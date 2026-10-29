@@ -1441,6 +1441,7 @@ export default function App() {
             isWalletConnected={Boolean(userContext?.address)}
             onConnectWallet={() => setShowWalletModal(true)}
             showToast={showToast}
+            lang={lang}
           />
         </main>
       )}
@@ -1448,7 +1449,7 @@ export default function App() {
       {/* DEVELOPER PORTAL & SDK VIEW */}
       {mainView === 'sdk' && (
         <main className="flex-1 flex flex-col items-center justify-start p-4 sm:p-6 w-full max-w-7xl mx-auto pb-28 md:pb-12">
-          <SdkView />
+          <SdkView lang={lang} />
         </main>
       )}
 

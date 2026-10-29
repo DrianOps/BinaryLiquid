@@ -4,24 +4,123 @@ import {
   Copy, 
   Check, 
   ExternalLink, 
-  Layers, 
-  Cpu, 
-  Terminal, 
-  Globe2, 
-  Sparkles, 
-  ShieldCheck,
-  TrendingUp,
-  Box
+  Box, 
+  TrendingUp, 
+  Terminal 
 } from 'lucide-react';
-import { motion } from 'framer-motion';
 
-export const SdkView: React.FC = () => {
+interface SdkViewProps {
+  lang?: 'en' | 'es';
+}
+
+const texts = {
+  en: {
+    heroBadge: "DEVELOPER PORTAL & SDK",
+    heroTitle: "Integrate BinaryLiquid into your ",
+    heroTitleHighlight: "dApp or Website",
+    heroSubtitle: "Embed our cross-chain swap with a customizable iFrame Widget or connect your bots and trackers with CoinGecko and CoinMarketCap compliant APIs.",
+    widgetTitle: "iFrame Widget Generator",
+    widgetBadge: "1-Click Embed",
+    widgetSubtitle: "Embed the cross-chain exchange gateway directly into any web project",
+    fromToken: "Initial Token (From):",
+    toToken: "Target Token (To):",
+    themeLabel: "Visual Theme:",
+    widthLabel: "Width (px):",
+    heightLabel: "Height (px):",
+    codeLabel: "HTML Code to embed into your website:",
+    copyCode: "Copy Code",
+    copied: "Copied!",
+    previewBadge: "Live Real-Time Preview:",
+    previewTitle: "Preview Widget",
+    trackersTitle: "Standard APIs for CoinGecko & CoinMarketCap",
+    trackersSubtitle: "Public endpoints for DEX aggregators, volume trackers, DEXScreener, and arbitrage bots",
+    cgSpec: "CoinGecko DEX Spec",
+    cgDesc: "Endpoints compliant with the official CoinGecko DEX integration specification:",
+    cmcSpec: "CoinMarketCap DEX Spec",
+    cmcDesc: "Official endpoints structured for CoinMarketCap DEX listing:",
+    codeTitle: "Create Swaps with Code (JavaScript / Python / cURL)",
+    copyExample: "Copy Example",
+    codeSnippet: `// 1. Fetch real-time market quote
+const quote = await fetch('https://bsprotocol.xyz/api/quote?fromToken=PUSD&toToken=USDC&amount=50')
+  .then(r => r.json());
+
+// 2. Create order with dedicated HD derivation (Zero Collision)
+const order = await fetch('https://bsprotocol.xyz/api/swap/create', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    fromToken: 'PUSD',
+    toToken: 'USDC',
+    fromChain: 'bch_mainnet',
+    toChain: 'polygon_mainnet',
+    amount: 50,
+    recipientAddress: '0xYOUR_POLYGON_WALLET'
+  })
+}).then(r => r.json());
+
+// 3. Result: Dedicated HD deposit address
+console.log('HD Deposit Address:', order.instructions.depositAddress);
+console.log('Derivation Path:', order.instructions.derivationPath);`
+  },
+  es: {
+    heroBadge: "PORTAL DE DESARROLLADORES & SDK",
+    heroTitle: "Integra BinaryLiquid en tu ",
+    heroTitleHighlight: "dApp o Web",
+    heroSubtitle: "Incrusta nuestra swap cross-chain con un Widget iFrame personalizable o conecta tus bots y rastreadores con nuestras APIs compatibles con CoinGecko y CoinMarketCap.",
+    widgetTitle: "Generador de Widget iFrame",
+    widgetBadge: "1-Click Embed",
+    widgetSubtitle: "Incrusta la pasarela de intercambio directamente en cualquier proyecto web",
+    fromToken: "Token Inicial (From):",
+    toToken: "Token Destino (To):",
+    themeLabel: "Tema Visual:",
+    widthLabel: "Ancho (px):",
+    heightLabel: "Alto (px):",
+    codeLabel: "Código HTML para pegar en tu web:",
+    copyCode: "Copiar Código",
+    copied: "¡Copiado!",
+    previewBadge: "Vista Previa en Tiempo Real:",
+    previewTitle: "Vista Previa Widget",
+    trackersTitle: "APIs Estándar para CoinGecko & CoinMarketCap",
+    trackersSubtitle: "Endpoints públicos para indexación en agregadores de volumen, DEXScreener y bots de arbitraje",
+    cgSpec: "CoinGecko DEX Spec",
+    cgDesc: "Endpoints compatibles con la especificación oficial de integración DEX de CoinGecko:",
+    cmcSpec: "CoinMarketCap DEX Spec",
+    cmcDesc: "Endpoints oficiales estructurados para listado DEX en CoinMarketCap:",
+    codeTitle: "Crear Swaps con Código (JavaScript / Python / cURL)",
+    copyExample: "Copiar Ejemplo",
+    codeSnippet: `// 1. Consultar cotización en tiempo real
+const quote = await fetch('https://bsprotocol.xyz/api/quote?fromToken=PUSD&toToken=USDC&amount=50')
+  .then(r => r.json());
+
+// 2. Crear orden con derivación HD aislada (Zero Collision)
+const order = await fetch('https://bsprotocol.xyz/api/swap/create', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    fromToken: 'PUSD',
+    toToken: 'USDC',
+    fromChain: 'bch_mainnet',
+    toChain: 'polygon_mainnet',
+    amount: 50,
+    recipientAddress: '0xTU_WALLET_POLYGON'
+  })
+}).then(r => r.json());
+
+// 3. Resultado: Dirección HD única exclusiva de la orden
+console.log('Dirección HD de Depósito:', order.instructions.depositAddress);
+console.log('Ruta de Derivación:', order.instructions.derivationPath);`
+  }
+};
+
+export const SdkView: React.FC<SdkViewProps> = ({ lang = 'en' }) => {
   const [copiedSection, setCopiedSection] = useState<string | null>(null);
   const [embedFrom, setEmbedFrom] = useState('PUSD');
   const [embedTo, setEmbedTo] = useState('USDC');
   const [embedTheme, setEmbedTheme] = useState<'dark' | 'light'>('dark');
   const [embedWidth, setEmbedWidth] = useState('420');
   const [embedHeight, setEmbedHeight] = useState('640');
+
+  const t = texts[lang] || texts.en;
 
   const origin = typeof window !== 'undefined' ? window.location.origin : 'https://bsprotocol.xyz';
   const embedUrl = `${origin}/embed?from=${embedFrom}&to=${embedTo}&theme=${embedTheme}`;
@@ -48,13 +147,13 @@ export const SdkView: React.FC = () => {
       <div className="text-center space-y-4 max-w-3xl mx-auto">
         <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-bold tracking-wide">
           <Code2 className="w-4 h-4" />
-          <span>PORTAL DE DESARROLLADORES & SDK</span>
+          <span>{t.heroBadge}</span>
         </div>
         <h1 className="text-3xl sm:text-5xl font-black text-gray-950 dark:text-white tracking-tight">
-          Integra BinaryLiquid en tu <span className="text-primary">dApp o Web</span>
+          {t.heroTitle}<span className="text-primary">{t.heroTitleHighlight}</span>
         </h1>
         <p className="text-gray-600 dark:text-gray-400 text-sm sm:text-base leading-relaxed">
-          Incrusta nuestra swap cross-chain con un <strong>Widget iFrame</strong> personalizable o conecta tus bots y rastreadores con nuestras <strong>APIs compatibles con CoinGecko y CoinMarketCap</strong>.
+          {t.heroSubtitle}
         </p>
       </div>
 
@@ -67,13 +166,13 @@ export const SdkView: React.FC = () => {
             </div>
             <div>
               <h2 className="text-xl font-black text-gray-900 dark:text-white flex items-center gap-2">
-                Generador de Widget iFrame
+                {t.widgetTitle}
                 <span className="text-xs bg-emerald-500/10 text-emerald-500 font-bold px-2 py-0.5 rounded-full">
-                  1-Click Embed
+                  {t.widgetBadge}
                 </span>
               </h2>
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                Incrusta la pasarela de intercambio directamente en cualquier proyecto web
+                {t.widgetSubtitle}
               </p>
             </div>
           </div>
@@ -85,7 +184,7 @@ export const SdkView: React.FC = () => {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1.5">
-                  Token Inicial (From):
+                  {t.fromToken}
                 </label>
                 <select
                   value={embedFrom}
@@ -93,7 +192,7 @@ export const SdkView: React.FC = () => {
                   className="w-full px-3 py-2.5 rounded-xl bg-gray-50 dark:bg-[#161c28] border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white font-bold text-xs focus:outline-none focus:border-primary"
                 >
                   <option value="PUSD">PUSD (BCH CashTokens)</option>
-                  <option value="BCH">BCH (Bitcoin Cash Nativo)</option>
+                  <option value="BCH">BCH (Bitcoin Cash Native)</option>
                   <option value="USDC">USDC (Polygon PoS)</option>
                   <option value="MUSD">MUSD (CashTokens)</option>
                   <option value="BCHAD">BCHAD (CashToken)</option>
@@ -102,7 +201,7 @@ export const SdkView: React.FC = () => {
 
               <div>
                 <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1.5">
-                  Token Destino (To):
+                  {t.toToken}
                 </label>
                 <select
                   value={embedTo}
@@ -113,7 +212,7 @@ export const SdkView: React.FC = () => {
                   <option value="PUSD">PUSD (BCH CashTokens)</option>
                   <option value="USDT">USDT (Polygon PoS)</option>
                   <option value="POL">POL (Polygon Native)</option>
-                  <option value="BCH">BCH Nativo</option>
+                  <option value="BCH">BCH Native</option>
                 </select>
               </div>
             </div>
@@ -121,7 +220,7 @@ export const SdkView: React.FC = () => {
             <div className="grid grid-cols-3 gap-3">
               <div>
                 <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1.5">
-                  Tema Visual:
+                  {t.themeLabel}
                 </label>
                 <div className="flex gap-2">
                   <button
@@ -151,7 +250,7 @@ export const SdkView: React.FC = () => {
 
               <div>
                 <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1.5">
-                  Ancho (px):
+                  {t.widthLabel}
                 </label>
                 <input
                   type="text"
@@ -163,7 +262,7 @@ export const SdkView: React.FC = () => {
 
               <div>
                 <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1.5">
-                  Alto (px):
+                  {t.heightLabel}
                 </label>
                 <input
                   type="text"
@@ -178,7 +277,7 @@ export const SdkView: React.FC = () => {
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-gray-700 dark:text-gray-300">
-                  Código HTML para pegar en tu web:
+                  {t.codeLabel}
                 </span>
                 <button
                   type="button"
@@ -188,12 +287,12 @@ export const SdkView: React.FC = () => {
                   {copiedSection === 'iframe' ? (
                     <>
                       <Check className="w-3.5 h-3.5 text-emerald-500" />
-                      <span className="text-emerald-500">¡Copiado!</span>
+                      <span className="text-emerald-500">{t.copied}</span>
                     </>
                   ) : (
                     <>
                       <Copy className="w-3.5 h-3.5" />
-                      <span>Copiar Código</span>
+                      <span>{t.copyCode}</span>
                     </>
                   )}
                 </button>
@@ -209,7 +308,7 @@ export const SdkView: React.FC = () => {
           <div className="lg:col-span-6 flex flex-col items-center">
             <span className="text-xs font-bold text-gray-500 mb-2 flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              Vista Previa en Tiempo Real:
+              {t.previewBadge}
             </span>
             <div className="w-full max-w-[420px] rounded-3xl overflow-hidden border border-gray-200 dark:border-gray-800 shadow-2xl bg-gray-900">
               <iframe
@@ -217,7 +316,7 @@ export const SdkView: React.FC = () => {
                 width="100%"
                 height="580"
                 style={{ border: 'none' }}
-                title="Preview Widget"
+                title={t.previewTitle}
               />
             </div>
           </div>
@@ -232,10 +331,10 @@ export const SdkView: React.FC = () => {
           </div>
           <div>
             <h2 className="text-2xl font-black text-gray-900 dark:text-white">
-              APIs Estándar para CoinGecko & CoinMarketCap
+              {t.trackersTitle}
             </h2>
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              Endpoints públicos para indexación en agregadores de volumen, DEXScreener y bots de arbitraje
+              {t.trackersSubtitle}
             </p>
           </div>
         </div>
@@ -247,7 +346,7 @@ export const SdkView: React.FC = () => {
               <div className="flex items-center gap-2">
                 <span className="text-lg">🦎</span>
                 <h3 className="font-bold text-gray-900 dark:text-white text-base">
-                  CoinGecko DEX Spec
+                  {t.cgSpec}
                 </h3>
               </div>
               <span className="text-[10px] font-mono bg-emerald-500/10 text-emerald-500 font-bold px-2 py-0.5 rounded-full">
@@ -256,7 +355,7 @@ export const SdkView: React.FC = () => {
             </div>
 
             <p className="text-xs text-gray-600 dark:text-gray-400">
-              Endpoints compatibles con la especificación oficial de integración DEX de CoinGecko:
+              {t.cgDesc}
             </p>
 
             <div className="space-y-2 text-xs font-mono">
@@ -328,7 +427,7 @@ export const SdkView: React.FC = () => {
               <div className="flex items-center gap-2">
                 <span className="text-lg">Ⓜ️</span>
                 <h3 className="font-bold text-gray-900 dark:text-white text-base">
-                  CoinMarketCap DEX Spec
+                  {t.cmcSpec}
                 </h3>
               </div>
               <span className="text-[10px] font-mono bg-blue-500/10 text-blue-500 font-bold px-2 py-0.5 rounded-full">
@@ -337,7 +436,7 @@ export const SdkView: React.FC = () => {
             </div>
 
             <p className="text-xs text-gray-600 dark:text-gray-400">
-              Endpoints oficiales estructurados para listado DEX en CoinMarketCap:
+              {t.cmcDesc}
             </p>
 
             <div className="space-y-2 text-xs font-mono">
@@ -411,67 +510,30 @@ export const SdkView: React.FC = () => {
           <div className="flex items-center gap-2.5">
             <Terminal className="w-5 h-5 text-primary" />
             <h3 className="font-black text-gray-900 dark:text-white text-base">
-              Crear Swaps con Código (JavaScript / Python / cURL)
+              {t.codeTitle}
             </h3>
           </div>
           <button
             type="button"
-            onClick={() => copyToClipboard(`// 1. Obtener cotización
-const quote = await fetch('https://bsprotocol.xyz/api/quote?fromToken=PUSD&toToken=USDC&amount=50').then(r => r.json());
-
-// 2. Crear orden con derivación HD aislada
-const swap = await fetch('https://bsprotocol.xyz/api/swap/create', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    fromToken: 'PUSD',
-    toToken: 'USDC',
-    fromChain: 'bch_mainnet',
-    toChain: 'polygon_mainnet',
-    amount: 50,
-    recipientAddress: '0xTU_WALLET_POLYGON'
-  })
-}).then(r => r.json());
-
-console.log('Envía PUSD a tu dirección HD dedicada:', swap.instructions.depositAddress);`, 'code')}
+            onClick={() => copyToClipboard(t.codeSnippet, 'code')}
             className="flex items-center gap-1.5 text-xs text-primary font-bold hover:underline cursor-pointer"
           >
             {copiedSection === 'code' ? (
               <>
                 <Check className="w-3.5 h-3.5 text-emerald-500" />
-                <span className="text-emerald-500">¡Copiado!</span>
+                <span className="text-emerald-500">{t.copied}</span>
               </>
             ) : (
               <>
                 <Copy className="w-3.5 h-3.5" />
-                <span>Copiar Ejemplo</span>
+                <span>{t.copyExample}</span>
               </>
             )}
           </button>
         </div>
 
         <pre className="p-4 rounded-2xl bg-gray-950 text-gray-200 font-mono text-xs overflow-x-auto border border-gray-800 leading-relaxed">
-          <code>{`// 1. Consultar cotización en tiempo real
-const quote = await fetch('https://bsprotocol.xyz/api/quote?fromToken=PUSD&toToken=USDC&amount=50')
-  .then(r => r.json());
-
-// 2. Crear orden con derivación HD aislada (Zero Collision)
-const order = await fetch('https://bsprotocol.xyz/api/swap/create', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    fromToken: 'PUSD',
-    toToken: 'USDC',
-    fromChain: 'bch_mainnet',
-    toChain: 'polygon_mainnet',
-    amount: 50,
-    recipientAddress: '0xTU_WALLET_POLYGON'
-  })
-}).then(r => r.json());
-
-// 3. Resultado: Dirección HD única exclusiva de la orden
-console.log('Dirección HD de Depósito:', order.instructions.depositAddress);
-console.log('Ruta de Derivación:', order.instructions.derivationPath);`}</code>
+          <code>{t.codeSnippet}</code>
         </pre>
       </div>
     </div>
