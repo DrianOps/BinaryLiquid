@@ -29,12 +29,14 @@ import {
   Lock,
   Server,
   Cpu,
-  Database
+  Database,
+  Code2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import BridgeSwap from './components/BridgeSwap';
 import LandingPage from './components/LandingPage';
 import PoolsView from './components/PoolsView';
+import SdkView from './components/SdkView';
 import { useWizardConnect } from '@wizardconnect/react';
 import { 
   connectWalletConnect, 
@@ -92,11 +94,16 @@ const PLATFORM_NETWORKS = {
 };
 
 export default function App() {
-  const [mainView, setMainView] = useState<'bridge' | 'gateway' | 'pools' | 'docs'>('gateway');
+  const [mainView, setMainView] = useState<'bridge' | 'gateway' | 'pools' | 'docs' | 'sdk'>('gateway');
   const [darkMode, setDarkMode] = useState<boolean>(() => {
     return localStorage.getItem('bliq_theme') === 'dark' || 
       (!localStorage.getItem('bliq_theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
   });
+
+  const isEmbed = typeof window !== 'undefined' && (
+    window.location.pathname === '/embed' || 
+    window.location.search.includes('embed=true')
+  );
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [toast, setToast] = useState<{message: string, type: 'success'|'error'} | null>(null);
   const [lang, setLang] = useState<'en' | 'es'>('en');
@@ -257,6 +264,23 @@ export default function App() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  if (isEmbed) {
+    return (
+      <div className={`min-h-screen w-full flex items-center justify-center p-2 sm:p-4 bg-transparent font-sans ${darkMode ? 'dark' : ''}`}>
+        <div className="w-full max-w-md">
+          <BridgeSwap
+            userContext={userContext}
+            userAddress={userContext?.address || ''}
+            onConnectWallet={() => setShowWalletModal(true)}
+            showToast={showToast}
+            backendUrl=""
+            onOpenLanding={() => {}}
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen w-full bg-warm-mesh dark:bg-[#080B11] flex flex-col font-sans transition-colors duration-200 text-gray-900 dark:text-gray-100 selection:bg-orange-500 selection:text-white">
       
@@ -314,6 +338,18 @@ export default function App() {
               }`}
             >
               <span>{t.navDocs}</span>
+            </button>
+
+            <button 
+              onClick={() => setMainView('sdk')} 
+              className={`font-bold text-sm px-4 py-2 rounded-full transition-all flex items-center gap-1.5 ${
+                mainView === 'sdk' 
+                  ? 'bg-gray-100 dark:bg-[#1a202c] text-gray-900 dark:text-white shadow-2xs' 
+                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+              }`}
+            >
+              <Code2 className="w-3.5 h-3.5 text-primary" />
+              <span>SDK & API</span>
             </button>
           </div>
         </div>
@@ -528,6 +564,23 @@ export default function App() {
                     <div className="text-left">
                       <div>Documentation</div>
                       <div className="text-[10px] text-gray-400 font-normal">Tokenomics & BLAZE specs</div>
+                    </div>
+                  </button>
+
+                  <button 
+                    onClick={() => { setMainView('sdk'); setMobileMenuOpen(false); }}
+                    className={`w-full flex items-center gap-3 p-3.5 rounded-2xl font-bold text-sm transition-all cursor-pointer ${
+                      mainView === 'sdk' 
+                        ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 shadow-2xs' 
+                        : 'hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200'
+                    }`}
+                  >
+                    <div className="w-9 h-9 rounded-xl bg-purple-500/10 text-purple-500 flex items-center justify-center shrink-0">
+                      <Code2 className="w-4 h-4" />
+                    </div>
+                    <div className="text-left">
+                      <div>SDK & Integración</div>
+                      <div className="text-[10px] text-gray-400 font-normal">Widget iFrame & APIs Trackers</div>
                     </div>
                   </button>
                 </div>
@@ -1331,6 +1384,13 @@ export default function App() {
             onConnectWallet={() => setShowWalletModal(true)}
             showToast={showToast}
           />
+        </main>
+      )}
+
+      {/* DEVELOPER PORTAL & SDK VIEW */}
+      {mainView === 'sdk' && (
+        <main className="flex-1 flex flex-col items-center justify-start p-4 sm:p-6 w-full max-w-7xl mx-auto pb-28 md:pb-12">
+          <SdkView />
         </main>
       )}
 

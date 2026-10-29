@@ -467,14 +467,28 @@ class PoolService {
       targetPool = this.getPool(this.defaultPoolId);
     }
 
-    const lpFeeCut = feeAmount * (0.20 / 0.30); // 0.20% to LPs
+    const isBootstrapping = targetPool.poolMode === 'BOOTSTRAPPING';
+    // Fee split: 0.20% to LPs, 0.10% to Creator (if Bootstrapping), or standard 0.20% to LPs
+    const lpRatio = isBootstrapping ? (0.20 / 0.30) : (0.20 / 0.30);
+    const creatorRatio = isBootstrapping ? (0.10 / 0.30) : 0.0;
+
+    const lpFeeCut = feeAmount * lpRatio;
+    const creatorFeeCut = feeAmount * creatorRatio;
 
     if (from === targetPool.tokenA) {
       targetPool.reserveA += lpFeeCut;
       targetPool.cumulativeFeesA += lpFeeCut;
+      if (creatorFeeCut > 0 && targetPool.creatorAddress) {
+        targetPool.creatorFeesEarnedA = (targetPool.creatorFeesEarnedA || 0) + creatorFeeCut;
+        db.updateUserBalance(targetPool.creatorAddress, from, creatorFeeCut, 'add');
+      }
     } else {
       targetPool.reserveB += lpFeeCut;
       targetPool.cumulativeFeesB += lpFeeCut;
+      if (creatorFeeCut > 0 && targetPool.creatorAddress) {
+        targetPool.creatorFeesEarnedB = (targetPool.creatorFeesEarnedB || 0) + creatorFeeCut;
+        db.updateUserBalance(targetPool.creatorAddress, from, creatorFeeCut, 'add');
+      }
     }
 
     targetPool.totalVolumeUsd += Number(swapAmount);
@@ -563,6 +577,19 @@ class PoolService {
     const initialTvl = (initA * (Number(initialPriceUsd) || 1)) + (initB * 1);
     const status = isBootstrapping ? (initialTvl >= targetTvl ? 'ACTIVE' : 'BOOTSTRAPPING') : 'ACTIVE';
 
+    // Clean and resolve IPFS URI if supplied
+    const resolveIcon = (icon, fallback) => {
+      if (!icon || typeof icon !== 'string') return fallback;
+      const clean = icon.trim();
+      if (clean.startsWith('ipfs://')) {
+        return `https://ipfs.io/ipfs/${clean.replace('ipfs://', '')}`;
+      }
+      return clean;
+    };
+
+    const resolvedIconA = resolveIcon(iconA, isA_Bch ? '/BCH.png' : '/USDC.png');
+    const resolvedIconB = resolveIcon(iconB, isB_Bch ? '/BCH.png' : '/USDC.png');
+
     const newPool = {
       id: poolId,
       pair: `${symA} / ${symB}`,
@@ -573,8 +600,8 @@ class PoolService {
       networkB,
       networkBadgeA: networkBadgeA || (isA_Bch ? 'BCH CashTokens' : 'External Chain'),
       networkBadgeB: networkBadgeB || (isB_Bch ? 'BCH CashTokens' : 'External Chain'),
-      iconA: iconA || (isA_Bch ? '/BCH.png' : '/USDC.png'),
-      iconB: iconB || (isB_Bch ? '/BCH.png' : '/USDC.png'),
+      iconA: resolvedIconA,
+      iconB: resolvedIconB,
       decimalsA: Number(decimalsA) || 6,
       decimalsB: Number(decimalsB) || 6,
       categoryIdA: categoryIdA ? categoryIdA.trim().toLowerCase() : null,
@@ -588,16 +615,20 @@ class PoolService {
       targetTvlUsd: targetTvl,
       status,
       feePercent: 0.30,
-      lpFeePercent: isBootstrapping ? 0.15 : 0.20,
-      creatorFeePercent: isBootstrapping ? 0.05 : 0.0,
-      protocolFeePercent: 0.10,
+      lpFeePercent: 0.20,
+      creatorFeePercent: isBootstrapping ? 0.10 : 0.0,
+      protocolFeePercent: isBootstrapping ? 0.00 : 0.10,
       cumulativeFeesA: 0,
       cumulativeFeesB: 0,
+      creatorFeesEarnedA: 0,
+      creatorFeesEarnedB: 0,
       totalVolumeUsd: 0,
       isCustom: true,
       creatorAddress: creatorAddress.toLowerCase(),
       poolMode,
       liquidityLocked: isBootstrapping,
+      isVerified: false,
+      verificationBadge: 'Comunitario',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -825,6 +856,19 @@ class PoolService {
       userBalances: db.getUserBalances(providerAddress),
       txHash: '0x' + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('')
     };
+  }
+
+  async verifyPool(poolId, { requesterAddress, txHash } = {}) {
+    this.initPools();
+    const pool = this.getPool(poolId);
+    if (!pool) throw new Error('Pool not found');
+    pool.isVerified = true;
+    pool.verificationBadge = 'Verificado Oficial';
+    pool.verifiedAt = new Date().toISOString();
+    pool.verificationTx = txHash || null;
+    pool.updatedAt = new Date().toISOString();
+    db.persist();
+    return pool;
   }
 
   async getPositionsForAddress(address, poolId = null) {

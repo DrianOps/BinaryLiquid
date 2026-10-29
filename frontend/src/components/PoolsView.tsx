@@ -23,7 +23,8 @@ import {
   Info,
   Layers,
   ShieldCheck,
-  Server
+  Server,
+  Check
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
@@ -70,6 +71,11 @@ interface PoolData {
   liquidityLocked?: boolean;
   creatorAddress?: string;
   categoryIdA?: string | null;
+  creatorFeePercent?: number;
+  isVerified?: boolean;
+  verificationBadge?: string;
+  creatorFeesEarnedA?: number;
+  creatorFeesEarnedB?: number;
 }
 
 interface UserPosition {
@@ -131,6 +137,7 @@ export default function PoolsView({
     tokenAName: '',
     categoryIdA: '',
     decimalsA: '6',
+    iconA: '',
     tokenB: 'USDC',
     tokenBName: 'USD Coin',
     networkB: 'Polygon (Mainnet)',
@@ -200,6 +207,26 @@ export default function PoolsView({
     }
   };
 
+  const handleVerifyPool = async (poolId: string) => {
+    try {
+      const res = await fetch(`${backendUrl}/api/pools/${poolId}/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requesterAddress: effectiveAddress })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(`¡Par verificado oficialmente! Insignia asignada.`, 'success');
+        confetti({ particleCount: 50, spread: 60, origin: { y: 0.6 } });
+        await fetchPoolsData();
+      } else {
+        showToast(data.error || 'No se pudo verificar el par', 'error');
+      }
+    } catch (e: any) {
+      showToast(e.message || 'Error de red', 'error');
+    }
+  };
+
   useEffect(() => {
     fetchPoolsData();
     fetchWalletBalances();
@@ -262,6 +289,7 @@ export default function PoolsView({
           networkBadgeA: 'BCH CashTokens',
           networkBadgeB: createForm.networkBadgeB,
           categoryIdA: createForm.categoryIdA.trim() || null,
+          iconA: createForm.iconA.trim() || null,
           decimalsA: parseInt(createForm.decimalsA, 10) || 6,
           decimalsB: 6,
           poolMode: createForm.poolMode,
@@ -289,6 +317,7 @@ export default function PoolsView({
           tokenAName: '',
           categoryIdA: '',
           decimalsA: '6',
+          iconA: '',
           tokenB: 'USDC',
           tokenBName: 'USD Coin',
           networkB: 'Polygon (Mainnet)',
@@ -817,11 +846,34 @@ export default function PoolsView({
                             ) : (
                               <>
                                 <Sparkles className="w-3 h-3 text-emerald-500" />
-                                <span>Par Comunitario (Uniswap)</span>
+                                <span>Par Estándar (Uniswap)</span>
                               </>
                             )}
                           </span>
                         )}
+
+                        {/* TOKEN VERIFICATION BADGE */}
+                        {pool.isVerified ? (
+                          <span className="text-[10px] font-bold text-blue-500 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded-full flex items-center gap-1">
+                            <Check className="w-3 h-3 text-blue-500" />
+                            <span>Verificado Oficial</span>
+                          </span>
+                        ) : pool.isCustom ? (
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-full">
+                              Comunitario
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleVerifyPool(pool.id)}
+                              className="text-[10px] font-bold text-blue-500 hover:text-blue-400 underline cursor-pointer"
+                              title="Verificar este token con insignia de confianza"
+                            >
+                              Verificar (5 PUSD)
+                            </button>
+                          </div>
+                        ) : null}
+
                         {pool.categoryIdA && (
                           <a
                             href={`https://3xpl.com/bitcoin-cash/token/${pool.categoryIdA}`}
@@ -1397,6 +1449,32 @@ export default function PoolsView({
                       className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#121622] border border-gray-200 dark:border-gray-700 font-mono text-[11px] text-gray-900 dark:text-white focus:outline-none focus:border-primary"
                     />
                   </div>
+
+                  <div>
+                    <label className="text-[10px] text-gray-400 block mb-1 flex items-center justify-between">
+                      <span>URL del Logo o Hash IPFS (ipfs://...):</span>
+                      <span className="text-[10px] text-emerald-500 font-mono">BCMR Compatible</span>
+                    </label>
+                    <div className="flex gap-2 items-center">
+                      <input
+                        type="text"
+                        value={createForm.iconA}
+                        onChange={(e) => setCreateForm({ ...createForm, iconA: e.target.value })}
+                        placeholder="ipfs://bafy... o https://..."
+                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#121622] border border-gray-200 dark:border-gray-700 font-mono text-[11px] text-gray-900 dark:text-white focus:outline-none focus:border-primary"
+                      />
+                      {createForm.iconA && (
+                        <div className="w-8 h-8 rounded-lg bg-gray-100 dark:bg-gray-800 p-0.5 border border-gray-200 dark:border-gray-700 shrink-0 flex items-center justify-center overflow-hidden">
+                          <img 
+                            src={createForm.iconA.startsWith('ipfs://') ? `https://ipfs.io/ipfs/${createForm.iconA.replace('ipfs://', '')}` : createForm.iconA} 
+                            alt="Logo" 
+                            className="w-full h-full object-contain rounded"
+                            onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 {/* TOKEN B: COUNTERPARTY TOKEN */}
@@ -1501,7 +1579,7 @@ export default function PoolsView({
                         </span>
                       </div>
                       <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-snug">
-                        Tú aportas tu token pero <strong>no puedes drenar la liquidez</strong> (Fondos Bloqueados). Ganas el <strong>0.05% de comisión continua</strong> de cada swap. Se activa automáticamente al llegar a la meta.
+                        Tú aportas tu token pero <strong>no puedes drenar la liquidez</strong> (Fondos Bloqueados). Ganas el <strong>0.10% de comisión continua</strong> de cada swap y los LPs el <strong>0.20%</strong>. Si tú también aportas liquidez de contraparte, ¡ganas ambas comisiones!
                       </p>
                     </div>
 
