@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <title>BinaryLiquid | The #1 Cross-Chain Liquidity Gateway for Bitcoin Cash</title>
+    <meta name="description" content="The #1 Cross-Chain Liquidity Gateway connecting EVM stablecoins (USDC, USDT) and Bitcoin Cash CashTokens (ParyonUSD) in seconds. Sponsored by BCH BLAZE." />
+    <meta name="theme-color" content="#F7931A" />
+
+    <script>
+      (function() {
+        try {
+          var theme = localStorage.getItem('bliq_theme');
+          var isDark = theme === 'dark' || (!theme && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          if (isDark) {
+            document.documentElement.classList.add('dark');
+            document.documentElement.style.backgroundColor = '#080B11';
+          } else {
+            document.documentElement.classList.remove('dark');
+            document.documentElement.style.backgroundColor = '#FAFAF9';
+          }
+        } catch(e) {}
+      })();
+    </script>
+
+    <style>
+      html, body {
+        margin: 0;
+        padding: 0;
+        min-height: 100%;
+        width: 100%;
+      }
+      html.dark, html.dark body {
+        background-color: #080B11 !important;
+        color: #f1f5f9;
+        color-scheme: dark;
+      }
+      html:not(.dark), html:not(.dark) body {
+        background-color: #FAFAF9 !important;
+        color: #111827;
+      }
+      #root {
+        width: 100%;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+      html.dark .initial-loader {
+        background-color: #080B11;
+        color: #f1f5f9;
+      }
+      html:not(.dark) .initial-loader {
+        background-color: #FAFAF9;
+        color: #111827;
+      }
+      .initial-loader {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        width: 100vw;
+      }
+      .initial-loader img {
+        width: 100px;
+        height: 100px;
+        animation: spin-pulse 2s infinite ease-in-out;
+      }
+      .initial-loader p {
+        margin-top: 20px;
+        font-family: sans-serif;
+        font-weight: bold;
+        color: #f7931a;
+        letter-spacing: 2px;
+      }
+      @keyframes spin-pulse {
+        0% { transform: scale(0.9) rotate(0deg); opacity: 0.8; }
+        50% { transform: scale(1.1) rotate(180deg); opacity: 1; }
+        100% { transform: scale(0.9) rotate(360deg); opacity: 0.8; }
+      }
+    </style>
+    <script type="module" crossorigin src="/assets/index-CH5CpwVJ.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/vendor-rIuniweC.js">
+    <link rel="modulepreload" crossorigin href="/assets/wizard-wj6mC8AI.js">
+    <link rel="stylesheet" crossorigin href="/assets/index-BN26zjxD.css">
+  </head>
+
+  <body class="antialiased font-sans">
+    <div id="root">
+    <div class="initial-loader">
+      <img src="/logo.png" alt="BinaryLiquid Loading" />
+      <p>LOADING...</p>
+    </div>
+  </div>
+  </body>
+</html>
