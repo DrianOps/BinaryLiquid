@@ -1062,23 +1062,6 @@ export default function App() {
                   <p className="text-[10px] font-bold text-gray-500 dark:text-gray-400 mt-0.5">MetaMask, Rainbow, Trust, Cashonize</p>
                 </div>
               </button>
-
-              {/* Option 3: Browser Extension (Injected MetaMask / Rabby) */}
-              <button 
-                onClick={() => handleConnectWallet('injected')} 
-                className="w-full bg-gray-50 dark:bg-[#171e2c] hover:bg-emerald-50 dark:hover:bg-emerald-950/20 border border-gray-200 dark:border-gray-700 hover:border-emerald-400/50 p-3.5 sm:p-4 rounded-2xl flex items-center gap-3.5 sm:gap-4 transition-all group cursor-pointer text-left"
-              >
-                <div className="w-11 h-11 sm:w-12 sm:h-12 bg-white dark:bg-[#1f2737] rounded-xl shadow-2xs flex items-center justify-center group-hover:scale-105 transition-transform p-2 shrink-0">
-                  <Wallet className="w-6 h-6 text-emerald-500" />
-                </div>
-                <div>
-                  <h4 className="font-black text-gray-900 dark:text-white text-sm sm:text-base flex items-center gap-1.5">
-                    <span>Browser Wallet</span>
-                    <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-500">1-Click</span>
-                  </h4>
-                  <p className="text-[10px] font-bold text-gray-500 dark:text-gray-400 mt-0.5">MetaMask, Rabby, Brave Extension</p>
-                </div>
-              </button>
             </div>
             
             <p className="text-center text-xs text-gray-400 dark:text-gray-500 font-bold mt-6">
