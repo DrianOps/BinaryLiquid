@@ -882,6 +882,7 @@ export default function App() {
             userAddress={userContext?.address || ''}
             onConnectWallet={() => setShowWalletModal(true)}
             showToast={showToast}
+            lang={lang}
           />
         </main>
       )}

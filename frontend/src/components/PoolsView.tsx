@@ -107,14 +107,86 @@ interface PoolsViewProps {
   userAddress: string;
   onConnectWallet: () => void;
   showToast: (msg: string, type: 'success' | 'error') => void;
+  lang?: 'en' | 'es';
 }
+
+const poolTexts = {
+  en: {
+    createTitle: "Create Liquidity Pair",
+    createSubtitle: "Launch a new CashToken cross-chain AMM pool",
+    baseTokenTitle: "Token 1 (CashToken / BCH)",
+    quoteTokenTitle: "Token 2 (Quote Asset)",
+    symbolPlaceholder: "e.g. BCHAD",
+    namePlaceholder: "Project Name (optional)",
+    initialPrice: "Initial Price (USD)",
+    advancedOptions: "Advanced (Category ID & Icon)",
+    categoryIdLabel: "CashToken Category ID (64 hex):",
+    categoryIdPlaceholder: "Contract Category ID (optional if BCH)...",
+    iconLabel: "Logo URL or IPFS Hash (ipfs://...):",
+    iconPlaceholder: "https://... or ipfs://...",
+    modeLabel: "Pool Launch Mode",
+    modeStandard: "Standard AMM",
+    modeStandardBadge: "Instant Trading",
+    modeStandardDesc: "Deposit both tokens now. Trading activates immediately with 0.20% LP fees.",
+    modeBootstrapping: "Fair Launch",
+    modeBootstrappingBadge: "Anti-Rug",
+    modeBootstrappingDesc: "Deposit base token now. Community funds quote asset until target TVL is reached.",
+    amountToDeposit: "Amount to Deposit",
+    amountTokenB: "Amount of",
+    targetTvl: "Target TVL Goal (USD)",
+    previewTitle: "Pair Summary",
+    pairLabel: "Pair:",
+    priceLabel: "Price:",
+    typeLabel: "Type:",
+    feeLabel: "Fee:",
+    btnCreating: "Registering Liquidity Pair...",
+    btnCreate: "Create & Register Pair",
+    toastSuccess: "Liquidity pair created successfully!",
+    toastError: "Error creating pair"
+  },
+  es: {
+    createTitle: "Crear Par de Liquidez",
+    createSubtitle: "Lanza un nuevo pool AMM para cualquier CashToken",
+    baseTokenTitle: "Token 1 (CashToken / BCH)",
+    quoteTokenTitle: "Token 2 (Activo de Cotización)",
+    symbolPlaceholder: "Ej: BCHAD",
+    namePlaceholder: "Nombre del Proyecto (opcional)",
+    initialPrice: "Precio Inicial (USD)",
+    advancedOptions: "Opciones Avanzadas (Category ID y Logo)",
+    categoryIdLabel: "CashToken Category ID (64 hex):",
+    categoryIdPlaceholder: "Category ID del contrato (opcional si es BCH)...",
+    iconLabel: "URL del Logo o Hash IPFS (ipfs://...):",
+    iconPlaceholder: "https://... o ipfs://...",
+    modeLabel: "Modalidad de Lanzamiento",
+    modeStandard: "Par Estándar AMM",
+    modeStandardBadge: "Trading Inmediato",
+    modeStandardDesc: "Depositas ambos tokens ahora. Queda activo de inmediato para trading libre con 0.20% para LPs.",
+    modeBootstrapping: "Recaudo Comunitario",
+    modeBootstrappingBadge: "Anti-Rug",
+    modeBootstrappingDesc: "Depositas el token base ahora y la comunidad fondea la contraparte hasta alcanzar la meta de TVL.",
+    amountToDeposit: "Cantidad a Depositar",
+    amountTokenB: "Cantidad de",
+    targetTvl: "Meta de Recaudo (USD)",
+    previewTitle: "Resumen del Par",
+    pairLabel: "Par:",
+    priceLabel: "Precio:",
+    typeLabel: "Tipo:",
+    feeLabel: "Comisión:",
+    btnCreating: "Registrando Par en el Protocolo...",
+    btnCreate: "Crear y Registrar Par",
+    toastSuccess: "¡Par de liquidez creado con éxito!",
+    toastError: "Error al crear el par"
+  }
+};
 
 export default function PoolsView({
   backendUrl = '',
   userAddress,
   onConnectWallet,
-  showToast
+  showToast,
+  lang = 'en'
 }: PoolsViewProps) {
+  const t = poolTexts[lang] || poolTexts.en;
   const [allPools, setAllPools] = useState<PoolData[]>([]);
   const [protocolStats, setProtocolStats] = useState<any>(null);
   const [positions, setPositions] = useState<UserPosition[]>([]);
@@ -128,6 +200,7 @@ export default function PoolsView({
   const [selectedPosition, setSelectedPosition] = useState<UserPosition | null>(null);
   const [createModalOpen, setCreateModalOpen] = useState<boolean>(false);
   const [isCreatingPool, setIsCreatingPool] = useState<boolean>(false);
+  const [showAdvanced, setShowAdvanced] = useState<boolean>(false);
 
   // Create Pool Form State
   const [createForm, setCreateForm] = useState({
@@ -1168,132 +1241,94 @@ export default function PoolsView({
           </div>
         )}
 
-        {/* CREATE CUSTOM POOL MODAL */}
+        {/* CREATE CUSTOM POOL MODAL - MINIMALIST & FLUID REDESIGN */}
         {createModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-md overflow-y-auto">
             <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="w-full max-w-lg bg-white dark:bg-[#121622] rounded-3xl border border-gray-200 dark:border-gray-800 p-6 shadow-2xl space-y-4 my-8"
+              initial={{ scale: 0.95, opacity: 0, y: 10 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 10 }}
+              transition={{ type: "spring", stiffness: 350, damping: 25 }}
+              className="w-full max-w-lg bg-white dark:bg-[#121622] rounded-3xl border border-gray-200/90 dark:border-gray-800 p-5 sm:p-6 shadow-2xl space-y-4 my-8 text-left"
             >
               {/* MODAL HEADER */}
               <div className="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-gray-800">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-10 h-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
-                    <Layers className="w-5 h-5" />
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-2xl bg-primary/10 text-primary flex items-center justify-center shadow-xs">
+                    <Sparkles className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="font-extrabold text-base sm:text-lg text-gray-900 dark:text-white">
-                      Crear Nuevo Par de Liquidez
+                    <h3 className="font-black text-base sm:text-lg text-gray-900 dark:text-white">
+                      {t.createTitle}
                     </h3>
-                    <p className="text-xs text-gray-400">
-                      Conecta un CashToken de Bitcoin Cash con cualquier red
+                    <p className="text-xs text-gray-400 font-medium">
+                      {t.createSubtitle}
                     </p>
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => setCreateModalOpen(false)}
-                  className="p-2 rounded-xl text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer text-sm font-bold"
+                  className="w-8 h-8 rounded-xl flex items-center justify-center text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer text-sm font-bold"
                 >
                   ✕
                 </button>
               </div>
 
-              <form onSubmit={handleCreatePool} className="space-y-4 text-xs">
-                {/* TOKEN A: BITCOIN CASH TOKEN */}
-                <div className="p-3 rounded-2xl bg-gray-50 dark:bg-[#161c28] border border-gray-200/80 dark:border-gray-800 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-gray-900 dark:text-white uppercase tracking-wider text-[11px] flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-orange-500"></span>
-                      1. Token de Bitcoin Cash (Base)
-                    </span>
-                    <span className="text-[10px] text-orange-500 font-mono font-bold bg-orange-500/10 px-2 py-0.5 rounded-full">
-                      BCH Layer 1
-                    </span>
-                  </div>
+              <form onSubmit={handleCreatePool} className="space-y-3.5">
+                {/* 2-TOKEN PAIR BUILDER */}
+                <div className="space-y-1.5">
+                  {/* TOKEN A: BASE CASHTOKEN */}
+                  <div className="p-3 rounded-2xl bg-gray-50/90 dark:bg-[#161c28] border border-gray-100 dark:border-gray-800/80 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-black uppercase tracking-wider text-orange-500 flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-orange-500"></span>
+                        {t.baseTokenTitle}
+                      </span>
+                      <span className="text-[10px] font-mono font-bold text-gray-400 bg-black/5 dark:bg-white/5 px-2 py-0.5 rounded-full">
+                        BCH CashToken
+                      </span>
+                    </div>
 
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-[10px] text-gray-400 block mb-1">Símbolo (Ticker):</label>
+                    <div className="grid grid-cols-2 gap-2">
                       <input
                         type="text"
                         required
                         value={createForm.tokenA}
                         onChange={(e) => setCreateForm({ ...createForm, tokenA: e.target.value.toUpperCase() })}
-                        placeholder="Ej: BCHAD"
-                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#121622] border border-gray-200 dark:border-gray-700 font-bold text-gray-900 dark:text-white focus:outline-none focus:border-primary"
+                        placeholder={t.symbolPlaceholder}
+                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#10141f] border border-gray-200 dark:border-gray-700/80 font-mono font-black text-sm text-gray-900 dark:text-white placeholder:text-gray-400 placeholder:font-normal focus:outline-none focus:border-primary transition-colors"
                       />
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-gray-400 block mb-1">Nombre del Proyecto:</label>
                       <input
                         type="text"
                         value={createForm.tokenAName}
                         onChange={(e) => setCreateForm({ ...createForm, tokenAName: e.target.value })}
-                        placeholder="Ej: BCH Chad Token"
-                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#121622] border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white focus:outline-none focus:border-primary"
+                        placeholder={t.namePlaceholder}
+                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#10141f] border border-gray-200 dark:border-gray-700/80 text-xs font-medium text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:border-primary transition-colors"
                       />
                     </div>
                   </div>
 
-                  <div>
-                    <label className="text-[10px] text-gray-400 block mb-1 flex items-center justify-between">
-                      <span>CashToken Category ID (64 hex):</span>
-                      <span className="text-[10px] text-gray-400">Opcional si es BCH nativo</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={createForm.categoryIdA}
-                      onChange={(e) => setCreateForm({ ...createForm, categoryIdA: e.target.value.toLowerCase() })}
-                      placeholder="64 caracteres hex del contrato CashToken en BCH..."
-                      className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#121622] border border-gray-200 dark:border-gray-700 font-mono text-[11px] text-gray-900 dark:text-white focus:outline-none focus:border-primary"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] text-gray-400 block mb-1 flex items-center justify-between">
-                      <span>URL del Logo o Hash IPFS (ipfs://...):</span>
-                      <span className="text-[10px] text-emerald-500 font-mono">BCMR Compatible</span>
-                    </label>
-                    <div className="flex gap-2 items-center">
-                      <input
-                        type="text"
-                        value={createForm.iconA}
-                        onChange={(e) => setCreateForm({ ...createForm, iconA: e.target.value })}
-                        placeholder="ipfs://bafy... o https://..."
-                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#121622] border border-gray-200 dark:border-gray-700 font-mono text-[11px] text-gray-900 dark:text-white focus:outline-none focus:border-primary"
-                      />
-                      {createForm.iconA && (
-                        <div className="w-8 h-8 rounded-lg bg-gray-100 dark:bg-gray-800 p-0.5 border border-gray-200 dark:border-gray-700 shrink-0 flex items-center justify-center overflow-hidden">
-                          <img 
-                            src={createForm.iconA.startsWith('ipfs://') ? `https://ipfs.io/ipfs/${createForm.iconA.replace('ipfs://', '')}` : createForm.iconA} 
-                            alt="Logo" 
-                            className="w-full h-full object-contain rounded"
-                            onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
-                          />
-                        </div>
-                      )}
+                  {/* CENTRAL LINK CONNECTOR */}
+                  <div className="flex justify-center -my-2.5 relative z-10">
+                    <div className="w-7 h-7 rounded-full bg-white dark:bg-[#1a2233] border border-gray-200 dark:border-gray-700 shadow-xs flex items-center justify-center text-primary">
+                      <Plus className="w-3.5 h-3.5 stroke-[3]" />
                     </div>
                   </div>
-                </div>
 
-                {/* TOKEN B: COUNTERPARTY TOKEN */}
-                <div className="p-3 rounded-2xl bg-gray-50 dark:bg-[#161c28] border border-gray-200/80 dark:border-gray-800 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-gray-900 dark:text-white uppercase tracking-wider text-[11px] flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-                      2. Token de Contraparte (Cotización)
-                    </span>
-                    <span className="text-[10px] text-blue-500 font-mono font-bold bg-blue-500/10 px-2 py-0.5 rounded-full">
-                      Cross-Chain o Intra-BCH
-                    </span>
-                  </div>
+                  {/* TOKEN B: QUOTE ASSET & PRICE */}
+                  <div className="p-3 rounded-2xl bg-gray-50/90 dark:bg-[#161c28] border border-gray-100 dark:border-gray-800/80 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-black uppercase tracking-wider text-blue-500 flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                        {t.quoteTokenTitle}
+                      </span>
+                      <span className="text-[10px] font-mono font-bold text-gray-400 bg-black/5 dark:bg-white/5 px-2 py-0.5 rounded-full">
+                        {createForm.networkBadgeB}
+                      </span>
+                    </div>
 
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-[10px] text-gray-400 block mb-1">Red y Token:</label>
+                    <div className="grid grid-cols-2 gap-2">
                       <select
                         value={createForm.tokenB}
                         onChange={(e) => {
@@ -1332,164 +1367,219 @@ export default function PoolsView({
                             });
                           }
                         }}
-                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#121622] border border-gray-200 dark:border-gray-700 font-bold text-gray-900 dark:text-white focus:outline-none focus:border-primary"
+                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#10141f] border border-gray-200 dark:border-gray-700/80 font-bold text-xs text-gray-900 dark:text-white focus:outline-none focus:border-primary transition-colors cursor-pointer"
                       >
-                        <option value="USDC">USDC (Polygon Mainnet)</option>
-                        <option value="USDT">USDT (Polygon Mainnet)</option>
+                        <option value="USDC">USDC (Polygon PoS)</option>
                         <option value="PUSD">PUSD (BCH CashTokens)</option>
-                        <option value="BCH">BCH Nativo</option>
+                        <option value="USDT">USDT (Polygon PoS)</option>
+                        <option value="BCH">BCH (Native)</option>
                       </select>
-                    </div>
 
+                      <div className="relative">
+                        <input
+                          type="number"
+                          step="any"
+                          value={createForm.initialPriceUsd}
+                          onChange={(e) => setCreateForm({ ...createForm, initialPriceUsd: e.target.value })}
+                          placeholder="0.0025"
+                          className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#10141f] border border-gray-200 dark:border-gray-700/80 font-mono font-bold text-xs text-gray-900 dark:text-white focus:outline-none focus:border-primary transition-colors pr-11"
+                        />
+                        <span className="absolute right-3 top-2 text-[10px] font-bold text-gray-400 pointer-events-none">
+                          USD
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* EXPANDABLE ADVANCED OPTIONS (Clean & Tidy Accordion) */}
+                <div className="border border-gray-100 dark:border-gray-800 rounded-2xl p-2.5 bg-gray-50/50 dark:bg-[#141924]">
+                  <button
+                    type="button"
+                    onClick={() => setShowAdvanced(!showAdvanced)}
+                    className="w-full flex items-center justify-between text-xs font-bold text-gray-600 dark:text-gray-300 px-1 py-0.5 cursor-pointer hover:text-primary transition-colors"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <Layers className="w-3.5 h-3.5 text-primary" />
+                      {t.advancedOptions}
+                    </span>
+                    <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showAdvanced ? 'rotate-180 text-primary' : 'text-gray-400'}`} />
+                  </button>
+
+                  <AnimatePresence>
+                    {showAdvanced && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="space-y-2 pt-2.5 border-t border-gray-200/50 dark:border-gray-700/50 mt-2 text-xs"
+                      >
+                        <div>
+                          <label className="text-[10px] font-medium text-gray-400 block mb-1">
+                            {t.categoryIdLabel}
+                          </label>
+                          <input
+                            type="text"
+                            value={createForm.categoryIdA}
+                            onChange={(e) => setCreateForm({ ...createForm, categoryIdA: e.target.value.toLowerCase() })}
+                            placeholder={t.categoryIdPlaceholder}
+                            className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#10141f] border border-gray-200 dark:border-gray-700 font-mono text-[11px] text-gray-900 dark:text-white focus:outline-none focus:border-primary"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-[10px] font-medium text-gray-400 block mb-1">
+                            {t.iconLabel}
+                          </label>
+                          <div className="flex gap-2 items-center">
+                            <input
+                              type="text"
+                              value={createForm.iconA}
+                              onChange={(e) => setCreateForm({ ...createForm, iconA: e.target.value })}
+                              placeholder={t.iconPlaceholder}
+                              className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#10141f] border border-gray-200 dark:border-gray-700 font-mono text-[11px] text-gray-900 dark:text-white focus:outline-none focus:border-primary"
+                            />
+                            {createForm.iconA && (
+                              <div className="w-8 h-8 rounded-lg bg-gray-100 dark:bg-gray-800 p-0.5 border border-gray-200 dark:border-gray-700 shrink-0 flex items-center justify-center overflow-hidden">
+                                <img 
+                                  src={createForm.iconA.startsWith('ipfs://') ? `https://ipfs.io/ipfs/${createForm.iconA.replace('ipfs://', '')}` : createForm.iconA} 
+                                  alt="Logo" 
+                                  className="w-full h-full object-contain rounded"
+                                  onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                {/* POOL MODE SELECTOR - MINIMALIST PILL SWITCH */}
+                <div className="space-y-1.5">
+                  <div className="grid grid-cols-2 p-1 rounded-2xl bg-gray-100 dark:bg-[#161c28] border border-gray-200/80 dark:border-gray-800 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setCreateForm({ ...createForm, poolMode: 'STANDARD' })}
+                      className={`py-2 px-3 rounded-xl font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                        createForm.poolMode === 'STANDARD'
+                          ? 'bg-white dark:bg-[#202737] text-gray-900 dark:text-white shadow-xs font-black'
+                          : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'
+                      }`}
+                    >
+                      <span>⚡ {t.modeStandard}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCreateForm({ ...createForm, poolMode: 'BOOTSTRAPPING' })}
+                      className={`py-2 px-3 rounded-xl font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                        createForm.poolMode === 'BOOTSTRAPPING'
+                          ? 'bg-white dark:bg-[#202737] text-amber-500 shadow-xs font-black'
+                          : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'
+                      }`}
+                    >
+                      <span>🔒 {t.modeBootstrapping}</span>
+                    </button>
+                  </div>
+
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400 px-1 leading-snug">
+                    {createForm.poolMode === 'STANDARD' ? t.modeStandardDesc : t.modeBootstrappingDesc}
+                  </p>
+                </div>
+
+                {/* INITIAL LIQUIDITY INPUTS */}
+                {createForm.poolMode === 'BOOTSTRAPPING' ? (
+                  <div className="grid grid-cols-2 gap-2.5 p-3 rounded-2xl bg-amber-500/5 border border-amber-500/20">
                     <div>
-                      <label className="text-[10px] text-gray-400 block mb-1">Precio Inicial Estimado ($):</label>
+                      <label className="text-[10px] font-bold text-gray-400 block mb-1">
+                        {t.amountToDeposit} ({createForm.tokenA || 'Base'}):
+                      </label>
                       <input
                         type="number"
-                        step="any"
-                        value={createForm.initialPriceUsd}
-                        onChange={(e) => setCreateForm({ ...createForm, initialPriceUsd: e.target.value })}
-                        placeholder="0.0025"
-                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#121622] border border-gray-200 dark:border-gray-700 font-mono font-bold text-gray-900 dark:text-white focus:outline-none focus:border-primary"
+                        value={createForm.initialAmountA}
+                        onChange={(e) => setCreateForm({ ...createForm, initialAmountA: e.target.value })}
+                        placeholder="1000000"
+                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#10141f] border border-gray-200 dark:border-gray-700 font-mono font-bold text-xs text-gray-900 dark:text-white focus:outline-none focus:border-amber-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-gray-400 block mb-1">
+                        {t.targetTvl}:
+                      </label>
+                      <input
+                        type="number"
+                        value={createForm.targetTvlUsd}
+                        onChange={(e) => setCreateForm({ ...createForm, targetTvlUsd: e.target.value })}
+                        placeholder="2500"
+                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#10141f] border border-gray-200 dark:border-gray-700 font-mono font-bold text-xs text-gray-900 dark:text-white focus:outline-none focus:border-amber-500"
                       />
                     </div>
                   </div>
-                </div>
-
-                {/* MODALIDAD DE LANZAMIENTO (LAS 2 OPCIONES DEL USUARIO) */}
-                <div className="space-y-2">
-                  <span className="font-bold text-gray-900 dark:text-white uppercase tracking-wider text-[11px] block">
-                    3. Elige la Modalidad de tu Par
-                  </span>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                    {/* OPTION 1: BOOTSTRAPPING (ANTI-RUG RECAUDO) */}
-                    <div
-                      onClick={() => setCreateForm({ ...createForm, poolMode: 'BOOTSTRAPPING' })}
-                      className={`p-3.5 rounded-2xl border cursor-pointer transition-all ${
-                        createForm.poolMode === 'BOOTSTRAPPING'
-                          ? 'bg-amber-500/10 border-amber-500 dark:border-amber-500 shadow-xs'
-                          : 'bg-gray-50 dark:bg-[#161c28] border-gray-200 dark:border-gray-800 opacity-70 hover:opacity-100'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-extrabold text-amber-600 dark:text-amber-400 flex items-center gap-1 text-xs">
-                          <Lock className="w-3.5 h-3.5" />
-                          Opción 1: Recaudo de Fondo
-                        </span>
-                        <span className="text-[9px] font-bold bg-amber-500/20 text-amber-600 dark:text-amber-300 px-1.5 py-0.5 rounded">
-                          Anti-Rug Lock
-                        </span>
-                      </div>
-                      <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-snug">
-                        Tú aportas tu token pero <strong>no puedes drenar la liquidez</strong> (Fondos Bloqueados). Ganas el <strong>0.10% de comisión continua</strong> de cada swap y los LPs el <strong>0.20%</strong>. Si tú también aportas liquidez de contraparte, ¡ganas ambas comisiones!
-                      </p>
-                    </div>
-
-                    {/* OPTION 2: STANDARD UNISWAP-STYLE */}
-                    <div
-                      onClick={() => setCreateForm({ ...createForm, poolMode: 'STANDARD' })}
-                      className={`p-3.5 rounded-2xl border cursor-pointer transition-all ${
-                        createForm.poolMode === 'STANDARD'
-                          ? 'bg-emerald-500/10 border-emerald-500 dark:border-emerald-500 shadow-xs'
-                          : 'bg-gray-50 dark:bg-[#161c28] border-gray-200 dark:border-gray-800 opacity-70 hover:opacity-100'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-extrabold text-emerald-600 dark:text-emerald-400 flex items-center gap-1 text-xs">
-                          <Sparkles className="w-3.5 h-3.5" />
-                          Opción 2: Par Estándar AMM
-                        </span>
-                        <span className="text-[9px] font-bold bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 px-1.5 py-0.5 rounded">
-                          Uniswap V2
-                        </span>
-                      </div>
-                      <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-snug">
-                        Aportas la liquidez de ambos tokens tú mismo. El par queda <strong>activo de inmediato</strong> para trading libre. Ganas el <strong>0.20% de comisiones LP</strong> con retiro estándar.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* DYNAMIC FORM INPUTS BASED ON MODE */}
-                {createForm.poolMode === 'BOOTSTRAPPING' ? (
-                  <div className="p-3 rounded-2xl bg-amber-500/5 border border-amber-500/20 space-y-2">
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-[10px] text-gray-400 block mb-1">
-                          Tokens {createForm.tokenA || 'Base'} a Depositar:
-                        </label>
-                        <input
-                          type="number"
-                          value={createForm.initialAmountA}
-                          onChange={(e) => setCreateForm({ ...createForm, initialAmountA: e.target.value })}
-                          placeholder="1000000"
-                          className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#121622] border border-gray-200 dark:border-gray-700 font-mono font-bold text-gray-900 dark:text-white focus:outline-none focus:border-amber-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[10px] text-gray-400 block mb-1">
-                          Meta de Recaudo (Target TVL en USD):
-                        </label>
-                        <input
-                          type="number"
-                          value={createForm.targetTvlUsd}
-                          onChange={(e) => setCreateForm({ ...createForm, targetTvlUsd: e.target.value })}
-                          placeholder="2500"
-                          className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#121622] border border-gray-200 dark:border-gray-700 font-mono font-bold text-gray-900 dark:text-white focus:outline-none focus:border-amber-500"
-                        />
-                      </div>
-                    </div>
-                    <div className="text-[10px] text-amber-700 dark:text-amber-300 font-medium">
-                      🔒 <strong>Garantía Anti-Rug:</strong> La comunidad podrá fondear {createForm.tokenB} sabiendo que el creador no puede retirar el fondo.
-                    </div>
-                  </div>
                 ) : (
-                  <div className="p-3 rounded-2xl bg-emerald-500/5 border border-emerald-500/20 space-y-2">
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-[10px] text-gray-400 block mb-1">
-                          Cantidad {createForm.tokenA || 'Base'}:
-                        </label>
-                        <input
-                          type="number"
-                          value={createForm.initialAmountA}
-                          onChange={(e) => setCreateForm({ ...createForm, initialAmountA: e.target.value })}
-                          placeholder="500000"
-                          className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#121622] border border-gray-200 dark:border-gray-700 font-mono font-bold text-gray-900 dark:text-white focus:outline-none focus:border-emerald-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[10px] text-gray-400 block mb-1">
-                          Cantidad {createForm.tokenB}:
-                        </label>
-                        <input
-                          type="number"
-                          value={createForm.initialAmountB}
-                          onChange={(e) => setCreateForm({ ...createForm, initialAmountB: e.target.value })}
-                          placeholder="500"
-                          className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#121622] border border-gray-200 dark:border-gray-700 font-mono font-bold text-gray-900 dark:text-white focus:outline-none focus:border-emerald-500"
-                        />
-                      </div>
+                  <div className="grid grid-cols-2 gap-2.5 p-3 rounded-2xl bg-emerald-500/5 border border-emerald-500/20">
+                    <div>
+                      <label className="text-[10px] font-bold text-gray-400 block mb-1">
+                        {createForm.tokenA || 'Token A'}:
+                      </label>
+                      <input
+                        type="number"
+                        value={createForm.initialAmountA}
+                        onChange={(e) => setCreateForm({ ...createForm, initialAmountA: e.target.value })}
+                        placeholder="500000"
+                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#10141f] border border-gray-200 dark:border-gray-700 font-mono font-bold text-xs text-gray-900 dark:text-white focus:outline-none focus:border-emerald-500"
+                      />
                     </div>
-                    <div className="text-[10px] text-emerald-700 dark:text-emerald-300 font-medium">
-                      ⚡ <strong>Trading Inmediato:</strong> El par queda listo en el swap en el segundo 1.
+                    <div>
+                      <label className="text-[10px] font-bold text-gray-400 block mb-1">
+                        {createForm.tokenB}:
+                      </label>
+                      <input
+                        type="number"
+                        value={createForm.initialAmountB}
+                        onChange={(e) => setCreateForm({ ...createForm, initialAmountB: e.target.value })}
+                        placeholder="500"
+                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#10141f] border border-gray-200 dark:border-gray-700 font-mono font-bold text-xs text-gray-900 dark:text-white focus:outline-none focus:border-emerald-500"
+                      />
                     </div>
                   </div>
                 )}
 
+                {/* LIVE PREVIEW BADGE */}
+                <div className="flex items-center justify-between p-3 rounded-2xl bg-gray-50 dark:bg-[#161c28] border border-gray-100 dark:border-gray-800 text-[11px]">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono font-black text-gray-900 dark:text-white text-xs">
+                      {createForm.tokenA || 'TOKEN'} / {createForm.tokenB}
+                    </span>
+                    <span className="text-gray-400">•</span>
+                    <span className="text-emerald-500 font-mono font-bold">
+                      ${createForm.initialPriceUsd || '0.00'} USD
+                    </span>
+                  </div>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                    createForm.poolMode === 'STANDARD'
+                      ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
+                      : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
+                  }`}>
+                    {createForm.poolMode === 'STANDARD' ? 'Active AMM' : `Goal: $${createForm.targetTvlUsd}`}
+                  </span>
+                </div>
+
                 {/* SUBMIT BUTTON */}
                 <button
                   type="submit"
-                  disabled={isCreatingPool}
-                  className="w-full py-4 rounded-2xl font-bold text-sm bg-primary hover:bg-orange-600 text-white shadow-xl shadow-orange-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  disabled={isCreatingPool || !createForm.tokenA}
+                  className="w-full py-3.5 rounded-2xl font-bold text-sm bg-primary hover:bg-orange-600 disabled:opacity-50 text-white shadow-lg shadow-orange-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
                 >
                   {isCreatingPool ? (
                     <>
-                      <RefreshCw className="w-4 h-4 animate-spin" /> Registrando Par en la Fábrica de Pools...
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>{t.btnCreating}</span>
                     </>
                   ) : (
                     <>
-                      <Plus className="w-4 h-4" /> Crear y Registrar Par de Liquidez
+                      <Plus className="w-4 h-4" />
+                      <span>{t.btnCreate}</span>
                     </>
                   )}
                 </button>
