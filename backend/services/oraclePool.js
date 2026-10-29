@@ -380,16 +380,8 @@ class OraclePoolManager {
     const fromSym = (fromToken || '').toUpperCase();
     const toSym = (toToken || '').toUpperCase();
 
-    const minAmount = fromSym === 'LIFT' ? 10.0 : config.minSwapAmount;
+    const minAmount = fromSym === 'LIFT' ? 1.0 : (['BCH', 'ETH', 'SOL', 'BNB'].includes(fromSym) ? 0.001 : config.minSwapAmount);
     const maxAmount = fromSym === 'LIFT' ? 1000000.0 : (fromSym === 'POL' ? 50000.0 : config.maxSwapAmount);
-
-    if (parsedAmount < minAmount) {
-      throw new Error(`Minimum swap amount is ${minAmount} ${fromToken}`);
-    }
-
-    if (parsedAmount > maxAmount) {
-      throw new Error(`Maximum swap amount per transaction is ${maxAmount} ${fromToken}`);
-    }
 
     const priceFrom = await this.getPriceUsd(fromToken);
     const priceTo = await this.getPriceUsd(toToken);
@@ -420,12 +412,14 @@ class OraclePoolManager {
       treasuryCutAmount: Number(treasuryCutAmount.toFixed(6)),
       netPayout: Number(netPayout.toFixed(6)),
       netPayoutUsd,
-      priceFromUsd: Number(priceFrom.toFixed(4)),
-      priceToUsd: Number(priceTo.toFixed(4)),
+      priceFromUsd: Number(priceFrom.toFixed(6)),
+      priceToUsd: Number(priceTo.toFixed(6)),
       hasLiquidity,
       availableLiquidity: Number(availableLiquidity.toFixed(4)),
       minAmount,
       maxAmount,
+      isBelowMin: parsedAmount < minAmount,
+      isAboveMax: parsedAmount > maxAmount,
       estimatedSeconds: 3,
       oracleProvider: this.activeProvider,
       isSponsorAsset: isPusd || isLift,

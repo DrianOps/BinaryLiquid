@@ -166,6 +166,20 @@ app.post('/api/swap/create', async (req, res) => {
       });
     }
 
+    if (quote.isBelowMin) {
+      return res.status(400).json({
+        success: false,
+        error: `Minimum swap amount is ${quote.minAmount} ${fromToken}`
+      });
+    }
+
+    if (quote.isAboveMax) {
+      return res.status(400).json({
+        success: false,
+        error: `Maximum swap amount per transaction is ${quote.maxAmount} ${fromToken}`
+      });
+    }
+
     // Derive dedicated BIP-44 HD Child Deposit Address for this order
     const hdInfo = await hdWalletService.deriveOrderDepositAddress(fromChain);
 
