@@ -102,16 +102,6 @@
         animation: heartbeat 1.35s infinite ease-in-out;
         will-change: transform, filter;
       }
-      .initial-loader p {
-        margin-top: 24px;
-        font-family: 'JetBrains Mono', -apple-system, BlinkMacSystemFont, monospace, sans-serif;
-        font-weight: 700;
-        font-size: 13px;
-        color: #f7931a;
-        letter-spacing: 3px;
-        text-transform: uppercase;
-        animation: heartbeat-text 1.35s infinite ease-in-out;
-      }
 
       /* Authentic Cardiac Heartbeat (Lub-Dub Rhythmic Pulse) */
       @keyframes heartbeat {
@@ -186,18 +176,6 @@
           opacity: 0;
         }
       }
-
-      @keyframes heartbeat-text {
-        0%, 100% {
-          opacity: 0.55;
-          letter-spacing: 3px;
-        }
-        42% {
-          opacity: 1;
-          letter-spacing: 3.5px;
-          text-shadow: 0 0 14px rgba(247, 147, 26, 0.7);
-        }
-      }
     </style>
   </head>
 
@@ -209,7 +187,6 @@
           <div class="heartbeat-ring"></div>
           <img src="/logo.png" alt="BinaryLiquid Loading" />
         </div>
-        <p>CARGANDO...</p>
       </div>
     </div>
     <script type="module" src="/src/main.tsx"></script>
