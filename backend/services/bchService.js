@@ -4,63 +4,78 @@ import { db } from './db.js';
 
 class BchService {
   constructor() {
-    this.wallet = null;
-    this.hotWalletAddress = config.bch.hotWalletAddress || '';
+    this.mainnetWallet = null;
+    this.chipnetWallet = null;
+    this.mainnetAddress = config.bch.hotWalletAddress || '';
+    this.chipnetAddress = config.bch.chipnetHotWalletAddress || '';
     this.isReady = false;
     this.init();
   }
 
   async init() {
+    // 1. Initialize Mainnet Wallet
     try {
-      const isMainnet = config.bch.network === 'mainnet';
-      const WalletClass = isMainnet ? Wallet : TestNetWallet;
-
       if (config.bch.hotWalletWif && config.bch.hotWalletWif.length > 20) {
-        this.wallet = await WalletClass.fromWIF(config.bch.hotWalletWif);
-        this.hotWalletAddress = this.wallet.cashaddr;
-        console.log(`[BCH] Loaded ${isMainnet ? 'Mainnet' : 'Chipnet'} Hot Wallet: ${this.hotWalletAddress}`);
-      } else {
-        // Fallback default demo Chipnet address
-        this.hotWalletAddress = config.bch.hotWalletAddress || 'bchtest:qz9j7x8k2y5a0p9q7s8d4f1g3h2j5k6l7z8x9c0v1b';
-        console.log(`[BCH] Using configured/demo Hot Wallet address: ${this.hotWalletAddress}`);
+        this.mainnetWallet = await Wallet.fromWIF(config.bch.hotWalletWif);
+        this.mainnetAddress = this.mainnetWallet.cashaddr;
+        console.log(`[BCH] ✅ Loaded Mainnet Hot Wallet: ${this.mainnetAddress}`);
       }
-      this.isReady = true;
     } catch (err) {
-      console.warn('[BCH] Initialization notice:', err.message);
-      this.hotWalletAddress = config.bch.hotWalletAddress || 'bchtest:qz9j7x8k2y5a0p9q7s8d4f1g3h2j5k6l7z8x9c0v1b';
-      this.isReady = true;
+      console.warn('[BCH] Mainnet wallet init warning:', err.message);
     }
+
+    // 2. Initialize Chipnet Wallet
+    try {
+      const chipnetWif = config.bch.chipnetHotWalletWif || config.bch.hotWalletWif;
+      if (chipnetWif && chipnetWif.length > 20) {
+        this.chipnetWallet = await TestNetWallet.fromWIF(chipnetWif);
+        this.chipnetAddress = this.chipnetWallet.cashaddr;
+        console.log(`[BCH] ✅ Loaded Chipnet (Testnet4) Hot Wallet: ${this.chipnetAddress}`);
+      }
+    } catch (err) {
+      console.warn('[BCH] Chipnet wallet init warning:', err.message);
+    }
+
+    this.isReady = true;
   }
 
-  getDepositAddress() {
-    return this.hotWalletAddress;
+  get wallet() {
+    return this.mainnetWallet || this.chipnetWallet;
+  }
+
+  getDepositAddress(isChipnet = false) {
+    if (isChipnet) {
+      return this.chipnetAddress || (this.chipnetWallet ? this.chipnetWallet.cashaddr : 'bchtest:qpnfz2nh7uy8a2ythr2z7am5vcxr28g43qjdwgfzp8');
+    }
+    return this.mainnetAddress || (this.mainnetWallet ? this.mainnetWallet.cashaddr : 'bitcoincash:qpnfz2nh7uy8a2ythr2z7am5vcxr28g43qkl20t4xm');
   }
 
   async getBalances() {
     const balances = {
-      bch: 0.0,
-      PUSD: 0.0,
-      MUSD: 0.0
+      mainnet: { bch: 0.0, PUSD: 0.0, MUSD: 0.0 },
+      chipnet: { bch: 0.0, PUSD: 0.0, MUSD: 0.0 }
     };
 
-    if (this.wallet) {
+    if (this.mainnetWallet) {
       try {
-        const bchBal = await this.wallet.getBalance('bch');
-        balances.bch = Number(bchBal) || 0.0;
-
-        // Inquire real on-chain CashToken balances
-        const tokenBals = await this.wallet.getTokenBalance();
+        const bal = await this.mainnetWallet.getBalance('bch');
+        balances.mainnet.bch = Number(bal) || 0.0;
+        const tokens = await this.mainnetWallet.getTokenBalance();
         const pusdCat = config.bch.tokens.PUSD?.category;
-        if (pusdCat && tokenBals?.[pusdCat]) {
-          balances.PUSD = Number(tokenBals[pusdCat]) / (10 ** config.bch.tokens.PUSD.decimals);
-        }
-
-        const musdCat = config.bch.tokens.MUSD?.category;
-        if (musdCat && tokenBals?.[musdCat]) {
-          balances.MUSD = Number(tokenBals[musdCat]) / (10 ** config.bch.tokens.MUSD.decimals);
+        if (pusdCat && tokens?.[pusdCat]) {
+          balances.mainnet.PUSD = Number(tokens[pusdCat]) / (10 ** config.bch.tokens.PUSD.decimals);
         }
       } catch (e) {
-        console.warn('[BCH] getBalances on-chain query warning:', e.message);
+        console.warn('[BCH Mainnet] Balance query warning:', e.message);
+      }
+    }
+
+    if (this.chipnetWallet) {
+      try {
+        const bal = await this.chipnetWallet.getBalance('bch');
+        balances.chipnet.bch = Number(bal) || 0.0;
+      } catch (e) {
+        console.warn('[BCH Chipnet] Balance query warning:', e.message);
       }
     }
 
@@ -68,47 +83,93 @@ class BchService {
   }
 
   async verifyDeposit(txHash, expectedAmount, tokenSymbol = 'PUSD', depositAddress = null) {
-    if (!txHash) return { verified: false, reason: 'Empty TXID' };
+    const isChipnet = depositAddress ? depositAddress.startsWith('bchtest:') : config.bch.network !== 'mainnet';
+    const activeWallet = isChipnet ? this.chipnetWallet : this.mainnetWallet;
 
-    const cleanHash = txHash.trim();
-    if (cleanHash.length < 20) return { verified: false, reason: 'Invalid TXID format' };
-
-    // If live wallet is initialized, query transaction
-    if (this.wallet && !config.simulateIfNoFunds) {
+    // A) If dedicated deposit address is known, verify on-chain UTXOs directly
+    if (depositAddress) {
       try {
-        // Query Chipnet provider for tx verification
-        const history = await this.wallet.getHistory();
-        const found = history.find(tx => tx.tx_hash === cleanHash);
-        if (found) {
-          return { verified: true, amount: expectedAmount, txHash: cleanHash };
+        const WalletClass = isChipnet ? TestNetWallet : Wallet;
+        const watcher = await WalletClass.watchOnly(depositAddress);
+        const satBalance = await watcher.getBalance('sat');
+        if (satBalance && BigInt(satBalance) > 0n) {
+          return {
+            verified: true,
+            onChain: true,
+            amount: Number(satBalance) / 1e8,
+            txHash: txHash || `onchain_deposit_${depositAddress}`
+          };
         }
       } catch (err) {
-        console.warn('[BCH] On-chain check warning:', err.message);
+        console.warn(`[BCH ${isChipnet ? 'Chipnet' : 'Mainnet'}] Watcher check error:`, err.message);
       }
     }
 
-    // High performance verification for demo/testnet
-    if (config.simulateIfNoFunds) {
-      return { verified: true, simulated: true, amount: expectedAmount, txHash: cleanHash };
+    // B) Verify by clean txHash if supplied
+    if (txHash && txHash.trim().length >= 20) {
+      const cleanHash = txHash.trim();
+      if (activeWallet) {
+        try {
+          const history = await activeWallet.getHistory();
+          const found = history.find(tx => tx.tx_hash === cleanHash);
+          if (found) {
+            return { verified: true, onChain: true, amount: expectedAmount, txHash: cleanHash };
+          }
+        } catch (err) {
+          console.warn(`[BCH ${isChipnet ? 'Chipnet' : 'Mainnet'}] History query error:`, err.message);
+        }
+      }
+
+      // If strict mode is disabled, allow fallback
+      if (config.simulateIfNoFunds) {
+        return { verified: true, simulated: true, amount: expectedAmount, txHash: cleanHash };
+      }
+
+      return { verified: false, reason: `Transacción no confirmada en los indexadores de ${isChipnet ? 'Chipnet' : 'BCH Mainnet'}` };
     }
 
-    return { verified: false, reason: 'Deposit transaction not found on Chipnet indexer yet' };
+    if (config.simulateIfNoFunds) {
+      return { verified: true, simulated: true, amount: expectedAmount, txHash: 'simulated_fallback' };
+    }
+
+    return { verified: false, reason: 'No se detectaron fondos recibidos en la dirección de depósito' };
   }
 
   async sendPayout(recipientAddress, amount, tokenSymbol = 'PUSD') {
     if (!recipientAddress || (!recipientAddress.startsWith('bitcoincash:') && !recipientAddress.startsWith('bchtest:'))) {
-      throw new Error(`Invalid Bitcoin Cash CashAddr: ${recipientAddress}`);
+      throw new Error(`Dirección CashAddr de Bitcoin Cash inválida: ${recipientAddress}`);
     }
 
-    const tokenConfig = config.bch.tokens[tokenSymbol.toUpperCase()] || config.bch.tokens.PUSD;
-    const isChipnet = recipientAddress.startsWith('bchtest:') || config.bch.network !== 'mainnet';
+    const isChipnet = recipientAddress.startsWith('bchtest:');
+    const activeWallet = isChipnet ? this.chipnetWallet : this.mainnetWallet;
+    const networkName = isChipnet ? 'Chipnet (Testnet4)' : 'Bitcoin Cash Mainnet';
     const explorerBase = isChipnet ? 'https://chipnet.imaginary.cash/tx' : 'https://3xpl.com/bitcoin-cash/transaction';
 
-    // If live wallet with UTXOs is available
-    if (this.wallet && !config.simulateIfNoFunds) {
-      try {
+    if (!activeWallet) {
+      throw new Error(`[BCH] La Hot Wallet para ${networkName} no está inicializada`);
+    }
+
+    try {
+      const isNativeBch = tokenSymbol.toUpperCase() === 'BCH';
+      let res;
+
+      if (isNativeBch) {
+        // Native BCH / tBCH satoshis transfer
+        const satoshis = Math.floor(amount * 1e8);
+        console.log(`[BCH Payout] Sending ${amount} ${isChipnet ? 'tBCH' : 'BCH'} (${satoshis} sats) to ${recipientAddress} on ${networkName}...`);
+        res = await activeWallet.send([
+          {
+            cashaddr: recipientAddress,
+            value: satoshis,
+            unit: 'sat'
+          }
+        ]);
+      } else {
+        // CashTokens transfer
+        const tokenConfig = config.bch.tokens[tokenSymbol.toUpperCase()] || config.bch.tokens.PUSD;
         const rawTokenUnits = BigInt(Math.floor(amount * (10 ** tokenConfig.decimals)));
-        const res = await this.wallet.send([
+        console.log(`[BCH Payout] Sending ${amount} ${tokenSymbol} (${rawTokenUnits} units) to ${recipientAddress} on ${networkName}...`);
+        res = await activeWallet.send([
           {
             cashaddr: recipientAddress,
             value: 1000, // 1000 satoshis dust limit
@@ -119,31 +180,35 @@ class BchService {
             }
           }
         ]);
+      }
 
+      console.log(`[BCH Payout] ✅ Confirmed on-chain on ${networkName}! TXID: ${res.txid}`);
+      db.updateLiquidity(`bch_${tokenSymbol.toLowerCase()}`, -amount);
+
+      return {
+        success: true,
+        onChain: true,
+        txHash: res.txid,
+        explorerUrl: `${explorerBase}/${res.txid}`,
+        tokenCategory: isNativeBch ? undefined : config.bch.tokens[tokenSymbol.toUpperCase()]?.category
+      };
+    } catch (err) {
+      console.error(`[BCH Payout] ❌ Error on-chain en ${networkName}:`, err.message);
+
+      if (config.simulateIfNoFunds) {
+        console.warn('[BCH Payout] Falling back to simulated hash due to SIMULATE_IF_NO_FUNDS=true');
+        const mockTxid = Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
         db.updateLiquidity(`bch_${tokenSymbol.toLowerCase()}`, -amount);
-
         return {
           success: true,
-          txHash: res.txid,
-          explorerUrl: `${explorerBase}/${res.txid}`,
-          tokenCategory: tokenConfig.category
+          simulated: true,
+          txHash: mockTxid,
+          explorerUrl: `${explorerBase}/${mockTxid}`
         };
-      } catch (err) {
-        console.error('[BCH] Real payout error, proceeding to relayer payout fallback:', err.message);
       }
+
+      throw new Error(`Fallo en el pago on-chain de ${networkName}: ${err.message}. Asegúrate de que la Hot Wallet (${activeWallet.cashaddr}) tenga balance suficiente.`);
     }
-
-    // Relayer simulated Chipnet transaction hash for presentation demo
-    const mockTxid = Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
-    db.updateLiquidity(`bch_${tokenSymbol.toLowerCase()}`, -amount);
-
-    return {
-      success: true,
-      simulated: true,
-      txHash: mockTxid,
-      explorerUrl: `${explorerBase}/${mockTxid}`,
-      tokenCategory: tokenConfig.category
-    };
   }
 }
 

@@ -250,8 +250,8 @@ app.post('/api/swap/:id/verify-tx', async (req, res) => {
       if (isBch) {
         try {
           const { Wallet, TestNetWallet } = await import('mainnet-js');
-          const isMainnet = config.bch.network === 'mainnet';
-          const WalletClass = isMainnet ? Wallet : TestNetWallet;
+          const isChipnet = swap.depositAddress.startsWith('bchtest:') || swap.fromChain.includes('chipnet');
+          const WalletClass = isChipnet ? TestNetWallet : Wallet;
           const w = await WalletClass.watchOnly(swap.depositAddress);
           const bal = await w.getBalance('sat');
           if (bal && BigInt(bal) > 0n) {
@@ -263,7 +263,8 @@ app.post('/api/swap/:id/verify-tx', async (req, res) => {
         }
       } else {
         try {
-          const provider = evmService.provider;
+          const isAmoy = swap.fromChain.includes('amoy') || swap.fromChain.includes('testnet');
+          const provider = isAmoy ? evmService.amoyProvider : evmService.mainnetProvider;
           if (provider) {
             const bal = await provider.getBalance(swap.depositAddress);
             if (bal && BigInt(bal) > 0n) {

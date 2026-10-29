@@ -60,7 +60,7 @@ class RelayerEngine {
           let payoutResult;
           const isBchOrigin = order.fromChain.includes('bch') || order.fromChain.includes('chipnet');
           if (isBchOrigin) {
-            payoutResult = await evmService.sendPayout(order.recipientAddress, order.expectedOutput, order.toToken);
+            payoutResult = await evmService.sendPayout(order.recipientAddress, order.expectedOutput, order.toToken, order.toChain);
           } else {
             payoutResult = await bchService.sendPayout(order.recipientAddress, order.expectedOutput, order.toToken);
           }
@@ -105,7 +105,7 @@ class RelayerEngine {
       if (isBchOrigin) {
         verifyResult = await bchService.verifyDeposit(swap.depositTxHash, swap.fromAmount, swap.fromToken, swap.depositAddress);
       } else {
-        verifyResult = await evmService.verifyDeposit(swap.depositTxHash, swap.fromAmount, swap.fromToken, swap.depositAddress);
+        verifyResult = await evmService.verifyDeposit(swap.depositTxHash, swap.fromAmount, swap.fromToken, swap.depositAddress, swap.fromChain);
       }
 
       if (!verifyResult.verified) {
@@ -132,10 +132,10 @@ class RelayerEngine {
 
       // 3. Dispatch funds from destination Hot Wallet
       if (isBchOrigin) {
-        // User sent PUSD on BCH -> We dispatch USDC on EVM
-        payoutResult = await evmService.sendPayout(swap.recipientAddress, swap.toAmount, swap.toToken);
+        // User sent on BCH/Chipnet -> We dispatch on EVM (Polygon Mainnet or Amoy Testnet)
+        payoutResult = await evmService.sendPayout(swap.recipientAddress, swap.toAmount, swap.toToken, swap.toChain);
       } else {
-        // User sent USDC on EVM -> We dispatch PUSD (CashTokens) on BCH
+        // User sent on EVM -> We dispatch on BCH/Chipnet
         payoutResult = await bchService.sendPayout(swap.recipientAddress, swap.toAmount, swap.toToken);
       }
 

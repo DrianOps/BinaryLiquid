@@ -13,32 +13,55 @@ const ERC20_ABI = [
 
 class EvmService {
   constructor() {
-    this.provider = null;
-    this.wallet = null;
-    this.hotWalletAddress = '';
+    this.mainnetProvider = null;
+    this.amoyProvider = null;
+    this.mainnetWallet = null;
+    this.amoyWallet = null;
+    this.hotWalletAddress = config.evm.hotWalletAddress || '';
     this.init();
   }
 
   init() {
+    // 1. Initialize Mainnet Provider & Wallet
     try {
-      this.provider = new ethers.JsonRpcProvider(config.evm.rpcUrl);
-
+      this.mainnetProvider = new ethers.JsonRpcProvider(config.evm.rpcUrl);
       if (config.evm.hotWalletPrivateKey && config.evm.hotWalletPrivateKey.length >= 64) {
         const key = config.evm.hotWalletPrivateKey.startsWith('0x')
           ? config.evm.hotWalletPrivateKey
           : `0x${config.evm.hotWalletPrivateKey}`;
-        this.wallet = new ethers.Wallet(key, this.provider);
-        this.hotWalletAddress = this.wallet.address;
-      } else {
-        // Fallback demo hot wallet address if no key provided yet
-        const demoWallet = ethers.Wallet.createRandom();
-        this.hotWalletAddress = config.evm.hotWalletAddress || demoWallet.address;
-        console.log(`[EVM] No EVM_HOT_WALLET_KEY in .env, using address: ${this.hotWalletAddress}`);
+        this.mainnetWallet = new ethers.Wallet(key, this.mainnetProvider);
+        this.hotWalletAddress = this.mainnetWallet.address;
+        console.log(`[EVM] ✅ Loaded Mainnet Hot Wallet: ${this.hotWalletAddress}`);
       }
     } catch (err) {
-      console.warn('[EVM] Provider init warning:', err.message);
-      this.hotWalletAddress = config.evm.hotWalletAddress || '0x71C836e22f281F26F524C48b61F484B595C335C4';
+      console.warn('[EVM] Mainnet provider init warning:', err.message);
     }
+
+    // 2. Initialize Polygon Amoy (Testnet) Provider & Wallet
+    try {
+      this.amoyProvider = new ethers.JsonRpcProvider(config.evm.amoyRpcUrl || 'https://polygon-amoy-bor-rpc.publicnode.com');
+      if (config.evm.hotWalletPrivateKey && config.evm.hotWalletPrivateKey.length >= 64) {
+        const key = config.evm.hotWalletPrivateKey.startsWith('0x')
+          ? config.evm.hotWalletPrivateKey
+          : `0x${config.evm.hotWalletPrivateKey}`;
+        this.amoyWallet = new ethers.Wallet(key, this.amoyProvider);
+        console.log(`[EVM] ✅ Loaded Polygon Amoy (Testnet) Hot Wallet: ${this.amoyWallet.address}`);
+      }
+    } catch (err) {
+      console.warn('[EVM] Amoy provider init warning:', err.message);
+    }
+
+    if (!this.hotWalletAddress) {
+      this.hotWalletAddress = config.evm.hotWalletAddress || '0x143cA3A5116835d94573C700320B9FEdFf846eF9';
+    }
+  }
+
+  get wallet() {
+    return this.mainnetWallet || this.amoyWallet;
+  }
+
+  get provider() {
+    return this.mainnetProvider || this.amoyProvider;
   }
 
   getDepositAddress() {
@@ -47,142 +70,190 @@ class EvmService {
 
   async getBalances() {
     const balances = {
-      native: 0.0,
-      USDC: 0.0,
-      USDT: 0.0
+      mainnet: { native: 0.0, USDC: 0.0, USDT: 0.0 },
+      amoy: { native: 0.0, USDC: 0.0 }
     };
 
-    if (!this.provider || !this.hotWalletAddress) return balances;
+    if (this.mainnetProvider && this.hotWalletAddress) {
+      try {
+        const nativeWei = await this.mainnetProvider.getBalance(this.hotWalletAddress);
+        balances.mainnet.native = parseFloat(ethers.formatEther(nativeWei)) || 0.0;
 
-    try {
-      const nativeWei = await this.provider.getBalance(this.hotWalletAddress);
-      balances.native = parseFloat(ethers.formatEther(nativeWei)) || 0.0;
-
-      // Real ERC-20 USDC balance on Polygon
-      const usdcToken = config.evm.tokens.USDC;
-      if (usdcToken?.address) {
-        const contract = new ethers.Contract(usdcToken.address, ERC20_ABI, this.provider);
-        const usdcRaw = await contract.balanceOf(this.hotWalletAddress);
-        balances.USDC = parseFloat(ethers.formatUnits(usdcRaw, usdcToken.decimals)) || 0.0;
+        const usdcToken = config.evm.tokens.USDC;
+        if (usdcToken?.address) {
+          const contract = new ethers.Contract(usdcToken.address, ERC20_ABI, this.mainnetProvider);
+          const raw = await contract.balanceOf(this.hotWalletAddress);
+          balances.mainnet.USDC = parseFloat(ethers.formatUnits(raw, usdcToken.decimals)) || 0.0;
+        }
+      } catch (e) {
+        console.warn('[EVM Mainnet] Balance query warning:', e.message);
       }
+    }
 
-      // Real ERC-20 USDT balance on Polygon
-      const usdtToken = config.evm.tokens.USDT;
-      if (usdtToken?.address) {
-        const contract = new ethers.Contract(usdtToken.address, ERC20_ABI, this.provider);
-        const usdtRaw = await contract.balanceOf(this.hotWalletAddress);
-        balances.USDT = parseFloat(ethers.formatUnits(usdtRaw, usdtToken.decimals)) || 0.0;
+    if (this.amoyProvider && this.hotWalletAddress) {
+      try {
+        const nativeWei = await this.amoyProvider.getBalance(this.hotWalletAddress);
+        balances.amoy.native = parseFloat(ethers.formatEther(nativeWei)) || 0.0;
+
+        const amoyUsdc = config.evm.amoyTokens?.USDC;
+        if (amoyUsdc?.address) {
+          const contract = new ethers.Contract(amoyUsdc.address, ERC20_ABI, this.amoyProvider);
+          const raw = await contract.balanceOf(this.hotWalletAddress);
+          balances.amoy.USDC = parseFloat(ethers.formatUnits(raw, amoyUsdc.decimals)) || 0.0;
+        }
+      } catch (e) {
+        console.warn('[EVM Amoy] Balance query warning:', e.message);
       }
-    } catch (err) {
-      console.warn('[EVM] getBalances on-chain query warning:', err.message);
     }
 
     return balances;
   }
 
-  async verifyDeposit(txHash, expectedAmount, tokenSymbol = 'USDC', depositAddress = null) {
-    if (!txHash) return { verified: false, reason: 'Empty TXID' };
+  async verifyDeposit(txHash, expectedAmount, tokenSymbol = 'USDC', depositAddress = null, chain = 'polygon_mainnet') {
+    const isAmoy = (chain && (chain.toLowerCase().includes('amoy') || chain.toLowerCase().includes('testnet')));
+    const activeProvider = isAmoy ? this.amoyProvider : this.mainnetProvider;
+    const networkName = isAmoy ? 'Polygon Amoy (Testnet)' : 'Polygon Mainnet';
 
-    // Clean hash
-    const cleanHash = txHash.trim();
-    if (cleanHash.length < 20) return { verified: false, reason: 'Invalid hash format' };
-
-    if (!this.provider) {
-      return { verified: true, simulated: true, amount: expectedAmount };
+    // A) If dedicated deposit address is known, verify on-chain balance directly
+    if (depositAddress && activeProvider) {
+      try {
+        const isNative = tokenSymbol.toUpperCase() === 'POL' || tokenSymbol.toUpperCase() === 'MATIC' || tokenSymbol.toUpperCase() === 'ETH';
+        if (isNative) {
+          const bal = await activeProvider.getBalance(depositAddress);
+          if (bal && BigInt(bal) > 0n) {
+            return {
+              verified: true,
+              onChain: true,
+              amount: parseFloat(ethers.formatEther(bal)),
+              txHash: txHash || `onchain_evm_${depositAddress.substring(0, 16)}`
+            };
+          }
+        } else {
+          const tokenConfig = isAmoy
+            ? (config.evm.amoyTokens?.[tokenSymbol.toUpperCase()] || config.evm.tokens[tokenSymbol.toUpperCase()])
+            : config.evm.tokens[tokenSymbol.toUpperCase()];
+          if (tokenConfig?.address) {
+            const contract = new ethers.Contract(tokenConfig.address, ERC20_ABI, activeProvider);
+            const rawBal = await contract.balanceOf(depositAddress);
+            if (rawBal && BigInt(rawBal) > 0n) {
+              return {
+                verified: true,
+                onChain: true,
+                amount: parseFloat(ethers.formatUnits(rawBal, tokenConfig.decimals)),
+                txHash: txHash || `onchain_erc20_${depositAddress.substring(0, 16)}`
+              };
+            }
+          }
+        }
+      } catch (err) {
+        console.warn(`[EVM ${networkName}] Watcher check warning:`, err.message);
+      }
     }
 
-    try {
-      const receipt = await this.provider.getTransactionReceipt(cleanHash);
-      if (!receipt) {
-        // Pending or not mined yet
-        return { verified: false, reason: 'Transaction pending or not mined yet in mempool' };
-      }
-
-      if (receipt.status !== 1) {
-        return { verified: false, reason: 'Transaction reverted on-chain' };
-      }
-
-      // Check Transfer events
-      const tokenConfig = config.evm.tokens[tokenSymbol.toUpperCase()];
-      const iface = new ethers.Interface(ERC20_ABI);
-      let detectedAmount = 0;
-      let matched = false;
-
-      for (const log of receipt.logs) {
-        if (tokenConfig && log.address.toLowerCase() === tokenConfig.address.toLowerCase()) {
-          try {
-            const parsed = iface.parseLog(log);
-            if (parsed.name === 'Transfer') {
-              const to = parsed.args[1].toLowerCase();
-              if (to === this.hotWalletAddress.toLowerCase()) {
-                detectedAmount = parseFloat(ethers.formatUnits(parsed.args[2], tokenConfig.decimals));
-                matched = true;
-                break;
-              }
-            }
-          } catch (e) {}
+    // B) If txHash is provided, verify transaction receipt
+    if (txHash && txHash.trim().length >= 20) {
+      const cleanHash = txHash.trim();
+      if (activeProvider) {
+        try {
+          const receipt = await activeProvider.getTransactionReceipt(cleanHash);
+          if (receipt && receipt.status === 1) {
+            return {
+              verified: true,
+              onChain: true,
+              amount: expectedAmount,
+              txHash: cleanHash,
+              blockNumber: receipt.blockNumber
+            };
+          }
+        } catch (err) {
+          console.warn(`[EVM ${networkName}] Receipt query error:`, err.message);
         }
       }
 
-      if (matched && detectedAmount >= expectedAmount * 0.99) {
-        return { verified: true, amount: detectedAmount, blockNumber: receipt.blockNumber };
+      if (config.simulateIfNoFunds) {
+        return { verified: true, simulated: true, amount: expectedAmount, txHash: cleanHash };
       }
 
-      // If simulated/test transaction
-      if (config.simulateIfNoFunds) {
-        return { verified: true, simulated: true, amount: expectedAmount };
-      }
-
-      return { verified: false, reason: 'Deposit to Hot Wallet address not found in transaction logs' };
-    } catch (err) {
-      if (config.simulateIfNoFunds) {
-        return { verified: true, simulated: true, amount: expectedAmount };
-      }
-      return { verified: false, reason: err.message };
+      return { verified: false, reason: `Transacción no confirmada en ${networkName}` };
     }
+
+    if (config.simulateIfNoFunds) {
+      return { verified: true, simulated: true, amount: expectedAmount, txHash: 'simulated_fallback' };
+    }
+
+    return { verified: false, reason: 'No se detectaron fondos recibidos en la dirección de depósito' };
   }
 
-  async sendPayout(recipientAddress, amount, tokenSymbol = 'USDC') {
+  async sendPayout(recipientAddress, amount, tokenSymbol = 'USDC', chain = 'polygon_mainnet') {
     const raw = recipientAddress.trim().toLowerCase();
     if (!ethers.isAddress(raw)) {
-      throw new Error(`Invalid EVM recipient address: ${recipientAddress}`);
+      throw new Error(`Dirección EVM de destino inválida: ${recipientAddress}`);
     }
     const cleanRecipient = ethers.getAddress(raw);
 
-    const tokenConfig = config.evm.tokens[tokenSymbol.toUpperCase()] || config.evm.tokens.USDC;
-    const parsedAmount = ethers.parseUnits(amount.toFixed(tokenConfig.decimals), tokenConfig.decimals);
+    const isAmoy = chain ? (chain.toLowerCase().includes('amoy') || chain.toLowerCase().includes('testnet')) : false;
+    const activeWallet = isAmoy ? this.amoyWallet : this.mainnetWallet;
+    const activeExplorer = isAmoy ? (config.evm.amoyExplorerUrl || 'https://amoy.polygonscan.com') : config.evm.explorerUrl;
+    const networkName = isAmoy ? 'Polygon Amoy (Testnet)' : 'Polygon Mainnet';
 
-    // If real wallet with gas is configured
-    if (this.wallet && !config.simulateIfNoFunds) {
-      try {
-        const contract = new ethers.Contract(tokenConfig.address, ERC20_ABI, this.wallet);
-        const tx = await contract.transfer(cleanRecipient, parsedAmount);
-        const receipt = await tx.wait(1);
-
-        db.updateLiquidity(`evm_${tokenSymbol.toLowerCase()}`, -amount);
-
-        return {
-          success: true,
-          txHash: receipt.hash,
-          explorerUrl: `${config.evm.explorerUrl}/tx/${receipt.hash}`,
-          blockNumber: receipt.blockNumber
-        };
-      } catch (err) {
-        console.error('[EVM] Real payout error, falling back to simulated relayer execution:', err.message);
-      }
+    if (!activeWallet) {
+      throw new Error(`[EVM] La Hot Wallet para ${networkName} no está inicializada`);
     }
 
-    // Fast relayer execution (mock/testnet simulator for live demo stability)
-    const mockHash = '0x' + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
-    db.updateLiquidity(`evm_${tokenSymbol.toLowerCase()}`, -amount);
+    try {
+      const isNative = tokenSymbol.toUpperCase() === 'POL' || tokenSymbol.toUpperCase() === 'MATIC';
+      let txReceipt;
 
-    return {
-      success: true,
-      simulated: true,
-      txHash: mockHash,
-      explorerUrl: `${config.evm.explorerUrl}/tx/${mockHash}`,
-      blockNumber: Math.floor(Math.random() * 100000) + 5000000
-    };
+      if (isNative) {
+        console.log(`[EVM Payout] Sending ${amount} POL natively to ${cleanRecipient} on ${networkName}...`);
+        const tx = await activeWallet.sendTransaction({
+          to: cleanRecipient,
+          value: ethers.parseEther(amount.toFixed(18))
+        });
+        txReceipt = await tx.wait(1);
+      } else {
+        const tokenConfig = isAmoy
+          ? (config.evm.amoyTokens?.[tokenSymbol.toUpperCase()] || config.evm.tokens[tokenSymbol.toUpperCase()])
+          : config.evm.tokens[tokenSymbol.toUpperCase()];
+
+        if (!tokenConfig?.address) {
+          throw new Error(`No hay contrato configurado para ${tokenSymbol} en ${networkName}`);
+        }
+
+        const parsedAmount = ethers.parseUnits(amount.toFixed(tokenConfig.decimals), tokenConfig.decimals);
+        console.log(`[EVM Payout] Sending ${amount} ${tokenSymbol} via ERC20 (${tokenConfig.address}) to ${cleanRecipient} on ${networkName}...`);
+        const contract = new ethers.Contract(tokenConfig.address, ERC20_ABI, activeWallet);
+        const tx = await contract.transfer(cleanRecipient, parsedAmount);
+        txReceipt = await tx.wait(1);
+      }
+
+      console.log(`[EVM Payout] ✅ Confirmed on-chain on ${networkName}! Hash: ${txReceipt.hash}`);
+      db.updateLiquidity(`evm_${tokenSymbol.toLowerCase()}`, -amount);
+
+      return {
+        success: true,
+        onChain: true,
+        txHash: txReceipt.hash,
+        explorerUrl: `${activeExplorer}/tx/${txReceipt.hash}`,
+        blockNumber: txReceipt.blockNumber
+      };
+    } catch (err) {
+      console.error(`[EVM Payout] ❌ Error on-chain en ${networkName}:`, err.message);
+
+      if (config.simulateIfNoFunds) {
+        console.warn('[EVM Payout] Falling back to simulated hash due to SIMULATE_IF_NO_FUNDS=true');
+        const mockHash = '0x' + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+        db.updateLiquidity(`evm_${tokenSymbol.toLowerCase()}`, -amount);
+        return {
+          success: true,
+          simulated: true,
+          txHash: mockHash,
+          explorerUrl: `${activeExplorer}/tx/${mockHash}`
+        };
+      }
+
+      throw new Error(`Fallo en el pago on-chain de ${networkName}: ${err.message}. Asegúrate de que la Hot Wallet (${activeWallet.address}) tenga gas suficiente.`);
+    }
   }
 }
 
