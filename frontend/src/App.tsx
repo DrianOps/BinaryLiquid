@@ -386,40 +386,6 @@ export default function App() {
             </button>
           )}
 
-          {/* Network Switcher Pill (Desktop) */}
-          <div className="hidden lg:inline-flex p-0.5 bg-gray-100 dark:bg-[#161c28] rounded-full border border-gray-200/90 dark:border-gray-800 shadow-2xs text-xs">
-            <button
-              onClick={() => {
-                setPlatformNetwork('mainnet');
-                showToast('Red activa: Bitcoin Cash Mainnet (Producción)');
-              }}
-              className={`px-3 py-1.5 rounded-full font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                platformNetwork === 'mainnet'
-                  ? 'bg-primary text-black font-black shadow-xs'
-                  : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'
-              }`}
-              title="Red Principal de Producción"
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-black"></span>
-              <span>Mainnet</span>
-            </button>
-            <button
-              onClick={() => {
-                setPlatformNetwork('testnet');
-                showToast('Red activa: BCH Chipnet (Testnet)');
-              }}
-              className={`px-3 py-1.5 rounded-full font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                platformNetwork === 'testnet'
-                  ? 'bg-amber-500 text-white font-black shadow-xs'
-                  : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'
-              }`}
-              title="Entorno de Pruebas Chipnet"
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-white"></span>
-              <span>Testnet</span>
-            </button>
-          </div>
-
           {/* Theme Toggle Button (Desktop/Tablet) */}
           <button 
             onClick={() => setDarkMode(!darkMode)} 
