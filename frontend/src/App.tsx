@@ -40,6 +40,7 @@ import SdkView from './components/SdkView';
 import LendingView from './components/LendingView';
 import DocsView from './components/DocsView';
 import { useWizardConnect } from '@wizardconnect/react';
+import { deriveCashAddressFromXpub, pubkeyToCashAddress, formatAddress } from './utils/bchAddress';
 import { 
   connectWalletConnect, 
   disconnectWalletConnect, 
@@ -141,7 +142,17 @@ export default function App() {
 
   const [userContext, setUserContext] = useState<any>(() => {
     const saved = localStorage.getItem('bliq_user');
-    return saved ? JSON.parse(saved) : null;
+    if (!saved) return null;
+    try {
+      const parsed = JSON.parse(saved);
+      if (parsed?.address && parsed.address.startsWith('xpub')) {
+        parsed.address = deriveCashAddressFromXpub(parsed.address);
+        localStorage.setItem('bliq_user', JSON.stringify(parsed));
+      }
+      return parsed;
+    } catch {
+      return null;
+    }
   });
 
   const [showWalletModal, setShowWalletModal] = useState(false);
@@ -165,7 +176,8 @@ export default function App() {
     showToast('Wallet disconnected');
   };
 
-  const onWalletConnected = async (address: string, providerName: string) => {
+  const onWalletConnected = async (rawAddress: string, providerName: string) => {
+    const address = deriveCashAddressFromXpub(rawAddress);
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
@@ -174,9 +186,12 @@ export default function App() {
       });
       const data = await res.json();
       if (data.user) {
+        if (data.user.address && data.user.address.startsWith('xpub')) {
+          data.user.address = deriveCashAddressFromXpub(data.user.address);
+        }
         setUserContext(data.user);
         localStorage.setItem('bliq_user', JSON.stringify(data.user));
-        showToast(`Connected via ${providerName}: ${address.slice(0, 10)}...${address.slice(-4)}`);
+        showToast(`Connected via ${providerName}: ${formatAddress(address)}`);
         return;
       }
     } catch (e) {}
@@ -188,7 +203,7 @@ export default function App() {
     };
     setUserContext(fallbackUser);
     localStorage.setItem('bliq_user', JSON.stringify(fallbackUser));
-    showToast(`Connected via ${providerName}: ${address.slice(0, 10)}...${address.slice(-4)}`);
+    showToast(`Connected via ${providerName}: ${formatAddress(address)}`);
   };
 
   const handleConnectWallet = async (type: 'paytaca' | 'walletconnect' | 'injected') => {
@@ -233,14 +248,28 @@ export default function App() {
     if (wc.state === 'connected') {
        let realAddress = '';
        try {
-         const paths = wc.manager?.getSessionPaths();
-         if (paths && paths.length > 0) {
-            realAddress = paths[0].xpub || '';
+         // Attempt to derive address from pubkey via DappConnectionManager
+         const pubkey = wc.manager?.getPubkey(0, 0n);
+         if (pubkey) {
+           realAddress = pubkeyToCashAddress(pubkey);
          }
        } catch (e) {}
+
+       if (!realAddress) {
+         try {
+           const paths = wc.manager?.getSessionPaths();
+           if (paths && paths.length > 0) {
+             const receivePath = paths.find(p => p.name === 'receive') || paths[0];
+             if (receivePath?.xpub) {
+               realAddress = deriveCashAddressFromXpub(receivePath.xpub);
+             }
+           }
+         } catch (e) {}
+       }
        
        if (!realAddress && wc.manager) {
-         realAddress = (wc.manager as any).walletPublicKey || (wc.manager as any).address || '';
+         const fallback = (wc.manager as any).walletPublicKey || (wc.manager as any).address || '';
+         realAddress = deriveCashAddressFromXpub(fallback);
        }
 
        if (realAddress) {
@@ -412,7 +441,7 @@ export default function App() {
             >
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
               <span className="font-mono text-xs">
-                {userContext.address ? `${userContext.address.slice(0, 6)}...${userContext.address.slice(-3)}` : 'Connected'}
+                {userContext.address ? formatAddress(userContext.address) : 'Connected'}
               </span>
             </button>
           ) : (
