@@ -334,13 +334,12 @@ export default function App() {
 
             <button 
               onClick={() => setMainView('lend')} 
-              className={`font-bold text-sm px-4 py-2 rounded-full transition-all flex items-center gap-1.5 ${
+              className={`font-bold text-sm px-4 py-2 rounded-full transition-all ${
                 mainView === 'lend' 
                   ? 'bg-gray-100 dark:bg-[#1a202c] text-gray-900 dark:text-white shadow-2xs' 
                   : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
               }`}
             >
-              <Lock className="w-3.5 h-3.5 text-primary" />
               <span>{t.navLend}</span>
             </button>
 
@@ -357,13 +356,12 @@ export default function App() {
 
             <button 
               onClick={() => setMainView('sdk')} 
-              className={`font-bold text-sm px-4 py-2 rounded-full transition-all flex items-center gap-1.5 ${
+              className={`font-bold text-sm px-4 py-2 rounded-full transition-all ${
                 mainView === 'sdk' 
                   ? 'bg-gray-100 dark:bg-[#1a202c] text-gray-900 dark:text-white shadow-2xs' 
                   : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
               }`}
             >
-              <Code2 className="w-3.5 h-3.5 text-primary" />
               <span>SDK & API</span>
             </button>
           </div>
