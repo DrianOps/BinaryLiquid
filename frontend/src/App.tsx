@@ -307,6 +307,7 @@ export default function App() {
             showToast={showToast}
             backendUrl=""
             onOpenLanding={() => {}}
+            lang={lang}
           />
         </div>
       </div>
@@ -899,6 +900,7 @@ export default function App() {
             showToast={showToast}
             backendUrl=""
             onOpenLanding={() => setMainView('gateway')}
+            lang={lang}
           />
         </main>
       )}

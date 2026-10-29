@@ -40,7 +40,161 @@ interface BridgeSwapProps {
   showToast: (msg: string, type?: 'success' | 'error') => void;
   backendUrl?: string;
   onOpenLanding?: () => void;
+  lang?: 'en' | 'es';
 }
+
+const swapTranslations = {
+  en: {
+    tabSwap: 'Swap',
+    tabLimit: 'Limit',
+    tabPrivate: 'Private',
+    settingsTitle: 'Swap Settings',
+    slippageTolerance: 'Slippage Tolerance',
+    slippageNotice: 'Fixed 0.3% protocol fee applies to maintain high-liquidity cross-chain vaults and relayer settlement guarantees.',
+    sellLabel: 'Sell',
+    sellLimitLabel: 'Sell (Limit Order)',
+    buyLabel: 'Buy',
+    network: 'Network',
+    clear: 'Clear',
+    targetRateTitle: 'Target Execution Price',
+    marketRate: 'Market',
+    expectedOutput: 'Expected Output at Target:',
+    intraBchTitle: 'Intra-BCH Direct CashTokens (~2s)',
+    intraBchBadge: 'Intra-BCH CashTokens Swap',
+    intraBchFrictionless: 'Single Wallet • 0 Friction',
+    autoSettling: 'Auto-Settling to your connected BCH wallet',
+    destAddress: 'Destination Address',
+    validFormat: 'Valid format',
+    required: 'Required',
+    fundsNotice: 'Funds will be delivered directly to this address',
+    useConnected: 'Use Connected Wallet',
+    paste: 'Paste',
+    execMode: 'Execution Mode',
+    directRelayer: 'Cross-Chain Relayer (~3s)',
+    limitRelayer: 'Limit Order (Orderbook Relayer)',
+    marketPrice: 'Market Rate',
+    grossAmount: 'Estimated Gross Amount',
+    totalFee: 'Total Bridge Fee (0.30%)',
+    transparentBreakdown: '↳ Transparent breakdown:',
+    feeSplit: '0.20% LPs • 0.10% Protocol',
+    youReceive: 'You Receive (Real Net)',
+    minGuaranteed: 'Guaranteed Minimum',
+    enterAmount: 'Enter Amount',
+    connectWallet: 'Connect Wallet',
+    insufficientLiquidity: 'Insufficient Liquidity',
+    placeLimitOrder: 'Place Limit Order',
+    registeringLimit: 'Registering Limit Order...',
+    swapNow: 'Swap Now',
+    preparingRelayer: 'Preparing Relayer Intent...',
+    limitOrdersTitle: 'My Limit Orders',
+    monitoring247: 'Monitoring 24/7 by Relayer',
+    copy: 'Copy',
+    copied: 'Copied',
+    orderLabel: 'Order:',
+    back: 'Back',
+    depositInstruction: 'Send exactly',
+    toBridgeAddr: 'to the bridge address:',
+    depositAddr: 'Deposit Address',
+    hdSubaccount: '🔒 Dedicated HD sub-account for this order',
+    txidLabel: 'Transaction Hash / TXID:',
+    txidOptional: 'Optional for fast verification',
+    txidPlaceholder: 'Paste your deposit TXID (e.g., 0x... or 64-char hash)',
+    verifyDepositBtn: 'I Have Sent Funds • Verify Deposit',
+    verifyingOnChain: 'Verifying Deposit on Blockchain...',
+    swapSuccessTitle: 'Swap Successful!',
+    swapSuccessDesc: 'Your funds have been settled and sent to your destination address',
+    youSent: 'You Sent',
+    tidBox: 'Transaction ID (TID)',
+    destinationLabel: 'Destination:',
+    viewExplorer: 'View on Block Explorer',
+    newSwap: 'Make another Swap',
+    txFailedTitle: 'Transaction Not Completed',
+    txFailedDefault: 'An issue occurred while processing the order in the relayer.',
+    requestedOp: 'Requested Operation:',
+    fundsSafe: 'Your funds are safe (no debit occurred)',
+    diagnosticLabel: 'Diagnostic:',
+    retrySwap: 'Retry Swap',
+    cancel: 'Cancel',
+    zkTitle: 'Zero-Knowledge Private Swaps',
+    zkDesc: 'Breaks the public link between your Bitcoin Cash source wallet and EVM/Solana recipient using disposable Stealth Addresses and ZK-SNARK batch relayers.',
+    returnSwap: 'Return to Instant Swap'
+  },
+  es: {
+    tabSwap: 'Swap',
+    tabLimit: 'Límite',
+    tabPrivate: 'Privado',
+    settingsTitle: 'Ajustes del Swap',
+    slippageTolerance: 'Tolerancia al Deslizamiento (Slippage)',
+    slippageNotice: 'Se aplica una tarifa fija del 0.3% del protocolo para mantener bóvedas de alta liquidez y garantías de liquidación del relayer.',
+    sellLabel: 'Vender',
+    sellLimitLabel: 'Vender (Orden Límite)',
+    buyLabel: 'Recibir',
+    network: 'Red',
+    clear: 'Limpiar',
+    targetRateTitle: 'Precio Objetivo de Ejecución',
+    marketRate: 'Mercado',
+    expectedOutput: 'Retorno Esperado al Objetivo:',
+    intraBchTitle: 'CashTokens Directo Intra-BCH (~2s)',
+    intraBchBadge: 'Intercambio Intra-BCH CashTokens',
+    intraBchFrictionless: 'Billetera Única • Cero Fricción',
+    autoSettling: 'Liquidación directa a tu billetera BCH conectada',
+    destAddress: 'Dirección de Destino',
+    validFormat: 'Formato válido',
+    required: 'Requerido',
+    fundsNotice: 'Los fondos se entregarán directamente en esta dirección',
+    useConnected: 'Usar Billetera Conectada',
+    paste: 'Pegar',
+    execMode: 'Modo de Ejecución',
+    directRelayer: 'Relayer Cross-Chain (~3s)',
+    limitRelayer: 'Orden Límite (Libro de Órdenes Relayer)',
+    marketPrice: 'Tasa de Mercado',
+    grossAmount: 'Monto Bruto Estimado',
+    totalFee: 'Comisión Total del Puente (0.30%)',
+    transparentBreakdown: '↳ Desglose transparente:',
+    feeSplit: '0.20% LPs • 0.10% Protocolo',
+    youReceive: 'Recibes (Neto Real)',
+    minGuaranteed: 'Mínimo Garantizado',
+    enterAmount: 'Ingresa un Monto',
+    connectWallet: 'Conectar Billetera',
+    insufficientLiquidity: 'Liquidez Insuficiente',
+    placeLimitOrder: 'Crear Orden Límite',
+    registeringLimit: 'Registrando Orden Límite...',
+    swapNow: 'Intercambiar Ahora',
+    preparingRelayer: 'Preparando Intención de Relayer...',
+    limitOrdersTitle: 'Mis Órdenes Límite',
+    monitoring247: 'Monitoreado 24/7 por el Relayer',
+    copy: 'Copiar',
+    copied: 'Copiado',
+    orderLabel: 'Orden:',
+    back: 'Volver',
+    depositInstruction: 'Envía exactamente',
+    toBridgeAddr: 'a la dirección del puente:',
+    depositAddr: 'Dirección de Depósito',
+    hdSubaccount: '🔒 Sub-cuenta HD dedicada para esta orden',
+    txidLabel: 'Hash de Transacción / TXID:',
+    txidOptional: 'Opcional para verificación rápida',
+    txidPlaceholder: 'Pega el TXID de tu envío (ej: 0x... o hash de 64 caracteres)',
+    verifyDepositBtn: 'Ya Envié los Fondos • Verificar Depósito',
+    verifyingOnChain: 'Verificando Depósito en Blockchain...',
+    swapSuccessTitle: '¡Intercambio Exitoso!',
+    swapSuccessDesc: 'Tus fondos han sido liquidados y enviados a tu dirección de destino',
+    youSent: 'Enviaste',
+    tidBox: 'ID de Transacción (TID)',
+    destinationLabel: 'Destino:',
+    viewExplorer: 'Ver en el Explorador de Bloques',
+    newSwap: 'Hacer otro Intercambio',
+    txFailedTitle: 'Transacción No Completada',
+    txFailedDefault: 'Ocurrió un inconveniente al procesar la orden en el relayer.',
+    requestedOp: 'Operación solicitada:',
+    fundsSafe: 'Tus fondos están seguros (no se realizó débito)',
+    diagnosticLabel: 'Diagnóstico:',
+    retrySwap: 'Reintentar Swap',
+    cancel: 'Cancelar',
+    zkTitle: 'Intercambios Privados Zero-Knowledge',
+    zkDesc: 'Rompe el enlace público entre tu billetera de origen Bitcoin Cash y el receptor EVM/Solana usando Stealth Addresses desechables y relayers por lotes ZK-SNARK.',
+    returnSwap: 'Volver al Intercambio Instantáneo'
+  }
+};
 
 export default function BridgeSwap({
   userContext,
@@ -48,8 +202,10 @@ export default function BridgeSwap({
   onConnectWallet,
   showToast,
   backendUrl = '',
-  onOpenLanding
+  onOpenLanding,
+  lang = 'en'
 }: BridgeSwapProps) {
+  const t = swapTranslations[lang] || swapTranslations.en;
   // Navigation sub-tab (Swap | Limit | Private)
   const [subTab, setSubTab] = useState<'swap' | 'limit' | 'private'>('swap');
 
@@ -638,29 +794,32 @@ export default function BridgeSwap({
   return (
     <div className="w-full flex flex-col items-center justify-center min-h-[calc(100vh-140px)] py-6 sm:py-8 px-3 sm:px-4 selection:bg-orange-500 selection:text-white">
 
-      {/* TOP HEADER / TAB ROW (GLIDING INDICATOR) */}
-      <div className="w-full max-w-[480px] flex items-center justify-between mb-4 px-2">
-        <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-gray-100/80 dark:bg-[#151a24]/80 backdrop-blur-md border border-gray-200/50 dark:border-gray-800/80">
-          {(['swap', 'limit', 'private'] as const).map(tab => (
-            <button 
-              key={tab}
-              onClick={() => { setSubTab(tab); setCardState('form'); }}
-              className={`relative px-4 py-1.5 text-xs sm:text-sm font-bold capitalize transition-colors duration-200 cursor-pointer ${
-                subTab === tab 
-                  ? 'text-gray-900 dark:text-white' 
-                  : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
-              }`}
-            >
-              <span className="relative z-10">{tab}</span>
-              {subTab === tab && (
-                <motion.div 
-                  layoutId="activeSubTab"
-                  className="absolute inset-0 bg-white dark:bg-[#202737] rounded-xl shadow-xs border border-gray-200/60 dark:border-gray-700/60 z-0"
-                  transition={{ type: "spring", stiffness: 450, damping: 35 }}
-                />
-              )}
-            </button>
-          ))}
+      {/* TOP HEADER / TAB ROW (MINIMALIST DARK-LINE DESIGN) */}
+      <div className="w-full max-w-[480px] flex items-center justify-between mb-3 px-1">
+        <div className="flex items-center gap-1 p-1 rounded-xl bg-zinc-100/90 dark:bg-[#121620] border border-zinc-200/90 dark:border-zinc-800">
+          {(['swap', 'limit', 'private'] as const).map(tab => {
+            const label = tab === 'swap' ? t.tabSwap : tab === 'limit' ? t.tabLimit : t.tabPrivate;
+            return (
+              <button 
+                key={tab}
+                onClick={() => { setSubTab(tab); setCardState('form'); }}
+                className={`relative px-3.5 py-1.5 text-xs font-semibold capitalize transition-all cursor-pointer rounded-lg ${
+                  subTab === tab 
+                    ? 'text-zinc-900 dark:text-white' 
+                    : 'text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200'
+                }`}
+              >
+                <span className="relative z-10">{label}</span>
+                {subTab === tab && (
+                  <motion.div 
+                    layoutId="activeSubTab"
+                    className="absolute inset-0 bg-white dark:bg-[#1C2333] rounded-lg shadow-2xs border border-zinc-200/90 dark:border-zinc-700/80 z-0"
+                    transition={{ type: "spring", stiffness: 450, damping: 35 }}
+                  />
+                )}
+              </button>
+            );
+          })}
         </div>
 
         {/* Slippage / Settings icon */}
@@ -668,34 +827,20 @@ export default function BridgeSwap({
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           onClick={() => setShowSettingsModal(!showSettingsModal)}
-          className="w-10 h-10 rounded-full bg-white dark:bg-[#161c28] border border-gray-200/80 dark:border-gray-800 flex items-center justify-center text-gray-500 hover:text-gray-900 dark:hover:text-white shadow-xs transition-all cursor-pointer"
-          title="Swap Settings"
+          className="w-9 h-9 rounded-xl bg-white dark:bg-[#121620] border border-zinc-200/90 dark:border-zinc-800 flex items-center justify-center text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white shadow-2xs transition-colors cursor-pointer"
+          title={t.settingsTitle}
         >
           <SlidersHorizontal className="w-4 h-4" />
         </motion.button>
       </div>
 
-      {/* INFRASTRUCTURE POOL STATUS PILL */}
-      <div className="w-full max-w-[480px] mb-3 px-1 flex items-center justify-between text-[11px] text-gray-500 dark:text-gray-400">
-        <div className="flex items-center gap-1.5 font-medium">
-          <Flame className="w-3.5 h-3.5 text-orange-500 fill-orange-500" />
-          <span>BCH BLAZE</span>
-          <span className="text-gray-300 dark:text-gray-600">•</span>
-          <span className="text-emerald-600 dark:text-emerald-400 font-bold">ParyonUSD (PUSD)</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="flex h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-          <span className="text-gray-400 font-medium">RPC & Oracle Pools Active</span>
-        </div>
-      </div>
-
-      {/* SWAP CARD (CLASSIC MODERN AESTHETIC WITH SUBTLE GLOW) */}
+      {/* SWAP CARD (MINIMALIST DARK-LINE AESTHETIC) */}
       <motion.div 
         layout
-        initial={{ opacity: 0, y: 15 }}
+        initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        className="w-full max-w-[480px] bg-white/95 dark:bg-[#111622]/95 backdrop-blur-xl rounded-[28px] sm:rounded-[34px] border border-gray-200/80 dark:border-gray-800/80 shadow-[0_12px_40px_rgba(0,0,0,0.04)] dark:shadow-[0_16px_50px_rgba(0,0,0,0.5)] p-3 sm:p-4 relative transition-colors duration-200"
+        transition={{ duration: 0.25 }}
+        className="w-full max-w-[480px] bg-white dark:bg-[#0B0E14] rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm p-3.5 sm:p-4.5 relative transition-colors duration-200"
       >
         
         {/* SUBTAB CONTENT SWITCHER */}
@@ -742,21 +887,21 @@ export default function BridgeSwap({
               </div>
 
               <div>
-                <h3 className="text-xl font-extrabold text-gray-900 dark:text-white">
-                  ¡Intercambio Exitoso!
+                <h3 className="text-xl font-extrabold text-zinc-900 dark:text-white">
+                  {t.swapSuccessTitle}
                 </h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  Tus fondos han sido liquidados y enviados a tu dirección de destino
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+                  {t.swapSuccessDesc}
                 </p>
               </div>
 
               {/* Swap Amount Pair Summary */}
-              <div className="p-3.5 rounded-2xl bg-gray-50 dark:bg-[#161c28] border border-gray-100 dark:border-gray-800 flex items-center justify-between">
+              <div className="p-3.5 rounded-2xl bg-zinc-50 dark:bg-[#121620] border border-zinc-200/80 dark:border-zinc-800 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <img src={sellToken.icon} alt={sellToken.symbol} className="w-8 h-8 rounded-full object-contain" />
                   <div className="text-left">
-                    <div className="text-[10px] uppercase font-bold text-gray-400">Enviaste</div>
-                    <div className="font-bold text-sm text-gray-900 dark:text-white font-mono">
+                    <div className="text-[10px] uppercase font-bold text-zinc-400">{t.youSent}</div>
+                    <div className="font-bold text-sm text-zinc-900 dark:text-white font-mono">
                       {activeSwap?.fromAmount || sellAmount} {sellToken.symbol}
                     </div>
                   </div>
@@ -766,7 +911,7 @@ export default function BridgeSwap({
 
                 <div className="flex items-center gap-2">
                   <div className="text-right">
-                    <div className="text-[10px] uppercase font-bold text-emerald-600 dark:text-emerald-400">Recibes</div>
+                    <div className="text-[10px] uppercase font-bold text-emerald-600 dark:text-emerald-400">{t.youReceive}</div>
                     <div className="font-bold text-sm text-emerald-600 dark:text-emerald-400 font-mono">
                       {activeSwap?.toAmount || quote.netPayout} {buyToken.symbol}
                     </div>
@@ -776,24 +921,24 @@ export default function BridgeSwap({
               </div>
 
               {/* TID Box with 1-click Copy */}
-              <div className="p-3.5 rounded-2xl bg-[#F8F9FA] dark:bg-[#121620] border border-gray-200/80 dark:border-gray-800 text-left space-y-1.5">
+              <div className="p-3.5 rounded-2xl bg-zinc-50 dark:bg-[#121620] border border-zinc-200/80 dark:border-zinc-800 text-left space-y-1.5">
                 <div className="flex justify-between items-center">
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                    Transaction ID (TID)
+                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                    {t.tidBox}
                   </span>
                   {copied ? (
                     <span className="text-[10px] text-emerald-500 font-bold flex items-center gap-1 font-mono">
-                      <Check className="w-3 h-3" /> ¡Copiado!
+                      <Check className="w-3 h-3" /> {t.copied}!
                     </span>
                   ) : (
-                    <span className="text-[10px] text-gray-400 font-mono">
+                    <span className="text-[10px] text-zinc-400 font-mono">
                       1-Click Copy
                     </span>
                   )}
                 </div>
 
-                <div className="flex items-center justify-between gap-2 bg-white dark:bg-[#181f2c] p-2 rounded-xl border border-gray-200/60 dark:border-gray-700/60">
-                  <span className="font-mono text-xs text-gray-900 dark:text-gray-100 truncate select-all">
+                <div className="flex items-center justify-between gap-2 bg-white dark:bg-[#0B0E14] p-2 rounded-xl border border-zinc-200/80 dark:border-zinc-800">
+                  <span className="font-mono text-xs text-zinc-900 dark:text-zinc-100 truncate select-all">
                     {activeSwap?.payoutTxHash || activeSwap?.depositTxHash || activeSwap?.id || 'tx_pending'}
                   </span>
                   <motion.button
@@ -802,17 +947,17 @@ export default function BridgeSwap({
                     whileTap={{ scale: 0.95 }}
                     onClick={() => copyToClipboard(activeSwap?.payoutTxHash || activeSwap?.depositTxHash || activeSwap?.id || '')}
                     className="px-2.5 py-1.5 rounded-lg bg-orange-500/10 hover:bg-orange-500/20 text-orange-600 dark:text-orange-400 font-bold text-[11px] flex items-center gap-1 shrink-0 cursor-pointer border border-orange-500/20 transition-all"
-                    title="Copiar TID al portapapeles"
+                    title={t.copy}
                   >
                     <Copy className="w-3 h-3" />
-                    <span>Copiar</span>
+                    <span>{t.copy}</span>
                   </motion.button>
                 </div>
 
                 {/* Destination address */}
-                <div className="flex justify-between items-center text-[11px] text-gray-500 dark:text-gray-400 pt-1">
-                  <span>Destino:</span>
-                  <span className="font-mono truncate max-w-[220px] text-gray-700 dark:text-gray-300 font-medium">
+                <div className="flex justify-between items-center text-[11px] text-zinc-500 dark:text-zinc-400 pt-1">
+                  <span>{t.destinationLabel}</span>
+                  <span className="font-mono truncate max-w-[220px] text-zinc-700 dark:text-zinc-300 font-medium">
                     {activeSwap?.recipientAddress || recipientAddress}
                   </span>
                 </div>
@@ -825,9 +970,9 @@ export default function BridgeSwap({
                     href={getExplorerUrl(activeSwap)!}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex items-center gap-1.5 text-xs text-primary font-bold hover:underline"
+                    className="inline-flex items-center gap-1.5 text-xs text-orange-500 font-bold hover:underline"
                   >
-                    <span>Ver en el Explorador de Bloques</span>
+                    <span>{t.viewExplorer}</span>
                     <ExternalLink className="w-3.5 h-3.5" />
                   </a>
                 </div>
@@ -837,9 +982,9 @@ export default function BridgeSwap({
               <button
                 type="button"
                 onClick={handleResetSwap}
-                className="w-full py-4 rounded-2xl font-bold text-base bg-primary hover:bg-orange-600 text-white shadow-xl shadow-orange-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                className="w-full py-3.5 sm:py-4 rounded-xl font-bold text-base bg-orange-500 hover:bg-orange-600 text-white shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer"
               >
-                <span>Hacer otro Intercambio</span>
+                <span>{t.newSwap}</span>
               </button>
             </motion.div>
           ) : cardState === 'error' ? (
@@ -884,29 +1029,29 @@ export default function BridgeSwap({
               </div>
 
               <div>
-                <h3 className="text-xl font-extrabold text-gray-900 dark:text-white">
-                  {swapError?.title || 'Transacción No Completada'}
+                <h3 className="text-xl font-extrabold text-zinc-900 dark:text-white">
+                  {swapError?.title || t.txFailedTitle}
                 </h3>
                 <p className="text-xs text-rose-500 dark:text-rose-400 mt-1 max-w-sm mx-auto font-medium leading-relaxed">
-                  {swapError?.message || 'Ocurrió un inconveniente al procesar la orden en el relayer.'}
+                  {swapError?.message || t.txFailedDefault}
                 </p>
               </div>
 
               {/* Attempted Swap & Funds Safety Box */}
               <div className="p-3.5 rounded-2xl bg-rose-500/5 dark:bg-rose-500/10 border border-rose-500/20 text-left text-xs space-y-2">
-                <div className="flex justify-between items-center text-gray-500 dark:text-gray-400">
-                  <span>Operación solicitada:</span>
-                  <span className="font-bold text-gray-900 dark:text-white font-mono">
+                <div className="flex justify-between items-center text-zinc-500 dark:text-zinc-400">
+                  <span>{t.requestedOp}</span>
+                  <span className="font-bold text-zinc-900 dark:text-white font-mono">
                     {sellAmount} {sellToken.symbol} ➔ {buyToken.symbol}
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-semibold pt-1 border-t border-rose-500/15">
                   <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-500" />
-                  <span>Tus fondos están seguros (no se realizó débito)</span>
+                  <span>{t.fundsSafe}</span>
                 </div>
                 {swapError?.diagnostic && (
-                  <div className="text-[10px] text-gray-400 font-mono bg-white/60 dark:bg-black/30 p-2 rounded-lg">
-                    Diagnóstico: {swapError.diagnostic}
+                  <div className="text-[10px] text-zinc-400 font-mono bg-white/60 dark:bg-black/30 p-2 rounded-lg">
+                    {t.diagnosticLabel} {swapError.diagnostic}
                   </div>
                 )}
               </div>
@@ -916,16 +1061,16 @@ export default function BridgeSwap({
                 <button
                   type="button"
                   onClick={handleRetrySwap}
-                  className="flex-1 py-3.5 rounded-2xl font-bold text-sm bg-primary hover:bg-orange-600 text-white shadow-lg shadow-orange-500/25 transition-all cursor-pointer"
+                  className="flex-1 py-3.5 rounded-xl font-bold text-sm bg-orange-500 hover:bg-orange-600 text-white shadow-sm transition-all cursor-pointer"
                 >
-                  Reintentar Swap
+                  {t.retrySwap}
                 </button>
                 <button
                   type="button"
                   onClick={handleResetSwap}
-                  className="px-5 py-3.5 rounded-2xl font-bold text-sm bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 transition-all cursor-pointer"
+                  className="px-5 py-3.5 rounded-xl font-bold text-sm bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 transition-all cursor-pointer"
                 >
-                  Cancelar
+                  {t.cancel}
                 </button>
               </div>
             </motion.div>
@@ -939,26 +1084,26 @@ export default function BridgeSwap({
               className="space-y-4"
             >
               {/* Header with Cancel */}
-              <div className="flex justify-between items-center pb-2 border-b border-gray-100 dark:border-gray-800">
+              <div className="flex justify-between items-center pb-2 border-b border-zinc-200 dark:border-zinc-800">
                 <button
                   type="button"
                   onClick={handleResetSwap}
-                  className="text-gray-400 hover:text-gray-900 dark:hover:text-white flex items-center gap-1.5 text-xs font-semibold cursor-pointer transition-colors"
+                  className="text-zinc-400 hover:text-zinc-900 dark:hover:text-white flex items-center gap-1.5 text-xs font-semibold cursor-pointer transition-colors"
                 >
                   <ArrowLeft className="w-3.5 h-3.5" />
-                  <span>Volver</span>
+                  <span>{t.back}</span>
                 </button>
-                <span className="text-[11px] font-mono text-gray-400">
-                  Orden: <strong className="text-primary">{activeSwap?.id?.substring(0, 10)}...</strong>
+                <span className="text-[11px] font-mono text-zinc-400">
+                  {t.orderLabel} <strong className="text-orange-500">{activeSwap?.id?.substring(0, 10)}...</strong>
                 </span>
               </div>
 
               <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-800 dark:text-amber-300 leading-relaxed font-medium text-center">
-                Envía exactamente <strong>{activeSwap?.fromAmount} {activeSwap?.fromToken}</strong> a la dirección del puente:
+                {t.depositInstruction} <strong>{activeSwap?.fromAmount} {activeSwap?.fromToken}</strong> {t.toBridgeAddr}
               </div>
 
               {/* QR Code Container */}
-              <div className="flex justify-center p-3 bg-white rounded-2xl border border-gray-200 shadow-inner w-40 h-40 mx-auto">
+              <div className="flex justify-center p-3 bg-white rounded-2xl border border-zinc-200 shadow-inner w-40 h-40 mx-auto">
                 <img 
                   src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(activeSwap?.depositAddress || '')}`}
                   alt="Deposit QR"
@@ -967,9 +1112,9 @@ export default function BridgeSwap({
               </div>
 
               {/* Deposit Address Box with 1-click Copy & HD Badge */}
-              <div className="p-3.5 rounded-2xl bg-gray-50 dark:bg-[#161c28] border border-gray-200/80 dark:border-gray-700/80 space-y-2">
-                <div className="flex items-center justify-between text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                  <span>Dirección de Depósito ({sellToken.networkBadge})</span>
+              <div className="p-3.5 rounded-2xl bg-zinc-50 dark:bg-[#121620] border border-zinc-200/80 dark:border-zinc-800 space-y-2">
+                <div className="flex items-center justify-between text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                  <span>{t.depositAddr} ({sellToken.networkBadge})</span>
                   {activeSwap?.derivationIndex !== undefined && activeSwap?.derivationIndex !== null && (
                     <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/25 flex items-center gap-1 font-semibold">
                       <ShieldCheck className="w-3 h-3" />
@@ -977,8 +1122,8 @@ export default function BridgeSwap({
                     </span>
                   )}
                 </div>
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-mono text-xs text-gray-900 dark:text-gray-200 truncate font-semibold select-all">
+                <div className="flex items-center justify-between gap-2 bg-white dark:bg-[#0B0E14] p-2 rounded-xl border border-zinc-200 dark:border-zinc-800">
+                  <span className="font-mono text-xs text-zinc-900 dark:text-zinc-200 truncate font-semibold select-all">
                     {activeSwap?.depositAddress}
                   </span>
                   <motion.button 
@@ -987,16 +1132,16 @@ export default function BridgeSwap({
                     whileTap={{ scale: 0.95 }}
                     onClick={() => copyToClipboard(activeSwap?.depositAddress || '')}
                     className="px-2.5 py-1.5 rounded-lg bg-orange-500/10 hover:bg-orange-500/20 text-orange-600 dark:text-orange-400 font-bold text-[11px] flex items-center gap-1 shrink-0 border border-orange-500/20 cursor-pointer transition-all"
-                    title="Copiar dirección"
+                    title={t.copy}
                   >
                     {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{copied ? 'Copiado' : 'Copiar'}</span>
+                    <span>{copied ? t.copied : t.copy}</span>
                   </motion.button>
                 </div>
                 {activeSwap?.derivationPath && (
-                  <div className="pt-1 border-t border-gray-200/60 dark:border-gray-800/80 flex items-center justify-between text-[10px] text-gray-500 dark:text-gray-400 font-mono">
+                  <div className="pt-1 border-t border-zinc-200/60 dark:border-zinc-800/80 flex items-center justify-between text-[10px] text-zinc-400 font-mono">
                     <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium">
-                      🔒 Sub-cuenta HD dedicada para esta orden
+                      {t.hdSubaccount}
                     </span>
                     <span className="opacity-75">{activeSwap.derivationPath}</span>
                   </div>
@@ -1005,16 +1150,16 @@ export default function BridgeSwap({
 
               {/* TXID Input Field */}
               <div className="space-y-1">
-                <label className="text-[11px] font-semibold text-gray-600 dark:text-gray-300 flex items-center justify-between">
-                  <span>Hash de Transacción / TXID:</span>
-                  <span className="text-[10px] text-gray-400 font-normal">Opcional para verificación rápida</span>
+                <label className="text-[11px] font-semibold text-zinc-600 dark:text-zinc-300 flex items-center justify-between">
+                  <span>{t.txidLabel}</span>
+                  <span className="text-[10px] text-zinc-400 font-normal">{t.txidOptional}</span>
                 </label>
                 <input
                   type="text"
                   value={manualTxHash}
                   onChange={(e) => setManualTxHash(e.target.value)}
-                  placeholder="Pega el TXID de tu envío (ej: 0x... o hash de 64 caracteres)"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-gray-50 dark:bg-[#161c28] border border-gray-200 dark:border-gray-700/80 text-xs font-mono text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:border-primary transition-all"
+                  placeholder={t.txidPlaceholder}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-[#0B0E14] border border-zinc-200 dark:border-zinc-800 text-xs font-mono text-zinc-900 dark:text-white placeholder:text-zinc-400 focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-600 transition-colors"
                 />
               </div>
 
@@ -1023,46 +1168,46 @@ export default function BridgeSwap({
                 type="button"
                 onClick={handleVerifyDeposit}
                 disabled={isVerifying}
-                className="w-full py-4 rounded-2xl bg-primary hover:bg-orange-600 text-white font-bold text-sm transition-all shadow-xl shadow-orange-500/25 flex items-center justify-center gap-2 cursor-pointer"
+                className="w-full py-3.5 sm:py-4 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer"
               >
                 {isVerifying ? (
                   <>
                     <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>Verificando Depósito en Blockchain...</span>
+                    <span>{t.verifyingOnChain}</span>
                   </>
                 ) : (
                   <>
                     <Send className="w-4 h-4" />
-                    <span>Ya Envié los Fondos • Verificar Depósito</span>
+                    <span>{t.verifyDepositBtn}</span>
                   </>
                 )}
               </button>
             </motion.div>
           ) : subTab === 'private' ? (
             <div className="py-6 px-3 text-center space-y-4">
-              <div className="w-16 h-16 rounded-3xl bg-orange-500/10 dark:bg-orange-500/20 text-orange-500 flex items-center justify-center mx-auto border border-orange-500/20 shadow-inner">
-                <Lock className="w-8 h-8" />
+              <div className="w-14 h-14 rounded-2xl bg-orange-500/10 dark:bg-orange-500/20 text-orange-500 flex items-center justify-center mx-auto border border-orange-500/20">
+                <Lock className="w-7 h-7" />
               </div>
               <div>
-                <span className="inline-block px-3 py-1 rounded-full text-[11px] font-bold bg-orange-100 dark:bg-orange-900/40 text-orange-600 dark:text-orange-400 border border-orange-200 dark:border-orange-800/60 uppercase tracking-wider mb-2">
-                  v2 Protocol Roadmap
+                <span className="inline-block px-3 py-0.5 rounded-full text-[11px] font-bold bg-orange-100 dark:bg-orange-900/40 text-orange-600 dark:text-orange-400 border border-orange-200 dark:border-orange-800/60 uppercase tracking-wider mb-2">
+                  v2 Roadmap
                 </span>
-                <h3 className="text-xl font-extrabold text-gray-900 dark:text-white">Zero-Knowledge Private Swaps</h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400 max-w-sm mx-auto mt-1 leading-relaxed">
-                  Breaks the public link between your Bitcoin Cash source wallet and EVM/Solana recipient using disposable Stealth Addresses and ZK-SNARK batch relayers.
+                <h3 className="text-xl font-extrabold text-zinc-900 dark:text-white">{t.zkTitle}</h3>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 max-w-sm mx-auto mt-1 leading-relaxed">
+                  {t.zkDesc}
                 </p>
               </div>
 
-              <div className="p-3.5 rounded-2xl bg-gray-50 dark:bg-[#161c28] border border-gray-100 dark:border-gray-800 text-left text-xs space-y-2">
-                <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300 font-semibold">
+              <div className="p-3.5 rounded-2xl bg-zinc-50 dark:bg-[#121620] border border-zinc-200/80 dark:border-zinc-800 text-left text-xs space-y-2">
+                <div className="flex items-center gap-2 text-zinc-700 dark:text-zinc-300 font-semibold">
                   <CheckCircle2 className="w-4 h-4 text-emerald-500" />
                   <span>Decoupled UTXO ➔ Account Traceability</span>
                 </div>
-                <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300 font-semibold">
+                <div className="flex items-center gap-2 text-zinc-700 dark:text-zinc-300 font-semibold">
                   <CheckCircle2 className="w-4 h-4 text-emerald-500" />
                   <span>One-Time Ephemeral Deposit Addresses</span>
                 </div>
-                <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300 font-semibold">
+                <div className="flex items-center gap-2 text-zinc-700 dark:text-zinc-300 font-semibold">
                   <CheckCircle2 className="w-4 h-4 text-emerald-500" />
                   <span>No IP Logging & RPC Mixer Relay</span>
                 </div>
@@ -1070,9 +1215,9 @@ export default function BridgeSwap({
 
               <button
                 onClick={() => setSubTab('swap')}
-                className="w-full py-3.5 rounded-2xl font-bold text-sm bg-gray-950 dark:bg-white text-white dark:text-gray-950 hover:opacity-90 transition-all cursor-pointer"
+                className="w-full py-3.5 rounded-xl font-bold text-sm bg-zinc-900 hover:bg-black dark:bg-white dark:hover:bg-zinc-100 text-white dark:text-zinc-950 transition-all cursor-pointer"
               >
-                Return to Instant Swap
+                {t.returnSwap}
               </button>
             </div>
           ) : (
@@ -1085,24 +1230,24 @@ export default function BridgeSwap({
             >
             {/* INTRA-BCH NATIVE CASHTOKENS BADGE */}
             {sellToken.isBch && buyToken.isBch && (
-              <div className="mb-3 px-3 py-2 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-xs flex items-center justify-between">
+              <div className="mb-3 px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-xs flex items-center justify-between">
                 <span className="font-bold flex items-center gap-1.5">
-                  <Flame className="w-3.5 h-3.5 text-emerald-500" /> Intra-BCH CashTokens Swap
+                  <Flame className="w-3.5 h-3.5 text-emerald-500" /> {t.intraBchBadge}
                 </span>
                 <span className="text-[10px] font-mono font-semibold bg-emerald-500/20 px-2 py-0.5 rounded-md">
-                  Single Wallet • 0 Friction
+                  {t.intraBchFrictionless}
                 </span>
               </div>
             )}
 
-            {/* SELL BOX */}
-            <div className="rounded-[22px] bg-[#F8F9FA] dark:bg-[#161c28] border border-gray-100 dark:border-gray-800/80 p-4 sm:p-5 relative transition-all focus-within:border-orange-500/40 focus-within:ring-2 focus-within:ring-orange-500/10">
+            {/* SELL BOX (MINIMALIST DARK-LINE DESIGN) */}
+            <div className="rounded-2xl bg-zinc-50 dark:bg-[#121620] border border-zinc-200/80 dark:border-zinc-800/80 p-3.5 sm:p-4.5 relative transition-colors focus-within:border-zinc-400 dark:focus-within:border-zinc-650">
               <div className="flex justify-between items-center mb-1">
-                <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">
-                  {subTab === 'limit' ? 'Sell (Limit Order)' : 'Sell'}
+                <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
+                  {subTab === 'limit' ? t.sellLimitLabel : t.sellLabel}
                 </span>
-                <span className="text-xs text-gray-400 dark:text-gray-500 font-medium">
-                  Network: {sellToken.networkBadge}
+                <span className="text-[11px] text-zinc-400 dark:text-zinc-500 font-mono font-medium">
+                  {t.network}: {sellToken.networkBadge}
                 </span>
               </div>
 
@@ -1112,22 +1257,21 @@ export default function BridgeSwap({
                   value={sellAmount}
                   onChange={e => setSellAmount(e.target.value)}
                   placeholder="0"
-                  className="w-full bg-transparent text-3xl sm:text-4xl font-semibold text-gray-900 dark:text-white outline-none placeholder:text-gray-300 dark:placeholder:text-gray-600 font-mono"
+                  className="w-full bg-transparent text-3xl sm:text-4xl font-semibold text-zinc-900 dark:text-white outline-none placeholder:text-zinc-300 dark:placeholder:text-zinc-600 font-mono tracking-tight"
                 />
 
                 {/* Token Selector Pill */}
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
+                <button
+                  type="button"
                   onClick={() => setModalType('sell')}
-                  className="flex items-center gap-2.5 bg-white dark:bg-[#202737] hover:bg-gray-50 dark:hover:bg-[#262f43] px-3.5 py-2 rounded-full border border-gray-200/90 dark:border-gray-700 shadow-xs transition-all shrink-0 cursor-pointer"
+                  className="flex items-center gap-2 bg-white dark:bg-[#1A202E] hover:bg-zinc-100 dark:hover:bg-[#222A3D] px-3 py-1.5 rounded-xl border border-zinc-200 dark:border-zinc-700/80 shadow-2xs transition-all shrink-0 cursor-pointer"
                 >
                   <div className="w-6 h-6 rounded-full overflow-hidden shrink-0">
                     <img src={sellToken.icon} alt={sellToken.symbol} className="w-full h-full object-contain" />
                   </div>
                   <div className="text-left">
                     <div className="flex items-center gap-1">
-                      <span className="text-sm font-bold text-gray-900 dark:text-white leading-tight">
+                      <span className="text-sm font-bold text-zinc-900 dark:text-white leading-tight">
                         {sellToken.symbol}
                       </span>
                       {(sellToken.isVerified ?? true) && (
@@ -1136,37 +1280,40 @@ export default function BridgeSwap({
                         </span>
                       )}
                     </div>
-                    <div className="text-[10px] text-gray-400 font-medium leading-tight hidden sm:block">
+                    <div className="text-[10px] text-zinc-400 font-medium leading-tight hidden sm:block">
                       {sellToken.name.split(' ')[0]}
                     </div>
                   </div>
-                  <ChevronDown className="w-3.5 h-3.5 text-gray-400 ml-0.5" />
-                </motion.button>
+                  <ChevronDown className="w-3.5 h-3.5 text-zinc-400 ml-0.5" />
+                </button>
               </div>
 
               {/* Under amount: USD value & Quick Percentage pills */}
               <div className="flex items-center justify-between mt-3 pt-1">
-                <span className="text-xs font-medium text-gray-400 dark:text-gray-500 font-mono">
+                <span className="text-xs font-medium text-zinc-400 dark:text-zinc-500 font-mono">
                   ${(parsedAmount * (quote.rate || 1.0)).toFixed(2)}
                 </span>
 
                 {/* Percentage Pills (Clear | 50% | 100%) */}
                 <div className="flex items-center gap-1.5">
                   <button 
+                    type="button"
                     onClick={() => handlePercent(0)}
-                    className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-white dark:bg-[#202737] text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white border border-gray-200/80 dark:border-gray-700/80 shadow-2xs hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                    className="text-[11px] font-medium px-2.5 py-0.5 rounded-lg bg-white dark:bg-[#1A202E] text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white border border-zinc-200 dark:border-zinc-700/80 shadow-2xs transition-all cursor-pointer"
                   >
-                    Clear
+                    {t.clear}
                   </button>
                   <button 
+                    type="button"
                     onClick={() => handlePercent(50)}
-                    className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-white dark:bg-[#202737] text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white border border-gray-200/80 dark:border-gray-700/80 shadow-2xs hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                    className="text-[11px] font-medium px-2.5 py-0.5 rounded-lg bg-white dark:bg-[#1A202E] text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white border border-zinc-200 dark:border-zinc-700/80 shadow-2xs transition-all cursor-pointer"
                   >
                     50%
                   </button>
                   <button 
+                    type="button"
                     onClick={() => handlePercent(100)}
-                    className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-white dark:bg-[#202737] text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white border border-gray-200/80 dark:border-gray-700/80 shadow-2xs hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                    className="text-[11px] font-medium px-2.5 py-0.5 rounded-lg bg-white dark:bg-[#1A202E] text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white border border-zinc-200 dark:border-zinc-700/80 shadow-2xs transition-all cursor-pointer"
                   >
                     100%
                   </button>
@@ -1175,108 +1322,107 @@ export default function BridgeSwap({
             </div>
 
             {/* FLIP / REVERSE BUTTON */}
-            <div className="flex justify-center -my-3.5 relative z-10">
+            <div className="flex justify-center -my-3 relative z-10">
               <motion.button 
+                type="button"
                 onClick={handleFlip}
                 title="Invert tokens"
                 animate={{ rotate: flipDegree }}
                 transition={{ type: "spring", stiffness: 350, damping: 22 }}
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
-                className="w-10 h-10 rounded-full bg-white dark:bg-[#1c2333] border border-gray-200 dark:border-gray-700 shadow-md flex items-center justify-center text-gray-600 dark:text-gray-300 hover:text-primary transition-colors cursor-pointer"
+                whileHover={{ scale: 1.08 }}
+                whileTap={{ scale: 0.92 }}
+                className="w-8 h-8 rounded-xl bg-white dark:bg-[#0B0E14] border border-zinc-200 dark:border-zinc-750 shadow-xs flex items-center justify-center text-zinc-500 dark:text-zinc-400 hover:text-orange-500 dark:hover:text-orange-400 hover:border-zinc-400 dark:hover:border-zinc-600 transition-colors cursor-pointer"
               >
-                <ArrowUpDown className="w-4 h-4" />
+                <ArrowUpDown className="w-3.5 h-3.5" />
               </motion.button>
             </div>
 
             {/* BUY / TARGET RATE BOX */}
             {subTab === 'limit' ? (
-              <div className="rounded-[22px] bg-[#F8F9FA] dark:bg-[#161c28] border border-gray-100 dark:border-gray-800/80 p-4 sm:p-5 relative transition-all">
+              <div className="rounded-2xl bg-zinc-50 dark:bg-[#121620] border border-zinc-200/80 dark:border-zinc-800/80 p-3.5 sm:p-4.5 relative transition-colors">
                 <div className="flex justify-between items-center mb-1">
-                  <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 flex items-center gap-1">
-                    <Target className="w-3.5 h-3.5 text-primary" /> Target Execution Price
+                  <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 flex items-center gap-1">
+                    <Target className="w-3.5 h-3.5 text-orange-500" /> {t.targetRateTitle}
                   </span>
-                  <span className="text-xs text-gray-400 dark:text-gray-500 font-medium">
-                    Market: {quote.rate.toFixed(4)}
+                  <span className="text-xs text-zinc-400 dark:text-zinc-500 font-medium font-mono">
+                    {t.marketRate}: {quote.rate.toFixed(4)}
                   </span>
                 </div>
 
                 <div className="flex items-center justify-between gap-3 mt-1">
                   <div className="flex items-center gap-2 w-full">
-                    <span className="text-sm font-bold text-gray-400">1 {sellToken.symbol} =</span>
+                    <span className="text-sm font-bold text-zinc-400">1 {sellToken.symbol} =</span>
                     <input 
                       type="number"
                       value={targetRate}
                       onChange={e => setTargetRate(e.target.value)}
                       placeholder="1.0020"
-                      className="w-full bg-transparent text-2xl sm:text-3xl font-semibold text-gray-900 dark:text-white outline-none font-mono"
+                      className="w-full bg-transparent text-2xl sm:text-3xl font-semibold text-zinc-900 dark:text-white outline-none font-mono tracking-tight"
                     />
                   </div>
 
                   {/* Token Selector Pill */}
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
+                  <button
+                    type="button"
                     onClick={() => setModalType('buy')}
-                    className="flex items-center gap-2.5 bg-white dark:bg-[#202737] hover:bg-gray-50 dark:hover:bg-[#262f43] px-3.5 py-2 rounded-full border border-gray-200/90 dark:border-gray-700 shadow-xs transition-all shrink-0 cursor-pointer"
+                    className="flex items-center gap-2 bg-white dark:bg-[#1A202E] hover:bg-zinc-100 dark:hover:bg-[#222A3D] px-3 py-1.5 rounded-xl border border-zinc-200 dark:border-zinc-700/80 shadow-2xs transition-all shrink-0 cursor-pointer"
                   >
                     <div className="w-6 h-6 rounded-full overflow-hidden shrink-0">
                       <img src={buyToken.icon} alt={buyToken.symbol} className="w-full h-full object-contain" />
                     </div>
                     <div className="flex items-center gap-1">
-                      <span className="text-sm font-bold text-gray-900 dark:text-white">{buyToken.symbol}</span>
+                      <span className="text-sm font-bold text-zinc-900 dark:text-white">{buyToken.symbol}</span>
                       {(buyToken.isVerified ?? true) && (
                         <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-blue-500 text-white shrink-0" title="Token Oficial Verificado">
                           <Check className="w-2 h-2 stroke-[3]" />
                         </span>
                       )}
                     </div>
-                    <ChevronDown className="w-3.5 h-3.5 text-gray-400 ml-0.5" />
-                  </motion.button>
+                    <ChevronDown className="w-3.5 h-3.5 text-zinc-400 ml-0.5" />
+                  </button>
                 </div>
 
                 <div className="flex items-center justify-between mt-3 pt-1 text-xs">
-                  <span className="text-gray-400">Expected Output at Target:</span>
+                  <span className="text-zinc-400">{t.expectedOutput}</span>
                   <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
                     {(parsedAmount * (parseFloat(targetRate) || 1.0) * 0.997).toFixed(2)} {buyToken.symbol}
                   </span>
                 </div>
               </div>
             ) : (
-              <div className="rounded-[22px] bg-[#F8F9FA] dark:bg-[#161c28] border border-gray-100 dark:border-gray-800/80 p-4 sm:p-5 relative transition-all">
+              <div className="rounded-2xl bg-zinc-50 dark:bg-[#121620] border border-zinc-200/80 dark:border-zinc-800/80 p-3.5 sm:p-4.5 relative transition-colors">
                 <div className="flex justify-between items-center mb-1">
-                  <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">
-                    Buy
+                  <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
+                    {t.buyLabel}
                   </span>
-                  <span className="text-xs text-gray-400 dark:text-gray-500 font-medium">
-                    Network: {buyToken.networkBadge}
+                  <span className="text-[11px] text-zinc-400 dark:text-zinc-500 font-mono font-medium">
+                    {t.network}: {buyToken.networkBadge}
                   </span>
                 </div>
 
                 <div className="flex items-center justify-between gap-3 mt-1">
-                  <div className="text-3xl sm:text-4xl font-semibold text-gray-900 dark:text-white font-mono">
+                  <div className="text-3xl sm:text-4xl font-semibold text-zinc-900 dark:text-white font-mono tracking-tight">
                     {quoteLoading ? (
-                      <span className="text-gray-300 dark:text-gray-600 animate-pulse text-2xl">...</span>
+                      <span className="text-zinc-300 dark:text-zinc-600 animate-pulse text-2xl">...</span>
                     ) : isZero ? (
-                      <span className="text-gray-300 dark:text-gray-600">0</span>
+                      <span className="text-zinc-300 dark:text-zinc-600">0</span>
                     ) : (
                       formatNetPayout(quote.netPayout, buyToken.symbol)
                     )}
                   </div>
 
                   {/* Token Selector Pill */}
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
+                  <button
+                    type="button"
                     onClick={() => setModalType('buy')}
-                    className="flex items-center gap-2.5 bg-white dark:bg-[#202737] hover:bg-gray-50 dark:hover:bg-[#262f43] px-3.5 py-2 rounded-full border border-gray-200/90 dark:border-gray-700 shadow-xs transition-all shrink-0 cursor-pointer"
+                    className="flex items-center gap-2 bg-white dark:bg-[#1A202E] hover:bg-zinc-100 dark:hover:bg-[#222A3D] px-3 py-1.5 rounded-xl border border-zinc-200 dark:border-zinc-700/80 shadow-2xs transition-all shrink-0 cursor-pointer"
                   >
                     <div className="w-6 h-6 rounded-full overflow-hidden shrink-0">
                       <img src={buyToken.icon} alt={buyToken.symbol} className="w-full h-full object-contain" />
                     </div>
                     <div className="text-left">
                       <div className="flex items-center gap-1">
-                        <span className="text-sm font-bold text-gray-900 dark:text-white leading-tight">
+                        <span className="text-sm font-bold text-zinc-900 dark:text-white leading-tight">
                           {buyToken.symbol}
                         </span>
                         {(buyToken.isVerified ?? true) && (
@@ -1285,16 +1431,16 @@ export default function BridgeSwap({
                           </span>
                         )}
                       </div>
-                      <div className="text-[10px] text-gray-400 font-medium leading-tight hidden sm:block">
+                      <div className="text-[10px] text-zinc-400 font-medium leading-tight hidden sm:block">
                         {buyToken.name.split(' ')[0]}
                       </div>
                     </div>
-                    <ChevronDown className="w-3.5 h-3.5 text-gray-400 ml-0.5" />
-                  </motion.button>
+                    <ChevronDown className="w-3.5 h-3.5 text-zinc-400 ml-0.5" />
+                  </button>
                 </div>
 
                 <div className="flex items-center justify-between mt-3 pt-1">
-                  <span className="text-xs font-medium text-gray-400 dark:text-gray-500 font-mono">
+                  <span className="text-xs font-medium text-zinc-400 dark:text-zinc-500 font-mono">
                     ≈ ${quote.netPayoutUsd !== undefined 
                       ? (quote.netPayoutUsd < 1 ? quote.netPayoutUsd.toFixed(3) : quote.netPayoutUsd.toFixed(2))
                       : (['PUSD', 'USDC', 'USDT', 'MUSD'].includes(buyToken.symbol) 
@@ -1302,7 +1448,7 @@ export default function BridgeSwap({
                           : (parsedAmount * 0.997).toFixed(2))} USD
                   </span>
                   {quote.oracleProvider && (
-                    <span className="text-[10px] font-bold text-gray-400 bg-gray-200/50 dark:bg-gray-800 px-2 py-0.5 rounded-md flex items-center gap-1.5">
+                    <span className="text-[10px] font-bold text-zinc-400 bg-zinc-200/60 dark:bg-zinc-800/80 px-2 py-0.5 rounded-md flex items-center gap-1.5 font-mono">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                       <span>Feed: {quote.oracleProvider}</span>
                     </span>
@@ -1311,35 +1457,35 @@ export default function BridgeSwap({
               </div>
             )}
 
-            {/* DESTINATION WALLET BOX (ALWAYS VISIBLE & PROMINENT) */}
+            {/* DESTINATION WALLET BOX */}
             {sellToken.isBch && buyToken.isBch ? (
               <div className="mt-3 p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-xs">
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
                     <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-                    <span>Auto-Settling to your connected BCH wallet</span>
+                    <span>{t.autoSettling}</span>
                   </span>
                   <span className="text-[10px] font-mono font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/20 px-2 py-0.5 rounded-md">
                     Intra-BCH
                   </span>
                 </div>
-                <div className="font-mono text-[11px] text-gray-700 dark:text-gray-200 bg-white/70 dark:bg-[#121620]/70 p-2.5 rounded-xl border border-emerald-500/20 truncate">
+                <div className="font-mono text-[11px] text-zinc-700 dark:text-zinc-200 bg-white/70 dark:bg-[#0B0E14] p-2.5 rounded-xl border border-emerald-500/20 truncate">
                   {userAddress || recipientAddress || 'Connecting Bitcoin Cash wallet...'}
                 </div>
               </div>
             ) : (
-              <div className="mt-3 p-3.5 rounded-2xl bg-[#F8F9FA] dark:bg-[#161c28] border border-gray-100 dark:border-gray-800/80 transition-all focus-within:border-orange-500/40 focus-within:ring-2 focus-within:ring-orange-500/10">
+              <div className="mt-3 p-3.5 rounded-2xl bg-zinc-50 dark:bg-[#121620] border border-zinc-200/80 dark:border-zinc-800/80 transition-colors focus-within:border-zinc-400 dark:focus-within:border-zinc-650">
                 <div className="flex justify-between items-center mb-1.5">
-                  <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
-                    <Wallet className="w-3.5 h-3.5 text-primary" />
-                    <span>Destination Address ({buyToken.networkBadge})</span>
+                  <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
+                    <Wallet className="w-3.5 h-3.5 text-orange-500" />
+                    <span>{t.destAddress} ({buyToken.networkBadge})</span>
                   </span>
 
                   {/* Format validation status badge */}
                   {recipientAddress.trim() ? (
                     isRecipientValid() ? (
                       <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-mono font-bold flex items-center gap-1">
-                        <CheckCircle2 className="w-3 h-3" /> Valid format
+                        <CheckCircle2 className="w-3 h-3" /> {t.validFormat}
                       </span>
                     ) : (
                       <span className="text-[10px] text-rose-500 font-mono font-bold flex items-center gap-1">
@@ -1348,7 +1494,7 @@ export default function BridgeSwap({
                     )
                   ) : (
                     <span className="text-[10px] text-amber-500 font-mono font-bold">
-                      Required
+                      {t.required}
                     </span>
                   )}
                 </div>
@@ -1359,32 +1505,30 @@ export default function BridgeSwap({
                     value={recipientAddress}
                     onChange={e => setRecipientAddress(e.target.value)}
                     placeholder={buyToken.isBch ? "bitcoincash:qq... or bchtest:qq..." : buyToken.symbol === 'SOL' ? "Solana address (e.g. 7xKXtg...)" : "0x... (Paste your destination address)"}
-                    className="w-full bg-white dark:bg-[#121620] border border-gray-200 dark:border-gray-700 text-xs font-mono text-gray-900 dark:text-white rounded-xl p-2.5 outline-none focus:border-primary transition-colors"
+                    className="w-full bg-white dark:bg-[#0B0E14] border border-zinc-200 dark:border-zinc-750 text-xs font-mono text-zinc-900 dark:text-white rounded-xl p-2.5 outline-none focus:border-zinc-400 dark:focus:border-zinc-600 transition-colors"
                   />
 
                   {/* 1-Click Paste Button */}
-                  <motion.button
+                  <button
                     type="button"
-                    whileHover={{ scale: 1.03 }}
-                    whileTap={{ scale: 0.97 }}
                     onClick={handlePasteRecipient}
-                    className="px-3 py-2.5 rounded-xl bg-orange-500/10 hover:bg-orange-500/20 text-orange-600 dark:text-orange-400 font-bold text-xs flex items-center gap-1.5 shrink-0 border border-orange-500/20 cursor-pointer transition-all"
+                    className="px-3 py-2.5 rounded-xl bg-white dark:bg-[#1A202E] hover:bg-zinc-100 dark:hover:bg-[#222A3D] text-zinc-700 dark:text-zinc-300 font-semibold text-xs flex items-center gap-1.5 shrink-0 border border-zinc-200 dark:border-zinc-750 cursor-pointer transition-all"
                     title="Paste from clipboard"
                   >
                     <Clipboard className="w-3.5 h-3.5" />
-                    <span className="hidden sm:inline">Paste</span>
-                  </motion.button>
+                    <span className="hidden sm:inline">{t.paste}</span>
+                  </button>
                 </div>
 
-                <div className="flex justify-between items-center mt-2 text-[10px] text-gray-400">
-                  <span>Funds will be delivered directly to this address</span>
+                <div className="flex justify-between items-center mt-2 text-[10px] text-zinc-400">
+                  <span>{t.fundsNotice}</span>
                   {userAddress && (
                     <button
                       type="button"
                       onClick={() => setRecipientAddress(userAddress)}
-                      className="text-primary font-bold hover:underline cursor-pointer"
+                      className="text-orange-500 font-bold hover:underline cursor-pointer"
                     >
-                      Use Connected Wallet
+                      {t.useConnected}
                     </button>
                   )}
                 </div>
@@ -1395,62 +1539,62 @@ export default function BridgeSwap({
             <AnimatePresence>
               {!isZero && (
                 <motion.div 
-                  initial={{ opacity: 0, y: -5 }}
+                  initial={{ opacity: 0, y: -4 }}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -5 }}
-                  className="my-3 px-3.5 py-3 rounded-2xl bg-gray-50/80 dark:bg-[#161c28]/80 border border-gray-100 dark:border-gray-800 text-xs space-y-1.5"
+                  exit={{ opacity: 0, y: -4 }}
+                  className="my-3 p-3.5 rounded-2xl bg-zinc-50/70 dark:bg-[#121620]/70 border border-zinc-200/80 dark:border-zinc-800/80 text-xs space-y-1.5"
                 >
-                  <div className="flex justify-between text-gray-600 dark:text-gray-400">
-                    <span className="font-medium">Execution Mode</span>
-                    <span className="font-semibold text-gray-900 dark:text-white">
+                  <div className="flex justify-between text-zinc-600 dark:text-zinc-400">
+                    <span className="font-medium">{t.execMode}</span>
+                    <span className="font-semibold text-zinc-900 dark:text-white">
                       {sellToken.isBch && buyToken.isBch
-                        ? 'Intra-BCH Direct CashTokens (~2s)'
+                        ? t.intraBchTitle
                         : subTab === 'limit'
-                        ? 'Limit Order (Orderbook Relayer)'
-                        : 'Cross-Chain Relayer (~3s)'}
+                        ? t.limitRelayer
+                        : t.directRelayer}
                     </span>
                   </div>
 
-                  <div className="flex justify-between text-gray-600 dark:text-gray-400">
-                    <span className="font-medium">Tasa de Mercado</span>
-                    <span className="font-semibold text-gray-900 dark:text-white font-mono">
+                  <div className="flex justify-between text-zinc-600 dark:text-zinc-400">
+                    <span className="font-medium">{t.marketPrice}</span>
+                    <span className="font-semibold text-zinc-900 dark:text-white font-mono">
                       1 {sellToken.symbol} ≈ {Number((quote.rate || 1.0).toFixed(6))} {buyToken.symbol}
                     </span>
                   </div>
 
-                  <div className="flex justify-between text-gray-600 dark:text-gray-400">
-                    <span className="font-medium">Monto Bruto Estimado</span>
-                    <span className="font-semibold text-gray-700 dark:text-gray-300 font-mono">
+                  <div className="flex justify-between text-zinc-600 dark:text-zinc-400">
+                    <span className="font-medium">{t.grossAmount}</span>
+                    <span className="font-semibold text-zinc-700 dark:text-zinc-300 font-mono">
                       {formatNetPayout(quote.grossAmount || parsedAmount, buyToken.symbol)} {buyToken.symbol}
                     </span>
                   </div>
 
-                  <div className="flex justify-between text-gray-600 dark:text-gray-400">
-                    <span className="font-medium">Comisión Total del Puente (0.30%)</span>
+                  <div className="flex justify-between text-zinc-600 dark:text-zinc-400">
+                    <span className="font-medium">{t.totalFee}</span>
                     <span className="font-semibold text-orange-600 dark:text-orange-400 font-mono">
                       -{formatFeeAmount(quote.feeAmount)} {buyToken.symbol}
                     </span>
                   </div>
 
-                  <div className="flex justify-between text-gray-600 dark:text-gray-400 pl-2 border-l-2 border-orange-500/30">
-                    <span className="text-[11px] text-gray-500 dark:text-gray-400">↳ Desglose transparente:</span>
+                  <div className="flex justify-between text-zinc-500 dark:text-zinc-400 pl-2 border-l-2 border-orange-500/30">
+                    <span className="text-[11px]">{t.transparentBreakdown}</span>
                     <span className="font-semibold text-emerald-600 dark:text-emerald-400 font-mono text-[11px]">
-                      0.20% LPs • 0.10% Protocolo
+                      {t.feeSplit}
                     </span>
                   </div>
 
-                  <div className="flex justify-between text-gray-600 dark:text-gray-400 pt-1.5 border-t border-gray-200/60 dark:border-gray-700/60">
-                    <span className="font-bold text-gray-900 dark:text-white">Recibes (Neto Real)</span>
+                  <div className="flex justify-between text-zinc-700 dark:text-zinc-300 pt-1.5 border-t border-zinc-200 dark:border-zinc-800">
+                    <span className="font-bold text-zinc-900 dark:text-white">{t.youReceive}</span>
                     <span className="font-extrabold text-emerald-600 dark:text-emerald-400 font-mono text-sm">
                       {formatNetPayout(quote.netPayout, buyToken.symbol)} {buyToken.symbol}
                     </span>
                   </div>
 
-                  <div className="flex justify-between text-gray-500 dark:text-gray-400 text-xs pt-1">
+                  <div className="flex justify-between text-zinc-500 dark:text-zinc-400 text-xs pt-1">
                     <span className="flex items-center gap-1">
-                      <span>Mínimo Garantizado ({slippage}% slippage):</span>
+                      <span>{t.minGuaranteed} ({slippage}% slippage):</span>
                     </span>
-                    <span className="font-mono font-bold text-gray-700 dark:text-gray-300">
+                    <span className="font-mono font-bold text-zinc-700 dark:text-zinc-300">
                       {formatNetPayout(quote.netPayout * (1 - slippage / 100), buyToken.symbol)} {buyToken.symbol}
                     </span>
                   </div>
@@ -1471,25 +1615,25 @@ export default function BridgeSwap({
               {isZero ? (
                 <button 
                   disabled
-                  className="w-full py-4 rounded-2xl font-bold text-base bg-[#F3F4F6] dark:bg-[#19202c] text-gray-400 dark:text-gray-500 cursor-not-allowed text-center transition-all"
+                  className="w-full py-3.5 sm:py-4 rounded-xl font-semibold text-sm sm:text-base bg-zinc-100 dark:bg-[#121620] text-zinc-400 dark:text-zinc-600 border border-zinc-200/80 dark:border-zinc-800/80 cursor-not-allowed text-center transition-all"
                 >
-                  Enter Amount
+                  {t.enterAmount}
                 </button>
               ) : !userContext ? (
                 <motion.button 
                   whileHover={{ scale: 1.01 }}
                   whileTap={{ scale: 0.99 }}
                   onClick={onConnectWallet}
-                  className="w-full py-4 rounded-2xl font-bold text-base bg-gray-950 hover:bg-black dark:bg-white dark:hover:bg-gray-100 text-white dark:text-gray-950 shadow-lg shadow-gray-900/10 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  className="w-full py-3.5 sm:py-4 rounded-xl font-bold text-sm sm:text-base bg-zinc-900 hover:bg-black dark:bg-white dark:hover:bg-zinc-100 text-white dark:text-zinc-950 shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer"
                 >
-                  <Wallet className="w-5 h-5 text-primary" /> Connect Wallet
+                  <Wallet className="w-4 h-4 text-orange-500" /> {t.connectWallet}
                 </motion.button>
               ) : quote?.hasLiquidity === false ? (
                 <button 
                   disabled
-                  className="w-full py-4 rounded-2xl font-bold text-base bg-rose-500/10 border border-rose-500/30 text-rose-500 cursor-not-allowed text-center transition-all flex items-center justify-center gap-2"
+                  className="w-full py-3.5 sm:py-4 rounded-xl font-bold text-sm sm:text-base bg-rose-500/10 border border-rose-500/30 text-rose-500 cursor-not-allowed text-center transition-all flex items-center justify-center gap-2"
                 >
-                  <AlertCircle className="w-5 h-5 text-rose-500" /> Insufficient Liquidity
+                  <AlertCircle className="w-4 h-4 text-rose-500" /> {t.insufficientLiquidity}
                 </button>
               ) : subTab === 'limit' ? (
                 <motion.button 
@@ -1497,15 +1641,15 @@ export default function BridgeSwap({
                   whileTap={{ scale: 0.99 }}
                   onClick={handlePlaceLimitOrder}
                   disabled={isPlacingLimitOrder}
-                  className="w-full py-4 rounded-2xl font-bold text-base bg-primary hover:bg-orange-600 text-white shadow-xl shadow-orange-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  className="w-full py-3.5 sm:py-4 rounded-xl font-bold text-sm sm:text-base bg-orange-500 hover:bg-orange-600 text-white shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer"
                 >
                   {isPlacingLimitOrder ? (
                     <>
-                      <RefreshCw className="w-5 h-5 animate-spin" /> Registering Limit Order...
+                      <RefreshCw className="w-4 h-4 animate-spin" /> {t.registeringLimit}
                     </>
                   ) : (
                     <>
-                      <Target className="w-5 h-5" /> Place Limit Order
+                      <Target className="w-4 h-4" /> {t.placeLimitOrder}
                     </>
                   )}
                 </motion.button>
@@ -1515,14 +1659,14 @@ export default function BridgeSwap({
                   whileTap={{ scale: 0.99 }}
                   onClick={handleSwap}
                   disabled={isSwapping}
-                  className="w-full py-4 rounded-2xl font-bold text-base bg-primary hover:bg-orange-600 text-white shadow-xl shadow-orange-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  className="w-full py-3.5 sm:py-4 rounded-xl font-bold text-sm sm:text-base bg-orange-500 hover:bg-orange-600 text-white shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer"
                 >
                   {isSwapping ? (
                     <>
-                      <RefreshCw className="w-5 h-5 animate-spin" /> Preparing Relayer Intent...
+                      <RefreshCw className="w-4 h-4 animate-spin" /> {t.preparingRelayer}
                     </>
                   ) : (
-                    'Swap Now'
+                    t.swapNow
                   )}
                 </motion.button>
               )}
@@ -1535,30 +1679,30 @@ export default function BridgeSwap({
 
       {/* ACTIVE LIMIT ORDERS DRAWER */}
       {limitOrders.length > 0 && (
-        <div className="w-full max-w-[480px] mt-4 p-4 rounded-3xl bg-white dark:bg-[#111622] border border-gray-200 dark:border-gray-800 shadow-sm">
+        <div className="w-full max-w-[480px] mt-4 p-4 rounded-2xl bg-white dark:bg-[#0B0E14] border border-zinc-200 dark:border-zinc-800 shadow-sm">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-bold text-gray-900 dark:text-white flex items-center gap-1.5">
-              <Target className="w-3.5 h-3.5 text-primary" /> My Limit Orders ({limitOrders.length})
+            <span className="text-xs font-bold text-zinc-900 dark:text-white flex items-center gap-1.5">
+              <Target className="w-3.5 h-3.5 text-orange-500" /> {t.limitOrdersTitle} ({limitOrders.length})
             </span>
-            <span className="text-[10px] text-gray-400">Monitoring 24/7 by Relayer</span>
+            <span className="text-[10px] text-zinc-400 font-mono">{t.monitoring247}</span>
           </div>
 
           <div className="space-y-2 max-h-48 overflow-y-auto">
             {limitOrders.map(order => (
-              <div key={order.id} className="p-2.5 rounded-xl bg-gray-50 dark:bg-[#161c28] border border-gray-100 dark:border-gray-800 flex items-center justify-between text-xs">
+              <div key={order.id} className="p-2.5 rounded-xl bg-zinc-50 dark:bg-[#121620] border border-zinc-200/80 dark:border-zinc-800 flex items-center justify-between text-xs">
                 <div>
-                  <div className="font-bold text-gray-900 dark:text-white">
+                  <div className="font-bold text-zinc-900 dark:text-white">
                     {order.fromAmount} {order.fromToken} ➔ {order.expectedOutput} {order.toToken}
                   </div>
-                  <div className="text-[10px] text-gray-400 font-mono mt-0.5">
-                    Target Rate: {order.targetRate} • Status: <span className="text-primary font-semibold">{order.status}</span>
+                  <div className="text-[10px] text-zinc-400 font-mono mt-0.5">
+                    Target Rate: {order.targetRate} • Status: <span className="text-orange-500 font-semibold">{order.status}</span>
                   </div>
                 </div>
 
                 {order.status === 'OPEN' && (
                   <button
                     onClick={() => handleCancelLimitOrder(order.id)}
-                    className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors cursor-pointer"
+                    className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors cursor-pointer"
                     title="Cancel order"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
@@ -1790,22 +1934,22 @@ export default function BridgeSwap({
       {/* SETTINGS / SLIPPAGE MODAL */}
       <AnimatePresence>
         {showSettingsModal && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[110] flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
             <motion.div 
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white dark:bg-[#121620] rounded-[28px] p-6 w-full max-w-sm shadow-2xl border border-gray-100 dark:border-gray-800 relative text-left"
+              className="bg-white dark:bg-[#0B0E14] rounded-2xl p-5 sm:p-6 w-full max-w-sm shadow-2xl border border-zinc-200 dark:border-zinc-800 relative text-left"
             >
               <div className="flex justify-between items-center mb-4">
-                <h3 className="font-bold text-gray-900 dark:text-white">Bridge Settings</h3>
-                <button onClick={() => setShowSettingsModal(false)} className="text-gray-400 hover:text-gray-900 dark:hover:text-white font-bold cursor-pointer">✕</button>
+                <h3 className="font-bold text-zinc-900 dark:text-white">{t.settingsTitle}</h3>
+                <button onClick={() => setShowSettingsModal(false)} className="text-zinc-400 hover:text-zinc-900 dark:hover:text-white font-bold cursor-pointer">✕</button>
               </div>
 
               <div className="space-y-4">
                 <div>
-                  <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 block mb-2">
-                    Slippage Tolerance
+                  <label className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 block mb-2">
+                    {t.slippageTolerance}
                   </label>
                   <div className="flex gap-2">
                     {[0.1, 0.5, 1.0].map(s => (
@@ -1814,8 +1958,8 @@ export default function BridgeSwap({
                         onClick={() => setSlippage(s)}
                         className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
                           slippage === s 
-                            ? 'bg-primary text-white border-primary' 
-                            : 'bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700'
+                            ? 'bg-orange-500 text-white border-orange-500' 
+                            : 'bg-zinc-50 dark:bg-[#121620] text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-800'
                         }`}
                       >
                         {s}%
@@ -1824,8 +1968,8 @@ export default function BridgeSwap({
                   </div>
                 </div>
 
-                <div className="pt-2 text-[11px] text-gray-400 leading-relaxed border-t border-gray-100 dark:border-gray-800">
-                  Fixed 0.3% protocol fee applies to maintain high-liquidity cross-chain vaults and relayer settlement guarantees.
+                <div className="pt-2 text-[11px] text-zinc-400 leading-relaxed border-t border-zinc-200 dark:border-zinc-800">
+                  {t.slippageNotice}
                 </div>
               </div>
             </motion.div>
