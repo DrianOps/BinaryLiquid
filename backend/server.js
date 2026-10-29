@@ -148,7 +148,7 @@ app.get('/api/quote', async (req, res) => {
 // Create Swap Intent
 app.post('/api/swap/create', async (req, res) => {
   try {
-    const { fromToken, toToken, fromChain, toChain, amount, recipientAddress } = req.body;
+    const { fromToken, toToken, fromChain, toChain, amount, recipientAddress, slippage, minReceived } = req.body;
 
     if (!fromToken || !toToken || !fromChain || !toChain || !amount || !recipientAddress) {
       return res.status(400).json({ error: 'All fields are required (fromToken, toToken, fromChain, toChain, amount, recipientAddress)' });
@@ -168,6 +168,9 @@ app.post('/api/swap/create', async (req, res) => {
     // Derive dedicated BIP-44 HD Child Deposit Address for this order
     const hdInfo = await hdWalletService.deriveOrderDepositAddress(fromChain);
 
+    const userSlippage = parseFloat(slippage) || 0.5;
+    const minPayout = minReceived ? parseFloat(minReceived) : Number((quote.netPayout * (1 - userSlippage / 100)).toFixed(6));
+
     const swap = db.createSwap({
       fromToken: quote.fromToken,
       toToken: quote.toToken,
@@ -175,6 +178,8 @@ app.post('/api/swap/create', async (req, res) => {
       toChain,
       fromAmount: quote.inputAmount,
       toAmount: quote.netPayout,
+      minPayoutAmount: minPayout,
+      slippageTolerance: userSlippage,
       feeAmount: quote.feeAmount,
       feePercentage: config.feePercentage,
       oracleRate: quote.rate,
@@ -193,6 +198,7 @@ app.post('/api/swap/create', async (req, res) => {
         derivationPath: swap.derivationPath,
         derivationIndex: swap.derivationIndex,
         expectedPayout: `${swap.toAmount} ${swap.toToken}`,
+        minimumGuaranteed: `${swap.minPayoutAmount} ${swap.toToken} (${swap.slippageTolerance}% slippage tolerance)`,
         feeCollected: `${swap.feeAmount} ${swap.fromToken} (0.3% protocol fee)`
       }
     });

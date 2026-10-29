@@ -181,6 +181,8 @@ class BridgeDatabase {
       feeAmount: Number(swapData.feeAmount),
       feePercentage: Number(swapData.feePercentage || 0.003),
       oracleRate: Number(swapData.oracleRate || 1.0),
+      slippageTolerance: swapData.slippageTolerance !== undefined ? Number(swapData.slippageTolerance) : 0.5,
+      minPayoutAmount: swapData.minPayoutAmount !== undefined ? Number(swapData.minPayoutAmount) : Number((Number(swapData.toAmount) * 0.995).toFixed(6)),
       depositAddress: swapData.depositAddress,
       derivationPath: swapData.derivationPath || null,
       derivationIndex: swapData.derivationIndex !== undefined ? swapData.derivationIndex : null,

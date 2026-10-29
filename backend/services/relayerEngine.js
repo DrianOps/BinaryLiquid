@@ -116,7 +116,15 @@ class RelayerEngine {
         return { success: false, reason: verifyResult.reason };
       }
 
-      // 2. Mark payout execution
+      // 2. Slippage Protection Check
+      if (swap.minPayoutAmount && swap.toAmount < swap.minPayoutAmount) {
+        const msg = `Slippage tolerance exceeded: Minimum guaranteed was ${swap.minPayoutAmount} ${swap.toToken}, but payout is ${swap.toAmount}. Halted to protect user.`;
+        console.warn(`[Relayer Engine] ⚠️ ${msg}`);
+        db.updateSwap(swapId, { status: 'FAILED', error: msg });
+        return { success: false, reason: msg };
+      }
+
+      // Mark payout execution
       db.updateSwap(swapId, { status: 'EXECUTING_PAYOUT' });
       db.logEvent('SWAP_PAYOUT_INIT', `Executing payout of ${swap.toAmount} ${swap.toToken} to ${swap.recipientAddress}`, { swapId });
 

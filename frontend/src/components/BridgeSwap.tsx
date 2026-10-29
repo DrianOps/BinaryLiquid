@@ -530,6 +530,7 @@ export default function BridgeSwap({
     setSwapStep(1);
 
     try {
+      const minPayout = Number((quote.netPayout * (1 - slippage / 100)).toFixed(6));
       const res = await fetch(`${backendUrl}/api/swap/create`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -539,7 +540,9 @@ export default function BridgeSwap({
           fromChain: sellToken.isBch ? 'bch_mainnet' : 'polygon_mainnet',
           toChain: buyToken.isBch ? 'bch_mainnet' : 'polygon_mainnet',
           amount: num,
-          recipientAddress: recipientAddress.trim()
+          recipientAddress: recipientAddress.trim(),
+          slippage: slippage,
+          minReceived: minPayout
         })
       });
       const data = await res.json();
@@ -1419,6 +1422,15 @@ export default function BridgeSwap({
                     <span className="font-bold text-gray-900 dark:text-white">Recibes (Neto Real)</span>
                     <span className="font-extrabold text-emerald-600 dark:text-emerald-400 font-mono text-sm">
                       {formatNetPayout(quote.netPayout, buyToken.symbol)} {buyToken.symbol}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between text-gray-500 dark:text-gray-400 text-xs pt-1">
+                    <span className="flex items-center gap-1">
+                      <span>Mínimo Garantizado ({slippage}% slippage):</span>
+                    </span>
+                    <span className="font-mono font-bold text-gray-700 dark:text-gray-300">
+                      {formatNetPayout(quote.netPayout * (1 - slippage / 100), buyToken.symbol)} {buyToken.symbol}
                     </span>
                   </div>
 
