@@ -357,7 +357,7 @@ app.post('/api/limit-orders/create', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Missing required limit order parameters' });
     }
 
-    const isBchOrigin = (fromChain || '').includes('bch') || fromToken === 'PUSD' || fromToken === 'MUSD';
+    const isBchOrigin = (fromChain || '').includes('bch') || fromToken === 'PUSD' || fromToken === 'MUSD' || fromToken === 'LIFT';
     const originChain = fromChain || (isBchOrigin ? 'bch_mainnet' : 'polygon_mainnet');
     const hdInfo = await hdWalletService.deriveOrderDepositAddress(originChain);
 

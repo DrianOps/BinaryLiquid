@@ -49,10 +49,6 @@ export default function LandingPage({ onLaunchApp, onOpenDocs }: LandingPageProp
             <span className="text-[11px] sm:text-xs font-bold text-gray-700 dark:text-gray-200 group-hover:text-primary transition-colors">
               BCH BLAZE Hackathon Stablecoin Track
             </span>
-            <span className="text-gray-300 dark:text-gray-600 hidden xs:inline">•</span>
-            <span className="text-[11px] sm:text-xs font-black text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-              $750 PUSD Sponsored <Flame className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-orange-500 fill-orange-500" />
-            </span>
             <ChevronRight className="w-3.5 h-3.5 text-gray-400 group-hover:translate-x-0.5 transition-transform hidden xs:block" />
           </motion.div>
 

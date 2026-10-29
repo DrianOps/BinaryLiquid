@@ -38,6 +38,13 @@ export const config = {
         category: process.env.MUSD_CATEGORY || 'b7d0c2e800000000000000000000000000000000000000000000000000000000',
         decimals: 6,
         isSponsor: false
+      },
+      LIFT: {
+        name: 'Paytaca LIFT',
+        symbol: 'LIFT',
+        category: process.env.LIFT_CATEGORY || '5932b2fd4915d6a75d3ec53282cd49118149a2176ee67ed68b1111ff0786f7fc',
+        decimals: 2,
+        isSponsor: false
       }
     }
   },

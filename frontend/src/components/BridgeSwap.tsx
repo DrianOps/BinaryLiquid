@@ -636,7 +636,7 @@ export default function BridgeSwap({
     const hash = swap?.payoutTxHash || swap?.depositTxHash || swap?.id;
     if (!hash) return null;
     const to = (swap?.toToken || buyToken.symbol).toUpperCase();
-    if (to === 'PUSD' || to === 'MUSD' || to === 'BCH') {
+    if (to === 'PUSD' || to === 'MUSD' || to === 'BCH' || to === 'LIFT') {
       return `https://3xpl.com/bitcoin-cash/transaction/${hash}`;
     } else if (to === 'SOL') {
       return `https://solscan.io/tx/${hash}`;

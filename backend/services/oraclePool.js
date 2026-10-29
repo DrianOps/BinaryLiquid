@@ -1,4 +1,5 @@
 import Redis from 'ioredis';
+import { WebSocket } from 'ws';
 import { config } from '../config.js';
 import { poolService } from './poolService.js';
 
@@ -6,6 +7,10 @@ class OraclePoolManager {
   constructor() {
     this.currentIndex = 0;
     this.activeProvider = 'Binance API';
+
+    // Cauldron DEX Router Configuration for CashTokens
+    this.cauldronCategoryId = '5932b2fd4915d6a75d3ec53282cd49118149a2176ee67ed68b1111ff0786f7fc';
+    this.cauldronRouterWs = 'wss://router.riften.net/v1/route';
 
     // In-memory fallback prices (USD)
     this.memoryCache = {
@@ -19,7 +24,8 @@ class OraclePoolManager {
         ETH: 2345.0,
         SOL: 101.5,
         BNB: 749.0,
-        POL: 0.0915
+        POL: 0.0915,
+        LIFT: 0.01636
       }
     };
 
@@ -146,6 +152,73 @@ class OraclePoolManager {
   }
 
   /**
+   * Fetches real-time market price for Paytaca LIFT token from Cauldron DEX Router WebSocket.
+   * LIFT category: 5932b2fd4915d6a75d3ec53282cd49118149a2176ee67ed68b1111ff0786f7fc
+   * Decimals: 2 (10,000 base units = 100 LIFT)
+   */
+  async fetchLiftPriceFromCauldron() {
+    return new Promise((resolve, reject) => {
+      let ws;
+      const timeout = setTimeout(() => {
+        if (ws) {
+          try { ws.terminate(); } catch (e) {}
+        }
+        reject(new Error('Cauldron Router WebSocket timeout'));
+      }, 3500);
+
+      try {
+        ws = new WebSocket(this.cauldronRouterWs);
+      } catch (err) {
+        clearTimeout(timeout);
+        return reject(err);
+      }
+
+      ws.on('open', () => {
+        const payload = {
+          jsonrpc: '2.0',
+          id: Date.now(),
+          method: 'route.quote',
+          params: {
+            sell: this.cauldronCategoryId,
+            buy: 'bch',
+            amount: '10000', // 100 LIFT
+            side: 'sell'
+          }
+        };
+        ws.send(JSON.stringify(payload));
+      });
+
+      ws.on('message', async (data) => {
+        clearTimeout(timeout);
+        try {
+          const parsed = JSON.parse(data.toString());
+          const outputSats = parseFloat(parsed?.result?.output_amount);
+          if (!isNaN(outputSats) && outputSats > 0) {
+            // outputSats in satoshis for 100 LIFT
+            // 1 BCH = 100,000,000 satoshis
+            const bchPerLift = (outputSats / 100000000) / 100.0;
+            const bchUsd = await this.getBchPriceUsd();
+            const liftUsd = bchPerLift * (bchUsd || 283.5);
+            try { ws.close(); } catch (e) {}
+            return resolve(liftUsd);
+          }
+          try { ws.close(); } catch (e) {}
+          reject(new Error('Invalid Cauldron quote response'));
+        } catch (e) {
+          try { ws.close(); } catch (e) {}
+          reject(e);
+        }
+      });
+
+      ws.on('error', (err) => {
+        clearTimeout(timeout);
+        try { ws.terminate(); } catch (e) {}
+        reject(err);
+      });
+    });
+  }
+
+  /**
    * Fetches spot USD price for any supported asset with multi-oracle failover and Redis caching.
    */
   async getPriceUsd(tokenSymbol) {
@@ -165,14 +238,36 @@ class OraclePoolManager {
         const cached = await this.redis.get(`oracle:price:${sym}`);
         if (cached) {
           const parsed = parseFloat(cached);
-          if (!isNaN(parsed) && parsed > 0) return parsed;
+          if (!isNaN(parsed) && parsed > 0) {
+            if (sym === 'LIFT') this.activeProvider = 'Cauldron DEX Router (BCH AMM)';
+            return parsed;
+          }
         }
       } catch (err) {}
     }
 
     // 3. Try In-memory cache
     if (this.memoryCache.prices[sym] && (now - (this.memoryCache.timestamp[sym] || 0) < TTL_MS)) {
+      if (sym === 'LIFT') this.activeProvider = 'Cauldron DEX Router (BCH AMM)';
       return this.memoryCache.prices[sym];
+    }
+
+    // Special real-time integration for Paytaca LIFT token via Cauldron DEX
+    if (sym === 'LIFT') {
+      try {
+        const liftPrice = await this.fetchLiftPriceFromCauldron();
+        this.activeProvider = 'Cauldron DEX Router (BCH AMM)';
+        this.memoryCache.prices.LIFT = liftPrice;
+        this.memoryCache.timestamp.LIFT = now;
+        if (this.redis) {
+          this.redis.set('oracle:price:LIFT', liftPrice.toString(), 'EX', 15).catch(() => {});
+        }
+        return liftPrice;
+      } catch (err) {
+        console.warn('[OraclePool] Cauldron LIFT quote warning, fallback to cache:', err.message);
+        this.activeProvider = 'Cauldron DEX (Cached)';
+        return this.memoryCache.prices.LIFT || 0.01636;
+      }
     }
 
     // 4. Query Oracle Pool with automatic failover
@@ -266,6 +361,8 @@ class OraclePoolManager {
         return 75.0; // ~56,000 USD reserve
       case 'POL':
         return 300000.0; // ~27,000 USD reserve
+      case 'LIFT':
+        return 1000000.0; // ~16,000 USD reserve
       default:
         return 10000.0;
     }
@@ -280,12 +377,18 @@ class OraclePoolManager {
       throw new Error('Invalid swap amount');
     }
 
-    if (parsedAmount < config.minSwapAmount) {
-      throw new Error(`Minimum swap amount is ${config.minSwapAmount} ${fromToken}`);
+    const fromSym = (fromToken || '').toUpperCase();
+    const toSym = (toToken || '').toUpperCase();
+
+    const minAmount = fromSym === 'LIFT' ? 10.0 : config.minSwapAmount;
+    const maxAmount = fromSym === 'LIFT' ? 1000000.0 : (fromSym === 'POL' ? 50000.0 : config.maxSwapAmount);
+
+    if (parsedAmount < minAmount) {
+      throw new Error(`Minimum swap amount is ${minAmount} ${fromToken}`);
     }
 
-    if (parsedAmount > config.maxSwapAmount) {
-      throw new Error(`Maximum swap amount per transaction is ${config.maxSwapAmount} ${fromToken}`);
+    if (parsedAmount > maxAmount) {
+      throw new Error(`Maximum swap amount per transaction is ${maxAmount} ${fromToken}`);
     }
 
     const priceFrom = await this.getPriceUsd(fromToken);
@@ -302,9 +405,12 @@ class OraclePoolManager {
     const availableLiquidity = await this.getAvailableLiquidity(toToken);
     const hasLiquidity = netPayout <= availableLiquidity;
 
+    const isLift = fromSym === 'LIFT' || toSym === 'LIFT';
+    const isPusd = fromSym === 'PUSD' || toSym === 'PUSD';
+
     return {
-      fromToken: fromToken.toUpperCase(),
-      toToken: toToken.toUpperCase(),
+      fromToken: fromSym,
+      toToken: toSym,
       inputAmount: parsedAmount,
       rate: Number(rate.toFixed(6)),
       grossAmount: Number(grossAmount.toFixed(6)),
@@ -318,12 +424,12 @@ class OraclePoolManager {
       priceToUsd: Number(priceTo.toFixed(4)),
       hasLiquidity,
       availableLiquidity: Number(availableLiquidity.toFixed(4)),
-      minAmount: config.minSwapAmount,
-      maxAmount: config.maxSwapAmount,
+      minAmount,
+      maxAmount,
       estimatedSeconds: 3,
       oracleProvider: this.activeProvider,
-      isSponsorAsset: fromToken.toUpperCase() === 'PUSD' || toToken.toUpperCase() === 'PUSD',
-      sponsorTag: 'Official BLAZE Sponsor (ParyonUSD)'
+      isSponsorAsset: isPusd || isLift,
+      sponsorTag: isLift ? 'Paytaca LIFT • Cauldron DEX' : 'Official BLAZE Sponsor (ParyonUSD)'
     };
   }
 

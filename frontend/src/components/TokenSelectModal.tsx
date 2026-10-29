@@ -62,6 +62,17 @@ export const SUPPORTED_TOKENS: TokenInfo[] = [
     categoryOrAddress: 'b7d0c2e800000000000000000000000000000000000000000000000000000000'
   },
   {
+    symbol: 'LIFT',
+    name: 'Paytaca LIFT',
+    network: 'Bitcoin Cash (Mainnet)',
+    networkBadge: 'BCH CashTokens',
+    icon: '/LIFT.png',
+    decimals: 2,
+    isBch: true,
+    isVerified: true,
+    categoryOrAddress: '5932b2fd4915d6a75d3ec53282cd49118149a2176ee67ed68b1111ff0786f7fc'
+  },
+  {
     symbol: 'BCH',
     name: 'Bitcoin Cash',
     network: 'Bitcoin Cash (Mainnet)',
