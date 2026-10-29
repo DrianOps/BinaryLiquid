@@ -99,7 +99,7 @@ export default function LandingPage({ onLaunchApp, onOpenDocs }: LandingPageProp
               onClick={onOpenDocs}
               className="w-full sm:w-auto px-6 sm:px-7 py-3.5 sm:py-4 rounded-2xl bg-white/80 dark:bg-[#141924]/80 backdrop-blur-md hover:bg-white dark:hover:bg-[#1a2232] text-gray-800 dark:text-gray-200 border border-gray-200/90 dark:border-gray-800 font-bold text-sm sm:text-base shadow-2xs transition-all hover:scale-[1.01] cursor-pointer"
             >
-              Documentation & Tokenomics
+              Docs & Tokenomics
             </button>
           </motion.div>
 

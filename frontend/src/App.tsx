@@ -50,7 +50,7 @@ const translations = {
     navSwap: "Bridge Swap",
     navGateway: "Gateway",
     navPools: "Pools",
-    navDocs: "Documentation",
+    navDocs: "Docs",
     navWallet: "Connect Wallet",
     connect: "Connect Wallet",
     openWallet: "Connecting...",
@@ -60,7 +60,7 @@ const translations = {
     navSwap: "Bridge Swap",
     navGateway: "Gateway",
     navPools: "Pools",
-    navDocs: "Documentación",
+    navDocs: "Docs",
     navWallet: "Conectar Billetera",
     connect: "Conectar Billetera",
     openWallet: "Conectando...",
@@ -562,7 +562,7 @@ export default function App() {
                       <FileText className="w-4 h-4" />
                     </div>
                     <div className="text-left">
-                      <div>Documentation</div>
+                      <div>Docs</div>
                       <div className="text-[10px] text-gray-400 font-normal">Tokenomics & BLAZE specs</div>
                     </div>
                   </button>
@@ -840,7 +840,7 @@ export default function App() {
                 <span>BinaryLiquid Technical Whitepaper & Architecture</span>
               </div>
               <h2 className="text-2xl sm:text-4xl font-black text-gray-900 dark:text-white tracking-tight">
-                Cross-Chain Gateway Documentation
+                Cross-Chain Gateway Docs
               </h2>
               <p className="text-gray-500 dark:text-gray-400 font-bold mt-1 text-xs sm:text-sm">
                 Hybrid Relayer Engine, Non-Custodial Liquidity Pools & Autonomous Security Sweeper
