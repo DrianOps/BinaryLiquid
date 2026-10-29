@@ -41,6 +41,8 @@ interface BridgeSwapProps {
   backendUrl?: string;
   onOpenLanding?: () => void;
   lang?: 'en' | 'es';
+  platformNetwork?: 'mainnet' | 'testnet';
+  onToggleNetwork?: (net: 'mainnet' | 'testnet') => void;
 }
 
 const swapTranslations = {
@@ -203,9 +205,32 @@ export default function BridgeSwap({
   showToast,
   backendUrl = '',
   onOpenLanding,
-  lang = 'en'
+  lang = 'en',
+  platformNetwork = 'mainnet',
+  onToggleNetwork
 }: BridgeSwapProps) {
+  const isTestnet = platformNetwork === 'testnet';
   const t = swapTranslations[lang] || swapTranslations.en;
+
+  const getNetworkBadge = (token: TokenInfo) => {
+    if (token.isBch) {
+      return isTestnet ? 'Chipnet CashTokens' : token.networkBadge;
+    }
+    if (token.symbol === 'SOL') {
+      return isTestnet ? 'Devnet SPL' : token.networkBadge;
+    }
+    return isTestnet ? 'Polygon Amoy' : token.networkBadge;
+  };
+
+  const getNetworkName = (token: TokenInfo) => {
+    if (token.isBch) {
+      return isTestnet ? 'BCH Chipnet (Testnet4)' : token.network;
+    }
+    if (token.symbol === 'SOL') {
+      return isTestnet ? 'Solana Devnet' : token.network;
+    }
+    return isTestnet ? 'Polygon Amoy (Testnet)' : token.network;
+  };
   // Navigation sub-tab (Swap | Limit | Private)
   const [subTab, setSubTab] = useState<'swap' | 'limit' | 'private'>('swap');
 
@@ -325,6 +350,9 @@ export default function BridgeSwap({
   const isRecipientValid = () => {
     if (!recipientAddress.trim()) return false;
     if (buyToken.isBch) {
+      if (isTestnet) {
+        return recipientAddress.startsWith('bchtest:') || recipientAddress.startsWith('bch');
+      }
       return recipientAddress.startsWith('bch') || recipientAddress.startsWith('bitcoincash');
     } else if (buyToken.symbol === 'SOL') {
       return /^[1-9A-HJ-NP-za-km-z]{32,44}$/.test(recipientAddress.trim());
@@ -363,8 +391,8 @@ export default function BridgeSwap({
           userAddress,
           fromToken: sellToken.symbol,
           toToken: buyToken.symbol,
-          fromChain: sellToken.isBch ? 'bch' : 'evm',
-          toChain: buyToken.isBch ? 'bch' : 'evm',
+          fromChain: sellToken.isBch ? (isTestnet ? 'bch_chipnet' : 'bch_mainnet') : (isTestnet ? 'amoy_testnet' : 'polygon_mainnet'),
+          toChain: buyToken.isBch ? (isTestnet ? 'bch_chipnet' : 'bch_mainnet') : (isTestnet ? 'amoy_testnet' : 'polygon_mainnet'),
           fromAmount: amt,
           targetRate: tgt,
           recipientAddress: recipientAddress.trim()
@@ -669,11 +697,17 @@ export default function BridgeSwap({
     if (!hash) return null;
     const to = (swap?.toToken || buyToken.symbol).toUpperCase();
     if (to === 'PUSD' || to === 'MUSD' || to === 'BCH' || to === 'LIFT') {
-      return `https://3xpl.com/bitcoin-cash/transaction/${hash}`;
+      return isTestnet 
+        ? `https://chipnet.imaginary.cash/tx/${hash}`
+        : `https://3xpl.com/bitcoin-cash/transaction/${hash}`;
     } else if (to === 'SOL') {
-      return `https://solscan.io/tx/${hash}`;
+      return isTestnet
+        ? `https://solscan.io/tx/${hash}?cluster=devnet`
+        : `https://solscan.io/tx/${hash}`;
     } else {
-      return `https://polygonscan.com/tx/${hash}`;
+      return isTestnet
+        ? `https://amoy.polygonscan.com/tx/${hash}`
+        : `https://polygonscan.com/tx/${hash}`;
     }
   };
 
@@ -708,7 +742,7 @@ export default function BridgeSwap({
     }
 
     if (!recipientAddress.trim() || !isRecipientValid()) {
-      const err = classifySwapError(new Error(buyToken.isBch ? 'Por favor introduce una dirección válida de Bitcoin Cash (CashAddr)' : buyToken.symbol === 'SOL' ? 'Por favor introduce una dirección válida de Solana' : 'Por favor introduce una dirección 0x... EVM válida'));
+      const err = classifySwapError(new Error(buyToken.isBch ? (isTestnet ? 'Por favor introduce una dirección válida de BCH Chipnet (bchtest:...)' : 'Por favor introduce una dirección válida de Bitcoin Cash (bitcoincash:...)') : buyToken.symbol === 'SOL' ? 'Por favor introduce una dirección válida de Solana' : 'Por favor introduce una dirección 0x... EVM válida'));
       setSwapError(err);
       setCardState('error');
       return;
@@ -725,8 +759,8 @@ export default function BridgeSwap({
         body: JSON.stringify({
           fromToken: sellToken.symbol,
           toToken: buyToken.symbol,
-          fromChain: sellToken.isBch ? 'bch_mainnet' : 'polygon_mainnet',
-          toChain: buyToken.isBch ? 'bch_mainnet' : 'polygon_mainnet',
+          fromChain: sellToken.isBch ? (isTestnet ? 'bch_chipnet' : 'bch_mainnet') : (isTestnet ? 'amoy_testnet' : 'polygon_mainnet'),
+          toChain: buyToken.isBch ? (isTestnet ? 'bch_chipnet' : 'bch_mainnet') : (isTestnet ? 'amoy_testnet' : 'polygon_mainnet'),
           amount: num,
           recipientAddress: recipientAddress.trim(),
           slippage: slippage,
@@ -854,16 +888,37 @@ export default function BridgeSwap({
           })}
         </div>
 
-        {/* Slippage / Settings icon */}
-        <motion.button 
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={() => setShowSettingsModal(!showSettingsModal)}
-          className="w-9 h-9 rounded-xl bg-zinc-100 dark:bg-[#161D2B] flex items-center justify-center text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white shadow-sm transition-colors cursor-pointer"
-          title={t.settingsTitle}
-        >
-          <SlidersHorizontal className="w-4 h-4" />
-        </motion.button>
+        <div className="flex items-center gap-2">
+          {/* Quick Network Switcher Pill (Mainnet / Testnet) */}
+          <button
+            type="button"
+            onClick={() => {
+              const nextNet = isTestnet ? 'mainnet' : 'testnet';
+              if (onToggleNetwork) onToggleNetwork(nextNet);
+              showToast(nextNet === 'testnet' ? 'Red cambiada: BCH Chipnet (Testnet)' : 'Red cambiada: Bitcoin Cash Mainnet (Producción)');
+            }}
+            className={`px-2.5 py-1.5 rounded-xl text-[11px] font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs ${
+              isTestnet
+                ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 hover:bg-amber-500/25'
+                : 'bg-zinc-100 dark:bg-[#161D2B] text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-[#20293d]'
+            }`}
+            title="Click para alternar entre Mainnet y Testnet"
+          >
+            <span className={`w-2 h-2 rounded-full ${isTestnet ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'}`}></span>
+            <span>{isTestnet ? 'Chipnet (Testnet)' : 'Mainnet'}</span>
+          </button>
+
+          {/* Slippage / Settings icon */}
+          <motion.button 
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setShowSettingsModal(!showSettingsModal)}
+            className="w-9 h-9 rounded-xl bg-zinc-100 dark:bg-[#161D2B] flex items-center justify-center text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white shadow-sm transition-colors cursor-pointer"
+            title={t.settingsTitle}
+          >
+            <SlidersHorizontal className="w-4 h-4" />
+          </motion.button>
+        </div>
       </div>
 
       {/* SWAP CARD (BORDERLESS CLEAN MINIMALIST) */}
@@ -1146,7 +1201,7 @@ export default function BridgeSwap({
               {/* Deposit Address Box with 1-click Copy & HD Badge */}
               <div className="p-3.5 rounded-2xl bg-zinc-100 dark:bg-[#161D2B] space-y-2">
                 <div className="flex items-center justify-between text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
-                  <span>{t.depositAddr} ({sellToken.networkBadge})</span>
+                  <span>{t.depositAddr} ({getNetworkBadge(sellToken)})</span>
                   {activeSwap?.derivationIndex !== undefined && activeSwap?.derivationIndex !== null && (
                     <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full flex items-center gap-1 font-semibold">
                       <ShieldCheck className="w-3 h-3" />
@@ -1260,6 +1315,19 @@ export default function BridgeSwap({
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
             >
+            {/* TESTNET ACTIVE NOTIFICATION BANNER */}
+            {isTestnet && (
+              <div className="mb-3 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-300 text-xs flex items-center justify-between">
+                <span className="font-bold flex items-center gap-1.5 text-[11px]">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                  <span>Modo Testnet: BCH Chipnet ⟷ Polygon Amoy</span>
+                </span>
+                <span className="text-[10px] font-mono font-bold bg-amber-500/20 text-amber-600 dark:text-amber-400 px-1.5 py-0.5 rounded">
+                  Testnet4
+                </span>
+              </div>
+            )}
+
             {/* INTRA-BCH NATIVE CASHTOKENS BADGE */}
             {sellToken.isBch && buyToken.isBch && (
               <div className="mb-3 px-3 py-2 rounded-xl bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 text-xs flex items-center justify-between">
@@ -1279,7 +1347,7 @@ export default function BridgeSwap({
                   {subTab === 'limit' ? t.sellLimitLabel : t.sellLabel}
                 </span>
                 <span className="text-[11px] text-zinc-400 dark:text-zinc-500 font-mono font-medium">
-                  {t.network}: {sellToken.networkBadge}
+                  {t.network}: {getNetworkBadge(sellToken)}
                 </span>
               </div>
 
@@ -1432,7 +1500,7 @@ export default function BridgeSwap({
                     {t.buyLabel}
                   </span>
                   <span className="text-[11px] text-zinc-400 dark:text-zinc-500 font-mono font-medium">
-                    {t.network}: {buyToken.networkBadge}
+                    {t.network}: {getNetworkBadge(buyToken)}
                   </span>
                 </div>
 
@@ -1514,7 +1582,7 @@ export default function BridgeSwap({
                 <div className="flex justify-between items-center mb-1.5">
                   <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
                     <Wallet className="w-3.5 h-3.5 text-orange-500" />
-                    <span>{t.destAddress} ({buyToken.networkBadge})</span>
+                    <span>{t.destAddress} ({getNetworkBadge(buyToken)})</span>
                   </span>
 
                   {/* Format validation status badge */}
@@ -1525,7 +1593,7 @@ export default function BridgeSwap({
                       </span>
                     ) : (
                       <span className="text-[10px] text-rose-500 font-mono font-bold flex items-center gap-1">
-                        <AlertCircle className="w-3 h-3" /> {buyToken.isBch ? 'Invalid CashAddr' : buyToken.symbol === 'SOL' ? 'Needs Solana format' : 'Needs 0x... format'}
+                        <AlertCircle className="w-3 h-3" /> {buyToken.isBch ? (isTestnet ? 'Needs bchtest:... format' : 'Needs bitcoincash:... format') : buyToken.symbol === 'SOL' ? 'Needs Solana format' : 'Needs 0x... format'}
                       </span>
                     )
                   ) : (
@@ -1540,7 +1608,7 @@ export default function BridgeSwap({
                     type="text"
                     value={recipientAddress}
                     onChange={e => setRecipientAddress(e.target.value)}
-                    placeholder={buyToken.isBch ? "bitcoincash:qq... or bchtest:qq..." : buyToken.symbol === 'SOL' ? "Solana address (e.g. 7xKXtg...)" : "0x... (Paste your destination address)"}
+                    placeholder={buyToken.isBch ? (isTestnet ? "bchtest:qq... (Chipnet Address)" : "bitcoincash:qq... (Mainnet Address)") : buyToken.symbol === 'SOL' ? "Solana address (e.g. 7xKXtg...)" : "0x... (Paste your destination address)"}
                     className="w-full bg-white dark:bg-[#0E131E] text-xs font-mono text-zinc-900 dark:text-white rounded-xl p-2.5 outline-none transition-colors"
                   />
 
@@ -2033,6 +2101,7 @@ export default function BridgeSwap({
         selectedTokenSymbol={modalType === 'sell' ? sellToken.symbol : buyToken.symbol}
         title={modalType === 'sell' ? 'Select Token to Sell' : 'Select Token to Buy'}
         customTokens={customTokens}
+        isTestnet={isTestnet}
       />
 
     </div>

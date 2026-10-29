@@ -101,8 +101,8 @@ class BchService {
     }
 
     const tokenConfig = config.bch.tokens[tokenSymbol.toUpperCase()] || config.bch.tokens.PUSD;
-    const isMainnet = config.bch.network === 'mainnet';
-    const explorerBase = isMainnet ? 'https://3xpl.com/bitcoin-cash/transaction' : 'https://chipnet.imaginary.cash/tx';
+    const isChipnet = recipientAddress.startsWith('bchtest:') || config.bch.network !== 'mainnet';
+    const explorerBase = isChipnet ? 'https://chipnet.imaginary.cash/tx' : 'https://3xpl.com/bitcoin-cash/transaction';
 
     // If live wallet with UTXOs is available
     if (this.wallet && !config.simulateIfNoFunds) {

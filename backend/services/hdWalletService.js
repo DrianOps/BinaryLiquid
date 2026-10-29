@@ -45,9 +45,10 @@ class HdWalletService {
    */
   async deriveAddress(chain, index) {
     const chainLower = String(chain || '').toLowerCase();
-    const isChipnet = chainLower.includes('chipnet') || chainLower.includes('testnet');
-    const isBch = chainLower.includes('bch') || isChipnet;
     const isSolana = chainLower.includes('solana') || chainLower.includes('sol');
+    const isEvm = chainLower.includes('polygon') || chainLower.includes('amoy') || chainLower.includes('evm') || chainLower.includes('eth');
+    const isChipnet = !isEvm && !isSolana && (chainLower.includes('chipnet') || (chainLower.includes('testnet') && !chainLower.includes('amoy')));
+    const isBch = !isEvm && !isSolana && (chainLower.includes('bch') || isChipnet);
 
     if (isBch) {
       // Bitcoin Cash (Mainnet or Chipnet)

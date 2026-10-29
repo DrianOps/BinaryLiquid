@@ -308,6 +308,8 @@ export default function App() {
             backendUrl=""
             onOpenLanding={() => {}}
             lang={lang}
+            platformNetwork={platformNetwork}
+            onToggleNetwork={setPlatformNetwork}
           />
         </div>
       </div>
@@ -901,6 +903,8 @@ export default function App() {
             backendUrl=""
             onOpenLanding={() => setMainView('gateway')}
             lang={lang}
+            platformNetwork={platformNetwork}
+            onToggleNetwork={setPlatformNetwork}
           />
         </main>
       )}

@@ -131,6 +131,7 @@ interface TokenSelectModalProps {
   selectedTokenSymbol: string;
   title?: string;
   customTokens?: TokenInfo[];
+  isTestnet?: boolean;
 }
 
 export default function TokenSelectModal({
@@ -139,12 +140,22 @@ export default function TokenSelectModal({
   onSelect,
   selectedTokenSymbol,
   title = 'Select a token',
-  customTokens = []
+  customTokens = [],
+  isTestnet = false
 }: TokenSelectModalProps) {
   const [search, setSearch] = useState('');
 
   const allAvailable = React.useMemo(() => {
-    const list = [...SUPPORTED_TOKENS];
+    const list = SUPPORTED_TOKENS.map(t => {
+      if (isTestnet) {
+        return {
+          ...t,
+          network: t.isBch ? 'BCH Chipnet (Testnet4)' : (t.symbol === 'SOL' ? 'Solana Devnet' : 'Polygon Amoy (Testnet)'),
+          networkBadge: t.isBch ? 'Chipnet CashTokens' : (t.symbol === 'SOL' ? 'Devnet SPL' : 'Polygon Amoy')
+        };
+      }
+      return t;
+    });
     if (customTokens && customTokens.length > 0) {
       for (const ct of customTokens) {
         if (!list.find(t => t.symbol.toUpperCase() === ct.symbol.toUpperCase())) {
@@ -153,7 +164,7 @@ export default function TokenSelectModal({
       }
     }
     return list;
-  }, [customTokens]);
+  }, [customTokens, isTestnet]);
 
   if (!isOpen) return null;
 
