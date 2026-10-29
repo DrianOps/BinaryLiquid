@@ -195,7 +195,7 @@ export const SdkView: React.FC<SdkViewProps> = ({ lang = 'en' }) => {
                   <option value="BCH">BCH (Bitcoin Cash Native)</option>
                   <option value="USDC">USDC (Polygon PoS)</option>
                   <option value="MUSD">MUSD (CashTokens)</option>
-                  <option value="BCHAD">BCHAD (CashToken)</option>
+                  <option value="LIFT">Paytaca LIFT (CashToken)</option>
                 </select>
               </div>
 
