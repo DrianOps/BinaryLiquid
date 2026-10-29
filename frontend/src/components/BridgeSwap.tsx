@@ -1613,7 +1613,7 @@ export default function BridgeSwap({
                   {swapStep === 4 ? (
                     <CheckCircle2 className="w-8 h-8 text-emerald-500" />
                   ) : (
-                    <RefreshCw className="w-7 h-7 text-primary animate-spin" />
+                    <img src="/logo.png" alt="BinaryLiquid" className="w-8 h-8 object-contain animate-heartbeat" />
                   )}
                 </div>
                 <h3 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white">
@@ -1724,7 +1724,9 @@ export default function BridgeSwap({
               {/* STEP 2 & 3: In-Progress Confirming / Dispatching */}
               {(swapStep === 2 || swapStep === 3) && (
                 <div className="p-6 rounded-2xl bg-gray-50 dark:bg-[#171e2c] border border-gray-100 dark:border-gray-800 text-center space-y-3 mb-5">
-                  <RefreshCw className="w-10 h-10 text-primary animate-spin mx-auto" />
+                  <div className="w-16 h-16 mx-auto relative flex items-center justify-center">
+                    <img src="/logo.png" alt="BinaryLiquid" className="w-12 h-12 object-contain animate-heartbeat" />
+                  </div>
                   <h4 className="font-bold text-gray-900 dark:text-white text-sm">
                     {swapStep === 2 ? 'Deposit Confirmed On-Chain' : 'Relayer Signing Payout'}
                   </h4>
