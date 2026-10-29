@@ -12,6 +12,7 @@ import { relayerEngine } from './services/relayerEngine.js';
 import { sweeperEngine } from './services/sweeperEngine.js';
 import { poolService } from './services/poolService.js';
 import { hdWalletService } from './services/hdWalletService.js';
+import { lendingService } from './services/lendingService.js';
 
 const app = express();
 
@@ -544,6 +545,88 @@ app.post('/api/pools/:poolId/verify', async (req, res) => {
     const { requesterAddress, txHash } = req.body;
     const pool = await poolService.verifyPool(poolId, { requesterAddress, txHash });
     res.json({ success: true, message: `Pool ${pool.pair} verificado exitosamente`, pool });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+// ==============================================================================
+// BINARYLEND: BITCOIN CASH COLLATERAL VAULTS & STABLECOIN LIQUIDITY API
+// ==============================================================================
+app.get('/api/lend/overview', async (req, res) => {
+  try {
+    const overview = await lendingService.getMarketsOverview();
+    res.json({ success: true, ...overview });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.get('/api/lend/vault/:userAddress', async (req, res) => {
+  try {
+    const { userAddress } = req.params;
+    const vaultData = await lendingService.getUserVault(userAddress);
+    res.json({ success: true, ...vaultData });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/lend/deposit-collateral', async (req, res) => {
+  try {
+    const { userAddress, amountBch } = req.body;
+    const updated = await lendingService.depositCollateral(userAddress, amountBch);
+    res.json({ success: true, message: `¡${amountBch} BCH depositados exitosamente como colateral!`, ...updated });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/lend/withdraw-collateral', async (req, res) => {
+  try {
+    const { userAddress, amountBch } = req.body;
+    const updated = await lendingService.withdrawCollateral(userAddress, amountBch);
+    res.json({ success: true, message: `¡${amountBch} BCH de colateral liberados y retirados a tu billetera!`, ...updated });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/lend/borrow', async (req, res) => {
+  try {
+    const { userAddress, token, amount } = req.body;
+    const updated = await lendingService.borrow(userAddress, token, amount);
+    res.json({ success: true, message: `¡Préstamo de ${amount} ${token} aprobado y acreditado inmediatamente!`, ...updated });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/lend/repay', async (req, res) => {
+  try {
+    const { userAddress, token, amount } = req.body;
+    const updated = await lendingService.repay(userAddress, token, amount);
+    res.json({ success: true, message: `¡Pago de ${amount} ${token} procesado exitosamente! Tu deuda ha sido reducida.`, ...updated });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/lend/supply', async (req, res) => {
+  try {
+    const { userAddress, token, amount } = req.body;
+    const updated = await lendingService.supply(userAddress, token, amount);
+    res.json({ success: true, message: `¡${amount} ${token} suministrados al fondo de liquidez! Ahora estás ganando rendimiento pasivo continuo.`, ...updated });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/lend/withdraw-supply', async (req, res) => {
+  try {
+    const { userAddress, token, amount } = req.body;
+    const updated = await lendingService.withdrawSupply(userAddress, token, amount);
+    res.json({ success: true, message: `¡${amount} ${token} retirados exitosamente con sus rendimientos acumulados!`, ...updated });
   } catch (err) {
     res.status(400).json({ success: false, error: err.message });
   }

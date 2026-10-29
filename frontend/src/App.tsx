@@ -37,6 +37,7 @@ import BridgeSwap from './components/BridgeSwap';
 import LandingPage from './components/LandingPage';
 import PoolsView from './components/PoolsView';
 import SdkView from './components/SdkView';
+import LendingView from './components/LendingView';
 import { useWizardConnect } from '@wizardconnect/react';
 import { 
   connectWalletConnect, 
@@ -50,6 +51,7 @@ const translations = {
     navSwap: "Bridge Swap",
     navGateway: "Gateway",
     navPools: "Pools",
+    navLend: "Lend",
     navDocs: "Docs",
     navWallet: "Connect Wallet",
     connect: "Connect Wallet",
@@ -60,6 +62,7 @@ const translations = {
     navSwap: "Bridge Swap",
     navGateway: "Gateway",
     navPools: "Pools",
+    navLend: "Lend",
     navDocs: "Docs",
     navWallet: "Conectar Billetera",
     connect: "Conectar Billetera",
@@ -94,7 +97,7 @@ const PLATFORM_NETWORKS = {
 };
 
 export default function App() {
-  const [mainView, setMainView] = useState<'bridge' | 'gateway' | 'pools' | 'docs' | 'sdk'>('gateway');
+  const [mainView, setMainView] = useState<'bridge' | 'gateway' | 'pools' | 'docs' | 'sdk' | 'lend'>('gateway');
   const [darkMode, setDarkMode] = useState<boolean>(() => {
     return localStorage.getItem('bliq_theme') === 'dark' || 
       (!localStorage.getItem('bliq_theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
@@ -330,6 +333,18 @@ export default function App() {
             </button>
 
             <button 
+              onClick={() => setMainView('lend')} 
+              className={`font-bold text-sm px-4 py-2 rounded-full transition-all flex items-center gap-1.5 ${
+                mainView === 'lend' 
+                  ? 'bg-gray-100 dark:bg-[#1a202c] text-gray-900 dark:text-white shadow-2xs' 
+                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+              }`}
+            >
+              <Lock className="w-3.5 h-3.5 text-primary" />
+              <span>{t.navLend}</span>
+            </button>
+
+            <button 
               onClick={() => setMainView('docs')} 
               className={`font-bold text-sm px-4 py-2 rounded-full transition-all ${
                 mainView === 'docs' 
@@ -529,7 +544,24 @@ export default function App() {
                     </div>
                     <div className="text-left">
                       <div>Liquidity Pools</div>
-                      <div className="text-[10px] text-gray-400 font-normal">Earn 0.25% passive yield</div>
+                      <div className="text-[10px] text-gray-400 font-normal">Earn 0.20% passive yield</div>
+                    </div>
+                  </button>
+
+                  <button 
+                    onClick={() => { setMainView('lend'); setMobileMenuOpen(false); }}
+                    className={`w-full flex items-center gap-3 p-3.5 rounded-2xl font-bold text-sm transition-all cursor-pointer ${
+                      mainView === 'lend' 
+                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shadow-2xs' 
+                        : 'hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200'
+                    }`}
+                  >
+                    <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
+                      <Lock className="w-4 h-4" />
+                    </div>
+                    <div className="text-left">
+                      <div>Préstamos & Bóvedas</div>
+                      <div className="text-[10px] text-gray-400 font-normal">BCH Vaults • Borrow PUSD</div>
                     </div>
                   </button>
 
@@ -757,6 +789,19 @@ export default function App() {
           >
             <Droplets className="w-5 h-5" />
             <span className="text-[10px] leading-tight">Pools</span>
+          </button>
+
+          {/* Tab 3.5: Lend */}
+          <button 
+            onClick={() => setMainView('lend')}
+            className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-all cursor-pointer ${
+              mainView === 'lend' 
+                ? 'text-emerald-500 font-black scale-105' 
+                : 'text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 font-medium'
+            }`}
+          >
+            <Lock className="w-5 h-5" />
+            <span className="text-[10px] leading-tight">Lend</span>
           </button>
 
           {/* Tab 4: Docs */}
@@ -1381,6 +1426,19 @@ export default function App() {
           <PoolsView
             backendUrl=""
             userAddress={userContext?.address || ''}
+            onConnectWallet={() => setShowWalletModal(true)}
+            showToast={showToast}
+          />
+        </main>
+      )}
+
+      {/* LENDING & BCH COLLATERAL VAULTS VIEW */}
+      {mainView === 'lend' && (
+        <main className="flex-1 flex flex-col items-center justify-start p-4 sm:p-6 w-full max-w-7xl mx-auto pb-28 md:pb-12">
+          <LendingView
+            backendUrl=""
+            userAddress={userContext?.address || ''}
+            isWalletConnected={Boolean(userContext?.address)}
             onConnectWallet={() => setShowWalletModal(true)}
             showToast={showToast}
           />
