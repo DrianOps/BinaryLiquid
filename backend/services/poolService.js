@@ -35,12 +35,15 @@ const CANONICAL_POOLS_SEED = {
     status: 'ACTIVE',
     feePercent: 0.30,
     lpFeePercent: 0.20,
+    creatorFeePercent: 0.0,
     protocolFeePercent: 0.10,
     cumulativeFeesA: 135.50,
     cumulativeFeesB: 128.20,
     totalVolumeUsd: 112500.0,
     isSponsorPool: true,
-    sponsorTag: 'Official BLAZE Track Sponsor (PUSD)'
+    sponsorTag: 'Official BLAZE Track Sponsor (PUSD)',
+    isVerified: true,
+    verificationBadge: 'Oficial'
   },
   BCH_USDC: {
     id: 'BCH_USDC',
@@ -63,166 +66,13 @@ const CANONICAL_POOLS_SEED = {
     status: 'ACTIVE',
     feePercent: 0.30,
     lpFeePercent: 0.20,
+    creatorFeePercent: 0.0,
     protocolFeePercent: 0.10,
     cumulativeFeesA: 0.42,
     cumulativeFeesB: 115.00,
-    totalVolumeUsd: 84300.0
-  },
-  PUSD_USDT: {
-    id: 'PUSD_USDT',
-    pair: 'PUSD / USDT',
-    name: 'ParyonUSD ⟷ Tether USD',
-    tokenA: 'PUSD',
-    tokenB: 'USDT',
-    networkA: 'Bitcoin Cash (Mainnet)',
-    networkB: 'Polygon (Mainnet)',
-    networkBadgeA: 'BCH CashTokens',
-    networkBadgeB: 'Polygon PoS',
-    iconA: '/PUSD.png',
-    iconB: '/USDT.png',
-    decimalsA: 6,
-    decimalsB: 6,
-    reserveA: 25000.0,
-    reserveB: 25000.0,
-    totalShares: 50000.0,
-    targetTvlUsd: 25000.0,
-    status: 'ACTIVE',
-    feePercent: 0.30,
-    lpFeePercent: 0.20,
-    protocolFeePercent: 0.10,
-    cumulativeFeesA: 42.10,
-    cumulativeFeesB: 39.50,
-    totalVolumeUsd: 38200.0
-  },
-  BCH_PUSD: {
-    id: 'BCH_PUSD',
-    pair: 'BCH / PUSD',
-    name: 'Bitcoin Cash ⟷ ParyonUSD',
-    tokenA: 'BCH',
-    tokenB: 'PUSD',
-    networkA: 'Bitcoin Cash (Mainnet)',
-    networkB: 'Bitcoin Cash (Mainnet)',
-    networkBadgeA: 'BCH Layer 1',
-    networkBadgeB: 'BCH CashTokens',
-    iconA: '/BCH.png',
-    iconB: '/PUSD.png',
-    decimalsA: 8,
-    decimalsB: 6,
-    reserveA: 65.0,
-    reserveB: 18790.0,
-    totalShares: 37580.0,
-    targetTvlUsd: 30000.0,
-    status: 'ACTIVE',
-    feePercent: 0.30,
-    lpFeePercent: 0.20,
-    protocolFeePercent: 0.10,
-    cumulativeFeesA: 0.18,
-    cumulativeFeesB: 52.00,
-    totalVolumeUsd: 26400.0
-  },
-  MUSD_USDC: {
-    id: 'MUSD_USDC',
-    pair: 'MUSD / USDC',
-    name: 'MoriaUSD ⟷ USD Coin',
-    tokenA: 'MUSD',
-    tokenB: 'USDC',
-    networkA: 'Bitcoin Cash (Mainnet)',
-    networkB: 'Polygon (Mainnet)',
-    networkBadgeA: 'BCH CashTokens',
-    networkBadgeB: 'Polygon PoS',
-    iconA: '/MUSD.png',
-    iconB: '/USDC.png',
-    decimalsA: 6,
-    decimalsB: 6,
-    reserveA: 15000.0,
-    reserveB: 15000.0,
-    totalShares: 30000.0,
-    targetTvlUsd: 20000.0,
-    status: 'ACTIVE',
-    feePercent: 0.30,
-    lpFeePercent: 0.20,
-    protocolFeePercent: 0.10,
-    cumulativeFeesA: 18.20,
-    cumulativeFeesB: 16.50,
-    totalVolumeUsd: 14500.0
-  },
-  SOL_USDC: {
-    id: 'SOL_USDC',
-    pair: 'SOL / USDC',
-    name: 'Solana ⟷ USD Coin',
-    tokenA: 'SOL',
-    tokenB: 'USDC',
-    networkA: 'Solana (Mainnet)',
-    networkB: 'Polygon (Mainnet)',
-    networkBadgeA: 'Solana SPL',
-    networkBadgeB: 'Polygon PoS',
-    iconA: '/SOL.png',
-    iconB: '/USDC.png',
-    decimalsA: 9,
-    decimalsB: 6,
-    reserveA: 45.0,
-    reserveB: 4567.0,
-    totalShares: 9134.0,
-    targetTvlUsd: 10000.0,
-    status: 'BOOTSTRAPPING',
-    feePercent: 0.30,
-    lpFeePercent: 0.20,
-    protocolFeePercent: 0.10,
-    cumulativeFeesA: 0.05,
-    cumulativeFeesB: 5.20,
-    totalVolumeUsd: 6800.0
-  },
-  ETH_USDC: {
-    id: 'ETH_USDC',
-    pair: 'ETH / USDC',
-    name: 'Ethereum ⟷ USD Coin',
-    tokenA: 'ETH',
-    tokenB: 'USDC',
-    networkA: 'Ethereum (Mainnet)',
-    networkB: 'Polygon (Mainnet)',
-    networkBadgeA: 'Ethereum L1',
-    networkBadgeB: 'Polygon PoS',
-    iconA: '/ETH.png',
-    iconB: '/USDC.png',
-    decimalsA: 18,
-    decimalsB: 6,
-    reserveA: 3.2,
-    reserveB: 7504.0,
-    totalShares: 15008.0,
-    targetTvlUsd: 20000.0,
-    status: 'BOOTSTRAPPING',
-    feePercent: 0.30,
-    lpFeePercent: 0.20,
-    protocolFeePercent: 0.10,
-    cumulativeFeesA: 0.02,
-    cumulativeFeesB: 12.40,
-    totalVolumeUsd: 9200.0
-  },
-  POL_USDC: {
-    id: 'POL_USDC',
-    pair: 'POL / USDC',
-    name: 'Polygon ⟷ USD Coin',
-    tokenA: 'POL',
-    tokenB: 'USDC',
-    networkA: 'Polygon (Mainnet)',
-    networkB: 'Polygon (Mainnet)',
-    networkBadgeA: 'Polygon 2.0',
-    networkBadgeB: 'Polygon PoS',
-    iconA: '/POL.png',
-    iconB: '/USDC.png',
-    decimalsA: 18,
-    decimalsB: 6,
-    reserveA: 50000.0,
-    reserveB: 4575.0,
-    totalShares: 9150.0,
-    targetTvlUsd: 10000.0,
-    status: 'BOOTSTRAPPING',
-    feePercent: 0.30,
-    lpFeePercent: 0.20,
-    protocolFeePercent: 0.10,
-    cumulativeFeesA: 25.0,
-    cumulativeFeesB: 2.30,
-    totalVolumeUsd: 4100.0
+    totalVolumeUsd: 84300.0,
+    isVerified: true,
+    verificationBadge: 'Oficial'
   }
 };
 
@@ -236,6 +86,15 @@ class PoolService {
     if (!db.memoryState.pools) {
       db.memoryState.pools = {};
     }
+
+    // Purge obsolete filler/mock pools so only real canonical pools + user-created community pools remain
+    const OBSOLETE_POOLS = ['PUSD_USDT', 'BCH_PUSD', 'MUSD_USDC', 'SOL_USDC', 'ETH_USDC', 'POL_USDC'];
+    for (const pId of OBSOLETE_POOLS) {
+      if (db.memoryState.pools[pId]) {
+        delete db.memoryState.pools[pId];
+      }
+    }
+
     for (const [id, seed] of Object.entries(CANONICAL_POOLS_SEED)) {
       if (!db.memoryState.pools[id]) {
         db.memoryState.pools[id] = {
@@ -267,7 +126,9 @@ class PoolService {
           networkBadgeA: seed.networkBadgeA,
           networkBadgeB: seed.networkBadgeB,
           status: p.status || seed.status,
-          targetTvlUsd: seed.targetTvlUsd
+          targetTvlUsd: seed.targetTvlUsd,
+          isVerified: true,
+          verificationBadge: 'Oficial'
         };
       }
     }

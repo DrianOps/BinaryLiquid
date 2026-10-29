@@ -1126,8 +1126,15 @@ export default function BridgeSwap({
                     <img src={sellToken.icon} alt={sellToken.symbol} className="w-full h-full object-contain" />
                   </div>
                   <div className="text-left">
-                    <div className="text-sm font-bold text-gray-900 dark:text-white leading-tight">
-                      {sellToken.symbol}
+                    <div className="flex items-center gap-1">
+                      <span className="text-sm font-bold text-gray-900 dark:text-white leading-tight">
+                        {sellToken.symbol}
+                      </span>
+                      {(sellToken.isVerified ?? true) && (
+                        <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-blue-500 text-white shrink-0" title="Token Oficial Verificado">
+                          <Check className="w-2 h-2 stroke-[3]" />
+                        </span>
+                      )}
                     </div>
                     <div className="text-[10px] text-gray-400 font-medium leading-tight hidden sm:block">
                       {sellToken.name.split(' ')[0]}
@@ -1216,7 +1223,14 @@ export default function BridgeSwap({
                     <div className="w-6 h-6 rounded-full overflow-hidden shrink-0">
                       <img src={buyToken.icon} alt={buyToken.symbol} className="w-full h-full object-contain" />
                     </div>
-                    <span className="text-sm font-bold text-gray-900 dark:text-white">{buyToken.symbol}</span>
+                    <div className="flex items-center gap-1">
+                      <span className="text-sm font-bold text-gray-900 dark:text-white">{buyToken.symbol}</span>
+                      {(buyToken.isVerified ?? true) && (
+                        <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-blue-500 text-white shrink-0" title="Token Oficial Verificado">
+                          <Check className="w-2 h-2 stroke-[3]" />
+                        </span>
+                      )}
+                    </div>
                     <ChevronDown className="w-3.5 h-3.5 text-gray-400 ml-0.5" />
                   </motion.button>
                 </div>
@@ -1261,8 +1275,15 @@ export default function BridgeSwap({
                       <img src={buyToken.icon} alt={buyToken.symbol} className="w-full h-full object-contain" />
                     </div>
                     <div className="text-left">
-                      <div className="text-sm font-bold text-gray-900 dark:text-white leading-tight">
-                        {buyToken.symbol}
+                      <div className="flex items-center gap-1">
+                        <span className="text-sm font-bold text-gray-900 dark:text-white leading-tight">
+                          {buyToken.symbol}
+                        </span>
+                        {(buyToken.isVerified ?? true) && (
+                          <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-blue-500 text-white shrink-0" title="Token Oficial Verificado">
+                            <Check className="w-2 h-2 stroke-[3]" />
+                          </span>
+                        )}
                       </div>
                       <div className="text-[10px] text-gray-400 font-medium leading-tight hidden sm:block">
                         {buyToken.name.split(' ')[0]}

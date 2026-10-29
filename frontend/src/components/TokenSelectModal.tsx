@@ -11,6 +11,7 @@ export interface TokenInfo {
   decimals: number;
   isBch: boolean;
   isSponsor?: boolean;
+  isVerified?: boolean;
   categoryOrAddress?: string;
 }
 
@@ -24,6 +25,7 @@ export const SUPPORTED_TOKENS: TokenInfo[] = [
     decimals: 6,
     isBch: true,
     isSponsor: true,
+    isVerified: true,
     categoryOrAddress: 'a5c0b1f900000000000000000000000000000000000000000000000000000000'
   },
   {
@@ -34,6 +36,7 @@ export const SUPPORTED_TOKENS: TokenInfo[] = [
     icon: '/USDC.png',
     decimals: 6,
     isBch: false,
+    isVerified: true,
     categoryOrAddress: '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359'
   },
   {
@@ -44,6 +47,7 @@ export const SUPPORTED_TOKENS: TokenInfo[] = [
     icon: '/USDT.png',
     decimals: 6,
     isBch: false,
+    isVerified: true,
     categoryOrAddress: '0xc2132D05D31c914a87C6611C10748AEb04B58e8F'
   },
   {
@@ -54,6 +58,7 @@ export const SUPPORTED_TOKENS: TokenInfo[] = [
     icon: '/MUSD.png',
     decimals: 6,
     isBch: true,
+    isVerified: true,
     categoryOrAddress: 'b7d0c2e800000000000000000000000000000000000000000000000000000000'
   },
   {
@@ -63,7 +68,8 @@ export const SUPPORTED_TOKENS: TokenInfo[] = [
     networkBadge: 'BCH Layer 1',
     icon: '/BCH.png',
     decimals: 8,
-    isBch: true
+    isBch: true,
+    isVerified: true
   },
   {
     symbol: 'ETH',
@@ -72,7 +78,8 @@ export const SUPPORTED_TOKENS: TokenInfo[] = [
     networkBadge: 'Ethereum L1',
     icon: '/ETH.png',
     decimals: 18,
-    isBch: false
+    isBch: false,
+    isVerified: true
   },
   {
     symbol: 'SOL',
@@ -81,7 +88,8 @@ export const SUPPORTED_TOKENS: TokenInfo[] = [
     networkBadge: 'Solana SPL',
     icon: '/SOL.png',
     decimals: 9,
-    isBch: false
+    isBch: false,
+    isVerified: true
   },
   {
     symbol: 'BNB',
@@ -90,7 +98,8 @@ export const SUPPORTED_TOKENS: TokenInfo[] = [
     networkBadge: 'BEP-20',
     icon: '/BNB.png',
     decimals: 18,
-    isBch: false
+    isBch: false,
+    isVerified: true
   },
   {
     symbol: 'POL',
@@ -99,7 +108,8 @@ export const SUPPORTED_TOKENS: TokenInfo[] = [
     networkBadge: 'Polygon 2.0',
     icon: '/POL.png',
     decimals: 18,
-    isBch: false
+    isBch: false,
+    isVerified: true
   }
 ];
 
@@ -195,6 +205,11 @@ export default function TokenSelectModal({
               >
                 <img src={t.icon} alt={t.symbol} className="w-4 h-4 rounded-full object-contain" />
                 <span>{t.symbol}</span>
+                {t.isVerified && (
+                  <span className="inline-flex items-center justify-center w-3 h-3 rounded-full bg-blue-500 text-white" title="Oficial">
+                    <Check className="w-2 h-2 stroke-[3]" />
+                  </span>
+                )}
                 {t.isSponsor && <Flame className="w-3 h-3 text-orange-500 fill-orange-500" />}
               </motion.button>
             ))}
@@ -231,6 +246,11 @@ export default function TokenSelectModal({
                         <span className="font-bold text-gray-900 dark:text-white text-base">
                           {t.symbol}
                         </span>
+                        {t.isVerified && (
+                          <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-blue-500 text-white shadow-2xs" title="Token Oficial Verificado">
+                            <Check className="w-2.5 h-2.5 stroke-[3]" />
+                          </span>
+                        )}
                         {t.isSponsor && (
                           <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-600 dark:text-orange-400 border border-orange-500/20 flex items-center gap-0.5">
                             <Flame className="w-2.5 h-2.5" /> BLAZE Sponsor

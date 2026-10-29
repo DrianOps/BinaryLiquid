@@ -119,10 +119,8 @@ export default function PoolsView({
   const [protocolStats, setProtocolStats] = useState<any>(null);
   const [positions, setPositions] = useState<UserPosition[]>([]);
   const [walletBalances, setWalletBalances] = useState<Record<string, number>>({});
-  const [hotBalances, setHotBalances] = useState<{ bch?: number; pusd?: number; usdc?: number; usdt?: number; pol?: number }>({});
   const [loading, setLoading] = useState<boolean>(true);
   const [activeTab, setActiveTab] = useState<'all' | 'active' | 'bootstrapping' | 'my-positions'>('all');
-  const [showHotWalletDetails, setShowHotWalletDetails] = useState<boolean>(false);
   
   // Modal states
   const [actionModal, setActionModal] = useState<'add' | 'remove' | null>(null);
@@ -168,7 +166,6 @@ export default function PoolsView({
       if (data.success) {
         if (data.allPools) setAllPools(data.allPools);
         if (data.protocolStats) setProtocolStats(data.protocolStats);
-        if (data.hotWalletBalances) setHotBalances(data.hotWalletBalances);
       }
     } catch (err) {
       console.warn('Failed to load pool stats:', err);
@@ -338,24 +335,6 @@ export default function PoolsView({
     }
   };
 
-  // Refill demo float balance
-  const handleRefillFloat = async (token: string = 'USDC', amount: number = 1000) => {
-    try {
-      const res = await fetch(`${backendUrl}/api/faucet/demo-funds`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, amount, recipient: effectiveAddress })
-      });
-      const data = await res.json();
-      if (data.success) {
-        showToast(`+${amount} ${token} cargados a tu saldo de billetera!`, 'success');
-        confetti({ particleCount: 50, spread: 60, origin: { y: 0.7 } });
-        await fetchWalletBalances();
-      }
-    } catch (err) {
-      showToast('Error al recargar saldo', 'error');
-    }
-  };
 
   // Calculations for Add Liquidity preview
   const calcEstimatedShares = () => {
@@ -490,186 +469,8 @@ export default function PoolsView({
           Liquidity Pools & Automated Yield
         </h1>
         <p className="text-xs sm:text-sm md:text-base text-gray-500 dark:text-gray-400 mt-2 sm:mt-3 leading-relaxed">
-          Provee liquidez en la red principal de <strong className="text-gray-900 dark:text-white font-semibold">Bitcoin Cash Mainnet</strong>, <strong className="text-gray-900 dark:text-white font-semibold">Polygon PoS</strong> y <strong className="text-gray-900 dark:text-white font-semibold">Solana</strong>. Gana comisiones pasivas del <strong className="text-emerald-600 dark:text-emerald-400 font-semibold">0.20% de cada swap</strong> auto-compuestas en las reservas sin pérdida impermanente en pares estables.
+          Provee liquidez en la red principal de <strong className="text-gray-900 dark:text-white font-semibold">Bitcoin Cash Mainnet</strong> y <strong className="text-gray-900 dark:text-white font-semibold">Polygon PoS</strong>. Gana comisiones pasivas del <strong className="text-emerald-600 dark:text-emerald-400 font-semibold">0.20% de cada swap</strong> auto-compuestas en las reservas sin pérdida impermanente en pares estables.
         </p>
-      </div>
-
-      {/* RELAYER HOT WALLET & PROTOCOL RESERVES BANNER (SIEMPRE VISIBLE) */}
-      <div className="rounded-3xl bg-gradient-to-r from-orange-500/10 via-amber-500/10 to-emerald-500/10 border border-orange-500/25 p-4 sm:p-6 mb-8 shadow-sm">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
-              <Server className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="font-bold text-sm sm:text-base text-gray-950 dark:text-white">
-                  Bóvedas Hot Wallet y Flotante Activo del Protocolo
-                </h3>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
-                  Mainnet 100% Solvente
-                </span>
-              </div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                Fondos en las carteras calientes automatizadas listas para liquidación de swaps instantáneos (~3 seg).
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowHotWalletDetails(!showHotWalletDetails)}
-              className="px-3.5 py-1.5 rounded-xl bg-white dark:bg-[#1a2130] border border-gray-200 dark:border-gray-700 text-xs font-bold text-gray-700 dark:text-gray-200 hover:border-primary transition-all cursor-pointer flex items-center gap-1.5"
-            >
-              <Info className="w-3.5 h-3.5 text-primary" />
-              <span>{showHotWalletDetails ? 'Ocultar Direcciones' : 'Ver Bóvedas On-Chain'}</span>
-            </button>
-          </div>
-        </div>
-
-        {/* METRICS OF HOT WALLETS */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-4 mt-4 pt-4 border-t border-orange-500/15">
-          <div className="p-3 rounded-xl bg-white/70 dark:bg-[#151b27]/80 backdrop-blur-xs border border-white/50 dark:border-gray-800">
-            <span className="text-[10px] font-bold text-gray-400 uppercase block">Hot BCH Reserve</span>
-            <span className="text-base sm:text-lg font-black text-gray-900 dark:text-white font-mono">
-              {(hotBalances.bch ?? 0).toFixed(4)} BCH
-            </span>
-            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium block">On-Chain Real</span>
-          </div>
-
-          <div className="p-3 rounded-xl bg-white/70 dark:bg-[#151b27]/80 backdrop-blur-xs border border-white/50 dark:border-gray-800">
-            <span className="text-[10px] font-bold text-gray-400 uppercase block">Hot PUSD (CashTokens)</span>
-            <span className="text-base sm:text-lg font-black text-gray-900 dark:text-white font-mono">
-              {(hotBalances.pusd ?? 0).toLocaleString()} PUSD
-            </span>
-            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium block">BCH CashToken</span>
-          </div>
-
-          <div className="p-3 rounded-xl bg-white/70 dark:bg-[#151b27]/80 backdrop-blur-xs border border-white/50 dark:border-gray-800">
-            <span className="text-[10px] font-bold text-gray-400 uppercase block">Hot Polygon USDC</span>
-            <span className="text-base sm:text-lg font-black text-gray-900 dark:text-white font-mono">
-              {(hotBalances.usdc ?? 0).toLocaleString()} USDC
-            </span>
-            <span className="text-[10px] text-blue-500 font-medium block">Polygon PoS Native</span>
-          </div>
-
-          <div className="p-3 rounded-xl bg-white/70 dark:bg-[#151b27]/80 backdrop-blur-xs border border-white/50 dark:border-gray-800">
-            <span className="text-[10px] font-bold text-gray-400 uppercase block">Hot Tether USDT</span>
-            <span className="text-base sm:text-lg font-black text-gray-900 dark:text-white font-mono">
-              {(hotBalances.usdt ?? 0).toLocaleString()} USDT
-            </span>
-            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium block">Polygon PoS Native</span>
-          </div>
-        </div>
-
-        {/* DETAILED ACCORDION OF ON-CHAIN VAULT ADDRESSES */}
-        {showHotWalletDetails && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            className="mt-4 pt-3 border-t border-orange-500/15 space-y-2 text-xs font-mono"
-          >
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 p-2 rounded-lg bg-black/5 dark:bg-black/30">
-              <span className="text-gray-500">BCH Mainnet Hot Relayer:</span>
-              <span className="text-emerald-600 dark:text-emerald-400 font-bold select-all break-all">
-                bitcoincash:qpnfz2nh7uy8a2ythr2z7am5vcxr28g43qkl20t4xm
-              </span>
-            </div>
-
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 p-2 rounded-lg bg-black/5 dark:bg-black/30">
-              <span className="text-gray-500">Polygon Mainnet Hot Relayer:</span>
-              <span className="text-blue-500 font-bold select-all break-all">
-                0x143cA3A5116835d94573C700320B9FEdFf846eF9
-              </span>
-            </div>
-
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 p-2 rounded-lg bg-black/5 dark:bg-black/30">
-              <span className="text-gray-500">Tesoreria Fría (Cold Vault Offline):</span>
-              <span className="text-primary font-bold select-all break-all">
-                bitcoincash:qqgm9rel5xlyhwt3r6n8uq9fxk5zzxrcavaal6aw8v • 0x31ED1e684BD45a8724Ec11E873bA3F63fcf19f3f
-              </span>
-            </div>
-          </motion.div>
-        )}
-      </div>
-
-      {/* USER WALLET SALDO INTERNO & REFILL BAR */}
-      <div className="rounded-3xl bg-white dark:bg-[#121622] border border-gray-200/90 dark:border-gray-800 p-4 sm:p-5 mb-8 shadow-xs">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-gray-100 dark:border-gray-800">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
-              <Wallet className="w-4 h-4" />
-            </div>
-            <div>
-              <span className="text-xs font-bold text-gray-900 dark:text-white block">
-                Mi Saldo de Billetera (Fondos Disponibles para Agregar a Pools)
-              </span>
-              <span className="text-[11px] font-mono text-gray-400 truncate block max-w-xs sm:max-w-md">
-                {effectiveAddress}
-              </span>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => handleRefillFloat('PUSD', 1000)}
-              className="px-3 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
-            >
-              <Plus className="w-3.5 h-3.5" /> +1,000 PUSD
-            </button>
-            <button
-              onClick={() => handleRefillFloat('USDC', 1000)}
-              className="px-3 py-1.5 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-500/20 text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
-            >
-              <Plus className="w-3.5 h-3.5" /> +1,000 USDC
-            </button>
-          </div>
-        </div>
-
-        {/* WALLET BALANCES ROW */}
-        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2.5 pt-3 text-center">
-          <div className="p-2 rounded-xl bg-gray-50 dark:bg-[#161c28]">
-            <span className="text-[10px] text-gray-400 font-bold block">PUSD (BCH)</span>
-            <span className="text-sm font-black font-mono text-gray-900 dark:text-white">
-              {(walletBalances.PUSD ?? 0).toLocaleString()}
-            </span>
-          </div>
-
-          <div className="p-2 rounded-xl bg-gray-50 dark:bg-[#161c28]">
-            <span className="text-[10px] text-gray-400 font-bold block">USDC (Polygon)</span>
-            <span className="text-sm font-black font-mono text-gray-900 dark:text-white">
-              {(walletBalances.USDC ?? 0).toLocaleString()}
-            </span>
-          </div>
-
-          <div className="p-2 rounded-xl bg-gray-50 dark:bg-[#161c28]">
-            <span className="text-[10px] text-gray-400 font-bold block">BCH Nativo</span>
-            <span className="text-sm font-black font-mono text-gray-900 dark:text-white">
-              {(walletBalances.BCH ?? 0).toLocaleString()}
-            </span>
-          </div>
-
-          <div className="p-2 rounded-xl bg-gray-50 dark:bg-[#161c28]">
-            <span className="text-[10px] text-gray-400 font-bold block">USDT (Polygon)</span>
-            <span className="text-sm font-black font-mono text-gray-900 dark:text-white">
-              {(walletBalances.USDT ?? 0).toLocaleString()}
-            </span>
-          </div>
-
-          <div className="p-2 rounded-xl bg-gray-50 dark:bg-[#161c28]">
-            <span className="text-[10px] text-gray-400 font-bold block">SOL (Solana)</span>
-            <span className="text-sm font-black font-mono text-gray-900 dark:text-white">
-              {(walletBalances.SOL ?? 0).toLocaleString()}
-            </span>
-          </div>
-
-          <div className="p-2 rounded-xl bg-gray-50 dark:bg-[#161c28]">
-            <span className="text-[10px] text-gray-400 font-bold block">ETH (Mainnet)</span>
-            <span className="text-sm font-black font-mono text-gray-900 dark:text-white">
-              {(walletBalances.ETH ?? 0).toLocaleString()}
-            </span>
-          </div>
-        </div>
       </div>
 
       {/* PROTOCOL METRICS STATS CARDS */}
@@ -697,7 +498,7 @@ export default function PoolsView({
             ${(protocolStats?.totalVolumeUsd ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
           <span className="text-[10px] sm:text-[11px] text-gray-400 font-medium mt-1 block">
-            En los 8 Pares de Red Principal
+            En Pares On-Chain Verificados
           </span>
         </div>
 
@@ -1155,16 +956,17 @@ export default function PoolsView({
               <div className="p-4 rounded-2xl bg-gray-50 dark:bg-[#161c28] border border-gray-100 dark:border-gray-800 mb-4">
                 <div className="flex justify-between items-center text-xs text-gray-400 mb-1.5">
                   <span>Monto a Depositar</span>
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-2">
                     <span className="font-mono">
                       Saldo: <strong className="text-gray-900 dark:text-white font-bold">{getSelectedTokenBalance().toLocaleString()} {depositToken}</strong>
                     </span>
-                    {getSelectedTokenBalance() < 10 && (
+                    {getSelectedTokenBalance() > 0 && (
                       <button
-                        onClick={() => handleRefillFloat(depositToken, 1000)}
-                        className="text-[10px] font-bold text-primary hover:underline cursor-pointer"
+                        type="button"
+                        onClick={() => setDepositAmount(String(getSelectedTokenBalance()))}
+                        className="text-[10px] font-bold text-primary hover:text-orange-600 bg-primary/10 px-1.5 py-0.5 rounded cursor-pointer transition-colors"
                       >
-                        (+Recargar)
+                        MAX
                       </button>
                     )}
                   </div>
