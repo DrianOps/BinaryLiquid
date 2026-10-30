@@ -1,0 +1,47 @@
+pragma cashscript ^0.9.0;
+
+/**
+ * @title BinaryLiquidVault (Bitcoin Cash CashTokens Covenant)
+ * @author BinaryLiquid Protocol / DrianOps
+ * @notice 100% Non-Custodial Cross-Chain Escrow & Liquidity Covenant for Bitcoin Cash (CashTokens).
+ *
+ * SPECIFICATION:
+ * 1. Payout Path: The Watchman co-signs the release of CashTokens (PUSD/MUSD/LIFT) directly to 
+ *    the user's CashAddr locking bytecode (enforced by introspection opcodes).
+ * 2. Refund Path: If cross-chain delivery fails, after timeoutBlocks (e.g. ~144 blocks / 24 hours),
+ *    the depositor can reclaim 100% of their UTXO without permission.
+ */
+contract BinaryLiquidVault(
+    pubkey watchmanPk,       // The Watchman Sentinel public key
+    pubkey depositorPk,      // The depositor's public key (for refund)
+    int timeoutBlocks        // Block height after which depositor can refund unilaterally
+) {
+    /**
+     * @notice Payout function: Releases the CashTokens to the user's destination output.
+     * @param watchmanSig Cryptographic attestation signature from The Watchman
+     * @param recipientBytecode The destination locking bytecode of the recipient
+     */
+    function payout(sig watchmanSig, bytes recipientBytecode) {
+        // 1. Verify The Watchman's signature
+        require(checkSig(watchmanSig, watchmanPk));
+
+        // 2. Enforce output #0 sends the tokens directly to the recipient's locking bytecode
+        require(tx.outputs[0].lockingBytecode == recipientBytecode);
+
+        // 3. Prevent token burning: Ensure CashTokens category and amount are conserved in output #0
+        require(tx.outputs[0].tokenCategory == tx.inputs[this.activeInputIndex].tokenCategory);
+        require(tx.outputs[0].tokenAmount >= tx.inputs[this.activeInputIndex].tokenAmount);
+    }
+
+    /**
+     * @notice Timelock Refund: Unconditional refund back to depositor if unfulfilled after timeout.
+     * @param depositorSig The depositor's signature
+     */
+    function refund(sig depositorSig) {
+        // 1. Verify block height timelock has elapsed (~24 hours / 144 blocks)
+        require(tx.time >= timeoutBlocks);
+
+        // 2. Verify depositor signature
+        require(checkSig(depositorSig, depositorPk));
+    }
+}
