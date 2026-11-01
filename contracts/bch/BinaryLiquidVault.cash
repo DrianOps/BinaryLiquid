@@ -1,47 +1,46 @@
-pragma cashscript ^0.9.0;
+pragma cashscript ^0.14.0;
 
 /**
- * @title BinaryLiquidVault (Bitcoin Cash CashTokens Covenant)
+ * @title BinaryLiquidVault (Bitcoin Cash CashTokens Liquidity Pool Covenant)
  * @author BinaryLiquid Protocol / DrianOps
- * @notice 100% Non-Custodial Cross-Chain Escrow & Liquidity Covenant for Bitcoin Cash (CashTokens).
+ * @notice 100% Non-Custodial Cross-Chain Liquidity Covenant for Bitcoin Cash CashTokens (PUSD).
  *
- * SPECIFICATION:
- * 1. Payout Path: The Watchman co-signs the release of CashTokens (PUSD/MUSD/LIFT) directly to 
- *    the user's CashAddr locking bytecode (enforced by introspection opcodes).
- * 2. Refund Path: If cross-chain delivery fails, after timeoutBlocks (e.g. ~144 blocks / 24 hours),
- *    the depositor can reclaim 100% of their UTXO without permission.
+ * SECURITY INVARIANTS (BCH UTXO Introspection):
+ * 1. Zero-Custody Pool: Funds live inside a P2SH32 Covenant with no EOA private key.
+ * 2. Watchman Attestation: Requires Schnorr signature from The Watchman Sentinel (`watchmanPk`).
+ * 3. On-Chain Circuit Breaker: Enforces `payoutAmount <= maxSinglePayout` inside VM script.
+ * 4. Covenant State Continuation: Mathematically forces 100% of remaining CashTokens (`inputTokens - payoutAmount`)
+ *    back into the exact same Covenant bytecode (`tx.outputs[1].lockingBytecode == activeLockingBytecode`).
  */
 contract BinaryLiquidVault(
-    pubkey watchmanPk,       // The Watchman Sentinel public key
-    pubkey depositorPk,      // The depositor's public key (for refund)
-    int timeoutBlocks        // Block height after which depositor can refund unilaterally
+    pubkey watchmanPk,
+    int maxSinglePayout
 ) {
-    /**
-     * @notice Payout function: Releases the CashTokens to the user's destination output.
-     * @param watchmanSig Cryptographic attestation signature from The Watchman
-     * @param recipientBytecode The destination locking bytecode of the recipient
-     */
-    function payout(sig watchmanSig, bytes recipientBytecode) {
-        // 1. Verify The Watchman's signature
+    function release(sig watchmanSig, bytes recipientLockingBytecode, int payoutAmount) {
+        // 1. Verify cryptographic attestation from The Watchman Sentinel
         require(checkSig(watchmanSig, watchmanPk));
 
-        // 2. Enforce output #0 sends the tokens directly to the recipient's locking bytecode
-        require(tx.outputs[0].lockingBytecode == recipientBytecode);
+        // 2. Enforce on-chain Circuit Breaker bounds
+        require(payoutAmount > 0);
+        require(payoutAmount <= maxSinglePayout);
 
-        // 3. Prevent token burning: Ensure CashTokens category and amount are conserved in output #0
-        require(tx.outputs[0].tokenCategory == tx.inputs[this.activeInputIndex].tokenCategory);
-        require(tx.outputs[0].tokenAmount >= tx.inputs[this.activeInputIndex].tokenAmount);
-    }
+        // 3. Read active CashToken category and pool balance via native UTXO introspection
+        bytes poolCategory = tx.inputs[this.activeInputIndex].tokenCategory;
+        int poolBalance = tx.inputs[this.activeInputIndex].tokenAmount;
+        require(poolBalance >= payoutAmount);
 
-    /**
-     * @notice Timelock Refund: Unconditional refund back to depositor if unfulfilled after timeout.
-     * @param depositorSig The depositor's signature
-     */
-    function refund(sig depositorSig) {
-        // 1. Verify block height timelock has elapsed (~24 hours / 144 blocks)
-        require(tx.time >= timeoutBlocks);
+        // 4. Enforce Output #0 delivers exact CashTokens to recipient
+        require(tx.outputs[0].lockingBytecode == recipientLockingBytecode);
+        require(tx.outputs[0].tokenCategory == poolCategory);
+        require(tx.outputs[0].tokenAmount == payoutAmount);
 
-        // 2. Verify depositor signature
-        require(checkSig(depositorSig, depositorPk));
+        // 5. Covenant State Continuation: Force remaining pool liquidity back into this exact Vault
+        int remainingBalance = poolBalance - payoutAmount;
+        if (remainingBalance > 0) {
+            bytes vaultBytecode = tx.inputs[this.activeInputIndex].lockingBytecode;
+            require(tx.outputs[1].lockingBytecode == vaultBytecode);
+            require(tx.outputs[1].tokenCategory == poolCategory);
+            require(tx.outputs[1].tokenAmount >= remainingBalance);
+        }
     }
 }

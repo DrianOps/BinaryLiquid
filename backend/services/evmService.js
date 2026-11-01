@@ -1,8 +1,9 @@
+import fs from 'fs';
+import path from 'path';
 import { ethers } from 'ethers';
 import { config } from '../config.js';
 import { db } from './db.js';
 
-// Standard ERC-20 ABI
 const ERC20_ABI = [
   'function balanceOf(address owner) view returns (uint256)',
   'function decimals() view returns (uint8)',
@@ -15,74 +16,105 @@ class EvmService {
   constructor() {
     this.mainnetProvider = null;
     this.amoyProvider = null;
-    this.mainnetWallet = null;
-    this.amoyWallet = null;
-    this.hotWalletAddress = config.evm.hotWalletAddress || '';
+    this.mainnetSigner = null;
+    this.amoySigner = null;
+    this.watchmanAddress = config.evm.watchmanAddress || '0x143cA3A5116835d94573C700320B9FEdFf846eF9';
+    this.vaultAbi = null;
+    this.testnetUsdcAbi = null;
     this.init();
   }
 
   init() {
-    // 1. Initialize Mainnet Provider & Wallet
+    try {
+      const vaultArtifactPath = path.join(config.contractsDir, 'evm/artifacts/BinaryLiquidVault.json');
+      const usdcArtifactPath = path.join(config.contractsDir, 'evm/artifacts/TestnetUSDC.json');
+      this.vaultAbi = JSON.parse(fs.readFileSync(vaultArtifactPath, 'utf8')).abi;
+      this.testnetUsdcAbi = JSON.parse(fs.readFileSync(usdcArtifactPath, 'utf8')).abi;
+    } catch (err) {
+      console.error('[EVM Vault] Failed to load Solidity ABIs:', err.message);
+    }
+
+    const rawKey = config.evm.watchmanPrivateKey;
+    const formattedKey = rawKey && rawKey.length >= 64
+      ? (rawKey.startsWith('0x') ? rawKey : `0x${rawKey}`)
+      : null;
+
+    // 1. Polygon Mainnet Provider & Watchman Gas Signer
     try {
       this.mainnetProvider = new ethers.JsonRpcProvider(config.evm.rpcUrl);
-      if (config.evm.hotWalletPrivateKey && config.evm.hotWalletPrivateKey.length >= 64) {
-        const key = config.evm.hotWalletPrivateKey.startsWith('0x')
-          ? config.evm.hotWalletPrivateKey
-          : `0x${config.evm.hotWalletPrivateKey}`;
-        this.mainnetWallet = new ethers.Wallet(key, this.mainnetProvider);
-        this.hotWalletAddress = this.mainnetWallet.address;
-        console.log(`[EVM] ✅ Loaded Mainnet Hot Wallet: ${this.hotWalletAddress}`);
+      if (formattedKey) {
+        this.mainnetSigner = new ethers.Wallet(formattedKey, this.mainnetProvider);
+        this.watchmanAddress = this.mainnetSigner.address;
       }
     } catch (err) {
-      console.warn('[EVM] Mainnet provider init warning:', err.message);
+      console.warn('[EVM Mainnet] Init warning:', err.message);
     }
 
-    // 2. Initialize Polygon Amoy (Testnet) Provider & Wallet
+    // 2. Polygon Amoy (Testnet 80002) Provider & Watchman Gas Signer
     try {
-      this.amoyProvider = new ethers.JsonRpcProvider(config.evm.amoyRpcUrl || 'https://polygon-amoy-bor-rpc.publicnode.com');
-      if (config.evm.hotWalletPrivateKey && config.evm.hotWalletPrivateKey.length >= 64) {
-        const key = config.evm.hotWalletPrivateKey.startsWith('0x')
-          ? config.evm.hotWalletPrivateKey
-          : `0x${config.evm.hotWalletPrivateKey}`;
-        this.amoyWallet = new ethers.Wallet(key, this.amoyProvider);
-        console.log(`[EVM] ✅ Loaded Polygon Amoy (Testnet) Hot Wallet: ${this.amoyWallet.address}`);
+      this.amoyProvider = new ethers.JsonRpcProvider(
+        config.evm.amoyRpcUrl || 'https://polygon-amoy-bor-rpc.publicnode.com'
+      );
+      if (formattedKey) {
+        this.amoySigner = new ethers.Wallet(formattedKey, this.amoyProvider);
+        console.log(
+          `[EVM Amoy] 🛡️ Non-Custodial Vault: ${config.evm.amoyVaultAddress} (Watchman Signer: ${this.amoySigner.address})`
+        );
       }
     } catch (err) {
-      console.warn('[EVM] Amoy provider init warning:', err.message);
-    }
-
-    if (!this.hotWalletAddress) {
-      this.hotWalletAddress = config.evm.hotWalletAddress || '0x143cA3A5116835d94573C700320B9FEdFf846eF9';
+      console.warn('[EVM Amoy] Init warning:', err.message);
     }
   }
 
-  get wallet() {
-    return this.mainnetWallet || this.amoyWallet;
+  isAmoyChain(chain = '') {
+    const c = (chain || '').toLowerCase();
+    return c.includes('amoy') || c.includes('testnet') || c.includes('80002');
   }
 
-  get provider() {
-    return this.mainnetProvider || this.amoyProvider;
+  getVaultAddress(chain = 'polygon_amoy') {
+    if (this.isAmoyChain(chain)) {
+      return config.evm.amoyVaultAddress;
+    }
+    return config.evm.mainnetVaultAddress || config.evm.amoyVaultAddress;
   }
 
-  getDepositAddress() {
-    return this.hotWalletAddress;
+  getDepositAddress(chain = 'polygon_amoy') {
+    return this.getVaultAddress(chain);
+  }
+
+  getTokenConfig(tokenSymbol = 'USDC', chain = 'polygon_amoy') {
+    const sym = (tokenSymbol || 'USDC').toUpperCase();
+    if (this.isAmoyChain(chain)) {
+      return config.evm.amoyTokens?.[sym] || config.evm.tokens[sym];
+    }
+    return config.evm.tokens[sym];
   }
 
   async getBalances() {
     const balances = {
-      mainnet: { native: 0.0, USDC: 0.0, USDT: 0.0 },
-      amoy: { native: 0.0, USDC: 0.0 }
+      mainnet: {
+        native: 0.0,
+        USDC: 0.0,
+        USDT: 0.0,
+        vaultAddress: config.evm.mainnetVaultAddress || null
+      },
+      amoy: {
+        native: 0.0,
+        USDC: 0.0,
+        vaultAddress: config.evm.amoyVaultAddress
+      }
     };
 
-    if (this.mainnetProvider && this.hotWalletAddress) {
+    if (this.mainnetProvider && this.watchmanAddress) {
       try {
-        const nativeWei = await this.mainnetProvider.getBalance(this.hotWalletAddress);
+        const nativeWei = await this.mainnetProvider.getBalance(this.watchmanAddress);
         balances.mainnet.native = parseFloat(ethers.formatEther(nativeWei)) || 0.0;
 
+        const targetHolder = config.evm.mainnetVaultAddress || this.watchmanAddress;
         const usdcToken = config.evm.tokens.USDC;
         if (usdcToken?.address) {
           const contract = new ethers.Contract(usdcToken.address, ERC20_ABI, this.mainnetProvider);
-          const raw = await contract.balanceOf(this.hotWalletAddress);
+          const raw = await contract.balanceOf(targetHolder);
           balances.mainnet.USDC = parseFloat(ethers.formatUnits(raw, usdcToken.decimals)) || 0.0;
         }
       } catch (e) {
@@ -90,15 +122,15 @@ class EvmService {
       }
     }
 
-    if (this.amoyProvider && this.hotWalletAddress) {
+    if (this.amoyProvider && config.evm.amoyVaultAddress) {
       try {
-        const nativeWei = await this.amoyProvider.getBalance(this.hotWalletAddress);
+        const nativeWei = await this.amoyProvider.getBalance(this.watchmanAddress);
         balances.amoy.native = parseFloat(ethers.formatEther(nativeWei)) || 0.0;
 
         const amoyUsdc = config.evm.amoyTokens?.USDC;
         if (amoyUsdc?.address) {
           const contract = new ethers.Contract(amoyUsdc.address, ERC20_ABI, this.amoyProvider);
-          const raw = await contract.balanceOf(this.hotWalletAddress);
+          const raw = await contract.balanceOf(config.evm.amoyVaultAddress);
           balances.amoy.USDC = parseFloat(ethers.formatUnits(raw, amoyUsdc.decimals)) || 0.0;
         }
       } catch (e) {
@@ -109,151 +141,227 @@ class EvmService {
     return balances;
   }
 
-  async verifyDeposit(txHash, expectedAmount, tokenSymbol = 'USDC', depositAddress = null, chain = 'polygon_mainnet') {
-    const isAmoy = (chain && (chain.toLowerCase().includes('amoy') || chain.toLowerCase().includes('testnet')));
+  /**
+   * Cryptographically verifies on-chain deposit into `BinaryLiquidVault.sol`:
+   * Accepts either `BridgeDepositInitiated` event OR direct ERC-20 `Transfer(user -> vaultAddress)` log!
+   */
+  async verifyDeposit(txHash, expectedAmount, tokenSymbol = 'USDC', depositAddress = null, chain = 'polygon_amoy') {
+    const isAmoy = this.isAmoyChain(chain);
     const activeProvider = isAmoy ? this.amoyProvider : this.mainnetProvider;
     const networkName = isAmoy ? 'Polygon Amoy (Testnet)' : 'Polygon Mainnet';
+    const targetVault = (depositAddress || this.getVaultAddress(chain)).toLowerCase();
+    const tokenCfg = this.getTokenConfig(tokenSymbol, chain);
+    const decimals = tokenCfg?.decimals || 6;
 
-    // A) If dedicated deposit address is known, verify on-chain balance directly
-    if (depositAddress && activeProvider) {
-      try {
-        const isNative = tokenSymbol.toUpperCase() === 'POL' || tokenSymbol.toUpperCase() === 'MATIC' || tokenSymbol.toUpperCase() === 'ETH';
-        if (isNative) {
-          const bal = await activeProvider.getBalance(depositAddress);
-          if (bal && BigInt(bal) > 0n) {
-            return {
-              verified: true,
-              onChain: true,
-              amount: parseFloat(ethers.formatEther(bal)),
-              txHash: txHash || `onchain_evm_${depositAddress.substring(0, 16)}`
-            };
-          }
-        } else {
-          const tokenConfig = isAmoy
-            ? (config.evm.amoyTokens?.[tokenSymbol.toUpperCase()] || config.evm.tokens[tokenSymbol.toUpperCase()])
-            : config.evm.tokens[tokenSymbol.toUpperCase()];
-          if (tokenConfig?.address) {
-            const contract = new ethers.Contract(tokenConfig.address, ERC20_ABI, activeProvider);
-            const rawBal = await contract.balanceOf(depositAddress);
-            if (rawBal && BigInt(rawBal) > 0n) {
-              return {
-                verified: true,
-                onChain: true,
-                amount: parseFloat(ethers.formatUnits(rawBal, tokenConfig.decimals)),
-                txHash: txHash || `onchain_erc20_${depositAddress.substring(0, 16)}`
-              };
-            }
-          }
-        }
-      } catch (err) {
-        console.warn(`[EVM ${networkName}] Watcher check warning:`, err.message);
-      }
+    if (!txHash || txHash.trim().length < 20) {
+      return {
+        verified: false,
+        reason: `Por favor proporciona el Hash de Transacción (0x...) de tu depósito al Smart Contract Vault (${targetVault})`
+      };
     }
 
-    // B) If txHash is provided, verify transaction receipt
-    if (txHash && txHash.trim().length >= 20) {
-      const cleanHash = txHash.trim();
-      if (activeProvider) {
-        try {
-          const receipt = await activeProvider.getTransactionReceipt(cleanHash);
-          if (receipt && receipt.status === 1) {
-            return {
-              verified: true,
-              onChain: true,
-              amount: expectedAmount,
-              txHash: cleanHash,
-              blockNumber: receipt.blockNumber
-            };
-          }
-        } catch (err) {
-          console.warn(`[EVM ${networkName}] Receipt query error:`, err.message);
-        }
-      }
-
-      if (config.simulateIfNoFunds) {
-        return { verified: true, simulated: true, amount: expectedAmount, txHash: cleanHash };
-      }
-
-      return { verified: false, reason: `Transacción no confirmada en ${networkName}` };
-    }
-
-    if (config.simulateIfNoFunds) {
-      return { verified: true, simulated: true, amount: expectedAmount, txHash: 'simulated_fallback' };
-    }
-
-    return { verified: false, reason: 'No se detectaron fondos recibidos en la dirección de depósito' };
-  }
-
-  async sendPayout(recipientAddress, amount, tokenSymbol = 'USDC', chain = 'polygon_mainnet') {
-    const raw = recipientAddress.trim().toLowerCase();
-    if (!ethers.isAddress(raw)) {
-      throw new Error(`Dirección EVM de destino inválida: ${recipientAddress}`);
-    }
-    const cleanRecipient = ethers.getAddress(raw);
-
-    const isAmoy = chain ? (chain.toLowerCase().includes('amoy') || chain.toLowerCase().includes('testnet')) : false;
-    const activeWallet = isAmoy ? this.amoyWallet : this.mainnetWallet;
-    const activeExplorer = isAmoy ? (config.evm.amoyExplorerUrl || 'https://amoy.polygonscan.com') : config.evm.explorerUrl;
-    const networkName = isAmoy ? 'Polygon Amoy (Testnet)' : 'Polygon Mainnet';
-
-    if (!activeWallet) {
-      throw new Error(`[EVM] La Hot Wallet para ${networkName} no está inicializada`);
+    const cleanHash = txHash.trim();
+    if (!activeProvider) {
+      return { verified: false, reason: `Proveedor RPC no disponible para ${networkName}` };
     }
 
     try {
-      const isNative = tokenSymbol.toUpperCase() === 'POL' || tokenSymbol.toUpperCase() === 'MATIC';
-      let txReceipt;
-
-      if (isNative) {
-        console.log(`[EVM Payout] Sending ${amount} POL natively to ${cleanRecipient} on ${networkName}...`);
-        const tx = await activeWallet.sendTransaction({
-          to: cleanRecipient,
-          value: ethers.parseEther(amount.toFixed(18))
-        });
-        txReceipt = await tx.wait(1);
-      } else {
-        const tokenConfig = isAmoy
-          ? (config.evm.amoyTokens?.[tokenSymbol.toUpperCase()] || config.evm.tokens[tokenSymbol.toUpperCase()])
-          : config.evm.tokens[tokenSymbol.toUpperCase()];
-
-        if (!tokenConfig?.address) {
-          throw new Error(`No hay contrato configurado para ${tokenSymbol} en ${networkName}`);
-        }
-
-        const parsedAmount = ethers.parseUnits(amount.toFixed(tokenConfig.decimals), tokenConfig.decimals);
-        console.log(`[EVM Payout] Sending ${amount} ${tokenSymbol} via ERC20 (${tokenConfig.address}) to ${cleanRecipient} on ${networkName}...`);
-        const contract = new ethers.Contract(tokenConfig.address, ERC20_ABI, activeWallet);
-        const tx = await contract.transfer(cleanRecipient, parsedAmount);
-        txReceipt = await tx.wait(1);
+      const receipt = await activeProvider.getTransactionReceipt(cleanHash);
+      if (!receipt || receipt.status !== 1) {
+        return { verified: false, reason: `Transacción no confirmada o revertida en ${networkName}` };
       }
 
-      console.log(`[EVM Payout] ✅ Confirmed on-chain on ${networkName}! Hash: ${txReceipt.hash}`);
-      db.updateLiquidity(`evm_${tokenSymbol.toLowerCase()}`, -amount);
+      const vaultIface = this.vaultAbi ? new ethers.Interface(this.vaultAbi) : null;
+      const erc20Iface = new ethers.Interface(ERC20_ABI);
+
+      let verifiedAmount = 0;
+      let onChainDepositId = null;
+
+      for (const log of receipt.logs) {
+        // Check 1: Native Vault `BridgeDepositInitiated` event
+        if (vaultIface && log.address.toLowerCase() === targetVault) {
+          try {
+            const parsed = vaultIface.parseLog(log);
+            if (parsed && parsed.name === 'BridgeDepositInitiated') {
+              onChainDepositId = parsed.args.depositId;
+              verifiedAmount = parseFloat(ethers.formatUnits(parsed.args.amount, decimals));
+              break;
+            }
+          } catch (_) {
+            // Ignore non-matching log
+          }
+        }
+
+        // Check 2: Standard ERC-20 `Transfer(from, vaultAddress, value)`
+        try {
+          const parsedTransfer = erc20Iface.parseLog(log);
+          if (
+            parsedTransfer &&
+            parsedTransfer.name === 'Transfer' &&
+            parsedTransfer.args.to.toLowerCase() === targetVault
+          ) {
+            const amt = parseFloat(ethers.formatUnits(parsedTransfer.args.value, decimals));
+            if (amt > verifiedAmount) {
+              verifiedAmount = amt;
+            }
+          }
+        } catch (_) {
+          // Ignore non-ERC20 log
+        }
+      }
+
+      if (verifiedAmount <= 0) {
+        return {
+          verified: false,
+          reason: `La transacción ${cleanHash.slice(0, 12)}... no transfirió fondos al Smart Contract Vault (${targetVault})`
+        };
+      }
+
+      if (verifiedAmount < Number(expectedAmount) * 0.99) {
+        return {
+          verified: false,
+          reason: `Monto depositado en el Vault (${verifiedAmount} ${tokenSymbol}) menor al requerido (${expectedAmount} ${tokenSymbol})`
+        };
+      }
+
+      return {
+        verified: true,
+        onChain: true,
+        nonCustodial: true,
+        amount: verifiedAmount,
+        depositId: onChainDepositId,
+        txHash: cleanHash,
+        blockNumber: receipt.blockNumber
+      };
+    } catch (err) {
+      console.warn(`[EVM ${networkName}] Receipt verification error:`, err.message);
+      return { verified: false, reason: `Error verificando recibo en ${networkName}: ${err.message}` };
+    }
+  }
+
+  /**
+   * Executes a 100% Non-Custodial ERC-20 release from `BinaryLiquidVault.sol` using The Watchman's ECDSA proof!
+   */
+  async releaseFromVault({
+    bchTxHashBytes32,
+    recipientAddress,
+    amount,
+    tokenSymbol = 'USDC',
+    chain = 'polygon_amoy',
+    nonce,
+    watchmanSignature
+  }) {
+    const rawRecipient = (recipientAddress || '').trim().toLowerCase();
+    if (!ethers.isAddress(rawRecipient)) {
+      throw new Error(`Dirección EVM de destino inválida: ${recipientAddress}`);
+    }
+    const cleanRecipient = ethers.getAddress(rawRecipient);
+
+    const isAmoy = this.isAmoyChain(chain);
+    const activeSigner = isAmoy ? this.amoySigner : this.mainnetSigner;
+    const activeExplorer = isAmoy ? (config.evm.amoyExplorerUrl || 'https://amoy.polygonscan.com') : config.evm.explorerUrl;
+    const networkName = isAmoy ? 'Polygon Amoy (Testnet)' : 'Polygon Mainnet';
+    const vaultAddress = this.getVaultAddress(chain);
+    const tokenConfig = this.getTokenConfig(tokenSymbol, chain);
+
+    if (!activeSigner || !vaultAddress || !this.vaultAbi) {
+      throw new Error(`[EVM Vault] Smart Contract Vault no inicializado para ${networkName}`);
+    }
+    if (!tokenConfig?.address) {
+      throw new Error(`Token ${tokenSymbol} no configurado en ${networkName}`);
+    }
+
+    const parsedAmount = ethers.parseUnits(Number(amount).toFixed(tokenConfig.decimals), tokenConfig.decimals);
+    const vaultContract = new ethers.Contract(vaultAddress, this.vaultAbi, activeSigner);
+
+    try {
+      console.log(
+        `[EVM Vault] 🛡️ Releasing ${amount} ${tokenSymbol} from BinaryLiquidVault (${vaultAddress}) -> ${cleanRecipient} on ${networkName}...`
+      );
+      const tx = await vaultContract.release(
+        bchTxHashBytes32,
+        cleanRecipient,
+        tokenConfig.address,
+        parsedAmount,
+        nonce,
+        watchmanSignature
+      );
+      const txReceipt = await tx.wait(1);
+
+      console.log(`[EVM Vault] ✅ Smart Contract release confirmed! TX: ${txReceipt.hash}`);
+      db.updateLiquidity(`evm_${tokenSymbol.toLowerCase()}`, -Number(amount));
 
       return {
         success: true,
         onChain: true,
+        nonCustodial: true,
+        vaultAddress,
         txHash: txReceipt.hash,
         explorerUrl: `${activeExplorer}/tx/${txReceipt.hash}`,
         blockNumber: txReceipt.blockNumber
       };
     } catch (err) {
-      console.error(`[EVM Payout] ❌ Error on-chain en ${networkName}:`, err.message);
-
-      if (config.simulateIfNoFunds) {
-        console.warn('[EVM Payout] Falling back to simulated hash due to SIMULATE_IF_NO_FUNDS=true');
-        const mockHash = '0x' + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
-        db.updateLiquidity(`evm_${tokenSymbol.toLowerCase()}`, -amount);
-        return {
-          success: true,
-          simulated: true,
-          txHash: mockHash,
-          explorerUrl: `${activeExplorer}/tx/${mockHash}`
-        };
-      }
-
-      throw new Error(`Fallo en el pago on-chain de ${networkName}: ${err.message}. Asegúrate de que la Hot Wallet (${activeWallet.address}) tenga gas suficiente.`);
+      console.error(`[EVM Vault] ❌ Smart Contract release error on ${networkName}:`, err.message);
+      throw new Error(`Fallo en liberación del Smart Contract Vault (${networkName}): ${err.message}`);
     }
+  }
+
+  /**
+   * Marks an EVM -> BCH `depositId` settled on-chain once the BCH Covenant releases CashTokens
+   */
+  async markDepositSettled(depositId, bchPayoutTxHash, chain = 'polygon_amoy') {
+    if (!depositId) return null;
+    try {
+      const isAmoy = this.isAmoyChain(chain);
+      const activeSigner = isAmoy ? this.amoySigner : this.mainnetSigner;
+      const vaultAddress = this.getVaultAddress(chain);
+      if (!activeSigner || !vaultAddress || !this.vaultAbi) return null;
+
+      const cleanBchHash = bchPayoutTxHash.startsWith('0x')
+        ? bchPayoutTxHash
+        : `0x${bchPayoutTxHash.padStart(64, '0')}`;
+      const vaultContract = new ethers.Contract(vaultAddress, this.vaultAbi, activeSigner);
+      const tx = await vaultContract.markDepositCompleted(depositId, cleanBchHash);
+      const receipt = await tx.wait(1);
+      return receipt.hash;
+    } catch (err) {
+      console.warn('[EVM Vault] markDepositSettled warning:', err.message);
+      return null;
+    }
+  }
+
+  /**
+   * Real On-Chain Testnet Faucet: Calls `TestnetUSDC.faucet(recipient, amount)` on Polygon Amoy!
+   */
+  async dispenseTestnetUsdc(recipientAddress, amount = 100) {
+    const rawRecipient = (recipientAddress || '').trim().toLowerCase();
+    if (!ethers.isAddress(rawRecipient)) {
+      throw new Error('Ingresa una dirección EVM válida (0x...) para recibir Testnet USDC en Polygon Amoy');
+    }
+    if (!this.amoySigner || !this.testnetUsdcAbi) {
+      throw new Error('Polygon Amoy Faucet signer no disponible');
+    }
+
+    const cleanRecipient = ethers.getAddress(rawRecipient);
+    const cappedAmount = Math.min(Math.max(Number(amount) || 100, 1), 1000);
+    const parsedAmount = ethers.parseUnits(cappedAmount.toFixed(6), 6);
+    const usdcAddress = config.evm.amoyTokens.USDC.address;
+
+    const usdcContract = new ethers.Contract(usdcAddress, this.testnetUsdcAbi, this.amoySigner);
+    const tx = await usdcContract.faucet(cleanRecipient, parsedAmount);
+    const receipt = await tx.wait(1);
+
+    return {
+      success: true,
+      onChain: true,
+      token: 'USDC',
+      network: 'Polygon Amoy (Chain ID 80002)',
+      amount: cappedAmount,
+      recipient: cleanRecipient,
+      tokenAddress: usdcAddress,
+      txHash: receipt.hash,
+      explorerUrl: `https://amoy.polygonscan.com/tx/${receipt.hash}`
+    };
   }
 }
 

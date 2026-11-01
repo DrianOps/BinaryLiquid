@@ -1,0 +1,99 @@
+{
+  "contractName": "BinaryLiquidEscrow",
+  "constructorInputs": [
+    {
+      "name": "watchmanPk",
+      "type": "pubkey"
+    },
+    {
+      "name": "vaultPoolLockingBytecode",
+      "type": "bytes"
+    },
+    {
+      "name": "refundLockingBytecode",
+      "type": "bytes"
+    },
+    {
+      "name": "expiryTimestamp",
+      "type": "int"
+    },
+    {
+      "name": "orderSalt",
+      "type": "bytes16"
+    }
+  ],
+  "abi": [
+    {
+      "name": "settleToVault",
+      "inputs": [
+        {
+          "name": "watchmanSig",
+          "type": "sig"
+        }
+      ]
+    },
+    {
+      "name": "refund",
+      "inputs": []
+    }
+  ],
+  "bytecode": "OP_5 OP_PICK OP_0 OP_NUMEQUAL OP_IF OP_4 OP_ROLL OP_SIZE OP_NIP OP_16 OP_NUMEQUALVERIFY OP_5 OP_ROLL OP_SWAP OP_CHECKSIGVERIFY OP_INPUTINDEX OP_UTXOTOKENCATEGORY OP_INPUTINDEX OP_UTXOTOKENAMOUNT OP_0 OP_OUTPUTBYTECODE OP_3 OP_ROLL OP_EQUALVERIFY OP_DUP OP_0 OP_GREATERTHAN OP_IF OP_0 OP_OUTPUTTOKENCATEGORY OP_2 OP_PICK OP_EQUALVERIFY OP_0 OP_OUTPUTTOKENAMOUNT OP_OVER OP_GREATERTHANOREQUAL OP_VERIFY OP_ENDIF OP_2DROP OP_2DROP OP_DROP OP_1 OP_ELSE OP_5 OP_ROLL OP_1 OP_NUMEQUALVERIFY OP_4 OP_ROLL OP_SIZE OP_NIP OP_16 OP_NUMEQUALVERIFY OP_3 OP_ROLL OP_CHECKLOCKTIMEVERIFY OP_DROP OP_INPUTINDEX OP_UTXOTOKENCATEGORY OP_INPUTINDEX OP_UTXOTOKENAMOUNT OP_0 OP_OUTPUTBYTECODE OP_5 OP_ROLL OP_EQUALVERIFY OP_DUP OP_0 OP_GREATERTHAN OP_IF OP_0 OP_OUTPUTTOKENCATEGORY OP_2 OP_PICK OP_EQUALVERIFY OP_0 OP_OUTPUTTOKENAMOUNT OP_OVER OP_GREATERTHANOREQUAL OP_VERIFY OP_ENDIF OP_2DROP OP_2DROP OP_1 OP_ENDIF",
+  "source": "pragma cashscript ^0.14.0;\n\n/**\n * @title BinaryLiquidEscrow (Per-Swap Non-Custodial Intent Covenant)\n * @author BinaryLiquid Protocol / DrianOps\n * @notice Generates a deterministic, isolated P2SH32 CashTokens Smart Contract (`bchtest:r...` / `bitcoincash:r...`)\n * for each cross-chain swap order, with zero private keys and autonomous 24-hour Timelock Refund.\n */\ncontract BinaryLiquidEscrow(\n    pubkey watchmanPk,\n    bytes vaultPoolLockingBytecode,\n    bytes refundLockingBytecode,\n    int expiryTimestamp,\n    bytes16 orderSalt\n) {\n    /**\n     * @notice Sweeps verified user deposit strictly into the main BinaryLiquidVault Liquidity Pool\n     */\n    function settleToVault(sig watchmanSig) {\n        require(orderSalt.length == 16);\n        require(checkSig(watchmanSig, watchmanPk));\n\n        bytes tokenCat = tx.inputs[this.activeInputIndex].tokenCategory;\n        int tokenAmt = tx.inputs[this.activeInputIndex].tokenAmount;\n\n        // Mathematically cannot be diverted anywhere except the Non-Custodial Vault Pool\n        require(tx.outputs[0].lockingBytecode == vaultPoolLockingBytecode);\n        if (tokenAmt > 0) {\n            require(tx.outputs[0].tokenCategory == tokenCat);\n            require(tx.outputs[0].tokenAmount >= tokenAmt);\n        }\n    }\n\n    /**\n     * @notice Permissionless 24h Timelock Refund: Anyone can trigger after expiryTimestamp,\n     * and the BCH VM forces 100% of tokens/BCH back to the depositor's refundLockingBytecode.\n     */\n    function refund() {\n        require(orderSalt.length == 16);\n        require(tx.time >= expiryTimestamp);\n\n        bytes tokenCat = tx.inputs[this.activeInputIndex].tokenCategory;\n        int tokenAmt = tx.inputs[this.activeInputIndex].tokenAmount;\n\n        require(tx.outputs[0].lockingBytecode == refundLockingBytecode);\n        if (tokenAmt > 0) {\n            require(tx.outputs[0].tokenCategory == tokenCat);\n            require(tx.outputs[0].tokenAmount >= tokenAmt);\n        }\n    }\n}\n",
+  "fingerprint": "b9c8a05cd26db7e528d1bc46620d34407e64750432e5b43066b396e734e1c0fa",
+  "debug": {
+    "bytecode": "5579009c63547a8277609d557a7cadc0cec0d000cd537a887600a06300d152798800d378a269686d6d755167557a519d547a8277609d537ab175c0cec0d000cd557a887600a06300d152798800d378a269686d6d5168",
+    "sourceMap": "19:4:32:5;;;;;20:16:20:25;;:::32:1;;:36::38:0;:8::40:1;21:25:21:36:0;;:38::48;:8::51:1;23:35:23:56:0;:25::71:1;24:33:24:54:0;:23::67:1;27:27:27:28:0;:16::45:1;:49::73:0;;:8::75:1;28:12:28:20:0;:23::24;:12:::1;:26:31:9:0;29:31:29:32;:20::47:1;:51::59:0;;:12::61:1;30:31:30:32:0;:20::45:1;:49::57:0;:20:::1;:12::59;28:26:31:9;19:44:32:5;;;;:4;38::50::0;;;;39:16:39:25;;:::32:1;;:36::38:0;:8::40:1;40:27:40:42:0;;:8::44:1;;42:35:42:56:0;:25::71:1;43:33:43:54:0;:23::67:1;45:27:45:28:0;:16::45:1;:49::70:0;;:8::72:1;46:12:46:20:0;:23::24;:12:::1;:26:49:9:0;47:31:47:32;:20::47:1;:51::59:0;;:12::61:1;48:31:48:32:0;:20::45:1;:49::57:0;:20:::1;:12::59;46:26:49:9;38:22:50:5;;;9:0:51:1",
+    "logs": [],
+    "requires": [
+      {
+        "ip": 15,
+        "line": 20
+      },
+      {
+        "ip": 19,
+        "line": 21
+      },
+      {
+        "ip": 28,
+        "line": 27
+      },
+      {
+        "ip": 37,
+        "line": 29
+      },
+      {
+        "ip": 42,
+        "line": 30
+      },
+      {
+        "ip": 58,
+        "line": 39
+      },
+      {
+        "ip": 61,
+        "line": 40
+      },
+      {
+        "ip": 71,
+        "line": 45
+      },
+      {
+        "ip": 80,
+        "line": 47
+      },
+      {
+        "ip": 85,
+        "line": 48
+      }
+    ]
+  },
+  "compiler": {
+    "name": "cashc",
+    "version": "0.14.0",
+    "options": {
+      "enforceFunctionParameterTypes": true,
+      "enforceLocktimeGuard": true
+    }
+  },
+  "updatedAt": "2026-10-31T23:16:06.478Z"
+}

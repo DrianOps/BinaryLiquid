@@ -32,6 +32,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import TokenSelectModal, { TokenInfo, SUPPORTED_TOKENS } from './TokenSelectModal';
+import { executeWeb3VaultDeposit, DEPLOYED_TESTNET_CONTRACTS } from '../services/walletConnectService';
 
 interface BridgeSwapProps {
   userContext: any;
@@ -72,8 +73,8 @@ const swapTranslations = {
     useConnected: 'Use Connected Wallet',
     paste: 'Paste',
     execMode: 'Execution Mode',
-    directRelayer: 'Cross-Chain Relayer (~3s)',
-    limitRelayer: 'Limit Order (Orderbook Relayer)',
+    directRelayer: 'Non-Custodial Vault (~3s)',
+    limitRelayer: 'Limit Order (Vault Sentinel)',
     marketPrice: 'Market Rate',
     grossAmount: 'Estimated Gross Amount',
     totalFee: 'Total Bridge Fee (0.30%)',
@@ -87,17 +88,17 @@ const swapTranslations = {
     placeLimitOrder: 'Place Limit Order',
     registeringLimit: 'Registering Limit Order...',
     swapNow: 'Swap Now',
-    preparingRelayer: 'Preparing Relayer Intent...',
+    preparingRelayer: 'Instantiating Smart Contract...',
     limitOrdersTitle: 'My Limit Orders',
-    monitoring247: 'Monitoring 24/7 by Relayer',
+    monitoring247: 'Audited 24/7 by The Watchman',
     copy: 'Copy',
     copied: 'Copied',
     orderLabel: 'Order:',
     back: 'Back',
-    depositInstruction: 'Send exactly',
-    toBridgeAddr: 'to the bridge address:',
-    depositAddr: 'Deposit Address',
-    hdSubaccount: '🔒 Dedicated HD sub-account for this order',
+    depositInstruction: 'Deposit',
+    toBridgeAddr: 'into the Non-Custodial Smart Contract:',
+    depositAddr: 'Smart Contract Address',
+    hdSubaccount: '🛡️ Zero Private Keys • 24h Timelock Refund',
     txidLabel: 'Transaction Hash / TXID:',
     txidOptional: 'Optional for fast verification',
     txidPlaceholder: 'Paste your deposit TXID (e.g., 0x... or 64-char hash)',
@@ -147,8 +148,8 @@ const swapTranslations = {
     useConnected: 'Usar Billetera Conectada',
     paste: 'Pegar',
     execMode: 'Modo de Ejecución',
-    directRelayer: 'Relayer Cross-Chain (~3s)',
-    limitRelayer: 'Orden Límite (Libro de Órdenes Relayer)',
+    directRelayer: 'Smart Contract No-Custodio (~3s)',
+    limitRelayer: 'Orden Límite (Sentinel Vault)',
     marketPrice: 'Tasa de Mercado',
     grossAmount: 'Monto Bruto Estimado',
     totalFee: 'Comisión Total del Puente (0.30%)',
@@ -162,17 +163,17 @@ const swapTranslations = {
     placeLimitOrder: 'Crear Orden Límite',
     registeringLimit: 'Registrando Orden Límite...',
     swapNow: 'Intercambiar Ahora',
-    preparingRelayer: 'Preparando Intención de Relayer...',
+    preparingRelayer: 'Instanciando Smart Contract...',
     limitOrdersTitle: 'Mis Órdenes Límite',
-    monitoring247: 'Monitoreado 24/7 por el Relayer',
+    monitoring247: 'Auditado 24/7 por The Watchman',
     copy: 'Copiar',
     copied: 'Copiado',
     orderLabel: 'Orden:',
     back: 'Volver',
-    depositInstruction: 'Envía exactamente',
-    toBridgeAddr: 'a la dirección del puente:',
-    depositAddr: 'Dirección de Depósito',
-    hdSubaccount: '🔒 Sub-cuenta HD dedicada para esta orden',
+    depositInstruction: 'Deposita',
+    toBridgeAddr: 'en el Smart Contract No-Custodio:',
+    depositAddr: 'Dirección del Smart Contract',
+    hdSubaccount: '🛡️ Cero Llaves Privadas • Reembolso Autónomo 24h',
     txidLabel: 'Hash de Transacción / TXID:',
     txidOptional: 'Opcional para verificación rápida',
     txidPlaceholder: 'Pega el TXID de tu envío (ej: 0x... o hash de 64 caracteres)',
@@ -289,6 +290,28 @@ export default function BridgeSwap({
   const [manualTxHash, setManualTxHash] = useState<string>('');
   const [isVerifying, setIsVerifying] = useState<boolean>(false);
   const [customTokens, setCustomTokens] = useState<TokenInfo[]>([]);
+  const [isWeb3Depositing, setIsWeb3Depositing] = useState<boolean>(false);
+  const [web3StatusMsg, setWeb3StatusMsg] = useState<string>('');
+  const [showFaucetPanel, setShowFaucetPanel] = useState<boolean>(false);
+  const [faucetRecipient, setFaucetRecipient] = useState<string>('');
+  const [faucetLoadingToken, setFaucetLoadingToken] = useState<'PUSD' | 'USDC' | null>(null);
+
+  // Enforce allowed pairs when switching between Testnet (PUSD <-> USDC only) and Mainnet
+  useEffect(() => {
+    if (isTestnet) {
+      const allowed = ['PUSD', 'USDC'];
+      if (!allowed.includes(sellToken.symbol) || !allowed.includes(buyToken.symbol) || sellToken.symbol === buyToken.symbol) {
+        setSellToken(SUPPORTED_TOKENS[0]); // PUSD
+        setBuyToken(SUPPORTED_TOKENS[1]);  // USDC
+      }
+    } else {
+      const blockedPhase2 = ['ETH', 'SOL', 'BNB'];
+      if (blockedPhase2.includes(sellToken.symbol) || blockedPhase2.includes(buyToken.symbol)) {
+        setSellToken(SUPPORTED_TOKENS[0]);
+        setBuyToken(SUPPORTED_TOKENS[1]);
+      }
+    }
+  }, [isTestnet]);
 
   // Load custom community tokens from pools
   useEffect(() => {
@@ -763,6 +786,7 @@ export default function BridgeSwap({
           toChain: buyToken.isBch ? (isTestnet ? 'bch_chipnet' : 'bch_mainnet') : (isTestnet ? 'amoy_testnet' : 'polygon_mainnet'),
           amount: num,
           recipientAddress: recipientAddress.trim(),
+          senderAddress: userAddress || undefined,
           slippage: slippage,
           minReceived: minPayout
         })
@@ -781,14 +805,14 @@ export default function BridgeSwap({
     }
   };
 
-  // Trigger deposit verification
-  const handleVerifyDeposit = async () => {
+  // Trigger deposit verification (supports optional direct txHash from 1-click Web3 Vault deposit)
+  const handleVerifyDeposit = async (overrideTxHash?: string) => {
     if (!activeSwap) return;
     setIsVerifying(true);
     setSwapStep(2);
 
     try {
-      const hashToSend = manualTxHash.trim();
+      const hashToSend = (overrideTxHash ?? manualTxHash).trim();
 
       const res = await fetch(`${backendUrl}/api/swap/${activeSwap.id}/verify-tx`, {
         method: 'POST',
@@ -810,7 +834,7 @@ export default function BridgeSwap({
           colors: ['#F7931A', '#0AC18E', '#10B981', '#FFB703', '#FFFFFF']
         });
       } else {
-        const classified = classifySwapError(new Error(data.error || 'No se detectó la confirmación en el pool de validadores'));
+        const classified = classifySwapError(new Error(data.error || 'No se detectó la confirmación en el Smart Contract Vault'));
         setSwapError(classified);
         setCardState('error');
       }
@@ -819,6 +843,83 @@ export default function BridgeSwap({
       const classified = classifySwapError(err);
       setSwapError(classified);
       setCardState('error');
+    }
+  };
+
+  // 1-Click Web3 Deposit directly into BinaryLiquidVault.sol (Polygon Amoy / Polygon PoS)
+  const handleWeb3VaultDeposit = async () => {
+    if (!activeSwap) return;
+    setIsWeb3Depositing(true);
+    setWeb3StatusMsg('Conectando billetera Web3...');
+    try {
+      const tokenAddr =
+        activeSwap.tokenContractAddress ||
+        (isTestnet ? DEPLOYED_TESTNET_CONTRACTS.amoyUsdcAddress : sellToken.categoryOrAddress || '');
+
+      const { txHash } = await executeWeb3VaultDeposit({
+        isTestnet,
+        vaultAddress: activeSwap.depositAddress,
+        tokenAddress: tokenAddr,
+        amount: Number(activeSwap.fromAmount),
+        decimals: sellToken.decimals || 6,
+        bchRecipient: activeSwap.recipientAddress || recipientAddress,
+        onStatus: msg => setWeb3StatusMsg(msg)
+      });
+
+      setManualTxHash(txHash);
+      showToast('Depósito confirmado en BinaryLiquidVault.sol! Auditando con The Watchman...', 'success');
+      setIsWeb3Depositing(false);
+      setWeb3StatusMsg('');
+      await handleVerifyDeposit(txHash);
+    } catch (err: any) {
+      setIsWeb3Depositing(false);
+      setWeb3StatusMsg('');
+      showToast(err?.message || 'Error firmando depósito en el Smart Contract', 'error');
+    }
+  };
+
+  // Real On-Chain Testnet Faucet (Chipnet PUSD CashTokens + Polygon Amoy USDC)
+  const handleClaimTestnetFaucet = async (tokenSym: 'PUSD' | 'USDC') => {
+    const targetAddr =
+      faucetRecipient.trim() ||
+      (tokenSym === 'USDC' && userAddress?.startsWith('0x') ? userAddress : '') ||
+      (tokenSym === 'PUSD' && userAddress?.startsWith('bchtest:') ? userAddress : '');
+
+    if (!targetAddr) {
+      showToast(
+        tokenSym === 'PUSD'
+          ? 'Ingresa tu dirección BCH Chipnet (bchtest:q... o bchtest:z...) en el grifo'
+          : 'Ingresa tu dirección EVM (0x...) en el grifo',
+        'error'
+      );
+      return;
+    }
+
+    setFaucetLoadingToken(tokenSym);
+    try {
+      const res = await fetch(`${backendUrl}/api/faucet/testnet`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token: tokenSym,
+          amount: tokenSym === 'PUSD' ? 50 : 100,
+          recipient: targetAddr
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(
+          `¡Enviados ${data.amount} ${tokenSym} reales on-chain! TX: ${String(data.txHash).slice(0, 12)}...`,
+          'success'
+        );
+        confetti({ particleCount: 55, spread: 50, origin: { y: 0.7 } });
+      } else {
+        showToast(data.error || 'Error solicitando Testnet Faucet', 'error');
+      }
+    } catch (err: any) {
+      showToast(err?.message || 'Error de conexión con el Faucet', 'error');
+    } finally {
+      setFaucetLoadingToken(null);
     }
   };
 
@@ -1198,16 +1299,14 @@ export default function BridgeSwap({
                 />
               </div>
 
-              {/* Deposit Address Box with 1-click Copy & HD Badge */}
+              {/* Non-Custodial Smart Contract / CashScript Covenant Box */}
               <div className="p-3.5 rounded-2xl bg-zinc-100 dark:bg-[#161D2B] space-y-2">
                 <div className="flex items-center justify-between text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
                   <span>{t.depositAddr} ({getNetworkBadge(sellToken)})</span>
-                  {activeSwap?.derivationIndex !== undefined && activeSwap?.derivationIndex !== null && (
-                    <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full flex items-center gap-1 font-semibold">
-                      <ShieldCheck className="w-3 h-3" />
-                      BIP-44 HD #{activeSwap.derivationIndex}
-                    </span>
-                  )}
+                  <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full flex items-center gap-1 font-semibold">
+                    <ShieldCheck className="w-3 h-3" />
+                    {sellToken.isBch ? 'P2SH32 Covenant' : 'Smart Contract'}
+                  </span>
                 </div>
                 <div className="flex items-center justify-between gap-2 bg-white dark:bg-[#0E131E] p-2 rounded-xl">
                   <span className="font-mono text-xs text-zinc-900 dark:text-zinc-200 truncate font-semibold select-all">
@@ -1225,15 +1324,51 @@ export default function BridgeSwap({
                     <span>{copied ? t.copied : t.copy}</span>
                   </motion.button>
                 </div>
-                {activeSwap?.derivationPath && (
-                  <div className="pt-1 flex items-center justify-between text-[10px] text-zinc-400 font-mono">
-                    <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium">
-                      {t.hdSubaccount}
-                    </span>
-                    <span className="opacity-75">{activeSwap.derivationPath}</span>
-                  </div>
-                )}
+                <div className="pt-1 flex items-center justify-between text-[10px] text-zinc-400 font-mono">
+                  <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium">
+                    {t.hdSubaccount}
+                  </span>
+                  {activeSwap?.contractExplorerUrl ? (
+                    <a
+                      href={activeSwap.contractExplorerUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-orange-500 hover:underline flex items-center gap-1 font-bold"
+                    >
+                      <span>{activeSwap.contractName || 'Contract'}</span>
+                      <ExternalLink className="w-2.5 h-2.5" />
+                    </a>
+                  ) : (
+                    <span className="opacity-75">{activeSwap?.contractName || activeSwap?.derivationPath}</span>
+                  )}
+                </div>
               </div>
+
+              {/* 1-Click Web3 Smart Contract Deposit Button (for EVM USDC -> BCH PUSD) */}
+              {!sellToken.isBch && (
+                <button
+                  type="button"
+                  onClick={handleWeb3VaultDeposit}
+                  disabled={isWeb3Depositing || isVerifying}
+                  className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  {isWeb3Depositing ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>{web3StatusMsg || 'Firmando Smart Contract en Web3...'}</span>
+                    </>
+                  ) : (
+                    <>
+                      <ShieldCheck className="w-4 h-4" />
+                      <span>
+                        {lang === 'es'
+                          ? `⚡ Depositar ${activeSwap?.fromAmount} ${activeSwap?.fromToken} con MetaMask / Web3 (Smart Contract)`
+                          : `⚡ Deposit ${activeSwap?.fromAmount} ${activeSwap?.fromToken} via MetaMask / Web3 (Smart Contract)`}
+                      </span>
+                    </>
+                  )}
+                </button>
+              )}
 
               {/* TXID Input Field */}
               <div className="space-y-1">
@@ -1253,8 +1388,8 @@ export default function BridgeSwap({
               {/* Verify Trigger Button */}
               <button 
                 type="button"
-                onClick={handleVerifyDeposit}
-                disabled={isVerifying}
+                onClick={() => handleVerifyDeposit()}
+                disabled={isVerifying || isWeb3Depositing}
                 className="w-full py-3.5 sm:py-4 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer"
               >
                 {isVerifying ? (
@@ -1315,16 +1450,52 @@ export default function BridgeSwap({
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
             >
-            {/* TESTNET ACTIVE NOTIFICATION BANNER */}
+            {/* TESTNET ACTIVE NOTIFICATION BANNER + ON-CHAIN FAUCET */}
             {isTestnet && (
-              <div className="mb-3 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-300 text-xs flex items-center justify-between">
-                <span className="font-bold flex items-center gap-1.5 text-[11px]">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
-                  <span>Modo Testnet: BCH Chipnet ⟷ Polygon Amoy</span>
-                </span>
-                <span className="text-[10px] font-mono font-bold bg-amber-500/20 text-amber-600 dark:text-amber-400 px-1.5 py-0.5 rounded">
-                  Testnet4
-                </span>
+              <div className="mb-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-300 text-xs overflow-hidden">
+                <div className="px-3 py-1.5 flex items-center justify-between gap-2">
+                  <span className="font-bold flex items-center gap-1.5 text-[11px]">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                    <span>Testnet No-Custodio: PUSD (Chipnet) ⟷ USDC (Amoy)</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowFaucetPanel(!showFaucetPanel)}
+                    className="text-[10px] font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-700 dark:text-amber-300 px-2 py-0.5 rounded-md transition-colors cursor-pointer shrink-0"
+                  >
+                    {showFaucetPanel ? 'Cerrar Faucet ✕' : '🚰 Grifo Testnet'}
+                  </button>
+                </div>
+
+                {showFaucetPanel && (
+                  <div className="px-3 pb-2.5 pt-1.5 border-t border-amber-500/20 space-y-2 bg-amber-500/5">
+                    <input
+                      type="text"
+                      value={faucetRecipient}
+                      onChange={e => setFaucetRecipient(e.target.value)}
+                      placeholder="Pega tu bchtest:z... (para PUSD) o 0x... (para USDC Amoy)"
+                      className="w-full px-2.5 py-1.5 rounded-lg bg-white dark:bg-[#0E131E] text-[11px] font-mono text-zinc-900 dark:text-white outline-none border border-amber-500/20"
+                    />
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        disabled={faucetLoadingToken !== null}
+                        onClick={() => handleClaimTestnetFaucet('PUSD')}
+                        className="py-1.5 px-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] transition-all cursor-pointer disabled:opacity-50"
+                      >
+                        {faucetLoadingToken === 'PUSD' ? 'Enviando PUSD...' : 'Reclamar 50 PUSD (Chipnet)'}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={faucetLoadingToken !== null}
+                        onClick={() => handleClaimTestnetFaucet('USDC')}
+                        className="py-1.5 px-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-[11px] transition-all cursor-pointer disabled:opacity-50"
+                      >
+                        {faucetLoadingToken === 'USDC' ? 'Minting USDC...' : 'Reclamar 100 USDC (Amoy)'}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -1913,16 +2084,14 @@ export default function BridgeSwap({
                     />
                   </div>
 
-                  {/* Deposit Address Box with HD Badge */}
+                  {/* Non-Custodial Smart Contract Box */}
                   <div className="p-3.5 rounded-2xl bg-gray-50 dark:bg-[#171e2c] border border-gray-200 dark:border-gray-700/80 space-y-1.5">
                     <div className="flex items-center justify-between text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                      <span>Bridge Deposit Address</span>
-                      {activeSwap.derivationIndex !== undefined && activeSwap.derivationIndex !== null && (
-                        <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/25 flex items-center gap-1 font-semibold">
-                          <ShieldCheck className="w-3 h-3" />
-                          HD #{activeSwap.derivationIndex}
-                        </span>
-                      )}
+                      <span>Non-Custodial Smart Contract</span>
+                      <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/25 flex items-center gap-1 font-semibold">
+                        <ShieldCheck className="w-3 h-3" />
+                        24h Timelock
+                      </span>
                     </div>
                     <div className="flex items-center justify-between gap-2">
                       <span className="font-mono text-xs text-gray-900 dark:text-gray-200 truncate font-semibold">
@@ -1936,12 +2105,10 @@ export default function BridgeSwap({
                         {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
                       </button>
                     </div>
-                    {activeSwap.derivationPath && (
-                      <div className="pt-1 border-t border-gray-200/60 dark:border-gray-800/80 flex items-center justify-between text-[10px] text-gray-400 font-mono">
-                        <span className="text-emerald-500 font-medium">BIP-44 Dedicated Vault</span>
-                        <span className="opacity-75">{activeSwap.derivationPath}</span>
-                      </div>
-                    )}
+                    <div className="pt-1 border-t border-gray-200/60 dark:border-gray-800/80 flex items-center justify-between text-[10px] text-gray-400 font-mono">
+                      <span className="text-emerald-500 font-medium">Audited by The Watchman</span>
+                      <span className="opacity-75">{activeSwap.contractName || activeSwap.derivationPath}</span>
+                    </div>
                   </div>
 
                   {/* TXID Input */}
@@ -1958,7 +2125,7 @@ export default function BridgeSwap({
                   {/* Instant Verification Trigger */}
                   <div className="pt-2">
                     <button 
-                      onClick={handleVerifyDeposit}
+                      onClick={() => handleVerifyDeposit()}
                       disabled={isVerifying}
                       className="w-full py-3 rounded-2xl bg-primary hover:bg-orange-600 text-white font-bold text-xs transition-all shadow-md shadow-orange-500/20 flex items-center justify-center gap-2 cursor-pointer"
                     >

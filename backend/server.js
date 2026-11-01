@@ -9,10 +9,9 @@ import { rpcPool } from './services/rpcPool.js';
 import { bchService } from './services/bchService.js';
 import { evmService } from './services/evmService.js';
 import { relayerEngine } from './services/relayerEngine.js';
-import { sweeperEngine } from './services/sweeperEngine.js';
 import { poolService } from './services/poolService.js';
-import { hdWalletService } from './services/hdWalletService.js';
 import { lendingService } from './services/lendingService.js';
+import { watchmanSentinel } from './services/watchmanClient.js';
 
 const app = express();
 
@@ -86,20 +85,26 @@ app.get('/api/status', async (req, res) => {
 
     res.json({
       status: 'OPERATIONAL',
-      protocol: 'BinaryLiquid Hybrid Bridge',
+      protocol: 'BinaryLiquid 100% Non-Custodial Cross-Chain Protocol',
+      architecture: 'Smart Contract Vaults (Solidity + CashScript P2SH32 Covenants) + The Watchman Sentinel',
       feePercentage: config.feePercentage * 100, // 0.3%
       networks: {
         bch: {
           network: config.bch.network,
-          hotWalletAddress: bchService.getDepositAddress(),
+          vaultAddress: bchService.getVaultAddress(false, true),
+          chipnetVaultAddress: bchService.getVaultAddress(true, false),
+          chipnetVaultTokenAddress: bchService.getVaultAddress(true, true),
           tokens: config.bch.tokens,
           balances: bchBalances
         },
         evm: {
           chainName: config.evm.chainName,
           chainId: config.evm.chainId,
-          hotWalletAddress: evmService.getDepositAddress(),
+          amoyChainId: config.evm.amoyChainId,
+          vaultAddress: evmService.getVaultAddress('polygon_mainnet'),
+          amoyVaultAddress: config.evm.amoyVaultAddress,
           tokens: config.evm.tokens,
+          amoyTokens: config.evm.amoyTokens,
           balances: evmBalances
         }
       },
@@ -107,7 +112,7 @@ app.get('/api/status', async (req, res) => {
         rpcPool: rpcPool.getHealth(),
         oraclePool: oraclePool.getHealth(),
         database: db.getStatus(),
-        sweeper: sweeperEngine.getStatus()
+        watchman: watchmanSentinel.getStatus()
       },
       treasury: {
         totalVolumeUsd: treasury.totalVolumeUsd,
@@ -131,6 +136,42 @@ app.get('/api/status', async (req, res) => {
   }
 });
 
+// The Watchman Sentinel Status & Live Audit Feed
+app.get('/api/watchman/status', (req, res) => {
+  res.json({
+    success: true,
+    watchman: watchmanSentinel.getStatus(),
+    contracts: {
+      evmAmoyVault: config.evm.amoyVaultAddress,
+      evmAmoyUsdc: config.evm.amoyTokens.USDC.address,
+      bchChipnetVault: config.bch.chipnetVaultTokenAddress,
+      bchChipnetPusdCategory: config.bch.tokens.PUSD.chipnetCategory
+    }
+  });
+});
+
+// Live Deployed Non-Custodial Smart Contracts Manifest
+app.get('/api/contracts/manifest', (req, res) => {
+  res.json({
+    success: true,
+    architecture: '100% Non-Custodial Cross-Chain Vaults + CashScript Covenants',
+    evmAmoy: {
+      chainId: config.evm.amoyChainId,
+      vaultContractAddress: config.evm.amoyVaultAddress,
+      vaultExplorerUrl: `https://amoy.polygonscan.com/address/${config.evm.amoyVaultAddress}`,
+      testnetUsdcAddress: config.evm.amoyTokens.USDC.address,
+      circleUsdcAddress: config.evm.amoyTokens.USDC.circleAddress
+    },
+    bchChipnet: {
+      network: 'chipnet',
+      vaultAddress: config.bch.chipnetVaultAddress,
+      vaultTokenAddress: config.bch.chipnetVaultTokenAddress,
+      vaultExplorerUrl: `https://chipnet.imaginary.cash/address/${config.bch.chipnetVaultAddress}`,
+      pusdCategory: config.bch.tokens.PUSD.chipnetCategory
+    }
+  });
+});
+
 // Oracle Quote (Dynamic Multi-Source with Failover)
 app.get('/api/quote', async (req, res) => {
   try {
@@ -146,23 +187,53 @@ app.get('/api/quote', async (req, res) => {
   }
 });
 
-// Create Swap Intent
+// Create Non-Custodial Swap Intent (Smart Contract Vault / P2SH32 CashScript Covenant)
 app.post('/api/swap/create', async (req, res) => {
   try {
-    const { fromToken, toToken, fromChain, toChain, amount, recipientAddress, slippage, minReceived } = req.body;
+    const {
+      fromToken,
+      toToken,
+      fromChain,
+      toChain,
+      amount,
+      recipientAddress,
+      senderAddress,
+      slippage,
+      minReceived
+    } = req.body;
 
     if (!fromToken || !toToken || !fromChain || !toChain || !amount || !recipientAddress) {
-      return res.status(400).json({ error: 'All fields are required (fromToken, toToken, fromChain, toChain, amount, recipientAddress)' });
+      return res.status(400).json({
+        error: 'All fields are required (fromToken, toToken, fromChain, toChain, amount, recipientAddress)'
+      });
+    }
+
+    const isTestnetSwap =
+      fromChain.toLowerCase().includes('chipnet') ||
+      fromChain.toLowerCase().includes('amoy') ||
+      toChain.toLowerCase().includes('chipnet') ||
+      toChain.toLowerCase().includes('amoy');
+
+    if (isTestnetSwap) {
+      const allowedTestnet = ['PUSD', 'USDC'];
+      if (
+        !allowedTestnet.includes(fromToken.toUpperCase()) ||
+        !allowedTestnet.includes(toToken.toUpperCase())
+      ) {
+        return res.status(400).json({
+          success: false,
+          error: 'En modo Testnet únicamente está habilitado el puente 100% No-Custodio PUSD (BCH Chipnet) ⟷ USDC (Polygon Amoy).'
+        });
+      }
     }
 
     // Calculate quotation with live oracle pool
     const quote = await oraclePool.calculateQuote(fromToken, toToken, amount);
 
-    // Pre-flight Liquidity Check
     if (!quote.hasLiquidity) {
       return res.status(400).json({
         success: false,
-        error: `Insufficient pool liquidity for this swap. Maximum available: ${quote.availableLiquidity} ${quote.toToken}`
+        error: `Insufficient Vault liquidity for this swap. Maximum available: ${quote.availableLiquidity} ${quote.toToken}`
       });
     }
 
@@ -180,11 +251,44 @@ app.post('/api/swap/create', async (req, res) => {
       });
     }
 
-    // Derive dedicated BIP-44 HD Child Deposit Address for this order
-    const hdInfo = await hdWalletService.deriveOrderDepositAddress(fromChain);
+    const isBchOrigin = fromChain.toLowerCase().includes('bch') || fromChain.toLowerCase().includes('chipnet');
+    const isChipnet = fromChain.toLowerCase().includes('chipnet');
+    const orderSeed = `bliq_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+    let depositAddress;
+    let contractName;
+    let contractType;
+    let contractExplorerUrl;
+    let tokenContractAddress = null;
+    let timelockExpiry = Math.floor(Date.now() / 1000) + 86400;
+
+    if (isBchOrigin) {
+      const covenant = await bchService.createSwapEscrowCovenant({
+        orderId: orderSeed,
+        refundAddress: senderAddress || null,
+        isChipnet,
+        isCashToken: fromToken.toUpperCase() !== 'BCH'
+      });
+      depositAddress = covenant.address;
+      contractName = covenant.contractName;
+      contractType = covenant.contractType;
+      contractExplorerUrl = covenant.explorerUrl;
+      timelockExpiry = covenant.expiryTimestamp;
+      tokenContractAddress = bchService.getTokenCategory(fromToken, isChipnet);
+    } else {
+      const isAmoy = evmService.isAmoyChain(fromChain);
+      depositAddress = evmService.getVaultAddress(fromChain);
+      contractName = 'BinaryLiquidVault.sol';
+      contractType = 'Solidity Non-Custodial Vault (EIP-191 Watchman + 24h Timelock)';
+      const explorerBase = isAmoy ? 'https://amoy.polygonscan.com' : 'https://polygonscan.com';
+      contractExplorerUrl = `${explorerBase}/address/${depositAddress}`;
+      tokenContractAddress = evmService.getTokenConfig(fromToken, fromChain)?.address || null;
+    }
 
     const userSlippage = parseFloat(slippage) || 0.5;
-    const minPayout = minReceived ? parseFloat(minReceived) : Number((quote.netPayout * (1 - userSlippage / 100)).toFixed(6));
+    const minPayout = minReceived
+      ? parseFloat(minReceived)
+      : Number((quote.netPayout * (1 - userSlippage / 100)).toFixed(6));
 
     const swap = db.createSwap({
       fromToken: quote.fromToken,
@@ -198,9 +302,14 @@ app.post('/api/swap/create', async (req, res) => {
       feeAmount: quote.feeAmount,
       feePercentage: config.feePercentage,
       oracleRate: quote.rate,
-      depositAddress: hdInfo.address,
-      derivationPath: hdInfo.derivationPath,
-      derivationIndex: hdInfo.derivationIndex,
+      depositAddress,
+      derivationPath: contractName,
+      derivationIndex: 0,
+      contractName,
+      contractType,
+      contractExplorerUrl,
+      tokenContractAddress,
+      timelockExpiry,
       recipientAddress
     });
 
@@ -208,10 +317,13 @@ app.post('/api/swap/create', async (req, res) => {
       success: true,
       swap,
       instructions: {
-        message: `Please send ${swap.fromAmount} ${swap.fromToken} to your isolated HD deposit address.`,
+        message: `Deposit ${swap.fromAmount} ${swap.fromToken} into the Non-Custodial ${contractName} Smart Contract.`,
         depositAddress: swap.depositAddress,
-        derivationPath: swap.derivationPath,
-        derivationIndex: swap.derivationIndex,
+        contractName,
+        contractType,
+        contractExplorerUrl,
+        tokenContractAddress,
+        timelockExpiry,
         expectedPayout: `${swap.toAmount} ${swap.toToken}`,
         minimumGuaranteed: `${swap.minPayoutAmount} ${swap.toToken} (${swap.slippageTolerance}% slippage tolerance)`,
         feeCollected: `${swap.feeAmount} ${swap.fromToken} (0.3% protocol fee)`
@@ -229,7 +341,7 @@ app.get('/api/swap/:id', (req, res) => {
   res.json({ success: true, swap });
 });
 
-// Verify & Trigger Immediate Relayer Execution
+// Verify Smart Contract Deposit & Trigger Immediate Watchman + Vault Execution
 app.post('/api/swap/:id/verify-tx', async (req, res) => {
   try {
     const { txHash } = req.body;
@@ -243,49 +355,31 @@ app.post('/api/swap/:id/verify-tx', async (req, res) => {
     let finalTxHash = txHash ? txHash.trim() : null;
 
     if (!finalTxHash) {
-      // Query real on-chain balance / UTXOs at the dedicated HD deposit address
       const isBch = swap.fromChain.includes('bch') || swap.fromChain.includes('chipnet');
-      let onChainDetected = false;
-
       if (isBch) {
-        try {
-          const { Wallet, TestNetWallet } = await import('mainnet-js');
-          const isChipnet = swap.depositAddress.startsWith('bchtest:') || swap.fromChain.includes('chipnet');
-          const WalletClass = isChipnet ? TestNetWallet : Wallet;
-          const w = await WalletClass.watchOnly(swap.depositAddress);
-          const bal = await w.getBalance('sat');
-          if (bal && BigInt(bal) > 0n) {
-            onChainDetected = true;
-            finalTxHash = `bch_utxo_${swap.depositAddress.substring(swap.depositAddress.indexOf(':') + 1, swap.depositAddress.indexOf(':') + 16)}_${Date.now()}`;
-          }
-        } catch (e) {
-          console.warn('[Verify] BCH on-chain check error:', e.message);
-        }
-      } else {
-        try {
-          const isAmoy = swap.fromChain.includes('amoy') || swap.fromChain.includes('testnet');
-          const provider = isAmoy ? evmService.amoyProvider : evmService.mainnetProvider;
-          if (provider) {
-            const bal = await provider.getBalance(swap.depositAddress);
-            if (bal && BigInt(bal) > 0n) {
-              onChainDetected = true;
-              finalTxHash = `evm_deposit_${swap.depositAddress.substring(0, 16)}_${Date.now()}`;
-            }
-          }
-        } catch (e) {
-          console.warn('[Verify] EVM on-chain check error:', e.message);
+        // Inspect UTXOs directly inside the isolated P2SH32 CashScript Covenant (`bchtest:r...`)
+        const covenantCheck = await bchService.verifyDeposit(
+          null,
+          swap.fromAmount,
+          swap.fromToken,
+          swap.depositAddress
+        );
+        if (covenantCheck.verified && covenantCheck.txHash) {
+          finalTxHash = covenantCheck.txHash;
         }
       }
 
-      if (!onChainDetected && !finalTxHash) {
+      if (!finalTxHash) {
         return res.status(400).json({
           success: false,
-          error: 'No se detectó depósito entrante en tu dirección HD aún. Por favor envía los fondos desde tu billetera o ingresa el Hash de Transacción (TXID) de envío.'
+          error: isBch
+            ? `Aún no se detectan CashTokens ${swap.fromToken} en el Smart Contract Covenant (${swap.depositAddress}). Envía los fondos o pega el TXID.`
+            : `Para depósitos en el Smart Contract EVM (${swap.depositAddress}), usa el botón "Depositar con Web3" o pega el Hash de Transacción (0x...).`
         });
       }
     }
 
-    // Anti-Replay Attack Guard: Check if this txHash was already redeemed in another completed swap
+    // Anti-Replay Attack Guard
     const cleanHash = finalTxHash.toLowerCase();
     const existingTx = db.findSwapByDepositTxHash(cleanHash);
     if (existingTx && existingTx.id !== swap.id && existingTx.status === 'COMPLETED') {
@@ -295,22 +389,21 @@ app.post('/api/swap/:id/verify-tx', async (req, res) => {
       });
     }
 
-    // Attach deposit hash
     db.updateSwap(swap.id, { depositTxHash: finalTxHash, status: 'DEPOSIT_DETECTED' });
 
-    // Trigger instant relayer execution
+    // Trigger instant Watchman audit + Non-Custodial Vault release
     const result = await relayerEngine.executeRelay(swap.id);
 
     if (result.success) {
       res.json({
         success: true,
-        message: 'Deposit verified and payout executed successfully!',
+        message: 'Smart Contract deposit verified by The Watchman and Vault payout released on-chain!',
         swap: result.swap
       });
     } else {
       res.status(400).json({
         success: false,
-        error: result.reason || result.error || 'Failed to process relayer execution',
+        error: result.reason || result.error || 'Failed to process Watchman Vault settlement',
         swap: db.getSwap(swap.id)
       });
     }
@@ -326,44 +419,30 @@ app.get('/api/swaps/recent', (req, res) => {
   res.json({ success: true, count: recent.length, swaps: recent });
 });
 
-// Treasury Statistics & Cold Wallet Audit
+// Treasury Statistics & Protocol Fee Accounting
 app.get('/api/treasury', (req, res) => {
   const stats = db.getTreasuryStats();
   res.json({
     success: true,
     stats,
-    coldTreasuryAddresses: {
-      bchChipnet: config.bch.treasuryAddress,
-      bchMainnet: config.bch.mainnetTreasuryAddress || 'bitcoincash:qqgm9rel5xlyhwt3r6n8uq9fxk5zzxrcavaal6aw8v',
-      evmPolygon: config.evm.treasuryAddress,
-      solana: config.solana?.coldTreasuryAddress || '7QRhmj6TeGXbPKDD4otBJ23kTv6F2wydkuvtRQ6RRWfT'
+    nonCustodialVaults: {
+      evmAmoyVault: config.evm.amoyVaultAddress,
+      bchChipnetVault: config.bch.chipnetVaultTokenAddress
     }
   });
 });
 
-// Sweeper Engine Status & Manual Trigger (Treasury Security Barredora)
+// Legacy Sweeper Route -> Redirected to Non-Custodial Watchman Sentinel Status
 app.get('/api/sweeper/status', (req, res) => {
   res.json({
     success: true,
-    sweeper: sweeperEngine.getStatus()
+    architecture: '100% NON-CUSTODIAL (Hot-wallet sweeper deprecated; funds live inside Smart Contract Vaults)',
+    watchman: watchmanSentinel.getStatus()
   });
 });
 
-app.post('/api/sweeper/sweep-now', async (req, res) => {
-  try {
-    await sweeperEngine.runSweepCycle();
-    res.json({
-      success: true,
-      message: 'Sweeper cycle completed successfully.',
-      status: sweeperEngine.getStatus()
-    });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
 // ==========================================
-// LIMIT ORDERS (Real Relayer Execution)
+// LIMIT ORDERS (Non-Custodial Vault Execution)
 // ==========================================
 app.post('/api/limit-orders/create', async (req, res) => {
   try {
@@ -372,9 +451,29 @@ app.post('/api/limit-orders/create', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Missing required limit order parameters' });
     }
 
-    const isBchOrigin = (fromChain || '').includes('bch') || fromToken === 'PUSD' || fromToken === 'MUSD' || fromToken === 'LIFT';
+    const isBchOrigin =
+      (fromChain || '').includes('bch') ||
+      (fromChain || '').includes('chipnet') ||
+      ['PUSD', 'MUSD', 'LIFT'].includes((fromToken || '').toUpperCase());
     const originChain = fromChain || (isBchOrigin ? 'bch_mainnet' : 'polygon_mainnet');
-    const hdInfo = await hdWalletService.deriveOrderDepositAddress(originChain);
+    const isChipnet = originChain.includes('chipnet');
+    const orderSeed = `lim_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+
+    let depositAddress;
+    let contractName;
+    if (isBchOrigin) {
+      const cov = await bchService.createSwapEscrowCovenant({
+        orderId: orderSeed,
+        refundAddress: userAddress,
+        isChipnet,
+        isCashToken: (fromToken || '').toUpperCase() !== 'BCH'
+      });
+      depositAddress = cov.address;
+      contractName = cov.contractName;
+    } else {
+      depositAddress = evmService.getVaultAddress(originChain);
+      contractName = 'BinaryLiquidVault.sol';
+    }
 
     const order = db.createLimitOrder({
       userAddress,
@@ -386,14 +485,14 @@ app.post('/api/limit-orders/create', async (req, res) => {
       targetRate,
       expectedOutput: (parseFloat(fromAmount) * parseFloat(targetRate) * 0.997).toFixed(4),
       recipientAddress,
-      depositAddress: hdInfo.address,
-      derivationPath: hdInfo.derivationPath,
-      derivationIndex: hdInfo.derivationIndex
+      depositAddress,
+      derivationPath: contractName,
+      derivationIndex: 0
     });
 
     res.json({
       success: true,
-      message: 'Limit order placed successfully. Relayer engine will execute automatically upon price trigger.',
+      message: 'Non-Custodial limit order created. Watchman Sentinel will settle automatically upon target rate.',
       order
     });
   } catch (err) {
@@ -447,13 +546,19 @@ app.get('/api/pools/stats', async (req, res) => {
       pool: stats.pool, 
       allPools: stats.allPools, 
       protocolStats: stats.protocolStats,
+      vaultBalances: {
+        chipnetPusd: bchBalances.chipnet?.PUSD || 0,
+        amoyUsdc: evmBalances.amoy?.USDC || 0,
+        mainnetPusd: bchBalances.mainnet?.PUSD || 0,
+        mainnetUsdc: evmBalances.mainnet?.USDC || 0
+      },
       hotWalletBalances: {
-        bch: bchBalances.bch,
-        pusd: bchBalances.PUSD,
-        musd: bchBalances.MUSD,
-        pol: evmBalances.native,
-        usdc: evmBalances.USDC,
-        usdt: evmBalances.USDT
+        bch: bchBalances.chipnet?.bch || bchBalances.mainnet?.bch || 0,
+        pusd: bchBalances.chipnet?.PUSD || bchBalances.mainnet?.PUSD || 0,
+        musd: bchBalances.mainnet?.MUSD || 0,
+        pol: evmBalances.amoy?.native || evmBalances.mainnet?.native || 0,
+        usdc: evmBalances.amoy?.USDC || evmBalances.mainnet?.USDC || 0,
+        usdt: evmBalances.mainnet?.USDT || 0
       }
     });
   } catch (err) {
@@ -863,56 +968,91 @@ app.post('/api/auth/login', (req, res) => {
   res.json({ success: true, user });
 });
 
-// Demo Faucet Endpoint for Hackathon Judges
-app.post('/api/faucet/demo-funds', (req, res) => {
-  const { token, amount, recipient } = req.body;
-  const num = parseFloat(amount || '100');
-  const sym = (token || 'PUSD').toUpperCase();
-  if (recipient) {
-    db.updateUserBalance(recipient, sym, num);
-  }
-  res.json({
-    success: true,
-    message: `Granted demo liquidity for ${num} ${sym} to ${recipient || 'connected wallet'}.`,
-    recipient,
-    token: sym,
-    amount: num,
-    newBalance: recipient ? db.getUserBalances(recipient)[sym] : null,
-    txHash: '0x' + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join(''),
-    note: 'Demo funds credited for hackathon jury evaluation.'
-  });
+// Strict Rate Limiter for Live On-Chain Testnet Faucet: max 4 claims per 10 minutes per IP
+const faucetLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 4,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: 'Límite del Faucet Testnet alcanzado (máx 4 reclamos cada 10 min). Intenta más tarde.' }
 });
 
-// Start Background Relayer and HTTP Server
+// Real On-Chain Testnet Faucet (Polygon Amoy USDC + BCH Chipnet PUSD CashTokens)
+app.post('/api/faucet/testnet', faucetLimiter, async (req, res) => {
+  try {
+    const { token, amount, recipient } = req.body;
+    const sym = (token || 'PUSD').toUpperCase();
+    if (!recipient) {
+      return res.status(400).json({ success: false, error: 'Por favor ingresa tu dirección de billetera de destino.' });
+    }
+
+    if (sym === 'USDC') {
+      const result = await evmService.dispenseTestnetUsdc(recipient, parseFloat(amount || '100'));
+      return res.json(result);
+    }
+    if (sym === 'PUSD') {
+      const result = await bchService.dispenseTestnetPusd(recipient, parseFloat(amount || '50'));
+      return res.json(result);
+    }
+
+    return res.status(400).json({
+      success: false,
+      error: 'En Testnet únicamente están disponibles PUSD (BCH Chipnet) y USDC (Polygon Amoy).'
+    });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+// Backwards-compatible Demo Faucet Endpoint -> Routes to Real On-Chain Testnet Faucet!
+app.post('/api/faucet/demo-funds', faucetLimiter, async (req, res) => {
+  try {
+    const { token, amount, recipient } = req.body;
+    const sym = (token || 'PUSD').toUpperCase();
+    if (recipient && sym === 'USDC' && recipient.startsWith('0x')) {
+      const result = await evmService.dispenseTestnetUsdc(recipient, parseFloat(amount || '100'));
+      return res.json(result);
+    }
+    if (recipient && sym === 'PUSD' && recipient.startsWith('bchtest:')) {
+      const result = await bchService.dispenseTestnetPusd(recipient, parseFloat(amount || '50'));
+      return res.json(result);
+    }
+    return res.status(400).json({
+      success: false,
+      error: 'Proporciona una dirección válida de Testnet (bchtest:... para PUSD o 0x... para USDC en Amoy).'
+    });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+// Start Background Watchman Relayer and HTTP Server
 const PORT = config.port;
 const server = app.listen(PORT, config.host, () => {
-  console.log(`=======================================================`);
-  console.log(`🚀 BinaryLiquid Stablecoin Bridge Backend`);
+  console.log(`====================================================================`);
+  console.log(`🚀 BinaryLiquid 100% Non-Custodial Cross-Chain Protocol`);
   console.log(`🌐 Event: BCH BLAZE $750 PUSD Hackathon`);
   console.log(`⭐ Featured Sponsor: ParyonUSD (PUSD)`);
   console.log(`🔗 Listening on http://${config.host}:${PORT}`);
-  console.log(`🪙 BCH Hot Wallet (Chipnet): ${bchService.getDepositAddress()}`);
-  console.log(`🔷 EVM Hot Wallet (Amoy):    ${evmService.getDepositAddress()}`);
-  console.log(`💰 Bridge Fee: ${config.feePercentage * 100}%`);
-  console.log(`=======================================================`);
+  console.log(`🛡️ BCH Chipnet Covenant: ${bchService.getVaultAddress(true, true)}`);
+  console.log(`🛡️ EVM Amoy Vault:       ${evmService.getVaultAddress('polygon_amoy')}`);
+  console.log(`👁️ Watchman Signer:      ${watchmanSentinel.signerAddress}`);
+  console.log(`💰 Protocol Fee:         ${config.feePercentage * 100}%`);
+  console.log(`====================================================================`);
 
-  // Start background queue processing & sweeper barredora
   relayerEngine.start(4000);
-  sweeperEngine.start();
   poolService.initDatabaseTables().catch(e => console.warn('[Pool Service] Table init note:', e.message));
 });
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
-  console.log('SIGTERM received. Shutting down relayer engine and sweeper...');
+  console.log('SIGTERM received. Shutting down Watchman relayer engine...');
   relayerEngine.stop();
-  sweeperEngine.stop();
   server.close(() => process.exit(0));
 });
 
 process.on('SIGINT', () => {
-  console.log('SIGINT received. Shutting down relayer engine and sweeper...');
+  console.log('SIGINT received. Shutting down Watchman relayer engine...');
   relayerEngine.stop();
-  sweeperEngine.stop();
   server.close(() => process.exit(0));
 });

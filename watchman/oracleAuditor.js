@@ -5,16 +5,16 @@
  */
 
 export class OracleAuditor {
-  constructor(maxSlippagePercent = 1.0) {
+  constructor(maxSlippagePercent = 1.5, externalRateResolver = null) {
     this.maxSlippagePercent = maxSlippagePercent;
-    this.cache = new Map();
+    this.externalRateResolver = externalRateResolver;
   }
 
   /**
    * Validates that the requested swap rate does not deviate from live market oracle prices
-   * @param {string} fromToken 
-   * @param {string} toToken 
-   * @param {number} requestedRate 
+   * @param {string} fromToken
+   * @param {string} toToken
+   * @param {number} requestedRate
    * @returns {Promise<{ valid: boolean, marketRate: number, deviationPercent: number, reason?: string }>}
    */
   async auditRate(fromToken, toToken, requestedRate) {
@@ -47,15 +47,20 @@ export class OracleAuditor {
   }
 
   async fetchConsensusRate(fromToken, toToken) {
-    // 1:1 for stablecoins (USDC <-> PUSD <-> USDT)
-    const isFromStable = ['USDC', 'USDT', 'PUSD', 'MUSD'].includes(fromToken.toUpperCase());
-    const isToStable = ['USDC', 'USDT', 'PUSD', 'MUSD'].includes(toToken.toUpperCase());
+    const fromSym = (fromToken || 'PUSD').toUpperCase();
+    const toSym = (toToken || 'USDC').toUpperCase();
 
-    if (isFromStable && isToStable) {
+    // 1:1 peg verification for USD stablecoins (PUSD <-> USDC <-> USDT <-> MUSD)
+    const stables = ['USDC', 'USDT', 'PUSD', 'MUSD'];
+    if (stables.includes(fromSym) && stables.includes(toSym)) {
       return 1.0;
     }
 
-    // Dynamic rate query with fallback
-    return 3125.0; // Benchmark fallback
+    if (typeof this.externalRateResolver === 'function') {
+      const liveRate = await this.externalRateResolver(fromSym, toSym);
+      if (liveRate && liveRate > 0) return liveRate;
+    }
+
+    return 1.0;
   }
 }

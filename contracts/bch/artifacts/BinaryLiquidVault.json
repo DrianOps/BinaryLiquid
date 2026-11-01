@@ -1,0 +1,92 @@
+{
+  "contractName": "BinaryLiquidVault",
+  "constructorInputs": [
+    {
+      "name": "watchmanPk",
+      "type": "pubkey"
+    },
+    {
+      "name": "maxSinglePayout",
+      "type": "int"
+    }
+  ],
+  "abi": [
+    {
+      "name": "release",
+      "inputs": [
+        {
+          "name": "watchmanSig",
+          "type": "sig"
+        },
+        {
+          "name": "recipientLockingBytecode",
+          "type": "bytes"
+        },
+        {
+          "name": "payoutAmount",
+          "type": "int"
+        }
+      ]
+    }
+  ],
+  "bytecode": "OP_ROT OP_SWAP OP_CHECKSIGVERIFY OP_2 OP_PICK OP_0 OP_GREATERTHAN OP_VERIFY OP_2 OP_PICK OP_GREATERTHANOREQUAL OP_VERIFY OP_INPUTINDEX OP_UTXOTOKENCATEGORY OP_INPUTINDEX OP_UTXOTOKENAMOUNT OP_DUP OP_4 OP_PICK OP_GREATERTHANOREQUAL OP_VERIFY OP_0 OP_OUTPUTBYTECODE OP_3 OP_ROLL OP_EQUALVERIFY OP_0 OP_OUTPUTTOKENCATEGORY OP_2 OP_PICK OP_EQUALVERIFY OP_0 OP_OUTPUTTOKENAMOUNT OP_3 OP_PICK OP_NUMEQUALVERIFY OP_ROT OP_SUB OP_DUP OP_0 OP_GREATERTHAN OP_IF OP_INPUTINDEX OP_UTXOBYTECODE OP_1 OP_OUTPUTBYTECODE OP_OVER OP_EQUALVERIFY OP_1 OP_OUTPUTTOKENCATEGORY OP_3 OP_PICK OP_EQUALVERIFY OP_1 OP_OUTPUTTOKENAMOUNT OP_2 OP_PICK OP_GREATERTHANOREQUAL OP_VERIFY OP_DROP OP_ENDIF OP_2DROP OP_1",
+  "source": "pragma cashscript ^0.14.0;\n\n/**\n * @title BinaryLiquidVault (Bitcoin Cash CashTokens Liquidity Pool Covenant)\n * @author BinaryLiquid Protocol / DrianOps\n * @notice 100% Non-Custodial Cross-Chain Liquidity Covenant for Bitcoin Cash CashTokens (PUSD).\n *\n * SECURITY INVARIANTS (BCH UTXO Introspection):\n * 1. Zero-Custody Pool: Funds live inside a P2SH32 Covenant with no EOA private key.\n * 2. Watchman Attestation: Requires Schnorr signature from The Watchman Sentinel (`watchmanPk`).\n * 3. On-Chain Circuit Breaker: Enforces `payoutAmount <= maxSinglePayout` inside VM script.\n * 4. Covenant State Continuation: Mathematically forces 100% of remaining CashTokens (`inputTokens - payoutAmount`)\n *    back into the exact same Covenant bytecode (`tx.outputs[1].lockingBytecode == activeLockingBytecode`).\n */\ncontract BinaryLiquidVault(\n    pubkey watchmanPk,\n    int maxSinglePayout\n) {\n    function release(sig watchmanSig, bytes recipientLockingBytecode, int payoutAmount) {\n        // 1. Verify cryptographic attestation from The Watchman Sentinel\n        require(checkSig(watchmanSig, watchmanPk));\n\n        // 2. Enforce on-chain Circuit Breaker bounds\n        require(payoutAmount > 0);\n        require(payoutAmount <= maxSinglePayout);\n\n        // 3. Read active CashToken category and pool balance via native UTXO introspection\n        bytes poolCategory = tx.inputs[this.activeInputIndex].tokenCategory;\n        int poolBalance = tx.inputs[this.activeInputIndex].tokenAmount;\n        require(poolBalance >= payoutAmount);\n\n        // 4. Enforce Output #0 delivers exact CashTokens to recipient\n        require(tx.outputs[0].lockingBytecode == recipientLockingBytecode);\n        require(tx.outputs[0].tokenCategory == poolCategory);\n        require(tx.outputs[0].tokenAmount == payoutAmount);\n\n        // 5. Covenant State Continuation: Force remaining pool liquidity back into this exact Vault\n        int remainingBalance = poolBalance - payoutAmount;\n        if (remainingBalance > 0) {\n            bytes vaultBytecode = tx.inputs[this.activeInputIndex].lockingBytecode;\n            require(tx.outputs[1].lockingBytecode == vaultBytecode);\n            require(tx.outputs[1].tokenCategory == poolCategory);\n            require(tx.outputs[1].tokenAmount >= remainingBalance);\n        }\n    }\n}\n",
+  "fingerprint": "73e4c700d1ec0644f52181a827e3e12544bd94de2cb3d6d215c3f0f3a1b2e82b",
+  "debug": {
+    "bytecode": "7b7cad527900a0695279a269c0cec0d0765479a26900cd537a8800d152798800d353799d7b947600a063c0c751cd788851d153798851d35279a26975686d51",
+    "sourceMap": "21:25:21:36;:38::48;:8::51:1;24:16:24:28:0;;:31::32;:16:::1;:8::34;25:16:25:28:0;;:::47:1;:8::49;28:39:28:60:0;:29::75:1;29:36:29:57:0;:26::70:1;30:16:30:27:0;:31::43;;:16:::1;:8::45;33:27:33:28:0;:16::45:1;:49::73:0;;:8::75:1;34:27:34:28:0;:16::43:1;:47::59:0;;:8::61:1;35:27:35:28:0;:16::41:1;:45::57:0;;:8::59:1;38:45:38:57:0;:31:::1;39:12:39:28:0;:31::32;:12:::1;:34:44:9:0;40:44:40:65;:34::82:1;41:31:41:32:0;:20::49:1;:53::66:0;:12::68:1;42:31:42:32:0;:20::47:1;:51::63:0;;:12::65:1;43:31:43:32:0;:20::45:1;:49::65:0;;:20:::1;:12::67;39:34:44:9;;19:88:45:5;",
+    "logs": [],
+    "requires": [
+      {
+        "ip": 4,
+        "line": 21
+      },
+      {
+        "ip": 9,
+        "line": 24
+      },
+      {
+        "ip": 13,
+        "line": 25
+      },
+      {
+        "ip": 22,
+        "line": 30
+      },
+      {
+        "ip": 27,
+        "line": 33
+      },
+      {
+        "ip": 32,
+        "line": 34
+      },
+      {
+        "ip": 37,
+        "line": 35
+      },
+      {
+        "ip": 49,
+        "line": 41
+      },
+      {
+        "ip": 54,
+        "line": 42
+      },
+      {
+        "ip": 60,
+        "line": 43
+      }
+    ],
+    "sourceTags": "59:59:sc"
+  },
+  "compiler": {
+    "name": "cashc",
+    "version": "0.14.0",
+    "options": {
+      "enforceFunctionParameterTypes": true,
+      "enforceLocktimeGuard": true
+    }
+  },
+  "updatedAt": "2026-10-31T23:16:06.458Z"
+}

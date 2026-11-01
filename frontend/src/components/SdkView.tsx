@@ -44,23 +44,23 @@ const texts = {
 const quote = await fetch('https://bsprotocol.xyz/api/quote?fromToken=PUSD&toToken=USDC&amount=50')
   .then(r => r.json());
 
-// 2. Create order with dedicated HD derivation (Zero Collision)
+// 2. Instantiate isolated Non-Custodial CashScript Covenant / Smart Contract Vault
 const order = await fetch('https://bsprotocol.xyz/api/swap/create', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
     fromToken: 'PUSD',
     toToken: 'USDC',
-    fromChain: 'bch_mainnet',
-    toChain: 'polygon_mainnet',
+    fromChain: 'bch_chipnet',
+    toChain: 'amoy_testnet',
     amount: 50,
     recipientAddress: '0xYOUR_POLYGON_WALLET'
   })
 }).then(r => r.json());
 
-// 3. Result: Dedicated HD deposit address
-console.log('HD Deposit Address:', order.instructions.depositAddress);
-console.log('Derivation Path:', order.instructions.derivationPath);`
+// 3. Result: Zero-Private-Key P2SH32 Covenant / Solidity Vault + 24h Timelock
+console.log('Smart Contract Vault:', order.instructions.depositAddress);
+console.log('Contract Spec:', order.instructions.contractType);`
   },
   es: {
     heroBadge: "PORTAL DE DESARROLLADORES & SDK",
@@ -92,23 +92,23 @@ console.log('Derivation Path:', order.instructions.derivationPath);`
 const quote = await fetch('https://bsprotocol.xyz/api/quote?fromToken=PUSD&toToken=USDC&amount=50')
   .then(r => r.json());
 
-// 2. Crear orden con derivación HD aislada (Zero Collision)
+// 2. Instanciar Covenant CashScript P2SH32 / Smart Contract Vault No-Custodio
 const order = await fetch('https://bsprotocol.xyz/api/swap/create', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
     fromToken: 'PUSD',
     toToken: 'USDC',
-    fromChain: 'bch_mainnet',
-    toChain: 'polygon_mainnet',
+    fromChain: 'bch_chipnet',
+    toChain: 'amoy_testnet',
     amount: 50,
     recipientAddress: '0xTU_WALLET_POLYGON'
   })
 }).then(r => r.json());
 
-// 3. Resultado: Dirección HD única exclusiva de la orden
-console.log('Dirección HD de Depósito:', order.instructions.depositAddress);
-console.log('Ruta de Derivación:', order.instructions.derivationPath);`
+// 3. Resultado: Contrato Inteligente sin llaves privadas + Reembolso 24h
+console.log('Smart Contract de Depósito:', order.instructions.depositAddress);
+console.log('Especificación del Contrato:', order.instructions.contractType);`
   }
 };
 

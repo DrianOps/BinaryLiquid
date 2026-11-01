@@ -5,12 +5,13 @@ pragma solidity ^0.8.20;
  * @title BinaryLiquidVault
  * @author BinaryLiquid Protocol / DrianOps
  * @notice 100% Non-Custodial Cross-Chain Liquidity Vault for Bitcoin Cash (CashTokens) <-> EVM (Polygon PoS / Amoy).
- * 
- * ARCHITECTURE OVERVIEW:
- * 1. Zero-Custody: The contract holds the liquidity. Neither admin nor relayer holds user deposits.
- * 2. Cryptographic Attestation: The Watchman (Oracle Sentinel) verifies deposits on BCH and signs release proofs.
- * 3. Anti-Replay: Each BCH TxID / deposit ID can only be settled exactly once.
- * 4. Autonomous Refund: If cross-chain delivery fails, users can unilaterally reclaim funds after 24 hours.
+ *
+ * SECURITY INVARIANTS:
+ * 1. Zero-Custody: Liquidity lives strictly inside this contract. Owner has NO arbitrary withdraw function.
+ * 2. Cryptographic Attestation: "The Watchman" Sentinel only signs EIP-191 ECDSA attestations for verified BCH deposits.
+ * 3. On-Chain Circuit Breaker: Enforces `maxSinglePayout` cap per settlement directly in EVM bytecode.
+ * 4. Anti-Replay Registry: Each BCH TxID can be settled at most once (`executedPayouts[bchTxHash]`).
+ * 5. Autonomous Timelock Refund: Unsettled deposits can be reclaimed 100% unilaterally by the user after 24 hours.
  */
 
 interface IERC20 {
@@ -23,14 +24,14 @@ interface IERC20 {
 }
 
 contract BinaryLiquidVault {
-    // --- State Variables ---
     address public owner;
-    address public watchmanSigner; // "The Watchman" Sentinel public key for attestation
+    address public watchmanSigner;
     bool public paused;
 
     uint256 public constant REFUND_TIMELOCK = 24 hours;
     uint256 public constant PROTOCOL_FEE_BPS = 30; // 0.30%
     uint256 public constant BPS_DENOMINATOR = 10000;
+    uint256 public constant MAX_SINGLE_PAYOUT = 50_000 * 1e6; // $50,000 cap per release
 
     struct Deposit {
         address sender;
@@ -43,16 +44,10 @@ contract BinaryLiquidVault {
         bool completed;
     }
 
-    // Mapping from depositId => Deposit
     mapping(bytes32 => Deposit) public deposits;
-
-    // Mapping from bchTxHash => whether payout has already been executed (Anti-Replay)
     mapping(bytes32 => bool) public executedPayouts;
-
-    // Supported tokens whitelist (e.g. USDC, USDT)
     mapping(address => bool) public supportedTokens;
 
-    // --- Events ---
     event BridgeDepositInitiated(
         bytes32 indexed depositId,
         address indexed sender,
@@ -60,6 +55,12 @@ contract BinaryLiquidVault {
         uint256 grossAmount,
         uint256 netAmount,
         string bchRecipient,
+        uint256 timestamp
+    );
+
+    event BridgeDepositSettled(
+        bytes32 indexed depositId,
+        bytes32 indexed bchPayoutTxHash,
         uint256 timestamp
     );
 
@@ -83,59 +84,62 @@ contract BinaryLiquidVault {
     event TokenSupportUpdated(address indexed token, bool supported);
     event EmergencyPauseToggled(bool isPaused);
 
-    // --- Modifiers ---
     modifier onlyOwner() {
-        require(msg.sender == owner, "BinaryLiquid: Caller is not protocol owner");
+        require(msg.sender == owner, "BinaryLiquid: Not owner");
+        _;
+    }
+
+    modifier onlyWatchman() {
+        require(msg.sender == watchmanSigner, "BinaryLiquid: Not Watchman");
         _;
     }
 
     modifier whenNotPaused() {
-        require(!paused, "BinaryLiquid: Protocol is paused by Circuit Breaker");
+        require(!paused, "BinaryLiquid: Paused by Circuit Breaker");
         _;
     }
 
-    // Reentrancy lock
     uint256 private _status;
     modifier nonReentrant() {
-        require(_status != 2, "BinaryLiquid: Reentrant call detected");
+        require(_status != 2, "BinaryLiquid: Reentrant call");
         _status = 2;
         _;
         _status = 1;
     }
 
-    constructor(address _watchmanSigner) {
-        require(_watchmanSigner != address(0), "BinaryLiquid: Invalid Watchman address");
+    constructor(address _watchmanSigner, address[] memory _initialSupportedTokens) {
+        require(_watchmanSigner != address(0), "BinaryLiquid: Invalid Watchman");
         owner = msg.sender;
         watchmanSigner = _watchmanSigner;
         _status = 1;
+
+        for (uint256 i = 0; i < _initialSupportedTokens.length; i++) {
+            address tok = _initialSupportedTokens[i];
+            if (tok != address(0)) {
+                supportedTokens[tok] = true;
+                emit TokenSupportUpdated(tok, true);
+            }
+        }
     }
 
-    // --- User Actions ---
-
     /**
-     * @notice Deposit EVM tokens to bridge to Bitcoin Cash CashTokens
-     * @param token ERC20 token address (e.g. USDC on Polygon)
-     * @param amount Gross amount to deposit
-     * @param bchRecipient Bitcoin Cash CashAddr destination (e.g. bitcoincash:qp... or bchtest:qp...)
+     * @notice Deposit EVM tokens to bridge to Bitcoin Cash CashTokens (PUSD)
      */
     function deposit(
         address token,
         uint256 amount,
         string calldata bchRecipient
     ) external whenNotPaused nonReentrant returns (bytes32 depositId) {
-        require(supportedTokens[token], "BinaryLiquid: Token not supported");
-        require(amount > 0, "BinaryLiquid: Amount must be > 0");
-        require(bytes(bchRecipient).length >= 20, "BinaryLiquid: Invalid BCH destination address");
+        require(supportedTokens[token], "BinaryLiquid: Unsupported token");
+        require(amount > 0, "BinaryLiquid: Zero amount");
+        require(bytes(bchRecipient).length >= 20, "BinaryLiquid: Invalid BCH destination");
 
-        // Compute 0.3% protocol fee
         uint256 fee = (amount * PROTOCOL_FEE_BPS) / BPS_DENOMINATOR;
         uint256 netAmount = amount - fee;
 
-        // Pull tokens from user
         bool success = IERC20(token).transferFrom(msg.sender, address(this), amount);
-        require(success, "BinaryLiquid: Token transferFrom failed");
+        require(success, "BinaryLiquid: transferFrom failed");
 
-        // Unique deposit hash
         depositId = keccak256(
             abi.encodePacked(
                 msg.sender,
@@ -171,8 +175,18 @@ contract BinaryLiquidVault {
     }
 
     /**
-     * @notice Releases tokens to user on EVM when a valid deposit happened on Bitcoin Cash.
-     * @dev Validated via cryptographic signature from "The Watchman" Sentinel.
+     * @notice Marks an outbound EVM->BCH deposit settled once CashTokens Covenant releases on BCH
+     */
+    function markDepositCompleted(bytes32 depositId, bytes32 bchPayoutTxHash) external onlyWatchman {
+        Deposit storage dep = deposits[depositId];
+        require(dep.sender != address(0), "BinaryLiquid: Unknown deposit");
+        require(!dep.refunded, "BinaryLiquid: Already refunded");
+        dep.completed = true;
+        emit BridgeDepositSettled(depositId, bchPayoutTxHash, block.timestamp);
+    }
+
+    /**
+     * @notice Releases tokens on EVM upon cryptographic ECDSA attestation from The Watchman
      */
     function release(
         bytes32 bchTxHash,
@@ -182,12 +196,11 @@ contract BinaryLiquidVault {
         uint256 nonce,
         bytes calldata watchmanSignature
     ) external whenNotPaused nonReentrant {
-        require(!executedPayouts[bchTxHash], "BinaryLiquid: Payout already executed (Anti-Replay blocked)");
+        require(!executedPayouts[bchTxHash], "BinaryLiquid: Anti-Replay blocked");
         require(recipient != address(0), "BinaryLiquid: Invalid recipient");
-        require(supportedTokens[token], "BinaryLiquid: Token not supported");
-        require(amount > 0, "BinaryLiquid: Amount must be > 0");
+        require(supportedTokens[token], "BinaryLiquid: Unsupported token");
+        require(amount > 0 && amount <= MAX_SINGLE_PAYOUT, "BinaryLiquid: Exceeds circuit breaker");
 
-        // Verify cryptographic attestation from The Watchman
         bytes32 messageHash = keccak256(
             abi.encodePacked(
                 "\x19Ethereum Signed Message:\n32",
@@ -205,8 +218,7 @@ contract BinaryLiquidVault {
             )
         );
 
-        address recovered = recoverSigner(messageHash, watchmanSignature);
-        require(recovered == watchmanSigner, "BinaryLiquid: Invalid Watchman cryptographic signature");
+        require(recoverSigner(messageHash, watchmanSignature) == watchmanSigner, "BinaryLiquid: Invalid Watchman signature");
 
         executedPayouts[bchTxHash] = true;
 
@@ -217,38 +229,31 @@ contract BinaryLiquidVault {
     }
 
     /**
-     * @notice Autonomous Timelock Refund: If the bridge fails to fulfill on Bitcoin Cash,
-     * the user can unilaterally withdraw 100% of their deposited tokens after 24h.
+     * @notice Autonomous Timelock Refund (24h): Unconditional return of principal if unfulfilled
      */
     function refund(bytes32 depositId) external nonReentrant {
         Deposit storage dep = deposits[depositId];
-        require(dep.sender != address(0), "BinaryLiquid: Deposit does not exist");
-        require(!dep.completed, "BinaryLiquid: Deposit already settled");
+        require(dep.sender != address(0), "BinaryLiquid: Unknown deposit");
+        require(!dep.completed, "BinaryLiquid: Already settled");
         require(!dep.refunded, "BinaryLiquid: Already refunded");
-        require(
-            block.timestamp >= dep.timestamp + REFUND_TIMELOCK,
-            "BinaryLiquid: Timelock active. Refund only available after 24 hours"
-        );
-        require(msg.sender == dep.sender, "BinaryLiquid: Only depositor can trigger refund");
+        require(block.timestamp >= dep.timestamp + REFUND_TIMELOCK, "BinaryLiquid: 24h timelock active");
+        require(msg.sender == dep.sender, "BinaryLiquid: Only depositor");
 
         dep.refunded = true;
-
-        bool refundedSuccess = IERC20(dep.token).transfer(dep.sender, dep.amount);
-        require(refundedSuccess, "BinaryLiquid: Refund transfer failed");
+        bool ok = IERC20(dep.token).transfer(dep.sender, dep.amount);
+        require(ok, "BinaryLiquid: Refund failed");
 
         emit BridgeDepositRefunded(depositId, dep.sender, dep.token, dep.amount, block.timestamp);
     }
 
-    // --- Admin & Sentinel Management ---
-
     function setWatchmanSigner(address _newSigner) external onlyOwner {
-        require(_newSigner != address(0), "BinaryLiquid: Invalid signer");
+        require(_newSigner != address(0), "BinaryLiquid: Zero signer");
         emit WatchmanSignerUpdated(watchmanSigner, _newSigner);
         watchmanSigner = _newSigner;
     }
 
     function setTokenSupport(address token, bool supported) external onlyOwner {
-        require(token != address(0), "BinaryLiquid: Invalid token");
+        require(token != address(0), "BinaryLiquid: Zero token");
         supportedTokens[token] = supported;
         emit TokenSupportUpdated(token, supported);
     }
@@ -258,20 +263,16 @@ contract BinaryLiquidVault {
         emit EmergencyPauseToggled(_paused);
     }
 
-    // --- Internal Helpers ---
     function recoverSigner(bytes32 _ethSignedMessageHash, bytes memory _sig) internal pure returns (address) {
-        require(_sig.length == 65, "BinaryLiquid: Invalid signature length");
-
+        require(_sig.length == 65, "BinaryLiquid: Invalid sig length");
         bytes32 r;
         bytes32 s;
         uint8 v;
-
         assembly {
             r := mload(add(_sig, 32))
             s := mload(add(_sig, 64))
             v := byte(0, mload(add(_sig, 96)))
         }
-
         if (v < 27) v += 27;
         return ecrecover(_ethSignedMessageHash, v, r, s);
     }

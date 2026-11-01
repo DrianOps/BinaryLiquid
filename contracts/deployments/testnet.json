@@ -1,0 +1,33 @@
+{
+  "deployedAt": "2026-10-31T23:21:57.718Z",
+  "architecture": "100% Non-Custodial Smart Contract Vaults + The Watchman Sentinel",
+  "watchman": {
+    "evmSignerAddress": "0x143cA3A5116835d94573C700320B9FEdFf846eF9",
+    "bchPublicKeyHex": "0332d7133520cebac59c3d16b05421cfcc713cf837a8066475cccebccb677d7243",
+    "bchFeeAddress": "bchtest:qpnfz2nh7uy8a2ythr2z7am5vcxr28g43qjdwgfzp8"
+  },
+  "evmAmoy": {
+    "chainId": 80002,
+    "rpcUrl": "https://polygon-amoy-bor-rpc.publicnode.com",
+    "explorerUrl": "https://amoy.polygonscan.com",
+    "vaultContractAddress": "0xc830c7cB16cd05bdEd8CA9d0c73E9038ed25Aa4A",
+    "vaultDeployTxHash": "0xa63c83b5279b8ed5143b247c9766581dbbcbe61c9f7f8a6fc64ed50eb917fcf5",
+    "vaultExplorerUrl": "https://amoy.polygonscan.com/address/0xc830c7cB16cd05bdEd8CA9d0c73E9038ed25Aa4A",
+    "testnetUsdcAddress": "0x08d7CF325c44af76602922cBA6D37E4b267CDa71",
+    "testnetUsdcDeployTxHash": "0xaef3ff982a1adda312afc0838a2938ab2fd3e72cc6040f37094a868831250a2a",
+    "circleAmoyUsdcAddress": "0x41E94Eb019C0762f9Bfcf9Fb1E58725BfB0e7582",
+    "initialVaultLiquidityUsdc": 500000
+  },
+  "bchChipnet": {
+    "network": "chipnet",
+    "explorerUrl": "https://chipnet.imaginary.cash",
+    "vaultAddress": "bchtest:pvqse7cr2ptah2e34sl53r5utqwxl28fk84grvf5ufzd6n5tclme2hmkrmd9e",
+    "vaultTokenAddress": "bchtest:rvqse7cr2ptah2e34sl53r5utqwxl28fk84grvf5ufzd6n5tclme29g2zzvuj",
+    "vaultExplorerUrl": "https://chipnet.imaginary.cash/address/bchtest:pvqse7cr2ptah2e34sl53r5utqwxl28fk84grvf5ufzd6n5tclme2hmkrmd9e",
+    "pusdCategory": "6b6cf8de5963d67594a4565d49a7bcf3e668a18a7328828de16bd393ac00dcad",
+    "pusdGenesisTxId": "c3038d0aa6e36bc142e6e51b4e6648fe1093ccfd03a03ce3704bcd23ec6f1521",
+    "vaultFundingTxId": "28f7bd37409cd42fed3a57625fa71ec58810756a3d418a406d5290028b5381e6",
+    "maxSinglePayoutUnits": "50000000000",
+    "initialVaultLiquidityPusd": 500000
+  }
+}
