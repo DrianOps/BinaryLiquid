@@ -105,6 +105,9 @@ interface UserPosition {
 interface PoolsViewProps {
   backendUrl?: string;
   userAddress: string;
+  bchAddress?: string;
+  evmAddress?: string;
+  platformNetwork?: 'mainnet' | 'testnet';
   onConnectWallet: () => void;
   showToast: (msg: string, type: 'success' | 'error') => void;
   lang?: 'en' | 'es';
@@ -378,6 +381,9 @@ const poolTexts = {
 export default function PoolsView({
   backendUrl = '',
   userAddress,
+  bchAddress = '',
+  evmAddress = '',
+  platformNetwork = 'mainnet',
   onConnectWallet,
   showToast,
   lang = 'en'
@@ -424,8 +430,8 @@ export default function PoolsView({
   // Remove Liquidity form state
   const [burnPercentage, setBurnPercentage] = useState<number>(100);
 
-  // Active address for balance calculation (fallback to default cold address if not yet connected)
-  const effectiveAddress = userAddress || 'bitcoincash:qqgm9rel5xlyhwt3r6n8uq9fxk5zzxrcavaal6aw8v';
+  // Active connected address (strictly non-custodial — no hardcoded fake fallback)
+  const effectiveAddress = bchAddress || evmAddress || userAddress || '';
 
   // Fetch live pool statistics & all pools from backend
   const fetchPoolsData = async () => {
@@ -443,10 +449,21 @@ export default function PoolsView({
     }
   };
 
-  // Fetch real non-custodial wallet balances
+  // Fetch real non-custodial wallet balances across both BCH & EVM
   const fetchWalletBalances = async () => {
+    if (!effectiveAddress) {
+      setWalletBalances({});
+      return;
+    }
     try {
-      const res = await fetch(`${backendUrl}/api/wallet/balances/${encodeURIComponent(effectiveAddress)}`);
+      const qs = new URLSearchParams({
+        network: platformNetwork,
+        ...(bchAddress ? { bchAddress } : {}),
+        ...(evmAddress ? { evmAddress } : {})
+      });
+      const res = await fetch(
+        `${backendUrl}/api/wallet/balances/${encodeURIComponent(effectiveAddress)}?${qs.toString()}`
+      );
       const data = await res.json();
       if (data.success && data.balances) {
         setWalletBalances(data.balances);
@@ -503,10 +520,14 @@ export default function PoolsView({
       fetchUserPositions();
     }, 6000);
     return () => clearInterval(interval);
-  }, [backendUrl, userAddress, effectiveAddress]);
+  }, [backendUrl, userAddress, bchAddress, evmAddress, platformNetwork, effectiveAddress]);
 
   // Open Add Liquidity modal for a pool
   const handleOpenAddModal = (pool: PoolData) => {
+    if (!effectiveAddress) {
+      onConnectWallet();
+      return;
+    }
     setSelectedPool(pool);
     setDepositToken(pool.tokenA);
     setDepositAmount('');

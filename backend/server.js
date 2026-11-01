@@ -979,29 +979,78 @@ app.get('/api/cmc/trades', (req, res) => {
   }
 });
 
-// Non-Custodial Wallet Balances & Authentication
-app.get('/api/wallet/balances/:address', (req, res) => {
+// Non-Custodial Live On-Chain Wallet Balances & Authentication
+app.get('/api/wallet/balances/:address', async (req, res) => {
   try {
     const { address } = req.params;
-    const balances = db.getUserBalances(address);
-    res.json({ success: true, address, balances });
+    const isTestnet = (req.query.network || 'testnet') === 'testnet';
+    const extraBch = req.query.bchAddress ? String(req.query.bchAddress) : null;
+    const extraEvm = req.query.evmAddress ? String(req.query.evmAddress) : null;
+
+    const targetBch = extraBch || (address && !address.startsWith('0x') ? address : null);
+    const targetEvm = extraEvm || (address && address.startsWith('0x') ? address : null);
+
+    const [bchOnChain, evmOnChain] = await Promise.all([
+      targetBch ? bchService.getAddressBalances(targetBch, isTestnet) : Promise.resolve({ BCH: 0, PUSD: 0 }),
+      targetEvm ? evmService.getAddressBalances(targetEvm, isTestnet) : Promise.resolve({ POL: 0, USDT: 0, USDC: 0 })
+    ]);
+
+    const balances = {
+      PUSD: bchOnChain.PUSD || 0,
+      BCH: bchOnChain.BCH || 0,
+      USDT: evmOnChain.USDT || 0,
+      USDC: evmOnChain.USDC || 0,
+      POL: evmOnChain.POL || 0
+    };
+
+    res.json({
+      success: true,
+      nonCustodial: true,
+      network: isTestnet ? 'testnet' : 'mainnet',
+      address,
+      bchAddress: targetBch,
+      evmAddress: targetEvm,
+      balances
+    });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-app.post('/api/auth/login', (req, res) => {
-  const { address } = req.body;
-  if (!address) {
-    return res.status(400).json({ success: false, error: 'Address required' });
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { address, bchAddress, evmAddress, provider, network } = req.body;
+    const primary = address || bchAddress || evmAddress;
+    if (!primary) {
+      return res.status(400).json({ success: false, error: 'Address required' });
+    }
+    const isTestnet = (network || 'testnet') === 'testnet';
+    const targetBch = bchAddress || (!primary.startsWith('0x') ? primary : null);
+    const targetEvm = evmAddress || (primary.startsWith('0x') ? primary : null);
+
+    const [bchOnChain, evmOnChain] = await Promise.all([
+      targetBch ? bchService.getAddressBalances(targetBch, isTestnet) : Promise.resolve({ BCH: 0, PUSD: 0 }),
+      targetEvm ? evmService.getAddressBalances(targetEvm, isTestnet) : Promise.resolve({ POL: 0, USDT: 0, USDC: 0 })
+    ]);
+
+    const user = {
+      address: primary,
+      bchAddress: targetBch,
+      evmAddress: targetEvm,
+      provider: provider || 'Web3',
+      connectedAt: new Date().toISOString(),
+      balances: {
+        PUSD: bchOnChain.PUSD || 0,
+        BCH: bchOnChain.BCH || 0,
+        USDT: evmOnChain.USDT || 0,
+        USDC: evmOnChain.USDC || 0,
+        POL: evmOnChain.POL || 0
+      }
+    };
+    res.json({ success: true, user });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
   }
-  const balances = db.getUserBalances(address);
-  const user = {
-    address,
-    connectedAt: new Date().toISOString(),
-    balances
-  };
-  res.json({ success: true, user });
 });
 
 // Strict Rate Limiter for Live On-Chain Testnet Faucet: max 4 claims per 10 minutes per IP

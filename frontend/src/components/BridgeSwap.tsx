@@ -33,10 +33,18 @@ import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import TokenSelectModal, { TokenInfo, SUPPORTED_TOKENS } from './TokenSelectModal';
 import { executeWeb3VaultDeposit, DEPLOYED_TESTNET_CONTRACTS } from '../services/walletConnectService';
+import {
+  convertCashAddressNetwork,
+  isValidCashAddress,
+  generateQrDataUrl
+} from '../utils/bchAddress';
 
 interface BridgeSwapProps {
   userContext: any;
   userAddress: string;
+  bchAddress?: string;
+  evmAddress?: string;
+  onRefreshBalances?: () => void;
   onConnectWallet: () => void;
   showToast: (msg: string, type?: 'success' | 'error') => void;
   backendUrl?: string;
@@ -202,6 +210,9 @@ const swapTranslations = {
 export default function BridgeSwap({
   userContext,
   userAddress,
+  bchAddress = '',
+  evmAddress = '',
+  onRefreshBalances,
   onConnectWallet,
   showToast,
   backendUrl = '',
@@ -212,6 +223,14 @@ export default function BridgeSwap({
 }: BridgeSwapProps) {
   const isTestnet = platformNetwork === 'testnet';
   const t = swapTranslations[lang] || swapTranslations.en;
+
+  const connectedBch =
+    bchAddress ||
+    (userAddress && (userAddress.startsWith('bchtest:') || userAddress.startsWith('bitcoincash:'))
+      ? userAddress
+      : '');
+  const connectedEvm =
+    evmAddress || (userAddress && userAddress.startsWith('0x') ? userAddress : '');
 
   const getNetworkBadge = (token: TokenInfo) => {
     if (token.isBch) {
@@ -295,6 +314,20 @@ export default function BridgeSwap({
   const [showFaucetPanel, setShowFaucetPanel] = useState<boolean>(false);
   const [faucetRecipient, setFaucetRecipient] = useState<string>('');
   const [faucetLoadingToken, setFaucetLoadingToken] = useState<'PUSD' | 'USDT' | null>(null);
+  const [depositQrUrl, setDepositQrUrl] = useState<string>('');
+
+  const sellWalletConnected = sellToken.isBch ? Boolean(connectedBch) : Boolean(connectedEvm);
+  const rawSellBalance = Number(userContext?.balances?.[sellToken.symbol] ?? 0);
+  const connectedSellBalance =
+    Number.isFinite(rawSellBalance) && rawSellBalance > 0 ? rawSellBalance : 0;
+
+  useEffect(() => {
+    if (activeSwap?.depositAddress) {
+      setDepositQrUrl(generateQrDataUrl(activeSwap.depositAddress));
+    } else {
+      setDepositQrUrl('');
+    }
+  }, [activeSwap?.depositAddress]);
 
   // Enforce allowed pairs (PUSD <-> USDT) when switching between Testnet and Mainnet
   useEffect(() => {
@@ -363,16 +396,14 @@ export default function BridgeSwap({
 
   // Recipient validation helper
   const isRecipientValid = () => {
-    if (!recipientAddress.trim()) return false;
+    const trimmed = recipientAddress.trim();
+    if (!trimmed) return false;
     if (buyToken.isBch) {
-      if (isTestnet) {
-        return recipientAddress.startsWith('bchtest:') || recipientAddress.startsWith('bch');
-      }
-      return recipientAddress.startsWith('bch') || recipientAddress.startsWith('bitcoincash');
+      return isValidCashAddress(trimmed, isTestnet);
     } else if (buyToken.symbol === 'SOL') {
-      return /^[1-9A-HJ-NP-za-km-z]{32,44}$/.test(recipientAddress.trim());
+      return /^[1-9A-HJ-NP-za-km-z]{32,44}$/.test(trimmed);
     } else {
-      return /^0x[a-fA-F0-9]{40}$/.test(recipientAddress.trim());
+      return /^0x[a-fA-F0-9]{40}$/.test(trimmed);
     }
   };
 
@@ -468,22 +499,24 @@ export default function BridgeSwap({
     }
   };
 
-  // Auto-fill recipient based on destination token chain
+  // Auto-fill recipient based on destination token chain (supports simultaneous BCH + EVM connected wallets)
   useEffect(() => {
     if (buyToken.isBch) {
-      if (userAddress && (userAddress.startsWith('bch') || userAddress.startsWith('bitcoincash'))) {
-        setRecipientAddress(userAddress);
-      } else {
+      if (connectedBch) {
+        setRecipientAddress(convertCashAddressNetwork(connectedBch, isTestnet, true));
+      } else if (recipientAddress && isValidCashAddress(recipientAddress)) {
+        setRecipientAddress(convertCashAddressNetwork(recipientAddress, isTestnet, true));
+      } else if (recipientAddress && !isValidCashAddress(recipientAddress, isTestnet)) {
         setRecipientAddress('');
       }
     } else {
-      if (userAddress && userAddress.startsWith('0x')) {
-        setRecipientAddress(userAddress);
-      } else {
+      if (connectedEvm) {
+        setRecipientAddress(connectedEvm);
+      } else if (recipientAddress && !/^0x[a-fA-F0-9]{40}$/.test(recipientAddress.trim())) {
         setRecipientAddress('');
       }
     }
-  }, [buyToken.symbol, userAddress]);
+  }, [buyToken.symbol, buyToken.isBch, connectedBch, connectedEvm, isTestnet]);
 
   // Dynamic Quote calculation with Oracle Pool & 10s auto-refresh
   useEffect(() => {
@@ -626,10 +659,16 @@ export default function BridgeSwap({
     setBuyToken(prevSell);
   };
 
-  // Percentage quick buttons
+  // Percentage quick buttons (uses real live wallet balance when available)
   const handlePercent = (pct: number) => {
     if (pct === 0) {
       setSellAmount('');
+      return;
+    }
+    if (connectedSellBalance > 0) {
+      const decimals = sellToken.decimals === 8 ? 6 : 4;
+      const computed = Number(((connectedSellBalance * pct) / 100).toFixed(decimals));
+      setSellAmount(computed > 0 ? String(computed) : '');
     } else if (pct === 50) {
       setSellAmount('50');
     } else if (pct === 100) {
@@ -778,7 +817,14 @@ export default function BridgeSwap({
           toChain: buyToken.isBch ? (isTestnet ? 'bch_chipnet' : 'bch_mainnet') : (isTestnet ? 'amoy_testnet' : 'polygon_mainnet'),
           amount: num,
           recipientAddress: recipientAddress.trim(),
-          senderAddress: userAddress || undefined,
+          senderAddress:
+            (sellToken.isBch
+              ? connectedBch
+                ? convertCashAddressNetwork(connectedBch, isTestnet, true)
+                : ''
+              : connectedEvm) ||
+            userAddress ||
+            undefined,
           slippage: slippage,
           minReceived: minPayout
         })
@@ -819,6 +865,7 @@ export default function BridgeSwap({
         setSwapStep(4);
         setIsSwapping(false);
         setCardState('success');
+        onRefreshBalances?.();
         confetti({
           particleCount: 90,
           spread: 75,
@@ -874,14 +921,16 @@ export default function BridgeSwap({
   const handleClaimTestnetFaucet = async (tokenSym: 'PUSD' | 'USDT') => {
     const targetAddr =
       faucetRecipient.trim() ||
-      (tokenSym === 'USDT' && userAddress?.startsWith('0x') ? userAddress : '') ||
-      (tokenSym === 'PUSD' && userAddress?.startsWith('bchtest:') ? userAddress : '');
+      (tokenSym === 'USDT' ? connectedEvm : '') ||
+      (tokenSym === 'PUSD' && connectedBch
+        ? convertCashAddressNetwork(connectedBch, true, true)
+        : '');
 
     if (!targetAddr) {
       showToast(
         tokenSym === 'PUSD'
-          ? 'Ingresa tu dirección BCH Chipnet (bchtest:q... o bchtest:z...) en el grifo'
-          : 'Ingresa tu dirección EVM (0x...) en el grifo',
+          ? 'Conecta tu billetera BCH o ingresa una dirección bchtest:z... en el grifo'
+          : 'Conecta tu billetera EVM (MetaMask/WC2) o ingresa tu dirección 0x... en el grifo',
         'error'
       );
       return;
@@ -905,6 +954,7 @@ export default function BridgeSwap({
           'success'
         );
         confetti({ particleCount: 55, spread: 50, origin: { y: 0.7 } });
+        setTimeout(() => onRefreshBalances?.(), 2500);
       } else {
         showToast(data.error || 'Error solicitando Testnet Faucet', 'error');
       }
@@ -1282,13 +1332,15 @@ export default function BridgeSwap({
                 {t.depositInstruction} <strong>{activeSwap?.fromAmount} {activeSwap?.fromToken}</strong> {t.toBridgeAddr}
               </div>
 
-              {/* QR Code Container */}
+              {/* QR Code Container (Offline Instant Generator) */}
               <div className="flex justify-center p-3 bg-white rounded-2xl shadow-sm w-40 h-40 mx-auto">
-                <img 
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(activeSwap?.depositAddress || '')}`}
-                  alt="Deposit QR"
-                  className="w-full h-full object-contain"
-                />
+                {depositQrUrl ? (
+                  <img 
+                    src={depositQrUrl}
+                    alt="Deposit QR"
+                    className="w-full h-full object-contain"
+                  />
+                ) : null}
               </div>
 
               {/* Non-Custodial Smart Contract / CashScript Covenant Box */}
@@ -1465,7 +1517,11 @@ export default function BridgeSwap({
                       type="text"
                       value={faucetRecipient}
                       onChange={e => setFaucetRecipient(e.target.value)}
-                      placeholder="Pega tu bchtest:z... (para PUSD) o 0x... (para USDT Amoy)"
+                      placeholder={
+                        connectedBch || connectedEvm
+                          ? 'Opcional: se usará tu wallet conectada automáticamente (o pega otra dirección)'
+                          : 'Pega tu bchtest:z... (para PUSD) o 0x... (para USDT Amoy)'
+                      }
                       className="w-full px-2.5 py-1.5 rounded-lg bg-white dark:bg-[#0E131E] text-[11px] font-mono text-zinc-900 dark:text-white outline-none border border-amber-500/20"
                     />
                     <div className="grid grid-cols-2 gap-2">
@@ -1526,9 +1582,21 @@ export default function BridgeSwap({
                 <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
                   {subTab === 'limit' ? t.sellLimitLabel : t.sellLabel}
                 </span>
-                <span className="text-[11px] text-zinc-400 dark:text-zinc-500 font-mono font-medium">
-                  {t.network}: {getNetworkBadge(sellToken)}
-                </span>
+                <div className="flex items-center gap-2">
+                  {sellWalletConnected && (
+                    <button
+                      type="button"
+                      onClick={() => handlePercent(100)}
+                      className="text-[11px] font-mono font-bold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer"
+                      title="Click para usar el 100% de tu saldo disponible"
+                    >
+                      Saldo: {connectedSellBalance.toFixed(2)} {sellToken.symbol}
+                    </button>
+                  )}
+                  <span className="text-[11px] text-zinc-400 dark:text-zinc-500 font-mono font-medium">
+                    {t.network}: {getNetworkBadge(sellToken)}
+                  </span>
+                </div>
               </div>
 
               <div className="flex items-center justify-between gap-3 mt-1">
@@ -1806,13 +1874,33 @@ export default function BridgeSwap({
 
                 <div className="flex justify-between items-center mt-2 text-[10px] text-zinc-400">
                   <span>{t.fundsNotice}</span>
-                  {userAddress && (
+                  {(buyToken.isBch ? Boolean(connectedBch) : Boolean(connectedEvm)) ? (
                     <button
                       type="button"
-                      onClick={() => setRecipientAddress(userAddress)}
+                      onClick={() =>
+                        setRecipientAddress(
+                          buyToken.isBch
+                            ? convertCashAddressNetwork(connectedBch, isTestnet, true)
+                            : connectedEvm
+                        )
+                      }
                       className="text-orange-500 font-bold hover:underline cursor-pointer"
                     >
                       {t.useConnected}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={onConnectWallet}
+                      className="text-emerald-600 dark:text-emerald-400 font-bold hover:underline cursor-pointer"
+                    >
+                      {buyToken.isBch
+                        ? lang === 'es'
+                          ? '+ Conectar Wallet BCH'
+                          : '+ Connect BCH Wallet'
+                        : lang === 'es'
+                        ? '+ Conectar Wallet EVM'
+                        : '+ Connect EVM Wallet'}
                     </button>
                   )}
                 </div>
@@ -2098,13 +2186,15 @@ export default function BridgeSwap({
                     Please send <strong>{activeSwap.fromAmount} {activeSwap.fromToken}</strong> to the bridge deposit address below.
                   </div>
 
-                  {/* QR Code Container */}
+                  {/* QR Code Container (Offline Instant Generator) */}
                   <div className="flex justify-center p-3 bg-white dark:bg-white rounded-2xl border border-gray-200 shadow-inner w-44 h-44 mx-auto">
-                    <img 
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(activeSwap.depositAddress)}`}
-                      alt="Deposit QR"
-                      className="w-full h-full object-contain"
-                    />
+                    {depositQrUrl ? (
+                      <img 
+                        src={depositQrUrl}
+                        alt="Deposit QR"
+                        className="w-full h-full object-contain"
+                      />
+                    ) : null}
                   </div>
 
                   {/* Non-Custodial Smart Contract Box */}

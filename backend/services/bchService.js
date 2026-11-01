@@ -477,6 +477,63 @@ class BchService {
       explorerUrl: `https://chipnet.imaginary.cash/tx/${res.txId}`
     };
   }
+
+  /**
+   * Queries real live UTXOs on BCH Chipnet or Mainnet for any connected user CashAddress.
+   */
+  async getAddressBalances(cashaddr, forceTestnet = null) {
+    await this.readyPromise;
+    if (!cashaddr || typeof cashaddr !== 'string') {
+      return { BCH: 0, PUSD: 0, utxoCount: 0, network: 'unknown' };
+    }
+
+    try {
+      const clean = cashaddr.trim();
+      const decoded = cashAddressToLockingBytecode(clean);
+      if (typeof decoded === 'string') {
+        return { BCH: 0, PUSD: 0, utxoCount: 0, network: 'invalid' };
+      }
+
+      const isChipnet = forceTestnet !== null ? Boolean(forceTestnet) : decoded.prefix === 'bchtest';
+      const targetPrefix = isChipnet ? 'bchtest' : 'bitcoincash';
+      const baseEncoded = lockingBytecodeToCashAddress({
+        bytecode: decoded.bytecode,
+        prefix: targetPrefix,
+        tokenSupport: false
+      });
+      if (typeof baseEncoded === 'string') {
+        return { BCH: 0, PUSD: 0, utxoCount: 0, network: targetPrefix };
+      }
+
+      const provider = isChipnet ? this.chipnetProvider : this.mainnetProvider;
+      if (!provider) {
+        return { BCH: 0, PUSD: 0, utxoCount: 0, network: targetPrefix };
+      }
+
+      const pusdCategory = this.getTokenCategory('PUSD', isChipnet);
+      const utxos = await provider.getUtxos(baseEncoded.address);
+
+      let totalSats = 0n;
+      let totalPusdUnits = 0n;
+      for (const u of utxos) {
+        totalSats += BigInt(u.satoshis || 0);
+        if (u.token && u.token.category === pusdCategory) {
+          totalPusdUnits += BigInt(u.token.amount || 0);
+        }
+      }
+
+      return {
+        BCH: Number(totalSats) / 1e8,
+        PUSD: Number(totalPusdUnits) / 1e6,
+        utxoCount: utxos.length,
+        network: isChipnet ? 'chipnet' : 'mainnet',
+        address: baseEncoded.address
+      };
+    } catch (err) {
+      console.warn('[BCH Wallet Balance] Query warning:', err.message);
+      return { BCH: 0, PUSD: 0, utxoCount: 0, network: 'error' };
+    }
+  }
 }
 
 export const bchService = new BchService();

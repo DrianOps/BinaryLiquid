@@ -279,19 +279,19 @@ export default function LendingView({
   const [withdrawSupplyToken, setWithdrawSupplyToken] = useState<'PUSD' | 'USDC'>('PUSD');
   const [withdrawSupplyAmount, setWithdrawSupplyAmount] = useState<string>('');
 
-  const effectiveAddress = isWalletConnected && userAddress 
-    ? userAddress 
-    : 'bitcoincash:qqgm9rel5xlyhwt3r6n8uq9fxk5zzxrcavaal6aw8v';
+  const effectiveAddress = isWalletConnected && userAddress ? userAddress : '';
 
   const fetchData = async () => {
     try {
-      const [resOverview, resVault] = await Promise.all([
-        fetch(`${backendUrl}/api/lend/overview`).then(r => r.json()),
-        fetch(`${backendUrl}/api/lend/vault/${effectiveAddress}`).then(r => r.json())
-      ]);
-
+      const resOverview = await fetch(`${backendUrl}/api/lend/overview`).then(r => r.json());
       if (resOverview.success) setOverview(resOverview);
-      if (resVault.success) setUserVaultData(resVault);
+
+      if (effectiveAddress) {
+        const resVault = await fetch(`${backendUrl}/api/lend/vault/${encodeURIComponent(effectiveAddress)}`).then(r => r.json());
+        if (resVault.success) setUserVaultData(resVault);
+      } else {
+        setUserVaultData(null);
+      }
     } catch (err) {
       console.warn('Failed to load lending data:', err);
     } finally {
@@ -330,6 +330,10 @@ export default function LendingView({
 
   // Actions
   const handleDepositCollateral = async () => {
+    if (!effectiveAddress) {
+      onConnectWallet();
+      return;
+    }
     const amt = parseFloat(depositCollateralAmount);
     if (isNaN(amt) || amt <= 0) {
       showToast(t.toastEnterValidBch, 'error');
@@ -446,6 +450,10 @@ export default function LendingView({
   };
 
   const handleSupply = async () => {
+    if (!effectiveAddress) {
+      onConnectWallet();
+      return;
+    }
     const amt = parseFloat(supplyAmount);
     if (isNaN(amt) || amt <= 0) {
       showToast(`${t.toastEnterValidAmount} (${supplyToken})`, 'error');

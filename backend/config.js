@@ -61,7 +61,7 @@ export const config = {
   evm: {
     chainName: process.env.EVM_CHAIN_NAME || 'Polygon Mainnet',
     chainId: parseInt(process.env.EVM_CHAIN_ID || '137', 10),
-    rpcUrl: process.env.EVM_RPC_URL || 'https://polygon-bor-rpc.publicnode.com',
+    rpcUrl: process.env.EVM_RPC_URL || 'https://polygon-bor.publicnode.com',
     explorerUrl: process.env.EVM_EXPLORER_URL || 'https://polygonscan.com',
     amoyRpcUrl: process.env.EVM_AMOY_RPC_URL || 'https://polygon-amoy-bor-rpc.publicnode.com',
     amoyExplorerUrl: process.env.EVM_AMOY_EXPLORER_URL || 'https://amoy.polygonscan.com',

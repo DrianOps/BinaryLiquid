@@ -390,6 +390,64 @@ class EvmService {
   async dispenseTestnetUsdc(recipientAddress, amount = 100) {
     return this.dispenseTestnetErc20(recipientAddress, 'USDC', amount);
   }
+
+  /**
+   * Queries real live native POL + ERC-20 (USDT, USDC) balances on Polygon Amoy or Polygon Mainnet.
+   */
+  async getAddressBalances(evmAddress, isTestnet = true) {
+    if (!evmAddress || !ethers.isAddress(evmAddress.trim().toLowerCase())) {
+      return { POL: 0, USDT: 0, USDC: 0, network: isTestnet ? 'amoy' : 'polygon' };
+    }
+
+    const cleanAddr = ethers.getAddress(evmAddress.trim().toLowerCase());
+    const provider = isTestnet ? this.amoyProvider : this.mainnetProvider;
+    const tokenMap = isTestnet ? config.evm.amoyTokens : config.evm.tokens;
+
+    if (!provider) {
+      return { POL: 0, USDT: 0, USDC: 0, network: isTestnet ? 'amoy' : 'polygon' };
+    }
+
+    const result = {
+      POL: 0,
+      USDT: 0,
+      USDC: 0,
+      network: isTestnet ? 'amoy' : 'polygon',
+      chainId: isTestnet ? 80002 : 137,
+      address: cleanAddr
+    };
+
+    try {
+      const promises = [
+        provider.getBalance(cleanAddr).then(w => {
+          result.POL = parseFloat(ethers.formatEther(w)) || 0;
+        }).catch(() => {})
+      ];
+
+      if (tokenMap?.USDT?.address) {
+        const usdtContract = new ethers.Contract(tokenMap.USDT.address, ERC20_ABI, provider);
+        promises.push(
+          usdtContract.balanceOf(cleanAddr).then(raw => {
+            result.USDT = parseFloat(ethers.formatUnits(raw, tokenMap.USDT.decimals || 6)) || 0;
+          }).catch(() => {})
+        );
+      }
+
+      if (tokenMap?.USDC?.address) {
+        const usdcContract = new ethers.Contract(tokenMap.USDC.address, ERC20_ABI, provider);
+        promises.push(
+          usdcContract.balanceOf(cleanAddr).then(raw => {
+            result.USDC = parseFloat(ethers.formatUnits(raw, tokenMap.USDC.decimals || 6)) || 0;
+          }).catch(() => {})
+        );
+      }
+
+      await Promise.all(promises);
+    } catch (err) {
+      console.warn('[EVM Wallet Balance] Query warning:', err.message);
+    }
+
+    return result;
+  }
 }
 
 export const evmService = new EvmService();
