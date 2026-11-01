@@ -32,17 +32,6 @@ export const SUPPORTED_TOKENS: TokenInfo[] = [
     categoryOrAddress: 'a5c0b1f900000000000000000000000000000000000000000000000000000000'
   },
   {
-    symbol: 'USDC',
-    name: 'USD Coin',
-    network: 'Polygon (Mainnet)',
-    networkBadge: 'Polygon PoS',
-    icon: '/USDC.png',
-    decimals: 6,
-    isBch: false,
-    isVerified: true,
-    categoryOrAddress: '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359'
-  },
-  {
     symbol: 'USDT',
     name: 'Tether USD',
     network: 'Polygon (Mainnet)',
@@ -52,6 +41,17 @@ export const SUPPORTED_TOKENS: TokenInfo[] = [
     isBch: false,
     isVerified: true,
     categoryOrAddress: '0xc2132D05D31c914a87C6611C10748AEb04B58e8F'
+  },
+  {
+    symbol: 'USDC',
+    name: 'USD Coin',
+    network: 'Polygon (Mainnet)',
+    networkBadge: 'Polygon PoS',
+    icon: '/USDC.png',
+    decimals: 6,
+    isBch: false,
+    isVerified: true,
+    categoryOrAddress: '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359'
   },
   {
     symbol: 'MUSD',
@@ -153,7 +153,7 @@ export default function TokenSelectModal({
       const sym = t.symbol.toUpperCase();
 
       if (isTestnet) {
-        const isActiveInTestnet = sym === 'PUSD' || sym === 'USDC';
+        const isActiveInTestnet = sym === 'PUSD' || sym === 'USDT';
         return {
           ...t,
           network: t.isBch
@@ -169,20 +169,21 @@ export default function TokenSelectModal({
           categoryOrAddress:
             sym === 'PUSD'
               ? DEPLOYED_TESTNET_CONTRACTS.chipnetPusdCategory
+              : sym === 'USDT'
+              ? DEPLOYED_TESTNET_CONTRACTS.amoyUsdtAddress
               : sym === 'USDC'
               ? DEPLOYED_TESTNET_CONTRACTS.amoyUsdcAddress
               : t.categoryOrAddress,
           disabled: !isActiveInTestnet,
-          unavailableBadge: isActiveInTestnet ? undefined : 'Not available (Testnet)'
+          unavailableBadge: isActiveInTestnet ? undefined : 'Sin Liquidez'
         };
       }
 
-      // Mainnet mode: BCH + Polygon ecosystem active; external L1s marked Phase 2
-      const isPhase2Chain = ['ETH', 'SOL', 'BNB'].includes(sym);
+      // Mainnet mode: ALL tokens marked with "Sin Liquidez" while liquidity lives in Testnet Vaults
       return {
         ...t,
-        disabled: isPhase2Chain,
-        unavailableBadge: isPhase2Chain ? 'Not available • Phase 2' : undefined
+        disabled: true,
+        unavailableBadge: 'Sin Liquidez'
       };
     });
 
@@ -191,8 +192,8 @@ export default function TokenSelectModal({
         if (!list.find(t => t.symbol.toUpperCase() === ct.symbol.toUpperCase())) {
           list.push({
             ...ct,
-            disabled: isTestnet,
-            unavailableBadge: isTestnet ? 'Not available (Testnet)' : undefined
+            disabled: true,
+            unavailableBadge: 'Sin Liquidez'
           });
         }
       }
@@ -227,9 +228,13 @@ export default function TokenSelectModal({
         <div className="px-6 pt-6 pb-4 flex items-center justify-between border-b border-gray-100 dark:border-gray-800/80">
           <div>
             <h3 className="text-lg font-bold text-gray-900 dark:text-white">{title}</h3>
-            {isTestnet && (
+            {isTestnet ? (
               <p className="text-[11px] text-amber-600 dark:text-amber-400 font-semibold mt-0.5">
-                Testnet Active: Non-Custodial Vaults enabled for PUSD ⟷ USDC
+                Testnet Activa: Bóvedas con liquidez en PUSD ⟷ USDT
+              </p>
+            ) : (
+              <p className="text-[11px] text-rose-500 dark:text-rose-400 font-semibold mt-0.5">
+                Mainnet: Sin Liquidez • Cambia a Testnet para operar PUSD ⟷ USDT
               </p>
             )}
           </div>
@@ -278,8 +283,8 @@ export default function TokenSelectModal({
                 <img src={t.icon} alt={t.symbol} className="w-4 h-4 rounded-full object-contain" />
                 <span>{t.symbol}</span>
                 {t.disabled ? (
-                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-gray-200 dark:bg-gray-800 text-gray-500">
-                    N/A
+                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-rose-500/10 text-rose-500 dark:text-rose-400 font-semibold">
+                    Sin Liquidez
                   </span>
                 ) : (
                   <>
@@ -345,7 +350,7 @@ export default function TokenSelectModal({
                           </span>
                         )}
                         {t.disabled && t.unavailableBadge && (
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-zinc-300/60 dark:border-zinc-700 flex items-center gap-1">
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-500/10 dark:bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/25 flex items-center gap-1">
                             <Lock className="w-2.5 h-2.5" />
                             <span>{t.unavailableBadge}</span>
                           </span>

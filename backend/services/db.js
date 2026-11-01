@@ -74,7 +74,7 @@ class BridgeDatabase {
         port: parseInt(process.env.PGPORT || '5432', 10),
         database: process.env.PGDATABASE || 'binaryliquid_db',
         user: process.env.PGUSER || 'binaryliquid_user',
-        password: process.env.PGPASSWORD || 'BliqSecurePass2026!',
+        password: process.env.PGPASSWORD || '',
         max: 10,
         connectionTimeoutMillis: 3000
       });

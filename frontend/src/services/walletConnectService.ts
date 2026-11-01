@@ -13,6 +13,7 @@ export const AMOY_CHAIN_CONFIG = {
 
 export const DEPLOYED_TESTNET_CONTRACTS = {
   amoyVaultAddress: '0xc830c7cB16cd05bdEd8CA9d0c73E9038ed25Aa4A',
+  amoyUsdtAddress: '0x1a29793F2a64424D09f56AD045827dF1F0Fa1A75',
   amoyUsdcAddress: '0x08d7CF325c44af76602922cBA6D37E4b267CDa71',
   chipnetVaultTokenAddress: 'bchtest:rvqse7cr2ptah2e34sl53r5utqwxl28fk84grvf5ufzd6n5tclme29g2zzvuj',
   chipnetPusdCategory: '6b6cf8de5963d67594a4565d49a7bcf3e668a18a7328828de16bd393ac00dcad'
@@ -245,7 +246,7 @@ export async function executeWeb3VaultDeposit(params: {
   const currentAllowance = allowanceHex && allowanceHex !== '0x' ? BigInt(allowanceHex) : 0n;
 
   if (currentAllowance < rawUnits) {
-    onStatus?.('Paso 1/2: Aprueba USDC en tu billetera para el Smart Contract Vault...');
+    onStatus?.('Paso 1/2: Aprueba USDT en tu billetera para el Smart Contract Vault...');
     // `approve(address,uint256)` = 0x095ea7b3
     const approveData = `0x095ea7b3${pad32(vaultAddress)}${pad32(rawUnits.toString(16))}`;
     const approveTxHash = await eipProvider.request({

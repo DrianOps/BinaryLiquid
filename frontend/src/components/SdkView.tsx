@@ -41,7 +41,7 @@ const texts = {
     codeTitle: "Create Swaps with Code (JavaScript / Python / cURL)",
     copyExample: "Copy Example",
     codeSnippet: `// 1. Fetch real-time market quote
-const quote = await fetch('https://bsprotocol.xyz/api/quote?fromToken=PUSD&toToken=USDC&amount=50')
+const quote = await fetch('https://bsprotocol.xyz/api/quote?fromToken=PUSD&toToken=USDT&amount=50')
   .then(r => r.json());
 
 // 2. Instantiate isolated Non-Custodial CashScript Covenant / Smart Contract Vault
@@ -50,7 +50,7 @@ const order = await fetch('https://bsprotocol.xyz/api/swap/create', {
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
     fromToken: 'PUSD',
-    toToken: 'USDC',
+    toToken: 'USDT',
     fromChain: 'bch_chipnet',
     toChain: 'amoy_testnet',
     amount: 50,
@@ -89,7 +89,7 @@ console.log('Contract Spec:', order.instructions.contractType);`
     codeTitle: "Crear Swaps con Código (JavaScript / Python / cURL)",
     copyExample: "Copiar Ejemplo",
     codeSnippet: `// 1. Consultar cotización en tiempo real
-const quote = await fetch('https://bsprotocol.xyz/api/quote?fromToken=PUSD&toToken=USDC&amount=50')
+const quote = await fetch('https://bsprotocol.xyz/api/quote?fromToken=PUSD&toToken=USDT&amount=50')
   .then(r => r.json());
 
 // 2. Instanciar Covenant CashScript P2SH32 / Smart Contract Vault No-Custodio
@@ -98,7 +98,7 @@ const order = await fetch('https://bsprotocol.xyz/api/swap/create', {
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
     fromToken: 'PUSD',
-    toToken: 'USDC',
+    toToken: 'USDT',
     fromChain: 'bch_chipnet',
     toChain: 'amoy_testnet',
     amount: 50,
@@ -115,7 +115,7 @@ console.log('Especificación del Contrato:', order.instructions.contractType);`
 export const SdkView: React.FC<SdkViewProps> = ({ lang = 'en' }) => {
   const [copiedSection, setCopiedSection] = useState<string | null>(null);
   const [embedFrom, setEmbedFrom] = useState('PUSD');
-  const [embedTo, setEmbedTo] = useState('USDC');
+  const [embedTo, setEmbedTo] = useState('USDT');
   const [embedTheme, setEmbedTheme] = useState<'dark' | 'light'>('dark');
   const [embedWidth, setEmbedWidth] = useState('420');
   const [embedHeight, setEmbedHeight] = useState('640');

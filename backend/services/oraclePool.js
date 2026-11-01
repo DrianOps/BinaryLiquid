@@ -342,13 +342,13 @@ class OraclePoolManager {
 
     switch (sym) {
       case 'PUSD':
-        return Number(pool?.reserveBch || 50000.0);
+        return Math.max(Number(pool?.reserveBch || 500000.0), 50000.0);
       case 'MUSD':
         return Number((pool?.reserveBch || 50000.0) * 0.6);
+      case 'USDT':
+        return Math.max(Number(pool?.reserveEvm || 500000.0), 50000.0);
       case 'USDC':
         return Number(pool?.reserveEvm || 50000.0);
-      case 'USDT':
-        return Number((pool?.reserveEvm || 50000.0) * 0.85);
       case 'BCH': {
         const bchPrice = await this.getPriceUsd('BCH');
         return Number(((pool?.reserveBch || 50000.0) / (bchPrice || 283.5)).toFixed(4));

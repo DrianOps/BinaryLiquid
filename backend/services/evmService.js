@@ -21,6 +21,7 @@ class EvmService {
     this.watchmanAddress = config.evm.watchmanAddress || '0x143cA3A5116835d94573C700320B9FEdFf846eF9';
     this.vaultAbi = null;
     this.testnetUsdcAbi = null;
+    this.testnetUsdtAbi = null;
     this.init();
   }
 
@@ -28,8 +29,12 @@ class EvmService {
     try {
       const vaultArtifactPath = path.join(config.contractsDir, 'evm/artifacts/BinaryLiquidVault.json');
       const usdcArtifactPath = path.join(config.contractsDir, 'evm/artifacts/TestnetUSDC.json');
+      const usdtArtifactPath = path.join(config.contractsDir, 'evm/artifacts/TestnetUSDT.json');
       this.vaultAbi = JSON.parse(fs.readFileSync(vaultArtifactPath, 'utf8')).abi;
       this.testnetUsdcAbi = JSON.parse(fs.readFileSync(usdcArtifactPath, 'utf8')).abi;
+      this.testnetUsdtAbi = fs.existsSync(usdtArtifactPath)
+        ? JSON.parse(fs.readFileSync(usdtArtifactPath, 'utf8')).abi
+        : this.testnetUsdcAbi;
     } catch (err) {
       console.error('[EVM Vault] Failed to load Solidity ABIs:', err.message);
     }
@@ -100,6 +105,7 @@ class EvmService {
       },
       amoy: {
         native: 0.0,
+        USDT: 0.0,
         USDC: 0.0,
         vaultAddress: config.evm.amoyVaultAddress
       }
@@ -126,6 +132,13 @@ class EvmService {
       try {
         const nativeWei = await this.amoyProvider.getBalance(this.watchmanAddress);
         balances.amoy.native = parseFloat(ethers.formatEther(nativeWei)) || 0.0;
+
+        const amoyUsdt = config.evm.amoyTokens?.USDT;
+        if (amoyUsdt?.address) {
+          const usdtContract = new ethers.Contract(amoyUsdt.address, ERC20_ABI, this.amoyProvider);
+          const rawUsdt = await usdtContract.balanceOf(config.evm.amoyVaultAddress);
+          balances.amoy.USDT = parseFloat(ethers.formatUnits(rawUsdt, amoyUsdt.decimals)) || 0.0;
+        }
 
         const amoyUsdc = config.evm.amoyTokens?.USDC;
         if (amoyUsdc?.address) {
@@ -331,37 +344,51 @@ class EvmService {
   }
 
   /**
-   * Real On-Chain Testnet Faucet: Calls `TestnetUSDC.faucet(recipient, amount)` on Polygon Amoy!
+   * Real On-Chain Testnet Faucet: Calls `TestnetUSDT.faucet(recipient, amount)` on Polygon Amoy!
    */
-  async dispenseTestnetUsdc(recipientAddress, amount = 100) {
+  async dispenseTestnetErc20(recipientAddress, tokenSymbol = 'USDT', amount = 100) {
+    const sym = (tokenSymbol || 'USDT').toUpperCase();
     const rawRecipient = (recipientAddress || '').trim().toLowerCase();
     if (!ethers.isAddress(rawRecipient)) {
-      throw new Error('Ingresa una dirección EVM válida (0x...) para recibir Testnet USDC en Polygon Amoy');
+      throw new Error(`Ingresa una dirección EVM válida (0x...) para recibir Testnet ${sym} en Polygon Amoy`);
     }
-    if (!this.amoySigner || !this.testnetUsdcAbi) {
+    const abi = sym === 'USDT' ? (this.testnetUsdtAbi || this.testnetUsdcAbi) : this.testnetUsdcAbi;
+    if (!this.amoySigner || !abi) {
       throw new Error('Polygon Amoy Faucet signer no disponible');
+    }
+
+    const tokenCfg = config.evm.amoyTokens[sym];
+    if (!tokenCfg?.address) {
+      throw new Error(`Token ${sym} no disponible en Polygon Amoy Testnet`);
     }
 
     const cleanRecipient = ethers.getAddress(rawRecipient);
     const cappedAmount = Math.min(Math.max(Number(amount) || 100, 1), 1000);
-    const parsedAmount = ethers.parseUnits(cappedAmount.toFixed(6), 6);
-    const usdcAddress = config.evm.amoyTokens.USDC.address;
+    const parsedAmount = ethers.parseUnits(cappedAmount.toFixed(tokenCfg.decimals || 6), tokenCfg.decimals || 6);
 
-    const usdcContract = new ethers.Contract(usdcAddress, this.testnetUsdcAbi, this.amoySigner);
-    const tx = await usdcContract.faucet(cleanRecipient, parsedAmount);
+    const tokenContract = new ethers.Contract(tokenCfg.address, abi, this.amoySigner);
+    const tx = await tokenContract.faucet(cleanRecipient, parsedAmount);
     const receipt = await tx.wait(1);
 
     return {
       success: true,
       onChain: true,
-      token: 'USDC',
+      token: sym,
       network: 'Polygon Amoy (Chain ID 80002)',
       amount: cappedAmount,
       recipient: cleanRecipient,
-      tokenAddress: usdcAddress,
+      tokenAddress: tokenCfg.address,
       txHash: receipt.hash,
       explorerUrl: `https://amoy.polygonscan.com/tx/${receipt.hash}`
     };
+  }
+
+  async dispenseTestnetUsdt(recipientAddress, amount = 100) {
+    return this.dispenseTestnetErc20(recipientAddress, 'USDT', amount);
+  }
+
+  async dispenseTestnetUsdc(recipientAddress, amount = 100) {
+    return this.dispenseTestnetErc20(recipientAddress, 'USDC', amount);
   }
 }
 

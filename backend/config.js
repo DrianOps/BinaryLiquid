@@ -86,6 +86,12 @@ export const config = {
       }
     },
     amoyTokens: {
+      USDT: {
+        name: 'Tether USD (Amoy Testnet)',
+        symbol: 'USDT',
+        address: process.env.EVM_AMOY_USDT_ADDRESS || '0x1a29793F2a64424D09f56AD045827dF1F0Fa1A75',
+        decimals: 6
+      },
       USDC: {
         name: 'USD Coin (Amoy Testnet)',
         symbol: 'USDC',

@@ -237,7 +237,7 @@ export default function BridgeSwap({
 
   // Token selections
   const [sellToken, setSellToken] = useState<TokenInfo>(SUPPORTED_TOKENS[0]); // PUSD
-  const [buyToken, setBuyToken] = useState<TokenInfo>(SUPPORTED_TOKENS[1]);  // USDC
+  const [buyToken, setBuyToken] = useState<TokenInfo>(SUPPORTED_TOKENS[1]);  // USDT
 
   // Modal selector states
   const [modalType, setModalType] = useState<'sell' | 'buy' | null>(null);
@@ -294,22 +294,14 @@ export default function BridgeSwap({
   const [web3StatusMsg, setWeb3StatusMsg] = useState<string>('');
   const [showFaucetPanel, setShowFaucetPanel] = useState<boolean>(false);
   const [faucetRecipient, setFaucetRecipient] = useState<string>('');
-  const [faucetLoadingToken, setFaucetLoadingToken] = useState<'PUSD' | 'USDC' | null>(null);
+  const [faucetLoadingToken, setFaucetLoadingToken] = useState<'PUSD' | 'USDT' | null>(null);
 
-  // Enforce allowed pairs when switching between Testnet (PUSD <-> USDC only) and Mainnet
+  // Enforce allowed pairs (PUSD <-> USDT) when switching between Testnet and Mainnet
   useEffect(() => {
-    if (isTestnet) {
-      const allowed = ['PUSD', 'USDC'];
-      if (!allowed.includes(sellToken.symbol) || !allowed.includes(buyToken.symbol) || sellToken.symbol === buyToken.symbol) {
-        setSellToken(SUPPORTED_TOKENS[0]); // PUSD
-        setBuyToken(SUPPORTED_TOKENS[1]);  // USDC
-      }
-    } else {
-      const blockedPhase2 = ['ETH', 'SOL', 'BNB'];
-      if (blockedPhase2.includes(sellToken.symbol) || blockedPhase2.includes(buyToken.symbol)) {
-        setSellToken(SUPPORTED_TOKENS[0]);
-        setBuyToken(SUPPORTED_TOKENS[1]);
-      }
+    const allowed = ['PUSD', 'USDT'];
+    if (!allowed.includes(sellToken.symbol) || !allowed.includes(buyToken.symbol) || sellToken.symbol === buyToken.symbol) {
+      setSellToken(SUPPORTED_TOKENS[0]); // PUSD
+      setBuyToken(SUPPORTED_TOKENS[1]);  // USDT
     }
   }, [isTestnet]);
 
@@ -854,7 +846,7 @@ export default function BridgeSwap({
     try {
       const tokenAddr =
         activeSwap.tokenContractAddress ||
-        (isTestnet ? DEPLOYED_TESTNET_CONTRACTS.amoyUsdcAddress : sellToken.categoryOrAddress || '');
+        (isTestnet ? DEPLOYED_TESTNET_CONTRACTS.amoyUsdtAddress : sellToken.categoryOrAddress || '');
 
       const { txHash } = await executeWeb3VaultDeposit({
         isTestnet,
@@ -878,11 +870,11 @@ export default function BridgeSwap({
     }
   };
 
-  // Real On-Chain Testnet Faucet (Chipnet PUSD CashTokens + Polygon Amoy USDC)
-  const handleClaimTestnetFaucet = async (tokenSym: 'PUSD' | 'USDC') => {
+  // Real On-Chain Testnet Faucet (Chipnet PUSD CashTokens + Polygon Amoy USDT)
+  const handleClaimTestnetFaucet = async (tokenSym: 'PUSD' | 'USDT') => {
     const targetAddr =
       faucetRecipient.trim() ||
-      (tokenSym === 'USDC' && userAddress?.startsWith('0x') ? userAddress : '') ||
+      (tokenSym === 'USDT' && userAddress?.startsWith('0x') ? userAddress : '') ||
       (tokenSym === 'PUSD' && userAddress?.startsWith('bchtest:') ? userAddress : '');
 
     if (!targetAddr) {
@@ -1450,13 +1442,13 @@ export default function BridgeSwap({
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
             >
-            {/* TESTNET ACTIVE NOTIFICATION BANNER + ON-CHAIN FAUCET */}
-            {isTestnet && (
+            {/* TESTNET ACTIVE NOTIFICATION BANNER + ON-CHAIN FAUCET / MAINNET NO LIQUIDITY NOTICE */}
+            {isTestnet ? (
               <div className="mb-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-300 text-xs overflow-hidden">
                 <div className="px-3 py-1.5 flex items-center justify-between gap-2">
                   <span className="font-bold flex items-center gap-1.5 text-[11px]">
                     <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
-                    <span>Testnet No-Custodio: PUSD (Chipnet) ⟷ USDC (Amoy)</span>
+                    <span>Testnet No-Custodio: PUSD (Chipnet) ⟷ USDT (Amoy)</span>
                   </span>
                   <button
                     type="button"
@@ -1473,7 +1465,7 @@ export default function BridgeSwap({
                       type="text"
                       value={faucetRecipient}
                       onChange={e => setFaucetRecipient(e.target.value)}
-                      placeholder="Pega tu bchtest:z... (para PUSD) o 0x... (para USDC Amoy)"
+                      placeholder="Pega tu bchtest:z... (para PUSD) o 0x... (para USDT Amoy)"
                       className="w-full px-2.5 py-1.5 rounded-lg bg-white dark:bg-[#0E131E] text-[11px] font-mono text-zinc-900 dark:text-white outline-none border border-amber-500/20"
                     />
                     <div className="grid grid-cols-2 gap-2">
@@ -1488,14 +1480,31 @@ export default function BridgeSwap({
                       <button
                         type="button"
                         disabled={faucetLoadingToken !== null}
-                        onClick={() => handleClaimTestnetFaucet('USDC')}
-                        className="py-1.5 px-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-[11px] transition-all cursor-pointer disabled:opacity-50"
+                        onClick={() => handleClaimTestnetFaucet('USDT')}
+                        className="py-1.5 px-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-bold text-[11px] transition-all cursor-pointer disabled:opacity-50"
                       >
-                        {faucetLoadingToken === 'USDC' ? 'Minting USDC...' : 'Reclamar 100 USDC (Amoy)'}
+                        {faucetLoadingToken === 'USDT' ? 'Minting USDT...' : 'Reclamar 100 USDT (Amoy)'}
                       </button>
                     </div>
                   </div>
                 )}
+              </div>
+            ) : (
+              <div className="mb-3 px-3 py-2 rounded-xl bg-rose-500/10 border border-rose-500/25 text-rose-600 dark:text-rose-400 text-xs flex items-center justify-between gap-2">
+                <span className="font-bold flex items-center gap-1.5 text-[11px]">
+                  <Lock className="w-3.5 h-3.5 shrink-0" />
+                  <span>Mainnet: Sin Liquidez • Liquidez activa en Testnet (PUSD ⟷ USDT)</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onToggleNetwork) onToggleNetwork('testnet');
+                    showToast('Red cambiada: Testnet activa (PUSD ⟷ USDT)');
+                  }}
+                  className="text-[10px] font-bold bg-amber-500 hover:bg-amber-600 text-white px-2.5 py-1 rounded-md transition-colors cursor-pointer shrink-0"
+                >
+                  Ir a Testnet
+                </button>
               </div>
             )}
 
@@ -1887,7 +1896,21 @@ export default function BridgeSwap({
 
             {/* MAIN ACTION BUTTON */}
             <div className="mt-3">
-              {isZero ? (
+              {!isTestnet ? (
+                <motion.button
+                  type="button"
+                  whileHover={{ scale: 1.01 }}
+                  whileTap={{ scale: 0.99 }}
+                  onClick={() => {
+                    if (onToggleNetwork) onToggleNetwork('testnet');
+                    showToast('Red cambiada: Testnet activa (PUSD ⟷ USDT)');
+                  }}
+                  className="w-full py-3.5 sm:py-4 rounded-xl font-bold text-xs sm:text-sm bg-rose-500/10 hover:bg-amber-500/15 border border-rose-500/30 hover:border-amber-500/40 text-rose-600 dark:text-rose-400 hover:text-amber-600 dark:hover:text-amber-400 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Lock className="w-4 h-4 shrink-0" />
+                  <span>Sin Liquidez en Mainnet • Cambiar a Testnet (PUSD ⟷ USDT)</span>
+                </motion.button>
+              ) : isZero ? (
                 <button 
                   disabled
                   className="w-full py-3.5 sm:py-4 rounded-xl font-semibold text-sm sm:text-base bg-zinc-100 dark:bg-[#121620] text-zinc-400 dark:text-zinc-600 border border-zinc-200/80 dark:border-zinc-800/80 cursor-not-allowed text-center transition-all"

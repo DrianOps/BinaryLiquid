@@ -114,7 +114,7 @@ export default function App() {
   const [lang, setLang] = useState<'en' | 'es'>('en');
   const [isScrolled, setIsScrolled] = useState<boolean>(false);
   const [copied, setCopied] = useState<boolean>(false);
-  const [platformNetwork, setPlatformNetwork] = useState<'mainnet' | 'testnet'>('mainnet');
+  const [platformNetwork, setPlatformNetwork] = useState<'mainnet' | 'testnet'>('testnet');
 
   // Dynamic navbar scroll listener
   useEffect(() => {

@@ -141,8 +141,10 @@ app.get('/api/watchman/status', (req, res) => {
   res.json({
     success: true,
     watchman: watchmanSentinel.getStatus(),
+    activePair: 'PUSD ⟷ USDT (Testnet)',
     contracts: {
       evmAmoyVault: config.evm.amoyVaultAddress,
+      evmAmoyUsdt: config.evm.amoyTokens.USDT.address,
       evmAmoyUsdc: config.evm.amoyTokens.USDC.address,
       bchChipnetVault: config.bch.chipnetVaultTokenAddress,
       bchChipnetPusdCategory: config.bch.tokens.PUSD.chipnetCategory
@@ -155,10 +157,13 @@ app.get('/api/contracts/manifest', (req, res) => {
   res.json({
     success: true,
     architecture: '100% Non-Custodial Cross-Chain Vaults + CashScript Covenants',
+    activePair: 'PUSD ⟷ USDT',
+    mainnetStatus: 'Sin Liquidez',
     evmAmoy: {
       chainId: config.evm.amoyChainId,
       vaultContractAddress: config.evm.amoyVaultAddress,
       vaultExplorerUrl: `https://amoy.polygonscan.com/address/${config.evm.amoyVaultAddress}`,
+      testnetUsdtAddress: config.evm.amoyTokens.USDT.address,
       testnetUsdcAddress: config.evm.amoyTokens.USDC.address,
       circleUsdcAddress: config.evm.amoyTokens.USDC.circleAddress
     },
@@ -214,17 +219,23 @@ app.post('/api/swap/create', async (req, res) => {
       toChain.toLowerCase().includes('chipnet') ||
       toChain.toLowerCase().includes('amoy');
 
-    if (isTestnetSwap) {
-      const allowedTestnet = ['PUSD', 'USDC'];
-      if (
-        !allowedTestnet.includes(fromToken.toUpperCase()) ||
-        !allowedTestnet.includes(toToken.toUpperCase())
-      ) {
-        return res.status(400).json({
-          success: false,
-          error: 'En modo Testnet únicamente está habilitado el puente 100% No-Custodio PUSD (BCH Chipnet) ⟷ USDC (Polygon Amoy).'
-        });
-      }
+    if (!isTestnetSwap) {
+      return res.status(400).json({
+        success: false,
+        error: 'Sin Liquidez en Mainnet actualmente. Cambia a la red Testnet para operar el par PUSD (BCH Chipnet) ⟷ USDT (Polygon Amoy).'
+      });
+    }
+
+    const allowedTestnet = ['PUSD', 'USDT'];
+    if (
+      !allowedTestnet.includes(fromToken.toUpperCase()) ||
+      !allowedTestnet.includes(toToken.toUpperCase()) ||
+      fromToken.toUpperCase() === toToken.toUpperCase()
+    ) {
+      return res.status(400).json({
+        success: false,
+        error: 'Sin Liquidez para este activo. En Testnet únicamente está habilitado con liquidez activa el par PUSD (BCH Chipnet) ⟷ USDT (Polygon Amoy).'
+      });
     }
 
     // Calculate quotation with live oracle pool
@@ -451,6 +462,30 @@ app.post('/api/limit-orders/create', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Missing required limit order parameters' });
     }
 
+    const isTestnetOrder =
+      (fromChain || '').toLowerCase().includes('chipnet') ||
+      (fromChain || '').toLowerCase().includes('amoy') ||
+      (toChain || '').toLowerCase().includes('chipnet') ||
+      (toChain || '').toLowerCase().includes('amoy');
+
+    if (!isTestnetOrder) {
+      return res.status(400).json({
+        success: false,
+        error: 'Sin Liquidez en Mainnet actualmente. Cambia a Testnet para crear órdenes PUSD ⟷ USDT.'
+      });
+    }
+
+    const allowedTestnetLimit = ['PUSD', 'USDT'];
+    if (
+      !allowedTestnetLimit.includes((fromToken || '').toUpperCase()) ||
+      !allowedTestnetLimit.includes((toToken || '').toUpperCase())
+    ) {
+      return res.status(400).json({
+        success: false,
+        error: 'Sin Liquidez para este activo. En Testnet únicamente tienen liquidez PUSD ⟷ USDT.'
+      });
+    }
+
     const isBchOrigin =
       (fromChain || '').includes('bch') ||
       (fromChain || '').includes('chipnet') ||
@@ -548,6 +583,7 @@ app.get('/api/pools/stats', async (req, res) => {
       protocolStats: stats.protocolStats,
       vaultBalances: {
         chipnetPusd: bchBalances.chipnet?.PUSD || 0,
+        amoyUsdt: evmBalances.amoy?.USDT || 0,
         amoyUsdc: evmBalances.amoy?.USDC || 0,
         mainnetPusd: bchBalances.mainnet?.PUSD || 0,
         mainnetUsdc: evmBalances.mainnet?.USDC || 0
@@ -558,7 +594,7 @@ app.get('/api/pools/stats', async (req, res) => {
         musd: bchBalances.mainnet?.MUSD || 0,
         pol: evmBalances.amoy?.native || evmBalances.mainnet?.native || 0,
         usdc: evmBalances.amoy?.USDC || evmBalances.mainnet?.USDC || 0,
-        usdt: evmBalances.mainnet?.USDT || 0
+        usdt: evmBalances.amoy?.USDT || evmBalances.mainnet?.USDT || 0
       }
     });
   } catch (err) {
@@ -977,7 +1013,7 @@ const faucetLimiter = rateLimit({
   message: { success: false, error: 'Límite del Faucet Testnet alcanzado (máx 4 reclamos cada 10 min). Intenta más tarde.' }
 });
 
-// Real On-Chain Testnet Faucet (Polygon Amoy USDC + BCH Chipnet PUSD CashTokens)
+// Real On-Chain Testnet Faucet (Polygon Amoy USDT + BCH Chipnet PUSD CashTokens)
 app.post('/api/faucet/testnet', faucetLimiter, async (req, res) => {
   try {
     const { token, amount, recipient } = req.body;
@@ -986,8 +1022,8 @@ app.post('/api/faucet/testnet', faucetLimiter, async (req, res) => {
       return res.status(400).json({ success: false, error: 'Por favor ingresa tu dirección de billetera de destino.' });
     }
 
-    if (sym === 'USDC') {
-      const result = await evmService.dispenseTestnetUsdc(recipient, parseFloat(amount || '100'));
+    if (sym === 'USDT') {
+      const result = await evmService.dispenseTestnetUsdt(recipient, parseFloat(amount || '100'));
       return res.json(result);
     }
     if (sym === 'PUSD') {
@@ -997,7 +1033,7 @@ app.post('/api/faucet/testnet', faucetLimiter, async (req, res) => {
 
     return res.status(400).json({
       success: false,
-      error: 'En Testnet únicamente están disponibles PUSD (BCH Chipnet) y USDC (Polygon Amoy).'
+      error: 'En Testnet únicamente tienen liquidez PUSD (BCH Chipnet) y USDT (Polygon Amoy).'
     });
   } catch (err) {
     res.status(400).json({ success: false, error: err.message });
@@ -1009,8 +1045,8 @@ app.post('/api/faucet/demo-funds', faucetLimiter, async (req, res) => {
   try {
     const { token, amount, recipient } = req.body;
     const sym = (token || 'PUSD').toUpperCase();
-    if (recipient && sym === 'USDC' && recipient.startsWith('0x')) {
-      const result = await evmService.dispenseTestnetUsdc(recipient, parseFloat(amount || '100'));
+    if (recipient && sym === 'USDT' && recipient.startsWith('0x')) {
+      const result = await evmService.dispenseTestnetUsdt(recipient, parseFloat(amount || '100'));
       return res.json(result);
     }
     if (recipient && sym === 'PUSD' && recipient.startsWith('bchtest:')) {
@@ -1019,7 +1055,7 @@ app.post('/api/faucet/demo-funds', faucetLimiter, async (req, res) => {
     }
     return res.status(400).json({
       success: false,
-      error: 'Proporciona una dirección válida de Testnet (bchtest:... para PUSD o 0x... para USDC en Amoy).'
+      error: 'Proporciona una dirección válida de Testnet (bchtest:... para PUSD o 0x... para USDT en Amoy).'
     });
   } catch (err) {
     res.status(400).json({ success: false, error: err.message });

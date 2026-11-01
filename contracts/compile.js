@@ -30,6 +30,9 @@ const solInput = {
     },
     'TestnetUSDC.sol': {
       content: fs.readFileSync(path.join(evmDir, 'TestnetUSDC.sol'), 'utf8')
+    },
+    'TestnetUSDT.sol': {
+      content: fs.readFileSync(path.join(evmDir, 'TestnetUSDT.sol'), 'utf8')
     }
   },
   settings: {
@@ -53,7 +56,7 @@ if (solOutput.errors) {
   if (hasFatal) process.exit(1);
 }
 
-for (const fileName of ['BinaryLiquidVault.sol', 'TestnetUSDC.sol']) {
+for (const fileName of ['BinaryLiquidVault.sol', 'TestnetUSDC.sol', 'TestnetUSDT.sol']) {
   const contractName = fileName.replace('.sol', '');
   const compiled = solOutput.contracts[fileName][contractName];
   const artifact = {
