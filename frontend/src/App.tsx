@@ -1311,7 +1311,12 @@ export default function App() {
           <LendingView
             backendUrl=""
             userAddress={userContext?.address || ''}
-            isWalletConnected={Boolean(userContext?.address)}
+            bchAddress={bchWallet?.tokenAddress || bchWallet?.address || ''}
+            evmAddress={evmWallet?.address || ''}
+            platformNetwork={platformNetwork}
+            onToggleNetwork={setPlatformNetwork}
+            onRefreshBalances={() => refreshWalletBalances()}
+            isWalletConnected={Boolean(userContext?.address || bchWallet || evmWallet)}
             onConnectWallet={() => setShowWalletModal(true)}
             showToast={showToast}
             lang={lang}

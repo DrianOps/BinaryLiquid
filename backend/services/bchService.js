@@ -25,6 +25,7 @@ class BchService {
     this.chipnetVault = null;
     this.vaultArtifact = null;
     this.escrowArtifact = null;
+    this.collateralVaultArtifact = null;
     this.isReady = false;
     this.readyPromise = this.init();
   }
@@ -33,8 +34,12 @@ class BchService {
     try {
       const vaultArtifactPath = path.join(config.contractsDir, 'bch/artifacts/BinaryLiquidVault.json');
       const escrowArtifactPath = path.join(config.contractsDir, 'bch/artifacts/BinaryLiquidEscrow.json');
+      const collateralArtifactPath = path.join(config.contractsDir, 'bch/artifacts/BinaryLiquidCollateralVault.json');
       this.vaultArtifact = JSON.parse(fs.readFileSync(vaultArtifactPath, 'utf8'));
       this.escrowArtifact = JSON.parse(fs.readFileSync(escrowArtifactPath, 'utf8'));
+      if (fs.existsSync(collateralArtifactPath)) {
+        this.collateralVaultArtifact = JSON.parse(fs.readFileSync(collateralArtifactPath, 'utf8'));
+      }
     } catch (err) {
       console.error('[BCH Covenant] Failed to load CashScript artifacts:', err.message);
     }
@@ -533,6 +538,208 @@ class BchService {
       console.warn('[BCH Wallet Balance] Query warning:', err.message);
       return { BCH: 0, PUSD: 0, utxoCount: 0, network: 'error' };
     }
+  }
+
+  /**
+   * Instantiates the user's personal deterministic P2SH32 Collateral Covenant (`BinaryLiquidCollateralVault.cash`).
+   * Zero EOA private keys: mathematically bound to `borrowerLockingBytecode`.
+   */
+  async getUserCollateralCovenant(borrowerCashAddr, isChipnet = true) {
+    await this.readyPromise;
+    if (!borrowerCashAddr || typeof borrowerCashAddr !== 'string') {
+      throw new Error('Se requiere una dirección de billetera Bitcoin Cash válida.');
+    }
+
+    const clean = borrowerCashAddr.trim();
+    const decoded = cashAddressToLockingBytecode(clean);
+    if (typeof decoded === 'string') {
+      throw new Error(`Dirección Bitcoin Cash inválida (${clean}): ${decoded}`);
+    }
+
+    const targetPrefix = isChipnet ? 'bchtest' : 'bitcoincash';
+    const baseEncoded = lockingBytecodeToCashAddress({
+      bytecode: decoded.bytecode,
+      prefix: targetPrefix,
+      tokenSupport: false
+    });
+    if (typeof baseEncoded === 'string') {
+      throw new Error(`No se pudo codificar la dirección base de Bitcoin Cash: ${baseEncoded}`);
+    }
+
+    const activeSigner = isChipnet ? this.chipnetSigner : this.mainnetSigner;
+    const activeProvider = isChipnet ? this.chipnetProvider : this.mainnetProvider;
+    if (!activeSigner || !activeProvider || !this.collateralVaultArtifact) {
+      throw new Error(`Covenant BinaryLiquidCollateralVault no disponible en ${isChipnet ? 'Chipnet' : 'Mainnet'}.`);
+    }
+
+    const contract = new CashContract(
+      this.collateralVaultArtifact,
+      [activeSigner.publicKeyCompressed, decoded.bytecode],
+      { provider: activeProvider }
+    );
+
+    const explorerBase = isChipnet
+      ? 'https://chipnet.imaginary.cash/address'
+      : 'https://3xpl.com/bitcoin-cash/address';
+
+    return {
+      contract,
+      vaultAddress: contract.address,
+      borrowerBaseAddress: baseEncoded.address,
+      borrowerLockingBytecode: decoded.bytecode,
+      contractName: 'BinaryLiquidCollateralVault.cash',
+      contractType: 'P2SH32 User-Bound Collateral Covenant (Zero Private Keys)',
+      explorerUrl: `${explorerBase}/${contract.address}`
+    };
+  }
+
+  /**
+   * Queries live UTXO satoshis locked inside the user's personal `BinaryLiquidCollateralVault.cash` Covenant.
+   */
+  async getCollateralVaultLiveBalance(borrowerCashAddr, isChipnet = true) {
+    const info = await this.getUserCollateralCovenant(borrowerCashAddr, isChipnet);
+    try {
+      const utxos = await info.contract.getUtxos();
+      const pureBchUtxos = (utxos || []).filter(u => !u.token && BigInt(u.satoshis || 0) > 0n);
+      const totalSats = pureBchUtxos.reduce((s, u) => s + BigInt(u.satoshis || 0), 0n);
+      return {
+        vaultAddress: info.vaultAddress,
+        borrowerBaseAddress: info.borrowerBaseAddress,
+        contractName: info.contractName,
+        contractType: info.contractType,
+        explorerUrl: info.explorerUrl,
+        balanceSats: Number(totalSats),
+        balanceBch: Number((Number(totalSats) / 1e8).toFixed(8)),
+        utxoCount: pureBchUtxos.length,
+        utxos: pureBchUtxos.map(u => ({
+          txid: u.txid,
+          vout: u.vout,
+          satoshis: Number(u.satoshis),
+          amountBch: Number((Number(u.satoshis) / 1e8).toFixed(8))
+        }))
+      };
+    } catch (err) {
+      console.warn('[BCH Collateral Covenant] Live UTXO query warning:', err.message);
+      return {
+        vaultAddress: info.vaultAddress,
+        borrowerBaseAddress: info.borrowerBaseAddress,
+        contractName: info.contractName,
+        contractType: info.contractType,
+        explorerUrl: info.explorerUrl,
+        balanceSats: 0,
+        balanceBch: 0,
+        utxoCount: 0,
+        utxos: []
+      };
+    }
+  }
+
+  /**
+   * Unlocks native BCH collateral from the user's `BinaryLiquidCollateralVault.cash` P2SH32 Covenant
+   * strictly back to the user's own wallet (`borrowerBaseAddress`), enforcing Covenant State Continuation
+   * for any remaining satoshis!
+   */
+  async releaseCollateralFromVault(borrowerCashAddr, withdrawAmountBch, isChipnet = true) {
+    await this.readyPromise;
+    const info = await this.getUserCollateralCovenant(borrowerCashAddr, isChipnet);
+    const activeSigner = isChipnet ? this.chipnetSigner : this.mainnetSigner;
+    const activeProvider = isChipnet ? this.chipnetProvider : this.mainnetProvider;
+    const activeWif = isChipnet ? config.bch.watchmanChipnetWif : config.bch.watchmanMainnetWif;
+    const txExplorerBase = isChipnet
+      ? 'https://chipnet.imaginary.cash/tx'
+      : 'https://3xpl.com/bitcoin-cash/transaction';
+
+    const requestedSats = BigInt(Math.round(Number(withdrawAmountBch) * 1e8));
+    if (requestedSats < 546n) {
+      throw new Error('El monto mínimo de retiro de colateral BCH en cadena es 0.00000546 BCH (546 satoshis).');
+    }
+
+    const allVaultUtxos = await info.contract.getUtxos();
+    const pureBchUtxos = (allVaultUtxos || [])
+      .filter(u => !u.token && BigInt(u.satoshis || 0) > 0n)
+      .sort((a, b) => (BigInt(b.satoshis) > BigInt(a.satoshis) ? 1 : -1));
+
+    const selectedUtxos = [];
+    let totalInputSats = 0n;
+    for (const u of pureBchUtxos) {
+      selectedUtxos.push(u);
+      totalInputSats += BigInt(u.satoshis);
+      if (totalInputSats >= requestedSats) break;
+    }
+
+    if (totalInputSats < requestedSats) {
+      const availBch = (Number(totalInputSats) / 1e8).toFixed(6);
+      throw new Error(
+        `Colateral on-chain insuficiente en tu Bóveda CashScript (${info.vaultAddress}). Disponible en cadena: ${availBch} BCH.`
+      );
+    }
+
+    // Watchman gas UTXO covers miner fee so 100% of user's collateral satoshis are preserved
+    const signerUtxos = await activeProvider.getUtxos(activeSigner.cashaddr);
+    const feeUtxos = (signerUtxos || []).filter(u => !u.token && BigInt(u.satoshis || 0) >= 2000n);
+    if (feeUtxos.length === 0) {
+      throw new Error(
+        `El Watchman (${activeSigner.cashaddr}) requiere satoshis de gas para cubrir el miner fee del Covenant.`
+      );
+    }
+
+    let remainderSats = totalInputSats - requestedSats;
+    let actualWithdrawSats = requestedSats;
+    let returnToVaultSats = remainderSats;
+
+    // Avoid sub-dust remainder (< 546 sats) by returning dust satoshis directly to borrower
+    if (remainderSats > 0n && remainderSats < 546n) {
+      actualWithdrawSats = totalInputSats;
+      returnToVaultSats = 0n;
+    }
+
+    const sigTemplate = new SignatureTemplate(activeWif);
+    const txBuilder = new TransactionBuilder({ provider: activeProvider });
+
+    for (const u of selectedUtxos) {
+      txBuilder.addInput(
+        u,
+        info.contract.unlock.releaseCollateral(sigTemplate, actualWithdrawSats, returnToVaultSats)
+      );
+    }
+    txBuilder.addInput(feeUtxos[0], sigTemplate.unlockP2PKH());
+
+    // Output #0: Borrower's exact withdrawn BCH
+    txBuilder.addOutput({
+      to: info.borrowerBaseAddress,
+      amount: actualWithdrawSats
+    });
+
+    // Output #1: Covenant State Continuation back to the exact same P2SH32 Collateral Vault
+    if (returnToVaultSats >= 546n) {
+      txBuilder.addOutput({
+        to: info.vaultAddress,
+        amount: returnToVaultSats
+      });
+    }
+
+    // Miner fee change back to Watchman gas address
+    txBuilder.addBchChangeOutputIfNeeded({
+      to: activeSigner.cashaddr,
+      feeRate: 1.5
+    });
+
+    const txDetails = await txBuilder.send();
+    console.log(
+      `[BCH Collateral Covenant] ✅ Released ${Number(actualWithdrawSats) / 1e8} BCH -> ${info.borrowerBaseAddress} | TXID: ${txDetails.txid}`
+    );
+
+    return {
+      success: true,
+      onChain: true,
+      nonCustodial: true,
+      vaultAddress: info.vaultAddress,
+      recipient: info.borrowerBaseAddress,
+      withdrawnBch: Number((Number(actualWithdrawSats) / 1e8).toFixed(8)),
+      remainingVaultBch: Number((Number(returnToVaultSats) / 1e8).toFixed(8)),
+      txHash: txDetails.txid,
+      explorerUrl: `${txExplorerBase}/${txDetails.txid}`
+    };
   }
 }
 

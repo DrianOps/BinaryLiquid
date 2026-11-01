@@ -1,0 +1,84 @@
+{
+  "contractName": "BinaryLiquidCollateralVault",
+  "constructorInputs": [
+    {
+      "name": "watchmanPk",
+      "type": "pubkey"
+    },
+    {
+      "name": "borrowerLockingBytecode",
+      "type": "bytes"
+    }
+  ],
+  "abi": [
+    {
+      "name": "releaseCollateral",
+      "inputs": [
+        {
+          "name": "watchmanSig",
+          "type": "sig"
+        },
+        {
+          "name": "withdrawSats",
+          "type": "int"
+        },
+        {
+          "name": "returnToVaultSats",
+          "type": "int"
+        }
+      ]
+    }
+  ],
+  "bytecode": "OP_ROT OP_SWAP OP_CHECKSIGVERIFY OP_OVER 2202 OP_GREATERTHANOREQUAL OP_VERIFY OP_2 OP_PICK OP_0 OP_GREATERTHANOREQUAL OP_VERIFY OP_INPUTINDEX OP_UTXOVALUE OP_2OVER OP_ADD OP_LESSTHANOREQUAL OP_VERIFY OP_0 OP_OUTPUTBYTECODE OP_EQUALVERIFY OP_0 OP_OUTPUTVALUE OP_LESSTHANOREQUAL OP_VERIFY OP_DUP 2202 OP_GREATERTHANOREQUAL OP_IF OP_INPUTINDEX OP_UTXOBYTECODE OP_1 OP_OUTPUTBYTECODE OP_OVER OP_EQUALVERIFY OP_1 OP_OUTPUTVALUE OP_2 OP_PICK OP_GREATERTHANOREQUAL OP_VERIFY OP_DROP OP_ENDIF OP_DROP OP_1",
+  "source": "pragma cashscript ^0.14.0;\n\n/**\n * @title BinaryLiquidCollateralVault (Per-User Non-Custodial BCH Lending Collateral Covenant)\n * @author BinaryLiquid Protocol / DrianOps\n * @notice Deterministic P2SH32 CashScript Smart Contract Vault (`bchtest:p...` / `bitcoincash:p...`)\n * dedicated to each borrower's Bitcoin Cash (BCH) lockingBytecode, with ZERO EOA private keys.\n *\n * SECURITY INVARIANTS (BCH Native UTXO Introspection):\n * 1. User-Bound Anti-Theft Invariant: Even with a valid Watchman signature, the BCH VM physically\n *    enforces `tx.outputs[0].lockingBytecode == borrowerLockingBytecode` — collateral BCH can NEVER\n *    be withdrawn to any address other than the borrower's own wallet.\n * 2. Solvency Gate: Requires Schnorr signature from The Watchman Sentinel (`watchmanPk`) after verifying\n *    Health Factor >= 1.15 (or zero remaining debt).\n * 3. Value Conservation & Covenant State Continuation: Enforces `withdrawSats + returnToVaultSats >= inputSats`\n *    and forces remaining collateral (`returnToVaultSats >= 546`) back into this exact P2SH32 Covenant.\n */\ncontract BinaryLiquidCollateralVault(\n    pubkey watchmanPk,\n    bytes borrowerLockingBytecode\n) {\n    function releaseCollateral(sig watchmanSig, int withdrawSats, int returnToVaultSats) {\n        // 1. Verify solvency attestation from The Watchman Sentinel\n        require(checkSig(watchmanSig, watchmanPk));\n        require(withdrawSats >= 546);\n        require(returnToVaultSats >= 0);\n\n        // 2. Ensure zero satoshis from this Covenant input leak outside borrower payout + vault continuation\n        int inputSats = tx.inputs[this.activeInputIndex].value;\n        require(withdrawSats + returnToVaultSats >= inputSats);\n\n        // 3. Enforce Output #0 delivers withdrawn BCH strictly to the borrower's own wallet\n        require(tx.outputs[0].lockingBytecode == borrowerLockingBytecode);\n        require(tx.outputs[0].value >= withdrawSats);\n\n        // 4. Covenant State Continuation: Force remaining collateral back into this exact Vault\n        if (returnToVaultSats >= 546) {\n            bytes vaultBytecode = tx.inputs[this.activeInputIndex].lockingBytecode;\n            require(tx.outputs[1].lockingBytecode == vaultBytecode);\n            require(tx.outputs[1].value >= returnToVaultSats);\n        }\n    }\n}\n",
+  "fingerprint": "2ee30887b1259d43b4b9142db3c8c8e89cdcf004069e0fa2c1c34054f015dee0",
+  "debug": {
+    "bytecode": "7b7cad78022202a269527900a269c0c67093a16900cd8800cca16976022202a263c0c751cd788851cc5279a26975687551",
+    "sourceMap": "24:25:24:36;:38::48;:8::51:1;25:16:25:28:0;:32::35;:16:::1;:8::37;26:16:26:33:0;;:37::38;:16:::1;:8::40;29:34:29:55:0;:24::62:1;30:16:30:48:0;::::1;:::61;:8::63;33:27:33:28:0;:16::45:1;:8::74;34:27:34:28:0;:16::35:1;:::51;:8::53;37:12:37:29:0;:33::36;:12:::1;:38:41:9:0;38:44:38:65;:34::82:1;39:31:39:32:0;:20::49:1;:53::66:0;:12::68:1;40:31:40:32:0;:20::39:1;:43::60:0;;:20:::1;:12::62;37:38:41:9;;22:89:42:5;",
+    "logs": [],
+    "requires": [
+      {
+        "ip": 4,
+        "line": 24
+      },
+      {
+        "ip": 8,
+        "line": 25
+      },
+      {
+        "ip": 13,
+        "line": 26
+      },
+      {
+        "ip": 19,
+        "line": 30
+      },
+      {
+        "ip": 22,
+        "line": 33
+      },
+      {
+        "ip": 26,
+        "line": 34
+      },
+      {
+        "ip": 36,
+        "line": 39
+      },
+      {
+        "ip": 42,
+        "line": 40
+      }
+    ],
+    "sourceTags": "41:41:sc"
+  },
+  "compiler": {
+    "name": "cashc",
+    "version": "0.14.0",
+    "options": {
+      "enforceFunctionParameterTypes": true,
+      "enforceLocktimeGuard": true
+    }
+  },
+  "updatedAt": "2026-11-01T07:06:59.968Z"
+}

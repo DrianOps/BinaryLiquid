@@ -71,7 +71,7 @@ for (const fileName of ['BinaryLiquidVault.sol', 'TestnetUSDC.sol', 'TestnetUSDT
 
 console.log('\n🔨 [2/2] Compiling Bitcoin Cash CashScript Covenants...');
 
-for (const cashFile of ['BinaryLiquidVault.cash', 'BinaryLiquidEscrow.cash']) {
+for (const cashFile of ['BinaryLiquidVault.cash', 'BinaryLiquidEscrow.cash', 'BinaryLiquidCollateralVault.cash']) {
   const contractName = cashFile.replace('.cash', '');
   const artifact = compileFile(path.join(bchDir, cashFile));
   const outPath = path.join(bchOutDir, `${contractName}.json`);

@@ -747,11 +747,12 @@ app.post('/api/pools/:poolId/verify', async (req, res) => {
 });
 
 // ==============================================================================
-// BINARYLEND: BITCOIN CASH COLLATERAL VAULTS & STABLECOIN LIQUIDITY API
+// BINARYLEND: NON-CUSTODIAL CASHSCRIPT COLLATERAL VAULTS & ON-CHAIN LENDING API
 // ==============================================================================
 app.get('/api/lend/overview', async (req, res) => {
   try {
-    const overview = await lendingService.getMarketsOverview();
+    const network = String(req.query.network || 'testnet').toLowerCase();
+    const overview = await lendingService.getMarketsOverview({ network });
     res.json({ success: true, ...overview });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -761,7 +762,14 @@ app.get('/api/lend/overview', async (req, res) => {
 app.get('/api/lend/vault/:userAddress', async (req, res) => {
   try {
     const { userAddress } = req.params;
-    const vaultData = await lendingService.getUserVault(userAddress);
+    const bchAddress = String(req.query.bchAddress || '');
+    const evmAddress = String(req.query.evmAddress || '');
+    const network = String(req.query.network || 'testnet').toLowerCase();
+    const vaultData = await lendingService.getUserVault(userAddress, {
+      bchAddress,
+      evmAddress,
+      network
+    });
     res.json({ success: true, ...vaultData });
   } catch (err) {
     res.status(400).json({ success: false, error: err.message });
@@ -770,9 +778,20 @@ app.get('/api/lend/vault/:userAddress', async (req, res) => {
 
 app.post('/api/lend/deposit-collateral', async (req, res) => {
   try {
-    const { userAddress, amountBch } = req.body;
-    const updated = await lendingService.depositCollateral(userAddress, amountBch);
-    res.json({ success: true, message: `¡${amountBch} BCH depositados exitosamente como colateral!`, ...updated });
+    const { userAddress, bchAddress, evmAddress, amountBch, txHash, network } = req.body;
+    const updated = await lendingService.depositCollateral({
+      userAddress,
+      bchAddress,
+      evmAddress,
+      amountBch,
+      txHash,
+      network
+    });
+    res.json({
+      success: true,
+      message: `¡${updated.depositedBch} BCH verificados en cadena dentro de tu Bóveda CashScript!`,
+      ...updated
+    });
   } catch (err) {
     res.status(400).json({ success: false, error: err.message });
   }
@@ -780,9 +799,19 @@ app.post('/api/lend/deposit-collateral', async (req, res) => {
 
 app.post('/api/lend/withdraw-collateral', async (req, res) => {
   try {
-    const { userAddress, amountBch } = req.body;
-    const updated = await lendingService.withdrawCollateral(userAddress, amountBch);
-    res.json({ success: true, message: `¡${amountBch} BCH de colateral liberados y retirados a tu billetera!`, ...updated });
+    const { userAddress, bchAddress, evmAddress, amountBch, network } = req.body;
+    const updated = await lendingService.withdrawCollateral({
+      userAddress,
+      bchAddress,
+      evmAddress,
+      amountBch,
+      network
+    });
+    res.json({
+      success: true,
+      message: `¡${updated.withdrawnBch} BCH liberados desde tu Covenant CashScript a tu billetera!`,
+      ...updated
+    });
   } catch (err) {
     res.status(400).json({ success: false, error: err.message });
   }
@@ -790,9 +819,20 @@ app.post('/api/lend/withdraw-collateral', async (req, res) => {
 
 app.post('/api/lend/borrow', async (req, res) => {
   try {
-    const { userAddress, token, amount } = req.body;
-    const updated = await lendingService.borrow(userAddress, token, amount);
-    res.json({ success: true, message: `¡Préstamo de ${amount} ${token} aprobado y acreditado inmediatamente!`, ...updated });
+    const { userAddress, bchAddress, evmAddress, token, amount, network } = req.body;
+    const updated = await lendingService.borrow({
+      userAddress,
+      bchAddress,
+      evmAddress,
+      token,
+      amount,
+      network
+    });
+    res.json({
+      success: true,
+      message: `¡Préstamo de ${amount} ${token} desembolsado en cadena a tu billetera!`,
+      ...updated
+    });
   } catch (err) {
     res.status(400).json({ success: false, error: err.message });
   }
@@ -800,9 +840,21 @@ app.post('/api/lend/borrow', async (req, res) => {
 
 app.post('/api/lend/repay', async (req, res) => {
   try {
-    const { userAddress, token, amount } = req.body;
-    const updated = await lendingService.repay(userAddress, token, amount);
-    res.json({ success: true, message: `¡Pago de ${amount} ${token} procesado exitosamente! Tu deuda ha sido reducida.`, ...updated });
+    const { userAddress, bchAddress, evmAddress, token, amount, txHash, network } = req.body;
+    const updated = await lendingService.repay({
+      userAddress,
+      bchAddress,
+      evmAddress,
+      token,
+      amount,
+      txHash,
+      network
+    });
+    res.json({
+      success: true,
+      message: `¡Pago on-chain de ${updated.repaidAmount} ${token} verificado! Tu deuda se ha reducido.`,
+      ...updated
+    });
   } catch (err) {
     res.status(400).json({ success: false, error: err.message });
   }
@@ -810,9 +862,21 @@ app.post('/api/lend/repay', async (req, res) => {
 
 app.post('/api/lend/supply', async (req, res) => {
   try {
-    const { userAddress, token, amount } = req.body;
-    const updated = await lendingService.supply(userAddress, token, amount);
-    res.json({ success: true, message: `¡${amount} ${token} suministrados al fondo de liquidez! Ahora estás ganando rendimiento pasivo continuo.`, ...updated });
+    const { userAddress, bchAddress, evmAddress, token, amount, txHash, network } = req.body;
+    const updated = await lendingService.supply({
+      userAddress,
+      bchAddress,
+      evmAddress,
+      token,
+      amount,
+      txHash,
+      network
+    });
+    res.json({
+      success: true,
+      message: `¡${updated.suppliedAmount} ${token} verificados en el Smart Contract Vault! Ganando APY continuo.`,
+      ...updated
+    });
   } catch (err) {
     res.status(400).json({ success: false, error: err.message });
   }
@@ -820,9 +884,20 @@ app.post('/api/lend/supply', async (req, res) => {
 
 app.post('/api/lend/withdraw-supply', async (req, res) => {
   try {
-    const { userAddress, token, amount } = req.body;
-    const updated = await lendingService.withdrawSupply(userAddress, token, amount);
-    res.json({ success: true, message: `¡${amount} ${token} retirados exitosamente con sus rendimientos acumulados!`, ...updated });
+    const { userAddress, bchAddress, evmAddress, token, amount, network } = req.body;
+    const updated = await lendingService.withdrawSupply({
+      userAddress,
+      bchAddress,
+      evmAddress,
+      token,
+      amount,
+      network
+    });
+    res.json({
+      success: true,
+      message: `¡${updated.withdrawnAmount} ${token} liberados desde el Smart Contract Vault a tu billetera!`,
+      ...updated
+    });
   } catch (err) {
     res.status(400).json({ success: false, error: err.message });
   }
@@ -1167,6 +1242,7 @@ const server = app.listen(PORT, config.host, () => {
 
   relayerEngine.start(4000);
   poolService.initDatabaseTables().catch(e => console.warn('[Pool Service] Table init note:', e.message));
+  lendingService.initDatabaseTables().catch(e => console.warn('[Lending Service] Table init note:', e.message));
 });
 
 // Graceful shutdown
