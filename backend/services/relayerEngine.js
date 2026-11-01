@@ -31,9 +31,42 @@ class RelayerEngine {
 
     try {
       const pending = db.getPendingSwaps();
+      const cutoffMs = Date.now() - 24 * 60 * 60 * 1000;
+
       for (const swap of pending) {
         if (swap.depositTxHash && (swap.status === 'PENDING_DEPOSIT' || swap.status === 'DEPOSIT_DETECTED')) {
           await this.executeRelay(swap.id);
+          continue;
+        }
+
+        // Autonomous UTXO detection on isolated per-swap P2SH32 Covenants (`BinaryLiquidEscrow.cash`)
+        const isBchOrigin =
+          String(swap.fromChain || '').toLowerCase().includes('bch') ||
+          String(swap.fromChain || '').toLowerCase().includes('chipnet');
+        const createdMs = swap.createdAt ? new Date(swap.createdAt).getTime() : 0;
+
+        if (
+          !swap.depositTxHash &&
+          swap.status === 'PENDING_DEPOSIT' &&
+          isBchOrigin &&
+          swap.contractName === 'BinaryLiquidEscrow.cash' &&
+          swap.depositAddress &&
+          createdMs >= cutoffMs
+        ) {
+          const check = await bchService.verifyDeposit(
+            null,
+            swap.fromAmount,
+            swap.fromToken,
+            swap.depositAddress
+          );
+          if (check.verified && check.txHash) {
+            db.updateSwap(swap.id, {
+              depositTxHash: check.txHash,
+              status: 'DEPOSIT_DETECTED',
+              error: null
+            });
+            await this.executeRelay(swap.id);
+          }
         }
       }
 
@@ -49,14 +82,35 @@ class RelayerEngine {
     const openOrders = db.listLimitOrders({ status: 'OPEN' });
     if (openOrders.length === 0) return;
 
+    const cutoffMs = Date.now() - 24 * 60 * 60 * 1000;
+
     for (const order of openOrders) {
       try {
+        const isBchOrigin =
+          String(order.fromChain || '').toLowerCase().includes('bch') ||
+          String(order.fromChain || '').toLowerCase().includes('chipnet');
+
+        if (!order.depositTxHash && isBchOrigin && order.depositAddress) {
+          const createdMs = order.createdAt ? new Date(order.createdAt).getTime() : 0;
+          if (createdMs >= cutoffMs) {
+            const check = await bchService.verifyDeposit(
+              null,
+              order.fromAmount,
+              order.fromToken,
+              order.depositAddress
+            );
+            if (check.verified && check.txHash) {
+              db.updateLimitOrder(order.id, { depositTxHash: check.txHash });
+              order.depositTxHash = check.txHash;
+            }
+          }
+        }
+
         if (!order.depositTxHash) continue;
         const currentRate = await oraclePool.getRate(order.fromToken, order.toToken);
 
         if (currentRate >= order.targetRate) {
           console.log(`[Watchman Relayer] 🎯 Limit Order ${order.id} triggered at rate ${currentRate}`);
-          const isBchOrigin = order.fromChain.includes('bch') || order.fromChain.includes('chipnet');
           const expectedOutput = Number(order.expectedOutput);
 
           let payoutResult;
@@ -233,6 +287,11 @@ class RelayerEngine {
           nonce: auth.nonce,
           watchmanSignature: auth.proof
         });
+
+        // Consolidate per-swap Escrow Covenant CashTokens back into main BinaryLiquidVault.cash asynchronously
+        if (payoutResult.success) {
+          bchService.sweepEscrowToVault(swap).catch(() => {});
+        }
       } else {
         // User deposited ERC-20 into BinaryLiquidVault.sol -> Watchman authorizes Schnorr Covenant Continuation on BCH!
         const auth = await watchmanSentinel.auditAndAuthorize({

@@ -225,24 +225,24 @@ export default function TokenSelectModal({
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="px-6 pt-6 pb-4 flex items-center justify-between border-b border-gray-100 dark:border-gray-800/80">
-          <div>
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white">{title}</h3>
-            {isTestnet ? (
-              <p className="text-[11px] text-amber-600 dark:text-amber-400 font-semibold mt-0.5">
-                Testnet Activa: Bóvedas con liquidez en PUSD ⟷ USDT
-              </p>
-            ) : (
-              <p className="text-[11px] text-rose-500 dark:text-rose-400 font-semibold mt-0.5">
-                Mainnet: Sin Liquidez • Cambia a Testnet para operar PUSD ⟷ USDT
-              </p>
-            )}
+        <div className="px-5 pt-5 pb-3.5 flex items-center justify-between border-b border-gray-100 dark:border-white/[0.06]">
+          <div className="flex items-center gap-2">
+            <h3 className="text-base font-bold text-gray-900 dark:text-white">{title}</h3>
+            <span
+              className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                isTestnet
+                  ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                  : 'bg-rose-500/10 text-rose-500 dark:text-rose-400'
+              }`}
+            >
+              {isTestnet ? 'Testnet' : 'Sin Liquidez'}
+            </span>
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-400 hover:text-gray-900 dark:hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+            className="w-7 h-7 rounded-full bg-gray-100 dark:bg-white/[0.06] text-gray-400 hover:text-gray-900 dark:hover:text-white flex items-center justify-center transition-colors cursor-pointer"
           >
-            <X className="w-4 h-4" />
+            <X className="w-3.5 h-3.5" />
           </button>
         </div>
 
@@ -344,13 +344,8 @@ export default function TokenSelectModal({
                             <Check className="w-2.5 h-2.5 stroke-[3]" />
                           </span>
                         )}
-                        {t.isSponsor && !t.disabled && (
-                          <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-600 dark:text-orange-400 border border-orange-500/20 flex items-center gap-0.5">
-                            <Flame className="w-2.5 h-2.5" /> BLAZE Sponsor
-                          </span>
-                        )}
                         {t.disabled && t.unavailableBadge && (
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-500/10 dark:bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/25 flex items-center gap-1">
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center gap-1">
                             <Lock className="w-2.5 h-2.5" />
                             <span>{t.unavailableBadge}</span>
                           </span>

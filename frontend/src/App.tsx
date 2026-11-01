@@ -625,6 +625,7 @@ export default function App() {
             userAddress={userContext?.address || ''}
             bchAddress={bchWallet?.tokenAddress || bchWallet?.address || ''}
             evmAddress={evmWallet?.address || ''}
+            walletBalances={walletBalances}
             onRefreshBalances={() => refreshWalletBalances()}
             onConnectWallet={() => setShowWalletModal(true)}
             showToast={showToast}
@@ -1275,6 +1276,7 @@ export default function App() {
             userAddress={userContext?.address || ''}
             bchAddress={bchWallet?.tokenAddress || bchWallet?.address || ''}
             evmAddress={evmWallet?.address || ''}
+            walletBalances={walletBalances}
             onRefreshBalances={() => refreshWalletBalances()}
             onConnectWallet={() => setShowWalletModal(true)}
             showToast={showToast}

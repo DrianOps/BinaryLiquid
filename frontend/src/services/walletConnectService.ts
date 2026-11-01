@@ -824,3 +824,93 @@ export async function executeWeb3LpDeposit(params: {
 
   return { txHash, sender };
 }
+
+// ============================================================================
+// 8. 1-CLICK NON-CUSTODIAL BCH COVENANT DEPOSIT (`wc2-bch-bcr` & Paytaca Ext)
+// ============================================================================
+export function hasActiveBchSigningCapability(): boolean {
+  if (bchSignClient && activeBchSession && activeBchSession.namespaces?.bch?.accounts?.length) {
+    return true;
+  }
+  if (typeof window !== 'undefined') {
+    const ext = (window as any).paytaca || (window as any).bitcoinCash;
+    if (ext && typeof ext.signTransaction === 'function') {
+      return true;
+    }
+  }
+  return false;
+}
+
+export async function executeBchSwapDeposit(params: {
+  backendUrl: string;
+  buildEndpoint: string;
+  senderAddress: string;
+  isTestnet: boolean;
+  onStatus?: (msg: string) => void;
+}): Promise<{ txHash: string }> {
+  const { backendUrl, buildEndpoint, senderAddress, isTestnet, onStatus } = params;
+
+  onStatus?.('Preparando transacción CashTokens No-Custodia...');
+  const buildRes = await fetch(`${backendUrl}${buildEndpoint}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ senderAddress })
+  });
+  const buildData = await buildRes.json();
+  if (!buildRes.ok || !buildData?.success || !buildData?.wcTransaction) {
+    throw new Error(buildData?.error || 'No se pudo construir la transacción CashTokens.');
+  }
+
+  const desiredChain = isTestnet ? 'bch:bchtest' : 'bch:bitcoincash';
+
+  // Priority 1: Active WalletConnect V2 BCH session (`wc2-bch-bcr`: Cashonize / Paytaca Mobile / Zapit)
+  if (bchSignClient && activeBchSession) {
+    const allowedChains = activeBchSession.namespaces?.bch?.chains || [];
+    const chainIdToUse = allowedChains.includes(desiredChain)
+      ? desiredChain
+      : allowedChains[0] || buildData.chainId || desiredChain;
+
+    onStatus?.('Confirma el pago en tu billetera BCH conectada...');
+    const signResult: any = await bchSignClient.request({
+      topic: activeBchSession.topic,
+      chainId: chainIdToUse,
+      request: {
+        method: 'bch_signTransaction',
+        params: buildData.wcTransaction
+      }
+    });
+
+    const txHash =
+      signResult?.signedTransactionHash ||
+      signResult?.txid ||
+      signResult?.hash ||
+      (typeof signResult === 'string' && signResult.length === 64 ? signResult : '');
+
+    if (!txHash) {
+      throw new Error('La billetera canceló la firma o no devolvió el TXID.');
+    }
+
+    return { txHash };
+  }
+
+  // Priority 2: Paytaca Browser Extension (`window.paytaca.signTransaction`)
+  if (typeof window !== 'undefined') {
+    const ext = (window as any).paytaca || (window as any).bitcoinCash;
+    if (ext && typeof ext.signTransaction === 'function') {
+      onStatus?.('Confirma el pago en la extensión Paytaca...');
+      const signResult: any = await ext.signTransaction(buildData.wcTransaction);
+      const txHash =
+        signResult?.signedTransactionHash ||
+        signResult?.txid ||
+        signResult?.hash ||
+        (typeof signResult === 'string' && signResult.length === 64 ? signResult : '');
+
+      if (!txHash) {
+        throw new Error('La extensión BCH canceló la firma.');
+      }
+      return { txHash };
+    }
+  }
+
+  throw new Error('La sesión BCH actual es de solo lectura (usa WalletConnect V2 o QR para firmar).');
+}

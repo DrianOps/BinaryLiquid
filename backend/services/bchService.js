@@ -6,11 +6,13 @@ import {
   Contract as CashContract,
   ElectrumNetworkProvider,
   SignatureTemplate,
-  TransactionBuilder
+  TransactionBuilder,
+  placeholderP2PKHUnlocker
 } from 'cashscript';
 import {
   cashAddressToLockingBytecode,
-  lockingBytecodeToCashAddress
+  lockingBytecodeToCashAddress,
+  stringify
 } from '@bitauth/libauth';
 import { config } from '../config.js';
 import { db } from './db.js';
@@ -740,6 +742,287 @@ class BchService {
       txHash: txDetails.txid,
       explorerUrl: `${txExplorerBase}/${txDetails.txid}`
     };
+  }
+
+  /**
+   * Builds a genuine unsigned `wc2-bch-bcr` CashTokens transaction (`bch_signTransaction`)
+   * so Cashonize / Paytaca Mobile / Paytaca Extension can sign & broadcast in 1 click directly from the user's wallet.
+   */
+  async buildUnsignedSwapWcTransaction({
+    senderAddress,
+    depositAddress,
+    tokenSymbol = 'PUSD',
+    amount,
+    isChipnet = true,
+    userPrompt = 'Confirmar intercambio No-Custodio en BinaryLiquid'
+  }) {
+    await this.readyPromise;
+    if (!senderAddress || typeof senderAddress !== 'string') {
+      throw new Error('Se requiere la dirección CashAddr de la billetera pagadora.');
+    }
+    if (!depositAddress || typeof depositAddress !== 'string') {
+      throw new Error('Se requiere la dirección del Smart Contract Covenant de destino.');
+    }
+
+    const decodedSender = cashAddressToLockingBytecode(senderAddress.trim());
+    if (typeof decodedSender === 'string') {
+      throw new Error(`Dirección BCH pagadora inválida: ${decodedSender}`);
+    }
+
+    const prefix = isChipnet ? 'bchtest' : 'bitcoincash';
+    const senderBaseObj = lockingBytecodeToCashAddress({
+      bytecode: decodedSender.bytecode,
+      prefix,
+      tokenSupport: false
+    });
+    const senderTokenObj = lockingBytecodeToCashAddress({
+      bytecode: decodedSender.bytecode,
+      prefix,
+      tokenSupport: true
+    });
+    if (typeof senderBaseObj === 'string' || typeof senderTokenObj === 'string') {
+      throw new Error('No se pudo normalizar la dirección CashAddr de la billetera pagadora.');
+    }
+
+    const senderBaseAddr = senderBaseObj.address;
+    const senderTokenAddr = senderTokenObj.address;
+    const provider = isChipnet ? this.chipnetProvider : this.mainnetProvider;
+    if (!provider) {
+      throw new Error(`Proveedor Electrum BCH no disponible en ${isChipnet ? 'Chipnet' : 'Mainnet'}.`);
+    }
+
+    const sym = (tokenSymbol || 'PUSD').toUpperCase();
+    const isNativeBch = sym === 'BCH';
+    const utxos = await provider.getUtxos(senderBaseAddr);
+    if (!utxos || utxos.length === 0) {
+      throw new Error(`No se detectaron UTXOs disponibles en ${senderBaseAddr}.`);
+    }
+
+    const txBuilder = new TransactionBuilder({ provider });
+    const unlocker = placeholderP2PKHUnlocker(senderBaseAddr);
+
+    if (isNativeBch) {
+      const requiredSats = BigInt(Math.round(Number(amount) * 1e8));
+      const pureUtxos = utxos
+        .filter(u => !u.token && BigInt(u.satoshis || 0) > 0n)
+        .sort((a, b) => (BigInt(b.satoshis) > BigInt(a.satoshis) ? 1 : -1));
+
+      let gatheredSats = 0n;
+      for (const u of pureUtxos) {
+        txBuilder.addInput(u, unlocker);
+        gatheredSats += BigInt(u.satoshis);
+        if (gatheredSats >= requiredSats + 1500n) break;
+      }
+
+      if (gatheredSats < requiredSats + 600n) {
+        throw new Error(
+          `Saldo BCH insuficiente en ${senderBaseAddr} (${(Number(gatheredSats) / 1e8).toFixed(6)} BCH disponibles).`
+        );
+      }
+
+      const decodedDep = cashAddressToLockingBytecode(depositAddress.trim());
+      if (typeof decodedDep === 'string') {
+        throw new Error(`Dirección Covenant inválida: ${decodedDep}`);
+      }
+      const depBaseObj = lockingBytecodeToCashAddress({
+        bytecode: decodedDep.bytecode,
+        prefix,
+        tokenSupport: false
+      });
+      if (typeof depBaseObj === 'string') {
+        throw new Error('No se pudo codificar la dirección del Covenant.');
+      }
+
+      txBuilder.addOutput({
+        to: depBaseObj.address,
+        amount: requiredSats
+      });
+      txBuilder.addBchChangeOutputIfNeeded({
+        to: senderBaseAddr,
+        feeRate: 1.5
+      });
+    } else {
+      const category = this.getTokenCategory(sym, isChipnet);
+      const decimals = config.bch.tokens[sym]?.decimals || 6;
+      const requiredUnits = BigInt(Math.round(Number(amount) * (10 ** decimals)));
+      const { tokenAddress: depositTokenAddr } = this.toTokenAwareAddress(depositAddress);
+
+      const tokenUtxos = utxos
+        .filter(u => u.token?.category === category && !u.token?.nft && BigInt(u.token.amount || 0) > 0n)
+        .sort((a, b) => (BigInt(b.token.amount) > BigInt(a.token.amount) ? 1 : -1));
+
+      let gatheredUnits = 0n;
+      let gatheredSats = 0n;
+      for (const u of tokenUtxos) {
+        txBuilder.addInput(u, unlocker);
+        gatheredUnits += BigInt(u.token.amount);
+        gatheredSats += BigInt(u.satoshis);
+        if (gatheredUnits >= requiredUnits) break;
+      }
+
+      if (gatheredUnits < requiredUnits) {
+        const availHuman = (Number(gatheredUnits) / (10 ** decimals)).toFixed(2);
+        throw new Error(
+          `Saldo ${sym} insuficiente en ${senderBaseAddr} (${availHuman} ${sym} disponibles).`
+        );
+      }
+
+      const tokenChangeUnits = gatheredUnits - requiredUnits;
+      const minRequiredSats = tokenChangeUnits > 0n ? 3200n : 2200n;
+
+      // Ensure enough satoshis for dust output (1000 sats) + token change dust (1000 sats) + miner fee (~800 sats)
+      if (gatheredSats < minRequiredSats) {
+        const pureBchUtxos = utxos
+          .filter(u => !u.token && BigInt(u.satoshis || 0) > 0n)
+          .sort((a, b) => (BigInt(b.satoshis) > BigInt(a.satoshis) ? 1 : -1));
+
+        for (const u of pureBchUtxos) {
+          txBuilder.addInput(u, unlocker);
+          gatheredSats += BigInt(u.satoshis);
+          if (gatheredSats >= minRequiredSats + 500n) break;
+        }
+      }
+
+      if (gatheredSats < (tokenChangeUnits > 0n ? 2500n : 1500n)) {
+        throw new Error(
+          `Necesitas al menos ~0.00003 BCH de gas en tu billetera para pagar el miner fee de red.`
+        );
+      }
+
+      txBuilder.addOutput({
+        to: depositTokenAddr,
+        amount: 1000n,
+        token: {
+          category,
+          amount: requiredUnits
+        }
+      });
+
+      if (tokenChangeUnits > 0n) {
+        txBuilder.addOutput({
+          to: senderTokenAddr,
+          amount: 1000n,
+          token: {
+            category,
+            amount: tokenChangeUnits
+          }
+        });
+      }
+
+      txBuilder.addBchChangeOutputIfNeeded({
+        to: senderBaseAddr,
+        feeRate: 1.5
+      });
+    }
+
+    const wcTxRaw = txBuilder.generateWcTransactionObject({
+      broadcast: true,
+      userPrompt
+    });
+    const wcTransaction = JSON.parse(stringify(wcTxRaw));
+    const unsignedHex = txBuilder.build();
+
+    return {
+      wcTransaction,
+      unsignedHex,
+      chainId: isChipnet ? 'bch:bchtest' : 'bch:bitcoincash',
+      senderBaseAddr,
+      senderTokenAddr
+    };
+  }
+
+  /**
+   * Sweeps CashTokens locked in an isolated per-swap `BinaryLiquidEscrow.cash` P2SH32 Covenant
+   * directly into the main `BinaryLiquidVault.cash` liquidity pool Covenant (`settleToVault`).
+   */
+  async sweepEscrowToVault(swap) {
+    await this.readyPromise;
+    if (!swap || !swap.orderSeed || !swap.timelockExpiry || swap.contractName !== 'BinaryLiquidEscrow.cash') {
+      return null;
+    }
+
+    const isChipnet = String(swap.depositAddress || '').startsWith('bchtest:');
+    const activeVault = isChipnet ? this.chipnetVault : this.mainnetVault;
+    const activeSigner = isChipnet ? this.chipnetSigner : this.mainnetSigner;
+    const activeProvider = isChipnet ? this.chipnetProvider : this.mainnetProvider;
+    const activeWif = isChipnet ? config.bch.watchmanChipnetWif : config.bch.watchmanMainnetWif;
+
+    if (!activeVault || !activeSigner || !activeProvider || !this.escrowArtifact) {
+      return null;
+    }
+
+    try {
+      const vaultDecoded = cashAddressToLockingBytecode(activeVault.address);
+      const vaultLockingBytecode = vaultDecoded.bytecode;
+
+      let refundLockingBytecode = vaultLockingBytecode;
+      if (
+        swap.senderAddress &&
+        (swap.senderAddress.startsWith('bchtest:') || swap.senderAddress.startsWith('bitcoincash:'))
+      ) {
+        const refDecoded = cashAddressToLockingBytecode(swap.senderAddress.trim());
+        if (typeof refDecoded !== 'string') {
+          refundLockingBytecode = refDecoded.bytecode;
+        }
+      }
+
+      const orderSalt = ethers.getBytes(ethers.id(String(swap.orderSeed))).slice(0, 16);
+      const escrowContract = new CashContract(
+        this.escrowArtifact,
+        [
+          activeSigner.publicKeyCompressed,
+          vaultLockingBytecode,
+          refundLockingBytecode,
+          BigInt(swap.timelockExpiry),
+          orderSalt
+        ],
+        { provider: activeProvider }
+      );
+
+      const utxos = await escrowContract.getUtxos();
+      if (!utxos || utxos.length === 0) return null;
+
+      const signerUtxos = await activeProvider.getUtxos(activeSigner.cashaddr);
+      const feeUtxos = (signerUtxos || []).filter(u => !u.token && BigInt(u.satoshis || 0) >= 2000n);
+      if (feeUtxos.length === 0) return null;
+
+      const sigTemplate = new SignatureTemplate(activeWif);
+      const targetUtxo = utxos[0];
+
+      const txBuilder = new TransactionBuilder({ provider: activeProvider })
+        .addInput(targetUtxo, escrowContract.unlock.settleToVault(sigTemplate))
+        .addInput(feeUtxos[0], sigTemplate.unlockP2PKH());
+
+      if (targetUtxo.token && BigInt(targetUtxo.token.amount || 0) > 0n) {
+        txBuilder.addOutput({
+          to: activeVault.tokenAddress,
+          amount: BigInt(targetUtxo.satoshis) >= 1000n ? BigInt(targetUtxo.satoshis) : 1000n,
+          token: {
+            category: targetUtxo.token.category,
+            amount: BigInt(targetUtxo.token.amount)
+          }
+        });
+      } else {
+        txBuilder.addOutput({
+          to: activeVault.address,
+          amount: BigInt(targetUtxo.satoshis)
+        });
+      }
+
+      txBuilder.addBchChangeOutputIfNeeded({
+        to: activeSigner.cashaddr,
+        feeRate: 1.5
+      });
+
+      const txDetails = await txBuilder.send();
+      console.log(
+        `[BCH Escrow Sweep] ✅ Swept ${swap.fromAmount} ${swap.fromToken} from BinaryLiquidEscrow.cash -> BinaryLiquidVault.cash | TXID: ${txDetails.txid}`
+      );
+      return txDetails.txid;
+    } catch (err) {
+      console.warn('[BCH Escrow Sweep] Non-fatal sweep warning:', err.message);
+      return null;
+    }
   }
 }
 

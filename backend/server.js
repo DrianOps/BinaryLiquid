@@ -180,12 +180,12 @@ app.get('/api/contracts/manifest', (req, res) => {
 // Oracle Quote (Dynamic Multi-Source with Failover)
 app.get('/api/quote', async (req, res) => {
   try {
-    const { fromToken, toToken, amount } = req.query;
+    const { fromToken, toToken, amount, network } = req.query;
     if (!fromToken || !toToken || !amount) {
       return res.status(400).json({ error: 'Missing required query parameters: fromToken, toToken, amount' });
     }
 
-    const quote = await oraclePool.calculateQuote(fromToken, toToken, amount);
+    const quote = await oraclePool.calculateQuote(fromToken, toToken, amount, network || 'testnet');
     res.json({ success: true, quote });
   } catch (err) {
     res.status(400).json({ success: false, error: err.message });
@@ -239,7 +239,7 @@ app.post('/api/swap/create', async (req, res) => {
     }
 
     // Calculate quotation with live oracle pool
-    const quote = await oraclePool.calculateQuote(fromToken, toToken, amount);
+    const quote = await oraclePool.calculateQuote(fromToken, toToken, amount, 'testnet');
 
     if (!quote.hasLiquidity) {
       return res.status(400).json({
@@ -321,6 +321,8 @@ app.post('/api/swap/create', async (req, res) => {
       contractExplorerUrl,
       tokenContractAddress,
       timelockExpiry,
+      orderSeed,
+      senderAddress: senderAddress || null,
       recipientAddress
     });
 
@@ -350,6 +352,39 @@ app.get('/api/swap/:id', (req, res) => {
   const swap = db.getSwap(req.params.id);
   if (!swap) return res.status(404).json({ error: 'Swap not found' });
   res.json({ success: true, swap });
+});
+
+// Build Unsigned `wc2-bch-bcr` CashTokens Transaction for 1-Click BCH Wallet Signing
+app.post('/api/swap/:id/build-bch-tx', async (req, res) => {
+  try {
+    const swap = db.getSwap(req.params.id);
+    if (!swap) return res.status(404).json({ success: false, error: 'Swap no encontrado.' });
+
+    const senderAddress = (req.body?.senderAddress || swap.senderAddress || '').trim();
+    if (!senderAddress) {
+      return res.status(400).json({
+        success: false,
+        error: 'Se requiere la dirección BCH conectada para construir la transacción.'
+      });
+    }
+
+    const isChipnet = String(swap.depositAddress || '').startsWith('bchtest:');
+    const built = await bchService.buildUnsignedSwapWcTransaction({
+      senderAddress,
+      depositAddress: swap.depositAddress,
+      tokenSymbol: swap.fromToken,
+      amount: swap.fromAmount,
+      isChipnet,
+      userPrompt: `BinaryLiquid Swap: ${swap.fromAmount} ${swap.fromToken} → ${swap.toAmount} ${swap.toToken}`
+    });
+
+    res.json({
+      success: true,
+      ...built
+    });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
 });
 
 // Verify Smart Contract Deposit & Trigger Immediate Watchman + Vault Execution
@@ -496,6 +531,7 @@ app.post('/api/limit-orders/create', async (req, res) => {
 
     let depositAddress;
     let contractName;
+    let timelockExpiry = Math.floor(Date.now() / 1000) + 86400;
     if (isBchOrigin) {
       const cov = await bchService.createSwapEscrowCovenant({
         orderId: orderSeed,
@@ -505,6 +541,7 @@ app.post('/api/limit-orders/create', async (req, res) => {
       });
       depositAddress = cov.address;
       contractName = cov.contractName;
+      timelockExpiry = cov.expiryTimestamp;
     } else {
       depositAddress = evmService.getVaultAddress(originChain);
       contractName = 'BinaryLiquidVault.sol';
@@ -515,14 +552,17 @@ app.post('/api/limit-orders/create', async (req, res) => {
       fromToken,
       toToken,
       fromChain: originChain,
-      toChain: toChain || (isBchOrigin ? 'polygon_mainnet' : 'bch_mainnet'),
+      toChain: toChain || (isBchOrigin ? 'polygon_amoy' : 'bch_chipnet'),
       fromAmount,
       targetRate,
       expectedOutput: (parseFloat(fromAmount) * parseFloat(targetRate) * 0.997).toFixed(4),
       recipientAddress,
       depositAddress,
       derivationPath: contractName,
-      derivationIndex: 0
+      derivationIndex: 0,
+      contractName,
+      timelockExpiry,
+      orderSeed
     });
 
     res.json({
@@ -532,6 +572,44 @@ app.post('/api/limit-orders/create', async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/limit-orders/:id/build-bch-tx', async (req, res) => {
+  try {
+    const order = db.getLimitOrder(req.params.id);
+    if (!order) return res.status(404).json({ success: false, error: 'Orden límite no encontrada.' });
+
+    const senderAddress = (req.body?.senderAddress || order.userAddress || '').trim();
+    const isChipnet = String(order.depositAddress || '').startsWith('bchtest:');
+    const built = await bchService.buildUnsignedSwapWcTransaction({
+      senderAddress,
+      depositAddress: order.depositAddress,
+      tokenSymbol: order.fromToken,
+      amount: order.fromAmount,
+      isChipnet,
+      userPrompt: `BinaryLiquid Limit Order: ${order.fromAmount} ${order.fromToken} @ ${order.targetRate}`
+    });
+
+    res.json({ success: true, ...built });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/limit-orders/:id/verify-tx', async (req, res) => {
+  try {
+    const order = db.getLimitOrder(req.params.id);
+    if (!order) return res.status(404).json({ success: false, error: 'Orden límite no encontrada.' });
+    const txHash = String(req.body?.txHash || '').trim();
+    if (!txHash) return res.status(400).json({ success: false, error: 'Se requiere txHash.' });
+
+    const updated = db.updateLimitOrder(order.id, { depositTxHash: txHash });
+    // Trigger immediate check in case target rate is already met
+    relayerEngine.checkLimitOrders().catch(() => {});
+    res.json({ success: true, order: updated });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
   }
 });
 

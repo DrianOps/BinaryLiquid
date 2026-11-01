@@ -334,49 +334,41 @@ class OraclePoolManager {
   }
 
   /**
-   * Returns current pool reserve / float liquidity for the destination token.
+   * Returns live Smart Contract Vault reserve liquidity for the destination token.
+   * Strictly enforces real Vault reserves: Mainnet and non-active Testnet pairs return 0 ("Sin Liquidez").
    */
-  async getAvailableLiquidity(tokenSymbol) {
-    const sym = (tokenSymbol || 'USDC').toUpperCase();
-    const pool = poolService.getPool('PUSD_USDC');
-
-    switch (sym) {
-      case 'PUSD':
-        return Math.max(Number(pool?.reserveBch || 500000.0), 50000.0);
-      case 'MUSD':
-        return Number((pool?.reserveBch || 50000.0) * 0.6);
-      case 'USDT':
-        return Math.max(Number(pool?.reserveEvm || 500000.0), 50000.0);
-      case 'USDC':
-        return Number(pool?.reserveEvm || 50000.0);
-      case 'BCH': {
-        const bchPrice = await this.getPriceUsd('BCH');
-        return Number(((pool?.reserveBch || 50000.0) / (bchPrice || 283.5)).toFixed(4));
-      }
-      case 'ETH':
-        return 25.0; // ~58,000 USD reserve
-      case 'SOL':
-        return 500.0; // ~50,000 USD reserve
-      case 'BNB':
-        return 75.0; // ~56,000 USD reserve
-      case 'POL':
-        return 300000.0; // ~27,000 USD reserve
-      case 'LIFT':
-        return 1000000.0; // ~16,000 USD reserve
-      default:
-        return 10000.0;
+  async getAvailableLiquidity(tokenSymbol, network = 'testnet') {
+    const net = String(network || 'testnet').toLowerCase() === 'mainnet' ? 'mainnet' : 'testnet';
+    if (net === 'mainnet') {
+      return 0;
     }
+
+    const sym = (tokenSymbol || 'USDT').toUpperCase();
+    if (sym !== 'PUSD' && sym !== 'USDT') {
+      return 0;
+    }
+
+    const pool = poolService.getPool('PUSD_USDT', 'testnet');
+    if (!pool || pool.hasLiquidity === false) {
+      return 0;
+    }
+
+    if (sym === 'PUSD') {
+      return Math.max(Number(pool.reserveBch || 0), 0);
+    }
+    return Math.max(Number(pool.reserveEvm || 0), 0);
   }
 
   /**
-   * Generates a fully quoted swap order including fee breakdown and pre-flight liquidity check.
+   * Generates a fully quoted swap order including fee breakdown and strict pre-flight Vault liquidity check.
    */
-  async calculateQuote(fromToken, toToken, amount) {
+  async calculateQuote(fromToken, toToken, amount, network = 'testnet') {
     const parsedAmount = parseFloat(amount);
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
       throw new Error('Invalid swap amount');
     }
 
+    const net = String(network || 'testnet').toLowerCase() === 'mainnet' ? 'mainnet' : 'testnet';
     const fromSym = (fromToken || '').toUpperCase();
     const toSym = (toToken || '').toUpperCase();
 
@@ -393,14 +385,21 @@ class OraclePoolManager {
     const netPayout = grossAmount - feeAmount;
     const netPayoutUsd = Number((netPayout * priceTo).toFixed(2));
 
-    // Pre-flight Liquidity Check against destination pool reserves
-    const availableLiquidity = await this.getAvailableLiquidity(toToken);
-    const hasLiquidity = netPayout <= availableLiquidity;
+    // Strict active pair check: only PUSD <-> USDT on Testnet has funded Vaults right now
+    const isActivePair =
+      net === 'testnet' &&
+      fromSym !== toSym &&
+      (fromSym === 'PUSD' || fromSym === 'USDT') &&
+      (toSym === 'PUSD' || toSym === 'USDT');
+
+    const availableLiquidity = isActivePair ? await this.getAvailableLiquidity(toSym, net) : 0;
+    const hasLiquidity = isActivePair && availableLiquidity > 0 && netPayout <= availableLiquidity;
 
     const isLift = fromSym === 'LIFT' || toSym === 'LIFT';
     const isPusd = fromSym === 'PUSD' || toSym === 'PUSD';
 
     return {
+      network: net,
       fromToken: fromSym,
       toToken: toSym,
       inputAmount: parsedAmount,
@@ -415,6 +414,7 @@ class OraclePoolManager {
       priceFromUsd: Number(priceFrom.toFixed(6)),
       priceToUsd: Number(priceTo.toFixed(6)),
       hasLiquidity,
+      unavailableBadge: isActivePair ? null : 'Sin Liquidez',
       availableLiquidity: Number(availableLiquidity.toFixed(4)),
       minAmount,
       maxAmount,

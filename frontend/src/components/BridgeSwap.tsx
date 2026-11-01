@@ -1,2389 +1,1436 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { 
-  ArrowUpDown, 
-  SlidersHorizontal, 
-  ChevronDown, 
-  ShieldCheck, 
-  Clock, 
-  ExternalLink, 
-  CheckCircle2, 
-  Flame, 
-  Coins, 
-  Copy, 
-  Check, 
-  Wallet, 
-  RefreshCw, 
-  Info, 
-  Sparkles, 
-  ArrowRight,
-  QrCode,
-  Activity,
-  Layers,
-  Send,
-  Lock,
-  Target,
-  Trash2,
-  AlertCircle,
-  Clipboard,
-  ArrowLeft,
-  X,
-  XCircle
-} from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
-import confetti from 'canvas-confetti';
-import TokenSelectModal, { TokenInfo, SUPPORTED_TOKENS } from './TokenSelectModal';
-import { executeWeb3VaultDeposit, DEPLOYED_TESTNET_CONTRACTS } from '../services/walletConnectService';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  convertCashAddressNetwork,
-  isValidCashAddress,
-  generateQrDataUrl
-} from '../utils/bchAddress';
+  ArrowDownUp,
+  ChevronDown,
+  Settings,
+  Droplets,
+  Check,
+  Copy,
+  ExternalLink,
+  Loader2,
+  X,
+  Lock,
+  Sparkles,
+  QrCode,
+  ArrowLeft,
+  CheckCircle2,
+  ClipboardPaste
+} from 'lucide-react';
+import TokenSelectModal, { SUPPORTED_TOKENS, TokenInfo } from './TokenSelectModal';
+import { convertCashAddressNetwork, formatAddress, generateQrDataUrl } from '../utils/bchAddress';
+import {
+  executeWeb3VaultDeposit,
+  executeBchSwapDeposit,
+  hasActiveBchSigningCapability,
+  DEPLOYED_TESTNET_CONTRACTS
+} from '../services/walletConnectService';
 
 interface BridgeSwapProps {
   userContext: any;
   userAddress: string;
   bchAddress?: string;
   evmAddress?: string;
+  walletBalances?: {
+    PUSD: number;
+    BCH: number;
+    USDT: number;
+    USDC: number;
+    POL: number;
+  };
   onRefreshBalances?: () => void;
   onConnectWallet: () => void;
   showToast: (msg: string, type?: 'success' | 'error') => void;
-  backendUrl?: string;
-  onOpenLanding?: () => void;
-  lang?: 'en' | 'es';
+  backendUrl: string;
+  onOpenLanding: () => void;
+  lang: 'en' | 'es';
   platformNetwork?: 'mainnet' | 'testnet';
   onToggleNetwork?: (net: 'mainnet' | 'testnet') => void;
 }
 
-const swapTranslations = {
-  en: {
-    tabSwap: 'Swap',
-    tabLimit: 'Limit',
-    tabPrivate: 'Private',
-    settingsTitle: 'Swap Settings',
-    slippageTolerance: 'Slippage Tolerance',
-    slippageNotice: 'Fixed 0.3% protocol fee applies to maintain high-liquidity cross-chain vaults and relayer settlement guarantees.',
-    sellLabel: 'Sell',
-    sellLimitLabel: 'Sell (Limit Order)',
-    buyLabel: 'Buy',
-    network: 'Network',
-    clear: 'Clear',
-    targetRateTitle: 'Target Execution Price',
-    marketRate: 'Market',
-    expectedOutput: 'Expected Output at Target:',
-    intraBchTitle: 'Intra-BCH Direct CashTokens (~2s)',
-    intraBchBadge: 'Intra-BCH CashTokens Swap',
-    intraBchFrictionless: 'Single Wallet • 0 Friction',
-    autoSettling: 'Auto-Settling to your connected BCH wallet',
-    destAddress: 'Destination Address',
-    validFormat: 'Valid format',
-    required: 'Required',
-    fundsNotice: 'Funds will be delivered directly to this address',
-    useConnected: 'Use Connected Wallet',
-    paste: 'Paste',
-    execMode: 'Execution Mode',
-    directRelayer: 'Non-Custodial Vault (~3s)',
-    limitRelayer: 'Limit Order (Vault Sentinel)',
-    marketPrice: 'Market Rate',
-    grossAmount: 'Estimated Gross Amount',
-    totalFee: 'Total Bridge Fee (0.30%)',
-    transparentBreakdown: '↳ Transparent breakdown:',
-    feeSplit: '0.20% LPs • 0.10% Protocol',
-    youReceive: 'You Receive (Real Net)',
-    minGuaranteed: 'Guaranteed Minimum',
-    enterAmount: 'Enter Amount',
-    connectWallet: 'Connect Wallet',
-    insufficientLiquidity: 'Insufficient Liquidity',
-    placeLimitOrder: 'Place Limit Order',
-    registeringLimit: 'Registering Limit Order...',
-    swapNow: 'Swap Now',
-    preparingRelayer: 'Instantiating Smart Contract...',
-    limitOrdersTitle: 'My Limit Orders',
-    monitoring247: 'Audited 24/7 by The Watchman',
-    copy: 'Copy',
-    copied: 'Copied',
-    orderLabel: 'Order:',
-    back: 'Back',
-    depositInstruction: 'Deposit',
-    toBridgeAddr: 'into the Non-Custodial Smart Contract:',
-    depositAddr: 'Smart Contract Address',
-    hdSubaccount: '🛡️ Zero Private Keys • 24h Timelock Refund',
-    txidLabel: 'Transaction Hash / TXID:',
-    txidOptional: 'Optional for fast verification',
-    txidPlaceholder: 'Paste your deposit TXID (e.g., 0x... or 64-char hash)',
-    verifyDepositBtn: 'I Have Sent Funds • Verify Deposit',
-    verifyingOnChain: 'Verifying Deposit on Blockchain...',
-    swapSuccessTitle: 'Swap Successful!',
-    swapSuccessDesc: 'Your funds have been settled and sent to your destination address',
-    youSent: 'You Sent',
-    tidBox: 'Transaction ID (TID)',
-    destinationLabel: 'Destination:',
-    viewExplorer: 'View on Block Explorer',
-    newSwap: 'Make another Swap',
-    txFailedTitle: 'Transaction Not Completed',
-    txFailedDefault: 'An issue occurred while processing the order in the relayer.',
-    requestedOp: 'Requested Operation:',
-    fundsSafe: 'Your funds are safe (no debit occurred)',
-    diagnosticLabel: 'Diagnostic:',
-    retrySwap: 'Retry Swap',
-    cancel: 'Cancel',
-    zkTitle: 'Zero-Knowledge Private Swaps',
-    zkDesc: 'Breaks the public link between your Bitcoin Cash source wallet and EVM/Solana recipient using disposable Stealth Addresses and ZK-SNARK batch relayers.',
-    returnSwap: 'Return to Instant Swap'
-  },
+const UI_TEXT = {
   es: {
-    tabSwap: 'Swap',
-    tabLimit: 'Límite',
-    tabPrivate: 'Privado',
-    settingsTitle: 'Ajustes del Swap',
-    slippageTolerance: 'Tolerancia al Deslizamiento (Slippage)',
-    slippageNotice: 'Se aplica una tarifa fija del 0.3% del protocolo para mantener bóvedas de alta liquidez y garantías de liquidación del relayer.',
-    sellLabel: 'Vender',
-    sellLimitLabel: 'Vender (Orden Límite)',
-    buyLabel: 'Recibir',
-    network: 'Red',
-    clear: 'Limpiar',
-    targetRateTitle: 'Precio Objetivo de Ejecución',
-    marketRate: 'Mercado',
-    expectedOutput: 'Retorno Esperado al Objetivo:',
-    intraBchTitle: 'CashTokens Directo Intra-BCH (~2s)',
-    intraBchBadge: 'Intercambio Intra-BCH CashTokens',
-    intraBchFrictionless: 'Billetera Única • Cero Fricción',
-    autoSettling: 'Liquidación directa a tu billetera BCH conectada',
-    destAddress: 'Dirección de Destino',
-    validFormat: 'Formato válido',
-    required: 'Requerido',
-    fundsNotice: 'Los fondos se entregarán directamente en esta dirección',
-    useConnected: 'Usar Billetera Conectada',
+    swap: 'Swap',
+    limit: 'Limit',
+    pay: 'Pagar',
+    receive: 'Recibir',
+    receiveAt: 'Recibir en',
+    balance: 'Saldo',
+    max: 'MAX',
     paste: 'Pegar',
-    execMode: 'Modo de Ejecución',
-    directRelayer: 'Smart Contract No-Custodio (~3s)',
-    limitRelayer: 'Orden Límite (Sentinel Vault)',
-    marketPrice: 'Tasa de Mercado',
-    grossAmount: 'Monto Bruto Estimado',
-    totalFee: 'Comisión Total del Puente (0.30%)',
-    transparentBreakdown: '↳ Desglose transparente:',
-    feeSplit: '0.20% LPs • 0.10% Protocolo',
-    youReceive: 'Recibes (Neto Real)',
-    minGuaranteed: 'Mínimo Garantizado',
-    enterAmount: 'Ingresa un Monto',
-    connectWallet: 'Conectar Billetera',
-    insufficientLiquidity: 'Liquidez Insuficiente',
-    placeLimitOrder: 'Crear Orden Límite',
-    registeringLimit: 'Registrando Orden Límite...',
-    swapNow: 'Intercambiar Ahora',
-    preparingRelayer: 'Instanciando Smart Contract...',
-    limitOrdersTitle: 'Mis Órdenes Límite',
-    monitoring247: 'Auditado 24/7 por The Watchman',
-    copy: 'Copiar',
-    copied: 'Copiado',
-    orderLabel: 'Orden:',
+    myWallet: 'Mi wallet',
+    targetPrice: 'Precio objetivo',
+    market: 'Mercado',
+    fee: 'Comisión',
+    minReceived: 'Mínimo garantizado',
+    contract: 'Contrato',
+    slippage: 'Slippage máximo',
+    faucet: 'Faucet',
+    faucetClaim: 'Recibir 50 PUSD',
+    faucetPlaceholder: 'Dirección Chipnet (bchtest:...)',
+    noLiquidity: 'Sin Liquidez',
+    mainnetNotice: 'Mainnet sin liquidez activa',
+    switchToTestnet: 'Usar Testnet',
+    connectBchToPay: 'Conectar Wallet BCH para pagar',
+    connectEvmToPay: 'Conectar Wallet EVM para pagar',
+    enterAmount: 'Ingresa un monto',
+    enterDestination: 'Ingresa dirección para recibir',
+    invalidDestination: 'Dirección de destino inválida',
+    swapAction: 'Intercambiar',
+    createLimitAction: 'Crear orden límite',
+    signing: 'Confirmando en wallet...',
+    settling: 'Liquidando en contrato...',
+    completed: 'Intercambio completado',
+    sentTo: 'Enviado a',
+    newSwap: 'Nuevo intercambio',
+    awaitingPayment: 'Esperando pago en contrato',
+    autoDetectHint: 'Detección automática en tiempo real (~3s)',
+    openPaytaca: 'Abrir en billetera BCH',
+    copyAddress: 'Copiar contrato',
+    manualTxToggle: '¿Ya enviaste? Verificar TXID',
+    verifyNow: 'Verificar',
     back: 'Volver',
-    depositInstruction: 'Deposita',
-    toBridgeAddr: 'en el Smart Contract No-Custodio:',
-    depositAddr: 'Dirección del Smart Contract',
-    hdSubaccount: '🛡️ Cero Llaves Privadas • Reembolso Autónomo 24h',
-    txidLabel: 'Hash de Transacción / TXID:',
-    txidOptional: 'Opcional para verificación rápida',
-    txidPlaceholder: 'Pega el TXID de tu envío (ej: 0x... o hash de 64 caracteres)',
-    verifyDepositBtn: 'Ya Envié los Fondos • Verificar Depósito',
-    verifyingOnChain: 'Verificando Depósito en Blockchain...',
-    swapSuccessTitle: '¡Intercambio Exitoso!',
-    swapSuccessDesc: 'Tus fondos han sido liquidados y enviados a tu dirección de destino',
-    youSent: 'Enviaste',
-    tidBox: 'ID de Transacción (TID)',
-    destinationLabel: 'Destino:',
-    viewExplorer: 'Ver en el Explorador de Bloques',
-    newSwap: 'Hacer otro Intercambio',
-    txFailedTitle: 'Transacción No Completada',
-    txFailedDefault: 'Ocurrió un inconveniente al procesar la orden en el relayer.',
-    requestedOp: 'Operación solicitada:',
-    fundsSafe: 'Tus fondos están seguros (no se realizó débito)',
-    diagnosticLabel: 'Diagnóstico:',
-    retrySwap: 'Reintentar Swap',
+    openOrders: 'Órdenes abiertas',
     cancel: 'Cancelar',
-    zkTitle: 'Intercambios Privados Zero-Knowledge',
-    zkDesc: 'Rompe el enlace público entre tu billetera de origen Bitcoin Cash y el receptor EVM/Solana usando Stealth Addresses desechables y relayers por lotes ZK-SNARK.',
-    returnSwap: 'Volver al Intercambio Instantáneo'
+    selectPayToken: 'Pagar con',
+    selectReceiveToken: 'Recibir en'
+  },
+  en: {
+    swap: 'Swap',
+    limit: 'Limit',
+    pay: 'Pay',
+    receive: 'Receive',
+    receiveAt: 'Receive at',
+    balance: 'Balance',
+    max: 'MAX',
+    paste: 'Paste',
+    myWallet: 'My wallet',
+    targetPrice: 'Target price',
+    market: 'Market',
+    fee: 'Fee',
+    minReceived: 'Min. received',
+    contract: 'Contract',
+    slippage: 'Max slippage',
+    faucet: 'Faucet',
+    faucetClaim: 'Claim 50 PUSD',
+    faucetPlaceholder: 'Chipnet address (bchtest:...)',
+    noLiquidity: 'No Liquidity',
+    mainnetNotice: 'Mainnet liquidity paused',
+    switchToTestnet: 'Switch to Testnet',
+    connectBchToPay: 'Connect BCH Wallet to pay',
+    connectEvmToPay: 'Connect EVM Wallet to pay',
+    enterAmount: 'Enter an amount',
+    enterDestination: 'Enter destination address',
+    invalidDestination: 'Invalid destination address',
+    swapAction: 'Swap',
+    createLimitAction: 'Place limit order',
+    signing: 'Confirm in wallet...',
+    settling: 'Settling on-chain...',
+    completed: 'Swap completed',
+    sentTo: 'Sent to',
+    newSwap: 'New swap',
+    awaitingPayment: 'Awaiting contract deposit',
+    autoDetectHint: 'Live automatic UTXO detection (~3s)',
+    openPaytaca: 'Open in BCH Wallet',
+    copyAddress: 'Copy contract',
+    manualTxToggle: 'Already sent? Verify TXID',
+    verifyNow: 'Verify',
+    back: 'Back',
+    openOrders: 'Open orders',
+    cancel: 'Cancel',
+    selectPayToken: 'Pay with',
+    selectReceiveToken: 'Receive token'
   }
 };
 
+function getTokenChainId(symbol: string, isBch: boolean, isTestnet: boolean): string {
+  if (isBch) return isTestnet ? 'bch_chipnet' : 'bch_mainnet';
+  const s = symbol.toUpperCase();
+  if (s === 'ETH') return 'ethereum_mainnet';
+  if (s === 'SOL') return isTestnet ? 'solana_devnet' : 'solana_mainnet';
+  if (s === 'BNB') return 'bsc_mainnet';
+  return isTestnet ? 'polygon_amoy' : 'polygon_mainnet';
+}
+
 export default function BridgeSwap({
-  userContext,
   userAddress,
   bchAddress = '',
   evmAddress = '',
+  walletBalances,
   onRefreshBalances,
   onConnectWallet,
   showToast,
-  backendUrl = '',
-  onOpenLanding,
-  lang = 'en',
-  platformNetwork = 'mainnet',
+  backendUrl,
+  lang,
+  platformNetwork = 'testnet',
   onToggleNetwork
 }: BridgeSwapProps) {
+  const t = UI_TEXT[lang] || UI_TEXT.es;
   const isTestnet = platformNetwork === 'testnet';
-  const t = swapTranslations[lang] || swapTranslations.en;
 
-  const connectedBch =
-    bchAddress ||
-    (userAddress && (userAddress.startsWith('bchtest:') || userAddress.startsWith('bitcoincash:'))
-      ? userAddress
-      : '');
-  const connectedEvm =
-    evmAddress || (userAddress && userAddress.startsWith('0x') ? userAddress : '');
-
-  const getNetworkBadge = (token: TokenInfo) => {
-    if (token.isBch) {
-      return isTestnet ? 'Chipnet CashTokens' : token.networkBadge;
-    }
-    if (token.symbol === 'SOL') {
-      return isTestnet ? 'Devnet SPL' : token.networkBadge;
-    }
-    return isTestnet ? 'Polygon Amoy' : token.networkBadge;
-  };
-
-  const getNetworkName = (token: TokenInfo) => {
-    if (token.isBch) {
-      return isTestnet ? 'BCH Chipnet (Testnet4)' : token.network;
-    }
-    if (token.symbol === 'SOL') {
-      return isTestnet ? 'Solana Devnet' : token.network;
-    }
-    return isTestnet ? 'Polygon Amoy (Testnet)' : token.network;
-  };
-  // Navigation sub-tab (Swap | Limit | Private)
-  const [subTab, setSubTab] = useState<'swap' | 'limit' | 'private'>('swap');
-
-  // Token selections
+  // Core Mode & Token Pair (Default: PUSD -> USDT)
+  const [activeTab, setActiveTab] = useState<'swap' | 'limit'>('swap');
   const [sellToken, setSellToken] = useState<TokenInfo>(SUPPORTED_TOKENS[0]); // PUSD
-  const [buyToken, setBuyToken] = useState<TokenInfo>(SUPPORTED_TOKENS[1]);  // USDT
+  const [buyToken, setBuyToken] = useState<TokenInfo>(SUPPORTED_TOKENS[1]); // USDT
+  const [tokenModalTarget, setTokenModalTarget] = useState<'sell' | 'buy' | null>(null);
 
-  // Modal selector states
-  const [modalType, setModalType] = useState<'sell' | 'buy' | null>(null);
-
-  // Amounts
-  const [sellAmount, setSellAmount] = useState<string>('');
+  // Amounts & Destination
+  const [amount, setAmount] = useState<string>('');
   const [recipientAddress, setRecipientAddress] = useState<string>('');
-  const [showRecipientInput, setShowRecipientInput] = useState<boolean>(false);
-  const [showSettingsModal, setShowSettingsModal] = useState<boolean>(false);
+  const [targetRate, setTargetRate] = useState<string>('1.00');
+
+  // Quote & UI Popovers
+  const [quote, setQuote] = useState<any>(null);
+  const [loadingQuote, setLoadingQuote] = useState<boolean>(false);
+  const [detailsOpen, setDetailsOpen] = useState<boolean>(false);
+  const [settingsOpen, setSettingsOpen] = useState<boolean>(false);
   const [slippage, setSlippage] = useState<number>(0.5);
-  const [flipDegree, setFlipDegree] = useState<number>(0);
+  const [customSlippage, setCustomSlippage] = useState<string>('');
 
-  // Quote state
-  const [quoteLoading, setQuoteLoading] = useState<boolean>(false);
-  const [quote, setQuote] = useState<{
-    grossAmount: number;
-    feeAmount: number;
-    netPayout: number;
-    feePercentage: number;
-    rate: number;
-    oracleProvider?: string;
-    netPayoutUsd?: number;
-    priceFromUsd?: number;
-    priceToUsd?: number;
-    hasLiquidity?: boolean;
-    availableLiquidity?: number;
-  }>({
-    grossAmount: 0,
-    feeAmount: 0,
-    netPayout: 0,
-    feePercentage: 0.3,
-    rate: 1.0,
-    oracleProvider: 'Oracle Pool',
-    hasLiquidity: true,
-    availableLiquidity: 50000
-  });
+  // Faucet Compact Drawer
+  const [faucetOpen, setFaucetOpen] = useState<boolean>(false);
+  const [faucetAddress, setFaucetAddress] = useState<string>('');
+  const [claimingFaucet, setClaimingFaucet] = useState<boolean>(false);
 
-  // Swap Execution state
-  const [isSwapping, setIsSwapping] = useState<boolean>(false);
-  const [cardState, setCardState] = useState<'form' | 'deposit' | 'success' | 'error'>('form');
-  const [swapError, setSwapError] = useState<{
-    title: string;
-    message: string;
-    diagnostic?: string;
-  } | null>(null);
-  const [swapModalOpen, setSwapModalOpen] = useState<boolean>(false);
+  // Execution Lifecycle
+  const [cardState, setCardState] = useState<'form' | 'deposit' | 'success'>('form');
+  const [executing, setExecuting] = useState<boolean>(false);
+  const [signingStep, setSigningStep] = useState<string>('');
   const [activeSwap, setActiveSwap] = useState<any>(null);
-  const [swapStep, setSwapStep] = useState<number>(1);
-  const [copied, setCopied] = useState<boolean>(false);
-  const [manualTxHash, setManualTxHash] = useState<string>('');
-  const [isVerifying, setIsVerifying] = useState<boolean>(false);
-  const [customTokens, setCustomTokens] = useState<TokenInfo[]>([]);
-  const [isWeb3Depositing, setIsWeb3Depositing] = useState<boolean>(false);
-  const [web3StatusMsg, setWeb3StatusMsg] = useState<string>('');
-  const [showFaucetPanel, setShowFaucetPanel] = useState<boolean>(false);
-  const [faucetRecipient, setFaucetRecipient] = useState<string>('');
-  const [faucetLoadingToken, setFaucetLoadingToken] = useState<'PUSD' | 'USDT' | null>(null);
-  const [depositQrUrl, setDepositQrUrl] = useState<string>('');
+  const [manualTxOpen, setManualTxOpen] = useState<boolean>(false);
+  const [txHashInput, setTxHashInput] = useState<string>('');
+  const [verifyingTx, setVerifyingTx] = useState<boolean>(false);
+  const [copiedContract, setCopiedContract] = useState<boolean>(false);
 
-  const sellWalletConnected = sellToken.isBch ? Boolean(connectedBch) : Boolean(connectedEvm);
-  const rawSellBalance = Number(userContext?.balances?.[sellToken.symbol] ?? 0);
-  const connectedSellBalance =
-    Number.isFinite(rawSellBalance) && rawSellBalance > 0 ? rawSellBalance : 0;
-
-  useEffect(() => {
-    if (activeSwap?.depositAddress) {
-      setDepositQrUrl(generateQrDataUrl(activeSwap.depositAddress));
-    } else {
-      setDepositQrUrl('');
-    }
-  }, [activeSwap?.depositAddress]);
-
-  // Enforce allowed pairs (PUSD <-> USDT) when switching between Testnet and Mainnet
-  useEffect(() => {
-    const allowed = ['PUSD', 'USDT'];
-    if (!allowed.includes(sellToken.symbol) || !allowed.includes(buyToken.symbol) || sellToken.symbol === buyToken.symbol) {
-      setSellToken(SUPPORTED_TOKENS[0]); // PUSD
-      setBuyToken(SUPPORTED_TOKENS[1]);  // USDT
-    }
-  }, [isTestnet]);
-
-  // Load custom community tokens from pools
-  useEffect(() => {
-    fetch(`${backendUrl}/api/pools`)
-      .then(r => r.json())
-      .then(d => {
-        if (d.success && d.pools) {
-          const list: TokenInfo[] = [];
-          for (const p of d.pools) {
-            if (p.isCustom) {
-              list.push({
-                symbol: p.tokenA,
-                name: p.name.split('⟷')[0].trim() || p.tokenA,
-                network: p.networkA,
-                networkBadge: p.networkBadgeA,
-                icon: p.iconA || '/BCH.png',
-                decimals: p.decimalsA || 6,
-                isBch: true,
-                categoryOrAddress: p.categoryIdA || undefined
-              });
-            }
-          }
-          setCustomTokens(list);
-        }
-      })
-      .catch(() => {});
-  }, [backendUrl]);
-
-  // Polling ref for active swap tracking
-  const pollTimerRef = useRef<any>(null);
-
-  // Limit Order states
-  const [targetRate, setTargetRate] = useState<string>('1.0025');
+  // Limit Orders
   const [limitOrders, setLimitOrders] = useState<any[]>([]);
-  const [isPlacingLimitOrder, setIsPlacingLimitOrder] = useState<boolean>(false);
-  const [showOrdersList, setShowOrdersList] = useState<boolean>(false);
 
-  // Fetch Limit Orders
-  const fetchLimitOrders = async () => {
-    if (!userAddress) return;
-    try {
-      const res = await fetch(`${backendUrl}/api/limit-orders?userAddress=${userAddress}`);
-      const data = await res.json();
-      if (data.success && data.orders) {
-        setLimitOrders(data.orders);
-      }
-    } catch (err) {
-      console.warn('Failed to load limit orders:', err);
-    }
-  };
+  // ==========================================================================
+  // STRICT PAY-WALLET vs RECEIVE-ADDRESS SEPARATION
+  // ==========================================================================
+  const connectedBch = useMemo(() => {
+    const raw = bchAddress || (userAddress && !userAddress.startsWith('0x') ? userAddress : '');
+    if (!raw) return '';
+    return convertCashAddressNetwork(raw, isTestnet, true);
+  }, [bchAddress, userAddress, isTestnet]);
 
+  const connectedEvm = useMemo(() => {
+    const raw = evmAddress || (userAddress && userAddress.startsWith('0x') ? userAddress : '');
+    return raw ? raw.trim() : '';
+  }, [evmAddress, userAddress]);
+
+  // Wallet that PAYS (`sellToken`)
+  const payingWalletAddress = sellToken.isBch ? connectedBch : connectedEvm;
+  const isPayingWalletConnected = Boolean(payingWalletAddress);
+
+  // Optional secondary wallet ONLY used if user taps "Mi wallet" chip
+  const optionalReceiveWallet = buyToken.isBch ? connectedBch : connectedEvm;
+
+  // Live balance of the paying token
+  const sellBalance = useMemo(() => {
+    if (!isPayingWalletConnected || !walletBalances) return null;
+    const sym = sellToken.symbol.toUpperCase() as keyof typeof walletBalances;
+    return typeof walletBalances[sym] === 'number' ? walletBalances[sym] : 0;
+  }, [isPayingWalletConnected, walletBalances, sellToken.symbol]);
+
+  // Sync default faucet input with connected BCH wallet if empty
   useEffect(() => {
-    fetchLimitOrders();
-    const interval = setInterval(fetchLimitOrders, 5000);
-    return () => clearInterval(interval);
-  }, [userAddress, backendUrl]);
+    if (connectedBch && !faucetAddress) {
+      setFaucetAddress(connectedBch);
+    }
+  }, [connectedBch, faucetAddress]);
 
-  // Recipient validation helper
-  const isRecipientValid = () => {
-    const trimmed = recipientAddress.trim();
-    if (!trimmed) return false;
+  // Keep pair liquidity-aware
+  const isPairLiquid = useMemo(() => {
+    if (!isTestnet) return false;
+    const a = sellToken.symbol.toUpperCase();
+    const b = buyToken.symbol.toUpperCase();
+    return a !== b && (a === 'PUSD' || a === 'USDT') && (b === 'PUSD' || b === 'USDT');
+  }, [isTestnet, sellToken.symbol, buyToken.symbol]);
+
+  // Validate manually entered destination address (`Recibir en`)
+  const normalizedRecipient = useMemo(() => {
+    const raw = recipientAddress.trim();
+    if (!raw) return '';
     if (buyToken.isBch) {
-      return isValidCashAddress(trimmed, isTestnet);
-    } else if (buyToken.symbol === 'SOL') {
-      return /^[1-9A-HJ-NP-za-km-z]{32,44}$/.test(trimmed);
-    } else {
-      return /^0x[a-fA-F0-9]{40}$/.test(trimmed);
+      if (raw.startsWith('0x')) return '';
+      const candidate =
+        raw.startsWith('bchtest:') || raw.startsWith('bitcoincash:')
+          ? raw
+          : `${isTestnet ? 'bchtest' : 'bitcoincash'}:${raw}`;
+      const converted = convertCashAddressNetwork(candidate, isTestnet, true);
+      if (isTestnet && !converted.startsWith('bchtest:')) return '';
+      if (!isTestnet && !converted.startsWith('bitcoincash:')) return '';
+      return converted.length > 24 ? converted : '';
     }
-  };
+    return /^0x[a-fA-F0-9]{40}$/.test(raw) ? raw : '';
+  }, [recipientAddress, buyToken.isBch, isTestnet]);
 
-  // Place Limit Order
-  const handlePlaceLimitOrder = async () => {
-    if (!userAddress) {
-      onConnectWallet();
-      return;
-    }
-    const amt = parseFloat(sellAmount);
-    const tgt = parseFloat(targetRate);
-    if (isNaN(amt) || amt <= 0) {
-      showToast('Enter a valid amount to sell', 'error');
-      return;
-    }
-    if (isNaN(tgt) || tgt <= 0) {
-      showToast('Enter a valid target price', 'error');
-      return;
-    }
-    if (!recipientAddress.trim()) {
-      showToast('Destination wallet address is required', 'error');
+  const isRecipientValid = Boolean(normalizedRecipient);
+
+  // ==========================================================================
+  // LIVE ORACLE QUOTE
+  // ==========================================================================
+  const fetchQuote = useCallback(async () => {
+    const parsed = parseFloat(amount);
+    if (!amount || isNaN(parsed) || parsed <= 0 || !isPairLiquid) {
+      setQuote(null);
       return;
     }
 
-    setIsPlacingLimitOrder(true);
+    setLoadingQuote(true);
     try {
-      const res = await fetch(`${backendUrl}/api/limit-orders/create`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userAddress,
-          fromToken: sellToken.symbol,
-          toToken: buyToken.symbol,
-          fromChain: sellToken.isBch ? (isTestnet ? 'bch_chipnet' : 'bch_mainnet') : (isTestnet ? 'amoy_testnet' : 'polygon_mainnet'),
-          toChain: buyToken.isBch ? (isTestnet ? 'bch_chipnet' : 'bch_mainnet') : (isTestnet ? 'amoy_testnet' : 'polygon_mainnet'),
-          fromAmount: amt,
-          targetRate: tgt,
-          recipientAddress: recipientAddress.trim()
-        })
-      });
+      const res = await fetch(
+        `${backendUrl}/api/quote?fromToken=${sellToken.symbol}&toToken=${buyToken.symbol}&amount=${parsed}&network=${platformNetwork}`
+      );
       const data = await res.json();
-      if (data.success) {
-        showToast(`Limit order placed! Trigger target: ${tgt} ${buyToken.symbol}`, 'success');
-        confetti({ particleCount: 60, spread: 50, origin: { y: 0.7 } });
-        setSellAmount('');
-        await fetchLimitOrders();
+      if (data.success && data.quote) {
+        setQuote(data.quote);
       } else {
-        showToast(data.error || 'Failed to place limit order', 'error');
+        setQuote(null);
       }
-    } catch (err: any) {
-      showToast(err.message || 'Network error', 'error');
+    } catch {
+      setQuote(null);
     } finally {
-      setIsPlacingLimitOrder(false);
+      setLoadingQuote(false);
     }
-  };
+  }, [amount, sellToken.symbol, buyToken.symbol, isPairLiquid, platformNetwork, backendUrl]);
 
-  // Cancel Limit Order
-  const handleCancelLimitOrder = async (orderId: string) => {
+  useEffect(() => {
+    const timer = setTimeout(fetchQuote, 220);
+    return () => clearTimeout(timer);
+  }, [fetchQuote]);
+
+  // ==========================================================================
+  // LIMIT ORDERS FETCH
+  // ==========================================================================
+  const fetchLimitOrders = useCallback(async () => {
+    if (!payingWalletAddress) {
+      setLimitOrders([]);
+      return;
+    }
     try {
-      const res = await fetch(`${backendUrl}/api/limit-orders/${orderId}/cancel`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userAddress })
-      });
+      const res = await fetch(
+        `${backendUrl}/api/limit-orders?userAddress=${encodeURIComponent(payingWalletAddress)}`
+      );
       const data = await res.json();
       if (data.success) {
-        showToast('Limit order cancelled', 'success');
-        await fetchLimitOrders();
-      } else {
-        showToast(data.error || 'Failed to cancel order', 'error');
+        setLimitOrders(data.orders || []);
       }
-    } catch (err: any) {
-      showToast(err.message || 'Network error', 'error');
+    } catch {
+      // silent
     }
-  };
+  }, [backendUrl, payingWalletAddress]);
 
-  // 1-Click Paste from clipboard
-  const handlePasteRecipient = async () => {
-    try {
-      if (navigator.clipboard && navigator.clipboard.readText) {
-        const text = await navigator.clipboard.readText();
-        if (text && text.trim()) {
-          setRecipientAddress(text.trim());
-          showToast('Address pasted from clipboard!', 'success');
-        } else {
-          showToast('Clipboard is empty', 'error');
-        }
-      } else {
-        showToast('Clipboard permission needed. Please paste manually.', 'error');
-      }
-    } catch (err) {
-      showToast('Clipboard error. Please paste manually.', 'error');
-    }
-  };
-
-  // Auto-fill recipient based on destination token chain (supports simultaneous BCH + EVM connected wallets)
   useEffect(() => {
-    if (buyToken.isBch) {
-      if (connectedBch) {
-        setRecipientAddress(convertCashAddressNetwork(connectedBch, isTestnet, true));
-      } else if (recipientAddress && isValidCashAddress(recipientAddress)) {
-        setRecipientAddress(convertCashAddressNetwork(recipientAddress, isTestnet, true));
-      } else if (recipientAddress && !isValidCashAddress(recipientAddress, isTestnet)) {
-        setRecipientAddress('');
-      }
-    } else {
-      if (connectedEvm) {
-        setRecipientAddress(connectedEvm);
-      } else if (recipientAddress && !/^0x[a-fA-F0-9]{40}$/.test(recipientAddress.trim())) {
-        setRecipientAddress('');
-      }
+    if (activeTab === 'limit') {
+      fetchLimitOrders();
     }
-  }, [buyToken.symbol, buyToken.isBch, connectedBch, connectedEvm, isTestnet]);
+  }, [activeTab, fetchLimitOrders]);
 
-  // Dynamic Quote calculation with Oracle Pool & 10s auto-refresh
+  // ==========================================================================
+  // LIVE AUTO-POLLING WHEN ON COVENANT QR SCREEN (`cardState === 'deposit'`)
+  // ==========================================================================
   useEffect(() => {
-    const num = parseFloat(sellAmount);
-    if (isNaN(num) || num <= 0) {
-      setQuote({ grossAmount: 0, feeAmount: 0, netPayout: 0, feePercentage: 0.3, rate: 1.0 });
+    if (cardState !== 'deposit' || !activeSwap?.id || activeSwap.status === 'COMPLETED') {
       return;
     }
 
-    let isSubscribed = true;
-
-    const fetchQuote = async (isInitial = false) => {
-      if (isInitial) setQuoteLoading(true);
-      try {
-        const res = await fetch(`${backendUrl}/api/quote?fromToken=${sellToken.symbol}&toToken=${buyToken.symbol}&amount=${num}`);
-        const data = await res.json();
-        if (!isSubscribed) return;
-        if (data.success && data.quote) {
-          setQuote(data.quote);
-        } else {
-          // Dynamic fallback based on asset pricing
-          const getFallbackPrice = (sym: string) => {
-            if (sym === 'LIFT') return 0.01617;
-            if (sym === 'BCH') return 283.5;
-            if (sym === 'ETH') return 2345.0;
-            if (sym === 'SOL') return 101.5;
-            if (sym === 'BNB') return 749.0;
-            if (sym === 'POL') return 0.0915;
-            return 1.0;
-          };
-          const pFrom = getFallbackPrice(sellToken.symbol);
-          const pTo = getFallbackPrice(buyToken.symbol);
-          const r = pTo > 0 ? pFrom / pTo : 1.0;
-          const gross = num * r;
-          const fee = gross * 0.003;
-          setQuote({
-            grossAmount: Number(gross.toFixed(6)),
-            feeAmount: Number(fee.toFixed(6)),
-            netPayout: Number((gross - fee).toFixed(6)),
-            netPayoutUsd: Number(((gross - fee) * pTo).toFixed(2)),
-            priceFromUsd: pFrom,
-            priceToUsd: pTo,
-            feePercentage: 0.3,
-            rate: Number(r.toFixed(6)),
-            oracleProvider: (sellToken.symbol === 'LIFT' || buyToken.symbol === 'LIFT') ? 'Cauldron DEX Router (BCH AMM)' : 'Fallback Peg'
-          });
-        }
-      } catch (err) {
-        if (!isSubscribed) return;
-        const getFallbackPrice = (sym: string) => {
-          if (sym === 'LIFT') return 0.01617;
-          if (sym === 'BCH') return 283.5;
-          if (sym === 'ETH') return 2345.0;
-          if (sym === 'SOL') return 101.5;
-          if (sym === 'BNB') return 749.0;
-          if (sym === 'POL') return 0.0915;
-          return 1.0;
-        };
-        const pFrom = getFallbackPrice(sellToken.symbol);
-        const pTo = getFallbackPrice(buyToken.symbol);
-        const r = pTo > 0 ? pFrom / pTo : 1.0;
-        const gross = num * r;
-        const fee = gross * 0.003;
-        setQuote({
-          grossAmount: Number(gross.toFixed(6)),
-          feeAmount: Number(fee.toFixed(6)),
-          netPayout: Number((gross - fee).toFixed(6)),
-          netPayoutUsd: Number(((gross - fee) * pTo).toFixed(2)),
-          priceFromUsd: pFrom,
-          priceToUsd: pTo,
-          feePercentage: 0.3,
-          rate: Number(r.toFixed(6)),
-          oracleProvider: (sellToken.symbol === 'LIFT' || buyToken.symbol === 'LIFT') ? 'Cauldron DEX Router (BCH AMM)' : 'Fallback Peg'
-        });
-      } finally {
-        if (isSubscribed && isInitial) setQuoteLoading(false);
-      }
-    };
-
-    fetchQuote(true);
-
-    // Auto-refresh quote every 10 seconds seamlessly in background
-    const intervalTimer = setInterval(() => {
-      fetchQuote(false);
-    }, 10000);
-
-    return () => {
-      isSubscribed = false;
-      clearInterval(intervalTimer);
-    };
-  }, [sellAmount, sellToken.symbol, buyToken.symbol, backendUrl]);
-
-  // Active Swap Status Polling (Every 2.5s)
-  useEffect(() => {
-    if (!swapModalOpen || !activeSwap || activeSwap.status === 'COMPLETED') {
-      if (pollTimerRef.current) clearInterval(pollTimerRef.current);
-      return;
-    }
-
-    pollTimerRef.current = setInterval(async () => {
+    const interval = setInterval(async () => {
       try {
         const res = await fetch(`${backendUrl}/api/swap/${activeSwap.id}`);
         const data = await res.json();
         if (data.success && data.swap) {
           setActiveSwap(data.swap);
-          const st = data.swap.status;
-          if (st === 'PENDING_DEPOSIT') {
-            setSwapStep(1);
-          } else if (st === 'DEPOSIT_DETECTED' || st === 'CONFIRMING') {
-            setSwapStep(2);
-          } else if (st === 'EXECUTING_PAYOUT') {
-            setSwapStep(3);
-          } else if (st === 'COMPLETED') {
-            setSwapStep(4);
-            setIsSwapping(false);
-            clearInterval(pollTimerRef.current);
-            confetti({
-              particleCount: 80,
-              spread: 70,
-              origin: { y: 0.6 },
-              colors: ['#F7931A', '#0AC18E', '#10B981', '#FFB703', '#FFFFFF']
-            });
-            showToast(`Successfully swapped for ${data.swap.toAmount} ${data.swap.toToken}!`);
+          if (data.swap.status === 'COMPLETED') {
+            setCardState('success');
+            onRefreshBalances?.();
+            showToast(
+              lang === 'es'
+                ? `¡${data.swap.toAmount} ${data.swap.toToken} enviados a destino!`
+                : `${data.swap.toAmount} ${data.swap.toToken} sent to destination!`,
+              'success'
+            );
           }
         }
-      } catch (err) {}
+      } catch {
+        // silent retry
+      }
     }, 2500);
 
-    return () => {
-      if (pollTimerRef.current) clearInterval(pollTimerRef.current);
-    };
-  }, [swapModalOpen, activeSwap?.id, activeSwap?.status, backendUrl]);
+    return () => clearInterval(interval);
+  }, [cardState, activeSwap?.id, activeSwap?.status, backendUrl, onRefreshBalances, showToast, lang]);
 
-  // Invert / Swap Tokens with animation
-  const handleFlip = () => {
-    setFlipDegree(prev => prev + 180);
+  // ==========================================================================
+  // ACTIONS
+  // ==========================================================================
+  const handleFlipTokens = () => {
     const prevSell = sellToken;
     const prevBuy = buyToken;
     setSellToken(prevBuy);
     setBuyToken(prevSell);
+    setQuote(null);
+
+    // Clear recipientAddress if it belongs to the previous chain format
+    if (recipientAddress.trim()) {
+      const wasEvmAddr = recipientAddress.trim().startsWith('0x');
+      const nextNeedsBch = prevSell.isBch;
+      if ((nextNeedsBch && wasEvmAddr) || (!nextNeedsBch && !wasEvmAddr)) {
+        setRecipientAddress('');
+      }
+    }
   };
 
-  // Percentage quick buttons (uses real live wallet balance when available)
-  const handlePercent = (pct: number) => {
-    if (pct === 0) {
-      setSellAmount('');
+  const handleSelectToken = (token: TokenInfo) => {
+    if (tokenModalTarget === 'sell') {
+      if (token.symbol === buyToken.symbol) {
+        handleFlipTokens();
+      } else {
+        setSellToken(token);
+      }
+    } else if (tokenModalTarget === 'buy') {
+      if (token.symbol === sellToken.symbol) {
+        handleFlipTokens();
+      } else {
+        setBuyToken(token);
+        const wasEvm = recipientAddress.trim().startsWith('0x');
+        if ((token.isBch && wasEvm) || (!token.isBch && recipientAddress && !wasEvm)) {
+          setRecipientAddress('');
+        }
+      }
+    }
+    setTokenModalTarget(null);
+  };
+
+  const handlePasteRecipient = async () => {
+    try {
+      const clip = await navigator.clipboard.readText();
+      if (clip && clip.trim()) {
+        setRecipientAddress(clip.trim());
+      }
+    } catch {
+      showToast(
+        lang === 'es' ? 'Pega la dirección con Ctrl+V o mantén presionado' : 'Paste with Ctrl+V',
+        'error'
+      );
+    }
+  };
+
+  const handleCopy = (text: string) => {
+    navigator.clipboard?.writeText(text).catch(() => {});
+    setCopiedContract(true);
+    setTimeout(() => setCopiedContract(false), 1800);
+  };
+
+  const handleClaimFaucet = async () => {
+    const target = (faucetAddress || connectedBch || '').trim();
+    if (!target) {
+      showToast(t.faucetPlaceholder, 'error');
       return;
     }
-    if (connectedSellBalance > 0) {
-      const decimals = sellToken.decimals === 8 ? 6 : 4;
-      const computed = Number(((connectedSellBalance * pct) / 100).toFixed(decimals));
-      setSellAmount(computed > 0 ? String(computed) : '');
-    } else if (pct === 50) {
-      setSellAmount('50');
-    } else if (pct === 100) {
-      setSellAmount('100');
+    const cleanAddr = convertCashAddressNetwork(
+      target.includes(':') ? target : `bchtest:${target}`,
+      true,
+      true
+    );
+
+    setClaimingFaucet(true);
+    try {
+      const res = await fetch(`${backendUrl}/api/testnet/faucet`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recipientAddress: cleanAddr, amount: 50 })
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Faucet error');
+
+      showToast('50 PUSD enviados en BCH Chipnet', 'success');
+      setFaucetOpen(false);
+      setTimeout(() => onRefreshBalances?.(), 2000);
+    } catch (err: any) {
+      showToast(err.message || 'Error en Faucet', 'error');
+    } finally {
+      setClaimingFaucet(false);
     }
   };
 
-  // Copy to clipboard helper
-  const copyToClipboard = (text: string) => {
-    if (navigator.clipboard && window.isSecureContext) {
-      navigator.clipboard.writeText(text);
-    } else {
-      const textArea = document.createElement("textarea");
-      textArea.value = text;
-      textArea.style.position = "fixed";
-      document.body.appendChild(textArea);
-      textArea.focus();
-      textArea.select();
-      try { document.execCommand('copy'); } catch (err) {}
-      document.body.removeChild(textArea);
-    }
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  // Helper to classify error into human-friendly Spanish explanation
-  const classifySwapError = (err: any) => {
-    const msg = (err?.message || String(err)).toLowerCase();
-
-    if (msg.includes('user rejected') || msg.includes('cancelled') || msg.includes('denied') || msg.includes('declined') || msg.includes('desestimó') || msg.includes('rechazó')) {
-      return {
-        title: 'Firma Cancelada',
-        message: 'Rechazaste la firma de la transacción en tu billetera. No se realizó ningún cargo ni envío de fondos.',
-        diagnostic: 'User Rejected Transaction Signature'
-      };
-    }
-
-    if (msg.includes('insufficient balance') || msg.includes('insufficient funds') || msg.includes('saldo') || msg.includes('not enough')) {
-      return {
-        title: 'Saldo Insuficiente',
-        message: 'Tu billetera no cuenta con los fondos suficientes para cubrir el monto a cambiar y la tarifa de gas de la red.',
-        diagnostic: 'Insufficient Balance in Wallet'
-      };
-    }
-
-    if (msg.includes('liquidity') || msg.includes('liquidez') || msg.includes('reserve')) {
-      return {
-        title: 'Liquidez Insuficiente en Pool',
-        message: err?.message || 'El monto solicitado supera las reservas activas en el pool de liquidez del relayer.',
-        diagnostic: 'Exceeded Pool Reserve Float'
-      };
-    }
-
-    if (msg.includes('timeout') || msg.includes('etimedout') || msg.includes('aborted') || msg.includes('network') || msg.includes('tiempo')) {
-      return {
-        title: 'Tiempo de Red Agotado (RPC)',
-        message: 'El nodo RPC de la blockchain demoró en responder. Tus fondos están totalmente seguros.',
-        diagnostic: 'Network RPC Node Timeout'
-      };
-    }
-
-    if (msg.includes('destination') || msg.includes('recipient') || msg.includes('address') || msg.includes('dirección')) {
-      return {
-        title: 'Dirección de Destino Inválida',
-        message: 'El formato de la dirección de destino no es válido para la red de este token.',
-        diagnostic: 'Invalid Destination Address Format'
-      };
-    }
-
-    return {
-      title: 'Transacción No Completada',
-      message: err?.message || 'Ocurrió un inconveniente al procesar la orden en el relayer.',
-      diagnostic: msg.substring(0, 70)
-    };
-  };
-
-  const getExplorerUrl = (swap: any) => {
-    if (swap?.payoutExplorerUrl) return swap.payoutExplorerUrl;
-    const hash = swap?.payoutTxHash || swap?.depositTxHash || swap?.id;
-    if (!hash) return null;
-    const to = (swap?.toToken || buyToken.symbol).toUpperCase();
-    if (to === 'PUSD' || to === 'MUSD' || to === 'BCH' || to === 'LIFT') {
-      return isTestnet 
-        ? `https://chipnet.imaginary.cash/tx/${hash}`
-        : `https://3xpl.com/bitcoin-cash/transaction/${hash}`;
-    } else if (to === 'SOL') {
-      return isTestnet
-        ? `https://solscan.io/tx/${hash}?cluster=devnet`
-        : `https://solscan.io/tx/${hash}`;
-    } else {
-      return isTestnet
-        ? `https://amoy.polygonscan.com/tx/${hash}`
-        : `https://polygonscan.com/tx/${hash}`;
-    }
-  };
-
-  const handleResetSwap = () => {
-    setCardState('form');
-    setSwapError(null);
-    setSellAmount('');
-    setActiveSwap(null);
-    setSwapStep(1);
-    setManualTxHash('');
-    setIsSwapping(false);
-    setIsVerifying(false);
-  };
-
-  const handleRetrySwap = () => {
-    setCardState('form');
-    setSwapError(null);
-    setIsSwapping(false);
-    setIsVerifying(false);
-  };
-
-  // Execute swap: create real on-chain intent
+  // ==========================================================================
+  // 1-CLICK SWAP EXECUTION (PAY FROM CONNECTED WALLET -> RECEIVE AT DESTINATION)
+  // ==========================================================================
   const handleSwap = async () => {
-    const num = parseFloat(sellAmount);
-    if (isNaN(num) || num <= 0) return;
-
-    if (quote?.hasLiquidity === false) {
-      const err = classifySwapError(new Error(`El monto solicitado supera la liquidez del pool (Máx: ${quote.availableLiquidity} ${buyToken.symbol})`));
-      setSwapError(err);
-      setCardState('error');
+    if (!isPairLiquid) return;
+    if (!isPayingWalletConnected) {
+      onConnectWallet();
       return;
     }
 
-    if (!recipientAddress.trim() || !isRecipientValid()) {
-      const err = classifySwapError(new Error(buyToken.isBch ? (isTestnet ? 'Por favor introduce una dirección válida de BCH Chipnet (bchtest:...)' : 'Por favor introduce una dirección válida de Bitcoin Cash (bitcoincash:...)') : buyToken.symbol === 'SOL' ? 'Por favor introduce una dirección válida de Solana' : 'Por favor introduce una dirección 0x... EVM válida'));
-      setSwapError(err);
-      setCardState('error');
+    const parsedAmount = parseFloat(amount);
+    if (!parsedAmount || parsedAmount <= 0) {
+      showToast(t.enterAmount, 'error');
+      return;
+    }
+    if (!isRecipientValid) {
+      showToast(t.invalidDestination, 'error');
       return;
     }
 
-    setIsSwapping(true);
-    setSwapStep(1);
+    setExecuting(true);
+    setSigningStep(t.signing);
 
     try {
-      const minPayout = Number((quote.netPayout * (1 - slippage / 100)).toFixed(6));
-      const res = await fetch(`${backendUrl}/api/swap/create`, {
+      const minOut = quote
+        ? Number((quote.netPayout * (1 - slippage / 100)).toFixed(6))
+        : 0;
+
+      // 1. Create Non-Custodial Swap Order
+      const createRes = await fetch(`${backendUrl}/api/swap/create`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           fromToken: sellToken.symbol,
           toToken: buyToken.symbol,
-          fromChain: sellToken.isBch ? (isTestnet ? 'bch_chipnet' : 'bch_mainnet') : (isTestnet ? 'amoy_testnet' : 'polygon_mainnet'),
-          toChain: buyToken.isBch ? (isTestnet ? 'bch_chipnet' : 'bch_mainnet') : (isTestnet ? 'amoy_testnet' : 'polygon_mainnet'),
-          amount: num,
-          recipientAddress: recipientAddress.trim(),
-          senderAddress:
-            (sellToken.isBch
-              ? connectedBch
-                ? convertCashAddressNetwork(connectedBch, isTestnet, true)
-                : ''
-              : connectedEvm) ||
-            userAddress ||
-            undefined,
-          slippage: slippage,
-          minReceived: minPayout
+          fromChain: getTokenChainId(sellToken.symbol, sellToken.isBch, isTestnet),
+          toChain: getTokenChainId(buyToken.symbol, buyToken.isBch, isTestnet),
+          amount: parsedAmount,
+          senderAddress: payingWalletAddress,
+          recipientAddress: normalizedRecipient,
+          slippage,
+          minReceived: minOut
         })
       });
-      const data = await res.json();
-      if (!data.success) throw new Error(data.error || 'Failed to create swap order');
+      const createData = await createRes.json();
+      if (!createData.success || !createData.swap) {
+        throw new Error(createData.error || 'No se pudo iniciar el intercambio');
+      }
 
-      setActiveSwap(data.swap);
+      const createdSwap = createData.swap;
+      setActiveSwap(createdSwap);
+
+      // 2A. Paying EVM Token (`USDT` -> `PUSD`): Direct 1-Click MetaMask / WC2 Deposit + Instant Settlement
+      if (!sellToken.isBch) {
+        const tokenAddress =
+          createdSwap.tokenContractAddress ||
+          (isTestnet ? DEPLOYED_TESTNET_CONTRACTS.amoyUsdtAddress : sellToken.categoryOrAddress || '');
+
+        const { txHash } = await executeWeb3VaultDeposit({
+          isTestnet,
+          vaultAddress: createdSwap.depositAddress,
+          tokenAddress,
+          amount: Number(createdSwap.fromAmount),
+          decimals: sellToken.decimals || 6,
+          bchRecipient: normalizedRecipient,
+          onStatus: msg => setSigningStep(msg)
+        });
+
+        setSigningStep(t.settling);
+        const verifyRes = await fetch(`${backendUrl}/api/swap/${createdSwap.id}/verify-tx`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ txHash })
+        });
+        const verifyData = await verifyRes.json();
+        if (!verifyData.success) {
+          throw new Error(verifyData.error || 'Error liquidando en contrato destino');
+        }
+
+        setActiveSwap(verifyData.swap);
+        setCardState('success');
+        setAmount('');
+        onRefreshBalances?.();
+        showToast(t.completed, 'success');
+        return;
+      }
+
+      // 2B. Paying BCH CashToken (`PUSD` -> `USDT`):
+      // Try 1-Click WalletConnect V2 (`bch_signTransaction`) or Paytaca Extension first!
+      if (hasActiveBchSigningCapability()) {
+        try {
+          const { txHash } = await executeBchSwapDeposit({
+            backendUrl,
+            buildEndpoint: `/api/swap/${createdSwap.id}/build-bch-tx`,
+            senderAddress: payingWalletAddress,
+            isTestnet,
+            onStatus: msg => setSigningStep(msg)
+          });
+
+          setSigningStep(t.settling);
+          const verifyRes = await fetch(`${backendUrl}/api/swap/${createdSwap.id}/verify-tx`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ txHash })
+          });
+          const verifyData = await verifyRes.json();
+          if (!verifyData.success) {
+            throw new Error(verifyData.error || 'Error liquidando USDT en Polygon');
+          }
+
+          setActiveSwap(verifyData.swap);
+          setCardState('success');
+          setAmount('');
+          onRefreshBalances?.();
+          showToast(t.completed, 'success');
+          return;
+        } catch (bchSignErr: any) {
+          const msg = String(bchSignErr?.message || '').toLowerCase();
+          if (msg.includes('reject') || msg.includes('cancel') || msg.includes('denied')) {
+            throw new Error(lang === 'es' ? 'Firma cancelada en tu billetera BCH' : 'Signature cancelled');
+          }
+          // Fallback cleanly to Covenant URI/QR with live UTXO auto-detection
+        }
+      }
+
+      // Read-only BCH session (e.g. WizardConnect xpub): show sleek Covenant payment sheet with auto-polling
+      setManualTxOpen(false);
+      setTxHashInput('');
       setCardState('deposit');
-      setIsSwapping(false);
     } catch (err: any) {
-      setIsSwapping(false);
-      const classified = classifySwapError(err);
-      setSwapError(classified);
-      setCardState('error');
+      showToast(err.message || 'Error al ejecutar swap', 'error');
+    } finally {
+      setExecuting(false);
+      setSigningStep('');
     }
   };
 
-  // Trigger deposit verification (supports optional direct txHash from 1-click Web3 Vault deposit)
-  const handleVerifyDeposit = async (overrideTxHash?: string) => {
-    if (!activeSwap) return;
-    setIsVerifying(true);
-    setSwapStep(2);
-
+  // Manual or instant check on Covenant deposit screen
+  const handleVerifyDeposit = async () => {
+    if (!activeSwap?.id) return;
+    setVerifyingTx(true);
     try {
-      const hashToSend = (overrideTxHash ?? manualTxHash).trim();
-
       const res = await fetch(`${backendUrl}/api/swap/${activeSwap.id}/verify-tx`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ txHash: hashToSend || undefined })
+        body: JSON.stringify({ txHash: txHashInput.trim() })
       });
       const data = await res.json();
-      setIsVerifying(false);
-
-      if (data.success && data.swap) {
-        setActiveSwap(data.swap);
-        setSwapStep(4);
-        setIsSwapping(false);
-        setCardState('success');
-        onRefreshBalances?.();
-        confetti({
-          particleCount: 90,
-          spread: 75,
-          origin: { y: 0.6 },
-          colors: ['#F7931A', '#0AC18E', '#10B981', '#FFB703', '#FFFFFF']
-        });
-      } else {
-        const classified = classifySwapError(new Error(data.error || 'No se detectó la confirmación en el Smart Contract Vault'));
-        setSwapError(classified);
-        setCardState('error');
+      if (!data.success) {
+        throw new Error(data.error || 'Aún no se detecta confirmación en el contrato');
       }
+      setActiveSwap(data.swap);
+      setCardState('success');
+      setAmount('');
+      onRefreshBalances?.();
+      showToast(t.completed, 'success');
     } catch (err: any) {
-      setIsVerifying(false);
-      const classified = classifySwapError(err);
-      setSwapError(classified);
-      setCardState('error');
+      showToast(err.message, 'error');
+    } finally {
+      setVerifyingTx(false);
     }
   };
 
-  // 1-Click Web3 Deposit directly into BinaryLiquidVault.sol (Polygon Amoy / Polygon PoS)
-  const handleWeb3VaultDeposit = async () => {
-    if (!activeSwap) return;
-    setIsWeb3Depositing(true);
-    setWeb3StatusMsg('Conectando billetera Web3...');
-    try {
-      const tokenAddr =
-        activeSwap.tokenContractAddress ||
-        (isTestnet ? DEPLOYED_TESTNET_CONTRACTS.amoyUsdtAddress : sellToken.categoryOrAddress || '');
-
-      const { txHash } = await executeWeb3VaultDeposit({
-        isTestnet,
-        vaultAddress: activeSwap.depositAddress,
-        tokenAddress: tokenAddr,
-        amount: Number(activeSwap.fromAmount),
-        decimals: sellToken.decimals || 6,
-        bchRecipient: activeSwap.recipientAddress || recipientAddress,
-        onStatus: msg => setWeb3StatusMsg(msg)
-      });
-
-      setManualTxHash(txHash);
-      showToast('Depósito confirmado en BinaryLiquidVault.sol! Auditando con The Watchman...', 'success');
-      setIsWeb3Depositing(false);
-      setWeb3StatusMsg('');
-      await handleVerifyDeposit(txHash);
-    } catch (err: any) {
-      setIsWeb3Depositing(false);
-      setWeb3StatusMsg('');
-      showToast(err?.message || 'Error firmando depósito en el Smart Contract', 'error');
-    }
-  };
-
-  // Real On-Chain Testnet Faucet (Chipnet PUSD CashTokens + Polygon Amoy USDT)
-  const handleClaimTestnetFaucet = async (tokenSym: 'PUSD' | 'USDT') => {
-    const targetAddr =
-      faucetRecipient.trim() ||
-      (tokenSym === 'USDT' ? connectedEvm : '') ||
-      (tokenSym === 'PUSD' && connectedBch
-        ? convertCashAddressNetwork(connectedBch, true, true)
-        : '');
-
-    if (!targetAddr) {
-      showToast(
-        tokenSym === 'PUSD'
-          ? 'Conecta tu billetera BCH o ingresa una dirección bchtest:z... en el grifo'
-          : 'Conecta tu billetera EVM (MetaMask/WC2) o ingresa tu dirección 0x... en el grifo',
-        'error'
-      );
+  // ==========================================================================
+  // 1-CLICK LIMIT ORDER CREATION + DEPOSIT
+  // ==========================================================================
+  const handleCreateLimitOrder = async () => {
+    if (!isPairLiquid) return;
+    if (!isPayingWalletConnected) {
+      onConnectWallet();
       return;
     }
 
-    setFaucetLoadingToken(tokenSym);
+    const parsedAmount = parseFloat(amount);
+    const parsedRate = parseFloat(targetRate);
+    if (!parsedAmount || parsedAmount <= 0 || !parsedRate || parsedRate <= 0) {
+      showToast(t.enterAmount, 'error');
+      return;
+    }
+    if (!isRecipientValid) {
+      showToast(t.invalidDestination, 'error');
+      return;
+    }
+
+    setExecuting(true);
+    setSigningStep(t.signing);
     try {
-      const res = await fetch(`${backendUrl}/api/faucet/testnet`, {
+      const createRes = await fetch(`${backendUrl}/api/limit-orders/create`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          token: tokenSym,
-          amount: tokenSym === 'PUSD' ? 50 : 100,
-          recipient: targetAddr
+          userAddress: payingWalletAddress,
+          fromToken: sellToken.symbol,
+          toToken: buyToken.symbol,
+          fromChain: getTokenChainId(sellToken.symbol, sellToken.isBch, isTestnet),
+          toChain: getTokenChainId(buyToken.symbol, buyToken.isBch, isTestnet),
+          fromAmount: parsedAmount,
+          targetRate: parsedRate,
+          recipientAddress: normalizedRecipient
         })
+      });
+      const createData = await createRes.json();
+      if (!createData.success || !createData.order) {
+        throw new Error(createData.error || 'No se pudo crear la orden límite');
+      }
+
+      const order = createData.order;
+
+      if (!sellToken.isBch) {
+        const tokenAddress = isTestnet
+          ? DEPLOYED_TESTNET_CONTRACTS.amoyUsdtAddress
+          : sellToken.categoryOrAddress || '';
+        const { txHash } = await executeWeb3VaultDeposit({
+          isTestnet,
+          vaultAddress: order.depositAddress,
+          tokenAddress,
+          amount: parsedAmount,
+          decimals: sellToken.decimals || 6,
+          bchRecipient: normalizedRecipient,
+          onStatus: msg => setSigningStep(msg)
+        });
+
+        await fetch(`${backendUrl}/api/limit-orders/${order.id}/verify-tx`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ txHash })
+        });
+      } else if (hasActiveBchSigningCapability()) {
+        const { txHash } = await executeBchSwapDeposit({
+          backendUrl,
+          buildEndpoint: `/api/limit-orders/${order.id}/build-bch-tx`,
+          senderAddress: payingWalletAddress,
+          isTestnet,
+          onStatus: msg => setSigningStep(msg)
+        });
+
+        await fetch(`${backendUrl}/api/limit-orders/${order.id}/verify-tx`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ txHash })
+        });
+      }
+
+      setAmount('');
+      fetchLimitOrders();
+      onRefreshBalances?.();
+      showToast(
+        lang === 'es' ? 'Orden límite activa en contrato' : 'Limit order active on-chain',
+        'success'
+      );
+    } catch (err: any) {
+      showToast(err.message || 'Error en orden límite', 'error');
+    } finally {
+      setExecuting(false);
+      setSigningStep('');
+    }
+  };
+
+  const handleCancelLimitOrder = async (orderId: string) => {
+    try {
+      const res = await fetch(`${backendUrl}/api/limit-orders/${orderId}/cancel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userAddress: payingWalletAddress })
       });
       const data = await res.json();
       if (data.success) {
-        showToast(
-          `¡Enviados ${data.amount} ${tokenSym} reales on-chain! TX: ${String(data.txHash).slice(0, 12)}...`,
-          'success'
-        );
-        confetti({ particleCount: 55, spread: 50, origin: { y: 0.7 } });
-        setTimeout(() => onRefreshBalances?.(), 2500);
-      } else {
-        showToast(data.error || 'Error solicitando Testnet Faucet', 'error');
+        fetchLimitOrders();
+        showToast(lang === 'es' ? 'Orden cancelada' : 'Order cancelled', 'success');
       }
-    } catch (err: any) {
-      showToast(err?.message || 'Error de conexión con el Faucet', 'error');
-    } finally {
-      setFaucetLoadingToken(null);
+    } catch {
+      // silent
     }
   };
 
-  const parsedAmount = parseFloat(sellAmount) || 0;
-  const isZero = parsedAmount <= 0;
+  // ==========================================================================
+  // COMPUTED DISPLAY VALUES & PRIMARY CTA STATE
+  // ==========================================================================
+  const receiveDisplay = useMemo(() => {
+    const parsed = parseFloat(amount);
+    if (!amount || isNaN(parsed) || parsed <= 0 || !isPairLiquid) return '';
+    if (activeTab === 'limit') {
+      const r = parseFloat(targetRate) || 1;
+      return (parsed * r * 0.997).toFixed(2);
+    }
+    if (quote?.netPayout !== undefined) {
+      return Number(quote.netPayout).toFixed(2);
+    }
+    return '';
+  }, [amount, isPairLiquid, activeTab, targetRate, quote]);
 
-  // Smart crypto amount formatter that guarantees visibility of exact decimals like 0.997
-  const formatNetPayout = (val: number, symbol: string): string => {
-    if (!val || isNaN(val) || val <= 0) return '0';
-    const isStable = ['PUSD', 'USDC', 'USDT', 'MUSD'].includes(symbol.toUpperCase());
-    
-    if (isStable) {
-      if (val < 10) {
-        // e.g. 1 PUSD -> 0.997 USDC
-        return Number(val.toFixed(4)).toString();
-      }
-      return val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const ctaConfig = useMemo(() => {
+    if (!isPairLiquid) {
+      return { label: t.noLiquidity, disabled: true, variant: 'muted' as const };
     }
-
-    // Volatile crypto assets (BCH, ETH, SOL, BNB, POL)
-    if (val >= 1000) {
-      return val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    if (executing) {
+      return { label: signingStep || t.signing, disabled: true, variant: 'primary' as const };
     }
-    if (val >= 1) {
-      return Number(val.toFixed(4)).toString();
+    if (!isPayingWalletConnected) {
+      return {
+        label: sellToken.isBch ? t.connectBchToPay : t.connectEvmToPay,
+        disabled: false,
+        variant: 'connect' as const
+      };
     }
-    // Small fractions (e.g. 0.034695 BCH, 0.0012 ETH)
-    return Number(val.toFixed(6)).toString();
-  };
-
-  const formatFeeAmount = (fee: number): string => {
-    if (!fee || isNaN(fee) || fee <= 0) return '0.00';
-    if (fee < 0.01) {
-      return Number(fee.toFixed(6)).toString();
+    const parsed = parseFloat(amount);
+    if (!amount || isNaN(parsed) || parsed <= 0) {
+      return { label: t.enterAmount, disabled: true, variant: 'muted' as const };
     }
-    return fee.toFixed(4);
-  };
+    if (!sellToken.isBch && sellBalance !== null && parsed > sellBalance) {
+      return {
+        label: lang === 'es' ? `Saldo ${sellToken.symbol} insuficiente` : `Insufficient ${sellToken.symbol}`,
+        disabled: true,
+        variant: 'muted' as const
+      };
+    }
+    if (!recipientAddress.trim()) {
+      return { label: t.enterDestination, disabled: true, variant: 'muted' as const };
+    }
+    if (!isRecipientValid) {
+      return { label: t.invalidDestination, disabled: true, variant: 'muted' as const };
+    }
+    if (activeTab === 'swap' && quote && !quote.hasLiquidity) {
+      return { label: t.noLiquidity, disabled: true, variant: 'muted' as const };
+    }
+    return {
+      label:
+        activeTab === 'swap'
+          ? `${t.swapAction} ${sellToken.symbol} → ${buyToken.symbol}`
+          : t.createLimitAction,
+      disabled: false,
+      variant: 'primary' as const
+    };
+  }, [
+    isPairLiquid,
+    executing,
+    signingStep,
+    t,
+    isPayingWalletConnected,
+    sellToken.isBch,
+    sellToken.symbol,
+    buyToken.symbol,
+    amount,
+    sellBalance,
+    lang,
+    recipientAddress,
+    isRecipientValid,
+    activeTab,
+    quote
+  ]);
 
   return (
-    <div className="w-full flex flex-col items-center justify-center min-h-[calc(100vh-140px)] py-6 sm:py-8 px-3 sm:px-4 selection:bg-orange-500 selection:text-white">
-
-      {/* TOP HEADER / TAB ROW (BORDERLESS CLEAN DESIGN) */}
-      <div className="w-full max-w-[480px] flex items-center justify-between mb-3 px-1">
-        <div className="flex items-center gap-1 p-1 rounded-xl bg-zinc-100 dark:bg-[#161D2B]">
-          {(['swap', 'limit', 'private'] as const).map(tab => {
-            const label = tab === 'swap' ? t.tabSwap : tab === 'limit' ? t.tabLimit : t.tabPrivate;
-            return (
-              <button 
-                key={tab}
-                onClick={() => { setSubTab(tab); setCardState('form'); }}
-                className={`relative px-3.5 py-1.5 text-xs font-semibold capitalize transition-all cursor-pointer rounded-lg ${
-                  subTab === tab 
-                    ? 'text-zinc-900 dark:text-white' 
-                    : 'text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200'
-                }`}
-              >
-                <span className="relative z-10">{label}</span>
-                {subTab === tab && (
-                  <motion.div 
-                    layoutId="activeSubTab"
-                    className="absolute inset-0 bg-white dark:bg-[#222B3D] rounded-lg shadow-sm z-0"
-                    transition={{ type: "spring", stiffness: 450, damping: 35 }}
-                  />
-                )}
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="flex items-center gap-2">
-          {/* Quick Network Switcher Pill (Mainnet / Testnet) */}
-          <button
-            type="button"
-            onClick={() => {
-              const nextNet = isTestnet ? 'mainnet' : 'testnet';
-              if (onToggleNetwork) onToggleNetwork(nextNet);
-              showToast(nextNet === 'testnet' ? 'Red cambiada: BCH Chipnet (Testnet)' : 'Red cambiada: Bitcoin Cash Mainnet (Producción)');
-            }}
-            className={`px-2.5 py-1.5 rounded-xl text-[11px] font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs ${
-              isTestnet
-                ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 hover:bg-amber-500/25'
-                : 'bg-zinc-100 dark:bg-[#161D2B] text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-[#20293d]'
-            }`}
-            title="Click para alternar entre Mainnet y Testnet"
-          >
-            <span className={`w-2 h-2 rounded-full ${isTestnet ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'}`}></span>
-            <span>{isTestnet ? 'Chipnet (Testnet)' : 'Mainnet'}</span>
-          </button>
-
-          {/* Slippage / Settings icon */}
-          <motion.button 
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => setShowSettingsModal(!showSettingsModal)}
-            className="w-9 h-9 rounded-xl bg-zinc-100 dark:bg-[#161D2B] flex items-center justify-center text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white shadow-sm transition-colors cursor-pointer"
-            title={t.settingsTitle}
-          >
-            <SlidersHorizontal className="w-4 h-4" />
-          </motion.button>
-        </div>
-      </div>
-
-      {/* SWAP CARD (BORDERLESS CLEAN MINIMALIST) */}
-      <motion.div 
-        layout
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.25 }}
-        className="w-full max-w-[480px] bg-white dark:bg-[#0E131E] rounded-3xl shadow-xl p-3.5 sm:p-4.5 relative transition-colors duration-200"
-      >
-        
-        {/* SUBTAB CONTENT SWITCHER */}
-        <AnimatePresence mode="wait">
-          {cardState === 'success' ? (
-            <motion.div
-              key="success"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ type: "spring", stiffness: 350, damping: 25 }}
-              className="py-3 sm:py-5 px-1 sm:px-3 text-center space-y-4"
+    <div className="w-full max-w-[440px] mx-auto pt-2 sm:pt-6 pb-8">
+      {/* Minimal Mainnet Switch Bar (only shown if user switched platform to Mainnet) */}
+      {!isTestnet && (
+        <div className="mb-3 px-3.5 py-2.5 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-between text-xs">
+          <span className="font-medium text-rose-600 dark:text-rose-400 flex items-center gap-1.5">
+            <Lock className="w-3.5 h-3.5 shrink-0" />
+            {t.mainnetNotice}
+          </span>
+          {onToggleNetwork && (
+            <button
+              type="button"
+              onClick={() => onToggleNetwork('testnet')}
+              className="px-2.5 py-1 rounded-lg bg-gray-900 dark:bg-white text-white dark:text-gray-950 font-semibold text-[11px] hover:opacity-90 transition cursor-pointer"
             >
-              {/* Checkmark in Center with Elastic Spring & Draw */}
-              <div className="relative mx-auto w-20 h-20 flex items-center justify-center">
-                <motion.div
-                  initial={{ scale: 0.8, opacity: 0 }}
-                  animate={{ scale: [1, 1.3, 1], opacity: [0.25, 0.6, 0.25] }}
-                  transition={{ repeat: Infinity, duration: 2.2 }}
-                  className="absolute inset-0 rounded-full bg-emerald-500/20 blur-md"
-                />
-                <motion.div
-                  initial={{ scale: 0, rotate: -45 }}
-                  animate={{ scale: 1, rotate: 0 }}
-                  transition={{ type: "spring", stiffness: 450, damping: 20 }}
-                  className="w-16 h-16 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-lg shadow-emerald-500/30"
-                >
-                  <motion.svg
-                    className="w-9 h-9 text-white stroke-current"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    strokeWidth="3.2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <motion.path
-                      d="M20 6L9 17L4 12"
-                      initial={{ pathLength: 0 }}
-                      animate={{ pathLength: 1 }}
-                      transition={{ duration: 0.45, delay: 0.1 }}
-                    />
-                  </motion.svg>
-                </motion.div>
-              </div>
-
-              <div>
-                <h3 className="text-xl font-extrabold text-zinc-900 dark:text-white">
-                  {t.swapSuccessTitle}
-                </h3>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
-                  {t.swapSuccessDesc}
-                </p>
-              </div>
-
-              {/* Swap Amount Pair Summary */}
-              <div className="p-3.5 rounded-2xl bg-zinc-100 dark:bg-[#161D2B] flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <img src={sellToken.icon} alt={sellToken.symbol} className="w-8 h-8 rounded-full object-contain" />
-                  <div className="text-left">
-                    <div className="text-[10px] uppercase font-bold text-zinc-400">{t.youSent}</div>
-                    <div className="font-bold text-sm text-zinc-900 dark:text-white font-mono">
-                      {activeSwap?.fromAmount || sellAmount} {sellToken.symbol}
-                    </div>
-                  </div>
-                </div>
-
-                <ArrowRight className="w-4 h-4 text-emerald-500 shrink-0" />
-
-                <div className="flex items-center gap-2">
-                  <div className="text-right">
-                    <div className="text-[10px] uppercase font-bold text-emerald-600 dark:text-emerald-400">{t.youReceive}</div>
-                    <div className="font-bold text-sm text-emerald-600 dark:text-emerald-400 font-mono">
-                      {activeSwap?.toAmount || quote.netPayout} {buyToken.symbol}
-                    </div>
-                  </div>
-                  <img src={buyToken.icon} alt={buyToken.symbol} className="w-8 h-8 rounded-full object-contain" />
-                </div>
-              </div>
-
-              {/* TID Box with 1-click Copy */}
-              <div className="p-3.5 rounded-2xl bg-zinc-100 dark:bg-[#161D2B] text-left space-y-1.5">
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
-                    {t.tidBox}
-                  </span>
-                  {copied ? (
-                    <span className="text-[10px] text-emerald-500 font-bold flex items-center gap-1 font-mono">
-                      <Check className="w-3 h-3" /> {t.copied}!
-                    </span>
-                  ) : (
-                    <span className="text-[10px] text-zinc-400 font-mono">
-                      1-Click Copy
-                    </span>
-                  )}
-                </div>
-
-                <div className="flex items-center justify-between gap-2 bg-white dark:bg-[#0E131E] p-2 rounded-xl">
-                  <span className="font-mono text-xs text-zinc-900 dark:text-zinc-100 truncate select-all">
-                    {activeSwap?.payoutTxHash || activeSwap?.depositTxHash || activeSwap?.id || 'tx_pending'}
-                  </span>
-                  <motion.button
-                    type="button"
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => copyToClipboard(activeSwap?.payoutTxHash || activeSwap?.depositTxHash || activeSwap?.id || '')}
-                    className="px-2.5 py-1.5 rounded-lg bg-orange-500/10 hover:bg-orange-500/20 text-orange-600 dark:text-orange-400 font-bold text-[11px] flex items-center gap-1 shrink-0 cursor-pointer transition-all"
-                    title={t.copy}
-                  >
-                    <Copy className="w-3 h-3" />
-                    <span>{t.copy}</span>
-                  </motion.button>
-                </div>
-
-                {/* Destination address */}
-                <div className="flex justify-between items-center text-[11px] text-zinc-500 dark:text-zinc-400 pt-1">
-                  <span>{t.destinationLabel}</span>
-                  <span className="font-mono truncate max-w-[220px] text-zinc-700 dark:text-zinc-300 font-medium">
-                    {activeSwap?.recipientAddress || recipientAddress}
-                  </span>
-                </div>
-              </div>
-
-              {/* Explorer Link */}
-              {getExplorerUrl(activeSwap) && (
-                <div className="pt-1">
-                  <a
-                    href={getExplorerUrl(activeSwap)!}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1.5 text-xs text-orange-500 font-bold hover:underline"
-                  >
-                    <span>{t.viewExplorer}</span>
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </a>
-                </div>
-              )}
-
-              {/* Reset Button */}
-              <button
-                type="button"
-                onClick={handleResetSwap}
-                className="w-full py-3.5 sm:py-4 rounded-xl font-bold text-base bg-orange-500 hover:bg-orange-600 text-white shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <span>{t.newSwap}</span>
-              </button>
-            </motion.div>
-          ) : cardState === 'error' ? (
-            <motion.div
-              key="error"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ type: "spring", stiffness: 350, damping: 25 }}
-              className="py-3 sm:py-5 px-1 sm:px-3 text-center space-y-4"
-            >
-              {/* Animated X in Center with Shake */}
-              <div className="relative mx-auto w-20 h-20 flex items-center justify-center">
-                <motion.div
-                  initial={{ scale: 0.8, opacity: 0 }}
-                  animate={{ scale: [1, 1.25, 1], opacity: [0.2, 0.5, 0.2] }}
-                  transition={{ repeat: Infinity, duration: 2.2 }}
-                  className="absolute inset-0 rounded-full bg-rose-500/20 blur-md"
-                />
-                <motion.div
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1, x: [0, -5, 5, -5, 5, 0] }}
-                  transition={{ duration: 0.5 }}
-                  className="w-16 h-16 rounded-full bg-rose-500 text-white flex items-center justify-center shadow-lg shadow-rose-500/30"
-                >
-                  <motion.svg
-                    className="w-9 h-9 text-white stroke-current"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    strokeWidth="3.2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <motion.path
-                      d="M18 6L6 18M6 6l12 12"
-                      initial={{ pathLength: 0 }}
-                      animate={{ pathLength: 1 }}
-                      transition={{ duration: 0.4, delay: 0.1 }}
-                    />
-                  </motion.svg>
-                </motion.div>
-              </div>
-
-              <div>
-                <h3 className="text-xl font-extrabold text-zinc-900 dark:text-white">
-                  {swapError?.title || t.txFailedTitle}
-                </h3>
-                <p className="text-xs text-rose-500 dark:text-rose-400 mt-1 max-w-sm mx-auto font-medium leading-relaxed">
-                  {swapError?.message || t.txFailedDefault}
-                </p>
-              </div>
-
-              {/* Attempted Swap & Funds Safety Box */}
-              <div className="p-3.5 rounded-2xl bg-rose-500/5 dark:bg-rose-500/10 border border-rose-500/20 text-left text-xs space-y-2">
-                <div className="flex justify-between items-center text-zinc-500 dark:text-zinc-400">
-                  <span>{t.requestedOp}</span>
-                  <span className="font-bold text-zinc-900 dark:text-white font-mono">
-                    {sellAmount} {sellToken.symbol} ➔ {buyToken.symbol}
-                  </span>
-                </div>
-                <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-semibold pt-1 border-t border-rose-500/15">
-                  <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-500" />
-                  <span>{t.fundsSafe}</span>
-                </div>
-                {swapError?.diagnostic && (
-                  <div className="text-[10px] text-zinc-400 font-mono bg-white/60 dark:bg-black/30 p-2 rounded-lg">
-                    {t.diagnosticLabel} {swapError.diagnostic}
-                  </div>
-                )}
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex items-center gap-2.5 pt-2">
-                <button
-                  type="button"
-                  onClick={handleRetrySwap}
-                  className="flex-1 py-3.5 rounded-xl font-bold text-sm bg-orange-500 hover:bg-orange-600 text-white shadow-sm transition-all cursor-pointer"
-                >
-                  {t.retrySwap}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleResetSwap}
-                  className="px-5 py-3.5 rounded-xl font-bold text-sm bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 transition-all cursor-pointer"
-                >
-                  {t.cancel}
-                </button>
-              </div>
-            </motion.div>
-          ) : cardState === 'deposit' ? (
-            <motion.div
-              key="deposit"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ type: "spring", stiffness: 350, damping: 25 }}
-              className="space-y-4"
-            >
-              {/* Header with Cancel */}
-              <div className="flex justify-between items-center pb-2">
-                <button
-                  type="button"
-                  onClick={handleResetSwap}
-                  className="text-zinc-400 hover:text-zinc-900 dark:hover:text-white flex items-center gap-1.5 text-xs font-semibold cursor-pointer transition-colors"
-                >
-                  <ArrowLeft className="w-3.5 h-3.5" />
-                  <span>{t.back}</span>
-                </button>
-                <span className="text-[11px] font-mono text-zinc-400">
-                  {t.orderLabel} <strong className="text-orange-500">{activeSwap?.id?.substring(0, 10)}...</strong>
-                </span>
-              </div>
-
-              <div className="p-3 rounded-2xl bg-amber-500/10 text-xs text-amber-800 dark:text-amber-300 leading-relaxed font-medium text-center">
-                {t.depositInstruction} <strong>{activeSwap?.fromAmount} {activeSwap?.fromToken}</strong> {t.toBridgeAddr}
-              </div>
-
-              {/* QR Code Container (Offline Instant Generator) */}
-              <div className="flex justify-center p-3 bg-white rounded-2xl shadow-sm w-40 h-40 mx-auto">
-                {depositQrUrl ? (
-                  <img 
-                    src={depositQrUrl}
-                    alt="Deposit QR"
-                    className="w-full h-full object-contain"
-                  />
-                ) : null}
-              </div>
-
-              {/* Non-Custodial Smart Contract / CashScript Covenant Box */}
-              <div className="p-3.5 rounded-2xl bg-zinc-100 dark:bg-[#161D2B] space-y-2">
-                <div className="flex items-center justify-between text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
-                  <span>{t.depositAddr} ({getNetworkBadge(sellToken)})</span>
-                  <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full flex items-center gap-1 font-semibold">
-                    <ShieldCheck className="w-3 h-3" />
-                    {sellToken.isBch ? 'P2SH32 Covenant' : 'Smart Contract'}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between gap-2 bg-white dark:bg-[#0E131E] p-2 rounded-xl">
-                  <span className="font-mono text-xs text-zinc-900 dark:text-zinc-200 truncate font-semibold select-all">
-                    {activeSwap?.depositAddress}
-                  </span>
-                  <motion.button 
-                    type="button"
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => copyToClipboard(activeSwap?.depositAddress || '')}
-                    className="px-2.5 py-1.5 rounded-lg bg-orange-500/10 hover:bg-orange-500/20 text-orange-600 dark:text-orange-400 font-bold text-[11px] flex items-center gap-1 shrink-0 cursor-pointer transition-all"
-                    title={t.copy}
-                  >
-                    {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{copied ? t.copied : t.copy}</span>
-                  </motion.button>
-                </div>
-                <div className="pt-1 flex items-center justify-between text-[10px] text-zinc-400 font-mono">
-                  <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium">
-                    {t.hdSubaccount}
-                  </span>
-                  {activeSwap?.contractExplorerUrl ? (
-                    <a
-                      href={activeSwap.contractExplorerUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-orange-500 hover:underline flex items-center gap-1 font-bold"
-                    >
-                      <span>{activeSwap.contractName || 'Contract'}</span>
-                      <ExternalLink className="w-2.5 h-2.5" />
-                    </a>
-                  ) : (
-                    <span className="opacity-75">{activeSwap?.contractName || activeSwap?.derivationPath}</span>
-                  )}
-                </div>
-              </div>
-
-              {/* 1-Click Web3 Smart Contract Deposit Button (for EVM USDC -> BCH PUSD) */}
-              {!sellToken.isBch && (
-                <button
-                  type="button"
-                  onClick={handleWeb3VaultDeposit}
-                  disabled={isWeb3Depositing || isVerifying}
-                  className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  {isWeb3Depositing ? (
-                    <>
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                      <span>{web3StatusMsg || 'Firmando Smart Contract en Web3...'}</span>
-                    </>
-                  ) : (
-                    <>
-                      <ShieldCheck className="w-4 h-4" />
-                      <span>
-                        {lang === 'es'
-                          ? `⚡ Depositar ${activeSwap?.fromAmount} ${activeSwap?.fromToken} con MetaMask / Web3 (Smart Contract)`
-                          : `⚡ Deposit ${activeSwap?.fromAmount} ${activeSwap?.fromToken} via MetaMask / Web3 (Smart Contract)`}
-                      </span>
-                    </>
-                  )}
-                </button>
-              )}
-
-              {/* TXID Input Field */}
-              <div className="space-y-1">
-                <label className="text-[11px] font-semibold text-zinc-600 dark:text-zinc-300 flex items-center justify-between">
-                  <span>{t.txidLabel}</span>
-                  <span className="text-[10px] text-zinc-400 font-normal">{t.txidOptional}</span>
-                </label>
-                <input
-                  type="text"
-                  value={manualTxHash}
-                  onChange={(e) => setManualTxHash(e.target.value)}
-                  placeholder={t.txidPlaceholder}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-[#0E131E] text-xs font-mono text-zinc-900 dark:text-white placeholder:text-zinc-400 focus:outline-none transition-colors"
-                />
-              </div>
-
-              {/* Verify Trigger Button */}
-              <button 
-                type="button"
-                onClick={() => handleVerifyDeposit()}
-                disabled={isVerifying || isWeb3Depositing}
-                className="w-full py-3.5 sm:py-4 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer"
-              >
-                {isVerifying ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>{t.verifyingOnChain}</span>
-                  </>
-                ) : (
-                  <>
-                    <Send className="w-4 h-4" />
-                    <span>{t.verifyDepositBtn}</span>
-                  </>
-                )}
-              </button>
-            </motion.div>
-          ) : subTab === 'private' ? (
-            <div className="py-6 px-3 text-center space-y-4">
-              <div className="w-14 h-14 rounded-2xl bg-orange-500/10 dark:bg-orange-500/20 text-orange-500 flex items-center justify-center mx-auto border border-orange-500/20">
-                <Lock className="w-7 h-7" />
-              </div>
-              <div>
-                <span className="inline-block px-3 py-0.5 rounded-full text-[11px] font-bold bg-orange-100 dark:bg-orange-900/40 text-orange-600 dark:text-orange-400 border border-orange-200 dark:border-orange-800/60 uppercase tracking-wider mb-2">
-                  v2 Roadmap
-                </span>
-                <h3 className="text-xl font-extrabold text-zinc-900 dark:text-white">{t.zkTitle}</h3>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400 max-w-sm mx-auto mt-1 leading-relaxed">
-                  {t.zkDesc}
-                </p>
-              </div>
-
-              <div className="p-3.5 rounded-2xl bg-zinc-50 dark:bg-[#121620] border border-zinc-200/80 dark:border-zinc-800 text-left text-xs space-y-2">
-                <div className="flex items-center gap-2 text-zinc-700 dark:text-zinc-300 font-semibold">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                  <span>Decoupled UTXO ➔ Account Traceability</span>
-                </div>
-                <div className="flex items-center gap-2 text-zinc-700 dark:text-zinc-300 font-semibold">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                  <span>One-Time Ephemeral Deposit Addresses</span>
-                </div>
-                <div className="flex items-center gap-2 text-zinc-700 dark:text-zinc-300 font-semibold">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                  <span>No IP Logging & RPC Mixer Relay</span>
-                </div>
-              </div>
-
-              <button
-                onClick={() => setSubTab('swap')}
-                className="w-full py-3.5 rounded-xl font-bold text-sm bg-zinc-900 hover:bg-black dark:bg-white dark:hover:bg-zinc-100 text-white dark:text-zinc-950 transition-all cursor-pointer"
-              >
-                {t.returnSwap}
-              </button>
-            </div>
-          ) : (
-            <motion.div
-              key="form"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-            >
-            {/* TESTNET ACTIVE NOTIFICATION BANNER + ON-CHAIN FAUCET / MAINNET NO LIQUIDITY NOTICE */}
-            {isTestnet ? (
-              <div className="mb-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-300 text-xs overflow-hidden">
-                <div className="px-3 py-1.5 flex items-center justify-between gap-2">
-                  <span className="font-bold flex items-center gap-1.5 text-[11px]">
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
-                    <span>Testnet No-Custodio: PUSD (Chipnet) ⟷ USDT (Amoy)</span>
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setShowFaucetPanel(!showFaucetPanel)}
-                    className="text-[10px] font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-700 dark:text-amber-300 px-2 py-0.5 rounded-md transition-colors cursor-pointer shrink-0"
-                  >
-                    {showFaucetPanel ? 'Cerrar Faucet ✕' : '🚰 Grifo Testnet'}
-                  </button>
-                </div>
-
-                {showFaucetPanel && (
-                  <div className="px-3 pb-2.5 pt-1.5 border-t border-amber-500/20 space-y-2 bg-amber-500/5">
-                    <input
-                      type="text"
-                      value={faucetRecipient}
-                      onChange={e => setFaucetRecipient(e.target.value)}
-                      placeholder={
-                        connectedBch || connectedEvm
-                          ? 'Opcional: se usará tu wallet conectada automáticamente (o pega otra dirección)'
-                          : 'Pega tu bchtest:z... (para PUSD) o 0x... (para USDT Amoy)'
-                      }
-                      className="w-full px-2.5 py-1.5 rounded-lg bg-white dark:bg-[#0E131E] text-[11px] font-mono text-zinc-900 dark:text-white outline-none border border-amber-500/20"
-                    />
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        disabled={faucetLoadingToken !== null}
-                        onClick={() => handleClaimTestnetFaucet('PUSD')}
-                        className="py-1.5 px-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] transition-all cursor-pointer disabled:opacity-50"
-                      >
-                        {faucetLoadingToken === 'PUSD' ? 'Enviando PUSD...' : 'Reclamar 50 PUSD (Chipnet)'}
-                      </button>
-                      <button
-                        type="button"
-                        disabled={faucetLoadingToken !== null}
-                        onClick={() => handleClaimTestnetFaucet('USDT')}
-                        className="py-1.5 px-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-bold text-[11px] transition-all cursor-pointer disabled:opacity-50"
-                      >
-                        {faucetLoadingToken === 'USDT' ? 'Minting USDT...' : 'Reclamar 100 USDT (Amoy)'}
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="mb-3 px-3 py-2 rounded-xl bg-rose-500/10 border border-rose-500/25 text-rose-600 dark:text-rose-400 text-xs flex items-center justify-between gap-2">
-                <span className="font-bold flex items-center gap-1.5 text-[11px]">
-                  <Lock className="w-3.5 h-3.5 shrink-0" />
-                  <span>Mainnet: Sin Liquidez • Liquidez activa en Testnet (PUSD ⟷ USDT)</span>
-                </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (onToggleNetwork) onToggleNetwork('testnet');
-                    showToast('Red cambiada: Testnet activa (PUSD ⟷ USDT)');
-                  }}
-                  className="text-[10px] font-bold bg-amber-500 hover:bg-amber-600 text-white px-2.5 py-1 rounded-md transition-colors cursor-pointer shrink-0"
-                >
-                  Ir a Testnet
-                </button>
-              </div>
-            )}
-
-            {/* INTRA-BCH NATIVE CASHTOKENS BADGE */}
-            {sellToken.isBch && buyToken.isBch && (
-              <div className="mb-3 px-3 py-2 rounded-xl bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 text-xs flex items-center justify-between">
-                <span className="font-bold flex items-center gap-1.5">
-                  <Flame className="w-3.5 h-3.5 text-emerald-500" /> {t.intraBchBadge}
-                </span>
-                <span className="text-[10px] font-mono font-semibold bg-emerald-500/20 px-2 py-0.5 rounded-md">
-                  {t.intraBchFrictionless}
-                </span>
-              </div>
-            )}
-
-            {/* SELL BOX (BORDERLESS CLEAN DESIGN) */}
-            <div className="rounded-2xl bg-zinc-100 dark:bg-[#161D2B] p-3.5 sm:p-4.5 relative transition-colors">
-              <div className="flex justify-between items-center mb-1">
-                <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
-                  {subTab === 'limit' ? t.sellLimitLabel : t.sellLabel}
-                </span>
-                <div className="flex items-center gap-2">
-                  {sellWalletConnected && (
-                    <button
-                      type="button"
-                      onClick={() => handlePercent(100)}
-                      className="text-[11px] font-mono font-bold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer"
-                      title="Click para usar el 100% de tu saldo disponible"
-                    >
-                      Saldo: {connectedSellBalance.toFixed(2)} {sellToken.symbol}
-                    </button>
-                  )}
-                  <span className="text-[11px] text-zinc-400 dark:text-zinc-500 font-mono font-medium">
-                    {t.network}: {getNetworkBadge(sellToken)}
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between gap-3 mt-1">
-                <input 
-                  type="number"
-                  value={sellAmount}
-                  onChange={e => setSellAmount(e.target.value)}
-                  placeholder="0"
-                  className="w-full bg-transparent text-3xl sm:text-4xl font-semibold text-zinc-900 dark:text-white outline-none placeholder:text-zinc-300 dark:placeholder:text-zinc-600 font-mono tracking-tight"
-                />
-
-                {/* Token Selector Pill */}
-                <button
-                  type="button"
-                  onClick={() => setModalType('sell')}
-                  className="flex items-center gap-2 bg-white dark:bg-[#222B3D] hover:bg-zinc-50 dark:hover:bg-[#2A354B] px-3 py-1.5 rounded-xl shadow-xs transition-all shrink-0 cursor-pointer"
-                >
-                  <div className="w-6 h-6 rounded-full overflow-hidden shrink-0">
-                    <img src={sellToken.icon} alt={sellToken.symbol} className="w-full h-full object-contain" />
-                  </div>
-                  <div className="text-left">
-                    <div className="flex items-center gap-1">
-                      <span className="text-sm font-bold text-zinc-900 dark:text-white leading-tight">
-                        {sellToken.symbol}
-                      </span>
-                      {(sellToken.isVerified ?? true) && (
-                        <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-blue-500 text-white shrink-0" title="Token Oficial Verificado">
-                          <Check className="w-2 h-2 stroke-[3]" />
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-[10px] text-zinc-400 font-medium leading-tight hidden sm:block">
-                      {sellToken.name.split(' ')[0]}
-                    </div>
-                  </div>
-                  <ChevronDown className="w-3.5 h-3.5 text-zinc-400 ml-0.5" />
-                </button>
-              </div>
-
-              {/* Under amount: USD value & Quick Percentage pills */}
-              <div className="flex items-center justify-between mt-3 pt-1">
-                <span className="text-xs font-medium text-zinc-400 dark:text-zinc-500 font-mono">
-                  ${(() => {
-                    const price = quote.priceFromUsd ?? (sellToken.symbol === 'LIFT' ? 0.01617 : (sellToken.symbol === 'BCH' ? 283.5 : 1.0));
-                    const val = parsedAmount * price;
-                    return val > 0 && val < 0.01 ? val.toFixed(4) : (val > 0 && val < 1 ? val.toFixed(3) : val.toFixed(2));
-                  })()}
-                </span>
-
-                {/* Percentage Pills (Clear | 50% | 100%) */}
-                <div className="flex items-center gap-1.5">
-                  <button 
-                    type="button"
-                    onClick={() => handlePercent(0)}
-                    className="text-[11px] font-medium px-2.5 py-0.5 rounded-lg bg-white dark:bg-[#222B3D] text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white shadow-2xs transition-all cursor-pointer"
-                  >
-                    {t.clear}
-                  </button>
-                  <button 
-                    type="button"
-                    onClick={() => handlePercent(50)}
-                    className="text-[11px] font-medium px-2.5 py-0.5 rounded-lg bg-white dark:bg-[#222B3D] text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white shadow-2xs transition-all cursor-pointer"
-                  >
-                    50%
-                  </button>
-                  <button 
-                    type="button"
-                    onClick={() => handlePercent(100)}
-                    className="text-[11px] font-medium px-2.5 py-0.5 rounded-lg bg-white dark:bg-[#222B3D] text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white shadow-2xs transition-all cursor-pointer"
-                  >
-                    100%
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* FLIP / REVERSE BUTTON */}
-            <div className="flex justify-center -my-3 relative z-10">
-              <motion.button 
-                type="button"
-                onClick={handleFlip}
-                title="Invert tokens"
-                animate={{ rotate: flipDegree }}
-                transition={{ type: "spring", stiffness: 350, damping: 22 }}
-                whileHover={{ scale: 1.08 }}
-                whileTap={{ scale: 0.92 }}
-                className="w-9 h-9 rounded-xl bg-white dark:bg-[#222B3D] shadow-md flex items-center justify-center text-zinc-500 dark:text-zinc-400 hover:text-orange-500 dark:hover:text-orange-400 transition-colors cursor-pointer"
-              >
-                <ArrowUpDown className="w-3.5 h-3.5" />
-              </motion.button>
-            </div>
-
-            {/* BUY / TARGET RATE BOX */}
-            {subTab === 'limit' ? (
-              <div className="rounded-2xl bg-zinc-100 dark:bg-[#161D2B] p-3.5 sm:p-4.5 relative transition-colors">
-                <div className="flex justify-between items-center mb-1">
-                  <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 flex items-center gap-1">
-                    <Target className="w-3.5 h-3.5 text-orange-500" /> {t.targetRateTitle}
-                  </span>
-                  <span className="text-xs text-zinc-400 dark:text-zinc-500 font-medium font-mono">
-                    {t.marketRate}: {quote.rate.toFixed(4)}
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between gap-3 mt-1">
-                  <div className="flex items-center gap-2 w-full">
-                    <span className="text-sm font-bold text-zinc-400">1 {sellToken.symbol} =</span>
-                    <input 
-                      type="number"
-                      value={targetRate}
-                      onChange={e => setTargetRate(e.target.value)}
-                      placeholder="1.0020"
-                      className="w-full bg-transparent text-2xl sm:text-3xl font-semibold text-zinc-900 dark:text-white outline-none font-mono tracking-tight"
-                    />
-                  </div>
-
-                  {/* Token Selector Pill */}
-                  <button
-                    type="button"
-                    onClick={() => setModalType('buy')}
-                    className="flex items-center gap-2 bg-white dark:bg-[#222B3D] hover:bg-zinc-50 dark:hover:bg-[#2A354B] px-3 py-1.5 rounded-xl shadow-xs transition-all shrink-0 cursor-pointer"
-                  >
-                    <div className="w-6 h-6 rounded-full overflow-hidden shrink-0">
-                      <img src={buyToken.icon} alt={buyToken.symbol} className="w-full h-full object-contain" />
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <span className="text-sm font-bold text-zinc-900 dark:text-white">{buyToken.symbol}</span>
-                      {(buyToken.isVerified ?? true) && (
-                        <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-blue-500 text-white shrink-0" title="Token Oficial Verificado">
-                          <Check className="w-2 h-2 stroke-[3]" />
-                        </span>
-                      )}
-                    </div>
-                    <ChevronDown className="w-3.5 h-3.5 text-zinc-400 ml-0.5" />
-                  </button>
-                </div>
-
-                <div className="flex items-center justify-between mt-3 pt-1 text-xs">
-                  <span className="text-zinc-400">{t.expectedOutput}</span>
-                  <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                    {(parsedAmount * (parseFloat(targetRate) || 1.0) * 0.997).toFixed(2)} {buyToken.symbol}
-                  </span>
-                </div>
-              </div>
-            ) : (
-              <div className="rounded-2xl bg-zinc-100 dark:bg-[#161D2B] p-3.5 sm:p-4.5 relative transition-colors">
-                <div className="flex justify-between items-center mb-1">
-                  <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
-                    {t.buyLabel}
-                  </span>
-                  <span className="text-[11px] text-zinc-400 dark:text-zinc-500 font-mono font-medium">
-                    {t.network}: {getNetworkBadge(buyToken)}
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between gap-3 mt-1">
-                  <div className="text-3xl sm:text-4xl font-semibold text-zinc-900 dark:text-white font-mono tracking-tight">
-                    {quoteLoading ? (
-                      <span className="text-zinc-300 dark:text-zinc-600 animate-pulse text-2xl">...</span>
-                    ) : isZero ? (
-                      <span className="text-zinc-300 dark:text-zinc-600">0</span>
-                    ) : (
-                      formatNetPayout(quote.netPayout, buyToken.symbol)
-                    )}
-                  </div>
-
-                  {/* Token Selector Pill */}
-                  <button
-                    type="button"
-                    onClick={() => setModalType('buy')}
-                    className="flex items-center gap-2 bg-white dark:bg-[#222B3D] hover:bg-zinc-50 dark:hover:bg-[#2A354B] px-3 py-1.5 rounded-xl shadow-xs transition-all shrink-0 cursor-pointer"
-                  >
-                    <div className="w-6 h-6 rounded-full overflow-hidden shrink-0">
-                      <img src={buyToken.icon} alt={buyToken.symbol} className="w-full h-full object-contain" />
-                    </div>
-                    <div className="text-left">
-                      <div className="flex items-center gap-1">
-                        <span className="text-sm font-bold text-zinc-900 dark:text-white leading-tight">
-                          {buyToken.symbol}
-                        </span>
-                        {(buyToken.isVerified ?? true) && (
-                          <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-blue-500 text-white shrink-0" title="Token Oficial Verificado">
-                            <Check className="w-2 h-2 stroke-[3]" />
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-[10px] text-zinc-400 font-medium leading-tight hidden sm:block">
-                        {buyToken.name.split(' ')[0]}
-                      </div>
-                    </div>
-                    <ChevronDown className="w-3.5 h-3.5 text-zinc-400 ml-0.5" />
-                  </button>
-                </div>
-
-                <div className="flex items-center justify-between mt-3 pt-1">
-                  <span className="text-xs font-medium text-zinc-400 dark:text-zinc-500 font-mono">
-                    ≈ ${quote.netPayoutUsd !== undefined 
-                      ? (quote.netPayoutUsd < 1 ? quote.netPayoutUsd.toFixed(3) : quote.netPayoutUsd.toFixed(2))
-                      : (['PUSD', 'USDC', 'USDT', 'MUSD'].includes(buyToken.symbol) 
-                          ? (quote.netPayout < 1 ? quote.netPayout.toFixed(3) : quote.netPayout.toFixed(2)) 
-                          : (parsedAmount * 0.997).toFixed(2))} USD
-                  </span>
-                  {quote.oracleProvider && (
-                    <span className="text-[10px] font-bold text-zinc-400 bg-zinc-200/60 dark:bg-zinc-800/80 px-2 py-0.5 rounded-md flex items-center gap-1.5 font-mono">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                      <span>Feed: {quote.oracleProvider}</span>
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* DESTINATION WALLET BOX */}
-            {sellToken.isBch && buyToken.isBch ? (
-              <div className="mt-3 p-3.5 rounded-2xl bg-emerald-500/10 text-xs">
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-                    <span>{t.autoSettling}</span>
-                  </span>
-                  <span className="text-[10px] font-mono font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/20 px-2 py-0.5 rounded-md">
-                    Intra-BCH
-                  </span>
-                </div>
-                <div className="font-mono text-[11px] text-zinc-700 dark:text-zinc-200 bg-white/70 dark:bg-[#0E131E] p-2.5 rounded-xl truncate">
-                  {userAddress || recipientAddress || 'Connecting Bitcoin Cash wallet...'}
-                </div>
-              </div>
-            ) : (
-              <div className="mt-3 p-3.5 rounded-2xl bg-zinc-100 dark:bg-[#161D2B] transition-colors">
-                <div className="flex justify-between items-center mb-1.5">
-                  <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
-                    <Wallet className="w-3.5 h-3.5 text-orange-500" />
-                    <span>{t.destAddress} ({getNetworkBadge(buyToken)})</span>
-                  </span>
-
-                  {/* Format validation status badge */}
-                  {recipientAddress.trim() ? (
-                    isRecipientValid() ? (
-                      <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-mono font-bold flex items-center gap-1">
-                        <CheckCircle2 className="w-3 h-3" /> {t.validFormat}
-                      </span>
-                    ) : (
-                      <span className="text-[10px] text-rose-500 font-mono font-bold flex items-center gap-1">
-                        <AlertCircle className="w-3 h-3" /> {buyToken.isBch ? (isTestnet ? 'Needs bchtest:... format' : 'Needs bitcoincash:... format') : buyToken.symbol === 'SOL' ? 'Needs Solana format' : 'Needs 0x... format'}
-                      </span>
-                    )
-                  ) : (
-                    <span className="text-[10px] text-amber-500 font-mono font-bold">
-                      {t.required}
-                    </span>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-2 mt-1">
-                  <input
-                    type="text"
-                    value={recipientAddress}
-                    onChange={e => setRecipientAddress(e.target.value)}
-                    placeholder={buyToken.isBch ? (isTestnet ? "bchtest:qq... (Chipnet Address)" : "bitcoincash:qq... (Mainnet Address)") : buyToken.symbol === 'SOL' ? "Solana address (e.g. 7xKXtg...)" : "0x... (Paste your destination address)"}
-                    className="w-full bg-white dark:bg-[#0E131E] text-xs font-mono text-zinc-900 dark:text-white rounded-xl p-2.5 outline-none transition-colors"
-                  />
-
-                  {/* 1-Click Paste Button */}
-                  <button
-                    type="button"
-                    onClick={handlePasteRecipient}
-                    className="px-3 py-2.5 rounded-xl bg-white dark:bg-[#222B3D] hover:bg-zinc-50 dark:hover:bg-[#2A354B] text-zinc-700 dark:text-zinc-300 font-semibold text-xs flex items-center gap-1.5 shrink-0 cursor-pointer transition-all"
-                    title="Paste from clipboard"
-                  >
-                    <Clipboard className="w-3.5 h-3.5" />
-                    <span className="hidden sm:inline">{t.paste}</span>
-                  </button>
-                </div>
-
-                <div className="flex justify-between items-center mt-2 text-[10px] text-zinc-400">
-                  <span>{t.fundsNotice}</span>
-                  {(buyToken.isBch ? Boolean(connectedBch) : Boolean(connectedEvm)) ? (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setRecipientAddress(
-                          buyToken.isBch
-                            ? convertCashAddressNetwork(connectedBch, isTestnet, true)
-                            : connectedEvm
-                        )
-                      }
-                      className="text-orange-500 font-bold hover:underline cursor-pointer"
-                    >
-                      {t.useConnected}
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={onConnectWallet}
-                      className="text-emerald-600 dark:text-emerald-400 font-bold hover:underline cursor-pointer"
-                    >
-                      {buyToken.isBch
-                        ? lang === 'es'
-                          ? '+ Conectar Wallet BCH'
-                          : '+ Connect BCH Wallet'
-                        : lang === 'es'
-                        ? '+ Conectar Wallet EVM'
-                        : '+ Connect EVM Wallet'}
-                    </button>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* DETAILS BREAKDOWN ACCORDION */}
-            <AnimatePresence>
-              {!isZero && (
-                <motion.div 
-                  initial={{ opacity: 0, y: -4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -4 }}
-                  className="my-3 p-3.5 rounded-2xl bg-zinc-100/80 dark:bg-[#161D2B]/80 text-xs space-y-1.5"
-                >
-                  <div className="flex justify-between text-zinc-600 dark:text-zinc-400">
-                    <span className="font-medium">{t.execMode}</span>
-                    <span className="font-semibold text-zinc-900 dark:text-white">
-                      {sellToken.isBch && buyToken.isBch
-                        ? t.intraBchTitle
-                        : subTab === 'limit'
-                        ? t.limitRelayer
-                        : t.directRelayer}
-                    </span>
-                  </div>
-
-                  <div className="flex justify-between text-zinc-600 dark:text-zinc-400">
-                    <span className="font-medium">{t.marketPrice}</span>
-                    <span className="font-semibold text-zinc-900 dark:text-white font-mono">
-                      1 {sellToken.symbol} ≈ {Number((quote.rate || 1.0).toFixed(6))} {buyToken.symbol}
-                    </span>
-                  </div>
-
-                  <div className="flex justify-between text-zinc-600 dark:text-zinc-400">
-                    <span className="font-medium">{t.grossAmount}</span>
-                    <span className="font-semibold text-zinc-700 dark:text-zinc-300 font-mono">
-                      {formatNetPayout(quote.grossAmount || parsedAmount, buyToken.symbol)} {buyToken.symbol}
-                    </span>
-                  </div>
-
-                  <div className="flex justify-between text-zinc-600 dark:text-zinc-400">
-                    <span className="font-medium">{t.totalFee}</span>
-                    <span className="font-semibold text-orange-600 dark:text-orange-400 font-mono">
-                      -{formatFeeAmount(quote.feeAmount)} {buyToken.symbol}
-                    </span>
-                  </div>
-
-                  <div className="flex justify-between text-zinc-500 dark:text-zinc-400 pl-2 border-l-2 border-orange-500/30">
-                    <span className="text-[11px]">{t.transparentBreakdown}</span>
-                    <span className="font-semibold text-emerald-600 dark:text-emerald-400 font-mono text-[11px]">
-                      {t.feeSplit}
-                    </span>
-                  </div>
-
-                  <div className="flex justify-between text-zinc-700 dark:text-zinc-300 pt-1.5 border-t border-zinc-200 dark:border-zinc-800">
-                    <span className="font-bold text-zinc-900 dark:text-white">{t.youReceive}</span>
-                    <span className="font-extrabold text-emerald-600 dark:text-emerald-400 font-mono text-sm">
-                      {formatNetPayout(quote.netPayout, buyToken.symbol)} {buyToken.symbol}
-                    </span>
-                  </div>
-
-                  <div className="flex justify-between text-zinc-500 dark:text-zinc-400 text-xs pt-1">
-                    <span className="flex items-center gap-1">
-                      <span>{t.minGuaranteed} ({slippage}% slippage):</span>
-                    </span>
-                    <span className="font-mono font-bold text-zinc-700 dark:text-zinc-300">
-                      {formatNetPayout(quote.netPayout * (1 - slippage / 100), buyToken.symbol)} {buyToken.symbol}
-                    </span>
-                  </div>
-
-                  {/* Pre-flight Liquidity Warning Badge */}
-                  {quote?.hasLiquidity === false && (
-                    <div className="mt-2 p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-semibold flex items-center gap-2">
-                      <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
-                      <span>Insufficient pool liquidity. Max available: <strong>{quote.availableLiquidity} {buyToken.symbol}</strong></span>
-                    </div>
-                  )}
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* MAIN ACTION BUTTON */}
-            <div className="mt-3">
-              {!isTestnet ? (
-                <motion.button
-                  type="button"
-                  whileHover={{ scale: 1.01 }}
-                  whileTap={{ scale: 0.99 }}
-                  onClick={() => {
-                    if (onToggleNetwork) onToggleNetwork('testnet');
-                    showToast('Red cambiada: Testnet activa (PUSD ⟷ USDT)');
-                  }}
-                  className="w-full py-3.5 sm:py-4 rounded-xl font-bold text-xs sm:text-sm bg-rose-500/10 hover:bg-amber-500/15 border border-rose-500/30 hover:border-amber-500/40 text-rose-600 dark:text-rose-400 hover:text-amber-600 dark:hover:text-amber-400 transition-all flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  <Lock className="w-4 h-4 shrink-0" />
-                  <span>Sin Liquidez en Mainnet • Cambiar a Testnet (PUSD ⟷ USDT)</span>
-                </motion.button>
-              ) : isZero ? (
-                <button 
-                  disabled
-                  className="w-full py-3.5 sm:py-4 rounded-xl font-semibold text-sm sm:text-base bg-zinc-100 dark:bg-[#121620] text-zinc-400 dark:text-zinc-600 border border-zinc-200/80 dark:border-zinc-800/80 cursor-not-allowed text-center transition-all"
-                >
-                  {t.enterAmount}
-                </button>
-              ) : !userContext ? (
-                <motion.button 
-                  whileHover={{ scale: 1.01 }}
-                  whileTap={{ scale: 0.99 }}
-                  onClick={onConnectWallet}
-                  className="w-full py-3.5 sm:py-4 rounded-xl font-bold text-sm sm:text-base bg-zinc-900 hover:bg-black dark:bg-white dark:hover:bg-zinc-100 text-white dark:text-zinc-950 shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  <Wallet className="w-4 h-4 text-orange-500" /> {t.connectWallet}
-                </motion.button>
-              ) : quote?.hasLiquidity === false ? (
-                <button 
-                  disabled
-                  className="w-full py-3.5 sm:py-4 rounded-xl font-bold text-sm sm:text-base bg-rose-500/10 border border-rose-500/30 text-rose-500 cursor-not-allowed text-center transition-all flex items-center justify-center gap-2"
-                >
-                  <AlertCircle className="w-4 h-4 text-rose-500" /> {t.insufficientLiquidity}
-                </button>
-              ) : subTab === 'limit' ? (
-                <motion.button 
-                  whileHover={{ scale: 1.01 }}
-                  whileTap={{ scale: 0.99 }}
-                  onClick={handlePlaceLimitOrder}
-                  disabled={isPlacingLimitOrder}
-                  className="w-full py-3.5 sm:py-4 rounded-xl font-bold text-sm sm:text-base bg-orange-500 hover:bg-orange-600 text-white shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  {isPlacingLimitOrder ? (
-                    <>
-                      <RefreshCw className="w-4 h-4 animate-spin" /> {t.registeringLimit}
-                    </>
-                  ) : (
-                    <>
-                      <Target className="w-4 h-4" /> {t.placeLimitOrder}
-                    </>
-                  )}
-                </motion.button>
-              ) : (
-                <motion.button 
-                  whileHover={{ scale: 1.01 }}
-                  whileTap={{ scale: 0.99 }}
-                  onClick={handleSwap}
-                  disabled={isSwapping}
-                  className="w-full py-3.5 sm:py-4 rounded-xl font-bold text-sm sm:text-base bg-orange-500 hover:bg-orange-600 text-white shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  {isSwapping ? (
-                    <>
-                      <RefreshCw className="w-4 h-4 animate-spin" /> {t.preparingRelayer}
-                    </>
-                  ) : (
-                    t.swapNow
-                  )}
-                </motion.button>
-              )}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      </motion.div>
-
-      {/* ACTIVE LIMIT ORDERS DRAWER */}
-      {limitOrders.length > 0 && (
-        <div className="w-full max-w-[480px] mt-4 p-4 rounded-2xl bg-white dark:bg-[#0E131E] shadow-xl">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-bold text-zinc-900 dark:text-white flex items-center gap-1.5">
-              <Target className="w-3.5 h-3.5 text-orange-500" /> {t.limitOrdersTitle} ({limitOrders.length})
-            </span>
-            <span className="text-[10px] text-zinc-400 font-mono">{t.monitoring247}</span>
-          </div>
-
-          <div className="space-y-2 max-h-48 overflow-y-auto">
-            {limitOrders.map(order => (
-              <div key={order.id} className="p-2.5 rounded-xl bg-zinc-100 dark:bg-[#161D2B] flex items-center justify-between text-xs">
-                <div>
-                  <div className="font-bold text-zinc-900 dark:text-white">
-                    {order.fromAmount} {order.fromToken} ➔ {order.expectedOutput} {order.toToken}
-                  </div>
-                  <div className="text-[10px] text-zinc-400 font-mono mt-0.5">
-                    Target Rate: {order.targetRate} • Status: <span className="text-orange-500 font-semibold">{order.status}</span>
-                  </div>
-                </div>
-
-                {order.status === 'OPEN' && (
-                  <button
-                    onClick={() => handleCancelLimitOrder(order.id)}
-                    className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors cursor-pointer"
-                    title="Cancel order"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
+              {t.switchToTestnet}
+            </button>
+          )}
         </div>
       )}
 
-      {/* FOOTER */}
-      <footer className="w-full max-w-[800px] mt-10 pt-6 border-t border-gray-200/60 dark:border-gray-800/80 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-gray-400 dark:text-gray-500 text-center sm:text-left">
-        <div>
-          <span>BinaryLiquid Protocol • Powered by <strong className="text-gray-600 dark:text-gray-300 font-semibold">Bitcoin Cash CashTokens</strong></span>
-        </div>
-
-        <div className="flex items-center justify-center gap-4">
-          <a href="https://bchblaze.cash" target="_blank" rel="noreferrer" className="hover:text-primary transition-colors flex items-center gap-1">
-            <span>BCH BLAZE</span>
-            <ExternalLink className="w-3 h-3" />
-          </a>
-          <a href="https://paryonusd.com" target="_blank" rel="noreferrer" className="hover:text-primary transition-colors flex items-center gap-1">
-            <span>ParyonUSD</span>
-            <ExternalLink className="w-3 h-3" />
-          </a>
-        </div>
-      </footer>
-
-      {/* REAL-TIME CROSS-CHAIN SWAP MODAL */}
-      <AnimatePresence>
-        {swapModalOpen && activeSwap && (
-          <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[120] flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 15 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 15 }}
-              transition={{ type: "spring", stiffness: 350, damping: 25 }}
-              className="bg-white dark:bg-[#121620] rounded-[32px] p-5 sm:p-7 w-full max-w-md shadow-2xl border border-gray-100 dark:border-gray-800 relative text-left my-8"
-            >
-              
-              <button 
-                onClick={() => setSwapModalOpen(false)}
-                className="absolute top-5 right-5 text-gray-400 hover:text-gray-900 dark:hover:text-white bg-gray-100 dark:bg-gray-800 w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs cursor-pointer"
+      {/* MAIN MINIMALIST SWAP CARD */}
+      <div className="bg-white dark:bg-[#0F131A] border border-gray-200/80 dark:border-white/[0.07] rounded-[28px] p-3.5 sm:p-4 shadow-[0_12px_40px_rgba(0,0,0,0.04)] dark:shadow-[0_16px_48px_rgba(0,0,0,0.45)]">
+        {/* CARD TOP BAR */}
+        {cardState === 'form' && (
+          <div className="flex items-center justify-between px-1 pb-3">
+            {/* Swap | Limit Segmented Control */}
+            <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-gray-100/80 dark:bg-white/[0.04]">
+              <button
+                type="button"
+                onClick={() => setActiveTab('swap')}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  activeTab === 'swap'
+                    ? 'bg-white dark:bg-[#1C2230] text-gray-900 dark:text-white shadow-2xs'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                }`}
               >
-                ✕
+                {t.swap}
               </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('limit')}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  activeTab === 'limit'
+                    ? 'bg-white dark:bg-[#1C2230] text-gray-900 dark:text-white shadow-2xs'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                }`}
+              >
+                {t.limit}
+              </button>
+            </div>
 
-              {/* Title & Status */}
-              <div className="text-center mb-5">
-                <div className="w-14 h-14 rounded-2xl bg-gray-50 dark:bg-[#1a2130] border border-gray-100 dark:border-gray-800 flex items-center justify-center mx-auto mb-2.5 shadow-xs">
-                  {swapStep === 4 ? (
-                    <CheckCircle2 className="w-8 h-8 text-emerald-500" />
+            {/* Subtle Utility Actions (Faucet + Slippage) */}
+            <div className="flex items-center gap-1.5">
+              {isTestnet && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFaucetOpen(!faucetOpen);
+                    setSettingsOpen(false);
+                  }}
+                  className={`h-8 px-2.5 rounded-xl text-[11px] font-semibold flex items-center gap-1 transition-colors cursor-pointer ${
+                    faucetOpen
+                      ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                      : 'bg-gray-100/80 dark:bg-white/[0.04] text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                  }`}
+                  title="Testnet PUSD Faucet"
+                >
+                  <Droplets className="w-3.5 h-3.5 text-emerald-500" />
+                  <span>{t.faucet}</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => {
+                  setSettingsOpen(!settingsOpen);
+                  setFaucetOpen(false);
+                }}
+                className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
+                  settingsOpen
+                    ? 'bg-primary/15 text-primary'
+                    : 'bg-gray-100/80 dark:bg-white/[0.04] text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                }`}
+                title={t.slippage}
+              >
+                <Settings className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* COMPACT FAUCET POPOVER */}
+        {cardState === 'form' && faucetOpen && isTestnet && (
+          <div className="mb-3 p-3 rounded-2xl bg-gray-50 dark:bg-[#161B24] border border-gray-200/70 dark:border-white/[0.06] space-y-2">
+            <div className="flex items-center justify-between text-[11px] text-gray-500 dark:text-gray-400">
+              <span className="font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-1">
+                <Sparkles className="w-3 h-3 text-emerald-500" /> PUSD Chipnet Faucet
+              </span>
+              <button
+                type="button"
+                onClick={() => setFaucetOpen(false)}
+                className="text-gray-400 hover:text-gray-700 dark:hover:text-white cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={faucetAddress}
+                onChange={e => setFaucetAddress(e.target.value)}
+                placeholder={t.faucetPlaceholder}
+                className="flex-1 min-w-0 bg-white dark:bg-[#0F131A] border border-gray-200 dark:border-white/[0.07] rounded-xl px-2.5 py-1.5 text-xs font-mono text-gray-900 dark:text-white outline-none focus:border-emerald-500"
+              />
+              <button
+                type="button"
+                disabled={claimingFaucet}
+                onClick={handleClaimFaucet}
+                className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white text-xs font-semibold shrink-0 transition cursor-pointer"
+              >
+                {claimingFaucet ? '...' : t.faucetClaim}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* COMPACT SLIPPAGE POPOVER */}
+        {cardState === 'form' && settingsOpen && (
+          <div className="mb-3 p-3 rounded-2xl bg-gray-50 dark:bg-[#161B24] border border-gray-200/70 dark:border-white/[0.06] flex items-center justify-between gap-2">
+            <span className="text-xs font-medium text-gray-600 dark:text-gray-400">{t.slippage}</span>
+            <div className="flex items-center gap-1">
+              {[0.1, 0.5, 1.0].map(val => (
+                <button
+                  key={val}
+                  type="button"
+                  onClick={() => {
+                    setSlippage(val);
+                    setCustomSlippage('');
+                  }}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                    slippage === val && !customSlippage
+                      ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-950'
+                      : 'bg-white dark:bg-[#0F131A] text-gray-600 dark:text-gray-400 border border-gray-200/70 dark:border-white/[0.06]'
+                  }`}
+                >
+                  {val}%
+                </button>
+              ))}
+              <input
+                type="number"
+                step="0.1"
+                min="0.05"
+                max="20"
+                placeholder="Custom"
+                value={customSlippage}
+                onChange={e => {
+                  setCustomSlippage(e.target.value);
+                  const n = parseFloat(e.target.value);
+                  if (!isNaN(n) && n > 0 && n <= 20) setSlippage(n);
+                }}
+                className="w-16 px-2 py-1 rounded-lg text-xs text-right bg-white dark:bg-[#0F131A] border border-gray-200/70 dark:border-white/[0.06] text-gray-900 dark:text-white outline-none"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* ================================================================ */}
+        {/* VIEW 1: CLEAN SWAP / LIMIT FORM                                  */}
+        {/* ================================================================ */}
+        {cardState === 'form' && (
+          <div className="space-y-1.5">
+            {/* PAY BOX (`sellToken` — Bound to Connected Paying Wallet) */}
+            <div className="p-4 rounded-2xl bg-gray-50/90 dark:bg-[#161B24] border border-transparent focus-within:border-gray-300 dark:focus-within:border-white/[0.12] transition-colors">
+              <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 mb-2">
+                <span className="font-medium">{t.pay}</span>
+                {isPayingWalletConnected ? (
+                  <div className="flex items-center gap-1.5">
+                    <span>
+                      {t.balance}:{' '}
+                      <strong className="text-gray-700 dark:text-gray-200 font-semibold tabular-nums">
+                        {sellBalance !== null ? sellBalance.toFixed(2) : '0.00'}
+                      </strong>
+                    </span>
+                    {sellBalance !== null && sellBalance > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setAmount(String(sellBalance))}
+                        className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-primary/15 text-primary hover:bg-primary/25 transition cursor-pointer"
+                      >
+                        {t.max}
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={onConnectWallet}
+                    className="text-[11px] font-semibold text-primary hover:underline cursor-pointer"
+                  >
+                    + {sellToken.isBch ? 'Wallet BCH' : 'Wallet EVM'}
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between gap-3">
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  step="any"
+                  value={amount}
+                  onChange={e => setAmount(e.target.value)}
+                  placeholder="0"
+                  className="w-full min-w-0 bg-transparent text-3xl font-semibold tracking-tight text-gray-900 dark:text-white placeholder:text-gray-300 dark:placeholder:text-gray-600 outline-none tabular-nums"
+                />
+
+                <button
+                  type="button"
+                  onClick={() => setTokenModalTarget('sell')}
+                  className="flex items-center gap-2 pl-2.5 pr-3 py-1.5 rounded-full bg-white dark:bg-[#202736] hover:bg-gray-100 dark:hover:bg-[#283042] border border-gray-200/80 dark:border-white/[0.08] shadow-2xs shrink-0 transition cursor-pointer"
+                >
+                  <img
+                    src={sellToken.icon}
+                    alt={sellToken.symbol}
+                    className="w-6 h-6 rounded-full object-contain"
+                  />
+                  <span className="font-bold text-sm text-gray-900 dark:text-white">
+                    {sellToken.symbol}
+                  </span>
+                  <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between mt-1.5 text-[11px] text-gray-400 dark:text-gray-500">
+                <span className="tabular-nums">
+                  {amount && parseFloat(amount) > 0
+                    ? `~$${(parseFloat(amount) * (quote?.priceFromUsd || 1)).toFixed(2)}`
+                    : '$0.00'}
+                </span>
+                <span>{sellToken.isBch ? (isTestnet ? 'BCH Chipnet' : 'Bitcoin Cash') : isTestnet ? 'Polygon Amoy' : 'Polygon'}</span>
+              </div>
+            </div>
+
+            {/* FLIP BUTTON */}
+            <div className="relative h-2 flex items-center justify-center z-10">
+              <button
+                type="button"
+                onClick={handleFlipTokens}
+                aria-label="Invertir par"
+                className="w-9 h-9 rounded-xl bg-white dark:bg-[#1A202C] hover:bg-gray-50 dark:hover:bg-[#232B3B] border-4 border-white dark:border-[#0F131A] shadow-xs flex items-center justify-center text-gray-600 dark:text-gray-300 hover:rotate-180 transition-all duration-200 cursor-pointer"
+              >
+                <ArrowDownUp className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* RECEIVE BOX (`buyToken`) */}
+            <div className="p-4 rounded-2xl bg-gray-50/90 dark:bg-[#161B24] border border-transparent transition-colors">
+              <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 mb-2">
+                <span className="font-medium">{t.receive}</span>
+                {!isPairLiquid && (
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-500">
+                    {t.noLiquidity}
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between gap-3">
+                <div className="w-full min-w-0 text-3xl font-semibold tracking-tight tabular-nums truncate">
+                  {loadingQuote ? (
+                    <span className="inline-block w-24 h-8 rounded-lg bg-gray-200/70 dark:bg-white/[0.06] animate-pulse align-middle" />
+                  ) : receiveDisplay ? (
+                    <span className="text-gray-900 dark:text-white">{receiveDisplay}</span>
                   ) : (
-                    <img src="/logo.png" alt="BinaryLiquid" className="w-8 h-8 object-contain animate-heartbeat" />
+                    <span className="text-gray-300 dark:text-gray-600">0</span>
                   )}
                 </div>
-                <h3 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white">
-                  {swapStep === 4 ? 'Swap Completed!' : 'Bridge Deposit & Relayer Execution'}
-                </h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400 font-mono mt-0.5">
-                  Order ID: <span className="font-bold text-primary">{activeSwap.id}</span>
-                </p>
+
+                <button
+                  type="button"
+                  onClick={() => setTokenModalTarget('buy')}
+                  className="flex items-center gap-2 pl-2.5 pr-3 py-1.5 rounded-full bg-white dark:bg-[#202736] hover:bg-gray-100 dark:hover:bg-[#283042] border border-gray-200/80 dark:border-white/[0.08] shadow-2xs shrink-0 transition cursor-pointer"
+                >
+                  <img
+                    src={buyToken.icon}
+                    alt={buyToken.symbol}
+                    className="w-6 h-6 rounded-full object-contain"
+                  />
+                  <span className="font-bold text-sm text-gray-900 dark:text-white">
+                    {buyToken.symbol}
+                  </span>
+                  <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+                </button>
               </div>
 
-              {/* Step Timeline Indicator */}
-              <div className="grid grid-cols-4 gap-1.5 mb-5">
-                {[
-                  { step: 1, label: 'Deposit' },
-                  { step: 2, label: 'Confirm' },
-                  { step: 3, label: 'Dispatch' },
-                  { step: 4, label: 'Done' }
-                ].map(s => {
-                  const isDone = swapStep > s.step;
-                  const isCur = swapStep === s.step;
-                  return (
-                    <div key={s.step} className="flex flex-col items-center">
-                      <div className={`w-full h-1.5 rounded-full mb-1 transition-all ${
-                        isDone ? 'bg-emerald-500' : isCur ? 'bg-primary animate-pulse' : 'bg-gray-200 dark:bg-gray-800'
-                      }`} />
-                      <span className={`text-[10px] font-bold ${
-                        isDone ? 'text-emerald-500' : isCur ? 'text-primary' : 'text-gray-400'
-                      }`}>
-                        {s.label}
-                      </span>
-                    </div>
-                  );
-                })}
+              <div className="flex items-center justify-between mt-1.5 text-[11px] text-gray-400 dark:text-gray-500">
+                <span className="tabular-nums">
+                  {receiveDisplay ? `~$${receiveDisplay}` : '$0.00'}
+                </span>
+                <span>{buyToken.isBch ? (isTestnet ? 'BCH Chipnet' : 'Bitcoin Cash') : isTestnet ? 'Polygon Amoy' : 'Polygon'}</span>
               </div>
+            </div>
 
-              {/* STEP 1: Awaiting Deposit (Shows QR & Deposit Address) */}
-              {swapStep === 1 && (
-                <div className="space-y-4 mb-5">
-                  <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-800 dark:text-amber-300 leading-relaxed font-medium">
-                    Please send <strong>{activeSwap.fromAmount} {activeSwap.fromToken}</strong> to the bridge deposit address below.
-                  </div>
+            {/* TARGET PRICE ROW (Only in Limit Tab) */}
+            {activeTab === 'limit' && (
+              <div className="px-4 py-3 rounded-2xl bg-gray-50/90 dark:bg-[#161B24] flex items-center justify-between gap-3">
+                <div className="text-xs text-gray-500 dark:text-gray-400">
+                  <div className="font-medium">{t.targetPrice}</div>
+                  <button
+                    type="button"
+                    onClick={() => setTargetRate('1.00')}
+                    className="text-[10px] text-primary font-semibold hover:underline cursor-pointer"
+                  >
+                    {t.market}: 1.00
+                  </button>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="number"
+                    step="0.001"
+                    min="0.0001"
+                    value={targetRate}
+                    onChange={e => setTargetRate(e.target.value)}
+                    className="w-24 bg-white dark:bg-[#0F131A] border border-gray-200/80 dark:border-white/[0.07] rounded-xl px-2.5 py-1.5 text-right text-sm font-semibold text-gray-900 dark:text-white outline-none tabular-nums"
+                  />
+                  <span className="text-xs font-semibold text-gray-500">{buyToken.symbol}</span>
+                </div>
+              </div>
+            )}
 
-                  {/* QR Code Container (Offline Instant Generator) */}
-                  <div className="flex justify-center p-3 bg-white dark:bg-white rounded-2xl border border-gray-200 shadow-inner w-44 h-44 mx-auto">
-                    {depositQrUrl ? (
-                      <img 
-                        src={depositQrUrl}
-                        alt="Deposit QR"
-                        className="w-full h-full object-contain"
-                      />
-                    ) : null}
-                  </div>
+            {/* DESTINATION ADDRESS INPUT (`Recibir en` — User manually pastes/enters destination!) */}
+            <div className="px-4 py-3 rounded-2xl bg-gray-50/90 dark:bg-[#161B24] border border-transparent focus-within:border-gray-300 dark:focus-within:border-white/[0.12] transition-colors">
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-medium text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
+                  <span>
+                    {t.receiveAt} ({buyToken.symbol})
+                  </span>
+                  {recipientAddress.trim() && isRecipientValid && (
+                    <Check className="w-3.5 h-3.5 text-emerald-500" />
+                  )}
+                </label>
 
-                  {/* Non-Custodial Smart Contract Box */}
-                  <div className="p-3.5 rounded-2xl bg-gray-50 dark:bg-[#171e2c] border border-gray-200 dark:border-gray-700/80 space-y-1.5">
-                    <div className="flex items-center justify-between text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                      <span>Non-Custodial Smart Contract</span>
-                      <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/25 flex items-center gap-1 font-semibold">
-                        <ShieldCheck className="w-3 h-3" />
-                        24h Timelock
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-mono text-xs text-gray-900 dark:text-gray-200 truncate font-semibold">
-                        {activeSwap.depositAddress}
-                      </span>
-                      <button 
-                        onClick={() => copyToClipboard(activeSwap.depositAddress)}
-                        className="p-1.5 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 hover:text-gray-900 dark:hover:text-white transition-colors shrink-0 cursor-pointer"
-                        title="Copy address"
+                <div className="flex items-center gap-1.5">
+                  {optionalReceiveWallet &&
+                    recipientAddress.trim().toLowerCase() !== optionalReceiveWallet.toLowerCase() && (
+                      <button
+                        type="button"
+                        onClick={() => setRecipientAddress(optionalReceiveWallet)}
+                        className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-gray-200/70 dark:bg-white/[0.06] text-gray-700 dark:text-gray-300 hover:bg-gray-300/70 dark:hover:bg-white/[0.1] transition cursor-pointer"
                       >
-                        {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                        {t.myWallet}
                       </button>
-                    </div>
-                    <div className="pt-1 border-t border-gray-200/60 dark:border-gray-800/80 flex items-center justify-between text-[10px] text-gray-400 font-mono">
-                      <span className="text-emerald-500 font-medium">Audited by The Watchman</span>
-                      <span className="opacity-75">{activeSwap.contractName || activeSwap.derivationPath}</span>
-                    </div>
-                  </div>
+                    )}
+                  <button
+                    type="button"
+                    onClick={handlePasteRecipient}
+                    className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-gray-200/70 dark:bg-white/[0.06] text-gray-700 dark:text-gray-300 hover:bg-gray-300/70 dark:hover:bg-white/[0.1] flex items-center gap-1 transition cursor-pointer"
+                  >
+                    <ClipboardPaste className="w-2.5 h-2.5" />
+                    <span>{t.paste}</span>
+                  </button>
+                </div>
+              </div>
 
-                  {/* TXID Input */}
-                  <div className="space-y-1">
-                    <input
-                      type="text"
-                      value={manualTxHash}
-                      onChange={(e) => setManualTxHash(e.target.value)}
-                      placeholder="TXID de envío (opcional)"
-                      className="w-full px-3 py-2 rounded-xl bg-gray-50 dark:bg-[#161c28] border border-gray-200 dark:border-gray-700 text-xs font-mono text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:border-primary"
+              <input
+                type="text"
+                value={recipientAddress}
+                onChange={e => setRecipientAddress(e.target.value)}
+                placeholder={
+                  buyToken.isBch
+                    ? isTestnet
+                      ? 'bchtest:q... / bchtest:z...'
+                      : 'bitcoincash:q... / bitcoincash:z...'
+                    : '0x...'
+                }
+                spellCheck={false}
+                className="w-full bg-transparent text-xs font-mono text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-600 outline-none"
+              />
+            </div>
+
+            {/* 1-LINE COLLAPSIBLE QUOTE SUMMARY */}
+            {quote && isPairLiquid && parseFloat(amount) > 0 && (
+              <div className="px-3.5 py-2.5 rounded-2xl border border-gray-100 dark:border-white/[0.05] text-xs">
+                <button
+                  type="button"
+                  onClick={() => setDetailsOpen(!detailsOpen)}
+                  className="w-full flex items-center justify-between text-gray-500 dark:text-gray-400 cursor-pointer"
+                >
+                  <span className="font-medium text-gray-700 dark:text-gray-300 tabular-nums">
+                    1 {sellToken.symbol} = {quote.rate} {buyToken.symbol}
+                  </span>
+                  <span className="flex items-center gap-1.5 text-[11px]">
+                    <span>{t.fee} 0.3%</span>
+                    <span>•</span>
+                    <span>~3s</span>
+                    <ChevronDown
+                      className={`w-3.5 h-3.5 transition-transform ${detailsOpen ? 'rotate-180' : ''}`}
                     />
-                  </div>
+                  </span>
+                </button>
 
-                  {/* Instant Verification Trigger */}
-                  <div className="pt-2">
-                    <button 
-                      onClick={() => handleVerifyDeposit()}
-                      disabled={isVerifying}
-                      className="w-full py-3 rounded-2xl bg-primary hover:bg-orange-600 text-white font-bold text-xs transition-all shadow-md shadow-orange-500/20 flex items-center justify-center gap-2 cursor-pointer"
-                    >
-                      <Send className="w-3.5 h-3.5" />
-                      <span>{isVerifying ? 'Checking On-Chain Deposit...' : 'I Have Sent Funds • Verify Now'}</span>
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* STEP 2 & 3: In-Progress Confirming / Dispatching */}
-              {(swapStep === 2 || swapStep === 3) && (
-                <div className="p-6 rounded-2xl bg-gray-50 dark:bg-[#171e2c] border border-gray-100 dark:border-gray-800 text-center space-y-3 mb-5">
-                  <div className="w-16 h-16 mx-auto relative flex items-center justify-center">
-                    <img src="/logo.png" alt="BinaryLiquid" className="w-12 h-12 object-contain animate-heartbeat" />
-                  </div>
-                  <h4 className="font-bold text-gray-900 dark:text-white text-sm">
-                    {swapStep === 2 ? 'Deposit Confirmed On-Chain' : 'Relayer Signing Payout'}
-                  </h4>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed font-medium">
-                    {swapStep === 2 
-                      ? 'Validating transaction through RPC failover pool. Preparing settlement dispatch...' 
-                      : `Transferring ${activeSwap.toAmount} ${activeSwap.toToken} to ${activeSwap.recipientAddress.substring(0, 10)}...`}
-                  </p>
-                </div>
-              )}
-
-              {/* STEP 4: Completed with on-chain proofs */}
-              {swapStep === 4 && (
-                <div className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-500/20 rounded-2xl p-4 mb-5 text-xs space-y-2">
-                  <div className="flex justify-between items-center">
-                    <span className="font-semibold text-gray-500 dark:text-gray-400">Delivered:</span>
-                    <span className="font-mono text-emerald-600 dark:text-emerald-400 font-bold text-sm">
-                      {activeSwap.toAmount} {activeSwap.toToken}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="font-semibold text-gray-500 dark:text-gray-400">Recipient:</span>
-                    <span className="font-mono text-gray-900 dark:text-gray-200 font-semibold truncate max-w-[200px]">
-                      {activeSwap.recipientAddress}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="font-semibold text-gray-500 dark:text-gray-400">Protocol Fee:</span>
-                    <span className="font-mono font-bold text-orange-500">
-                      {activeSwap.feeAmount} {activeSwap.fromToken} (0.3%)
-                    </span>
-                  </div>
-                  {activeSwap.payoutExplorerUrl && (
-                    <div className="pt-2 border-t border-emerald-500/20">
-                      <a 
-                        href={activeSwap.payoutExplorerUrl} 
-                        target="_blank" 
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1.5 text-primary hover:underline font-bold text-xs"
-                      >
-                        <span>View Settlement on Block Explorer</span>
-                        <ExternalLink className="w-3.5 h-3.5" />
-                      </a>
+                {detailsOpen && (
+                  <div className="pt-2.5 mt-2.5 border-t border-gray-100 dark:border-white/[0.05] space-y-1.5 text-[11px] text-gray-500 dark:text-gray-400">
+                    <div className="flex justify-between">
+                      <span>{t.minReceived} ({slippage}%)</span>
+                      <span className="font-medium text-gray-800 dark:text-gray-200 tabular-nums">
+                        {(quote.netPayout * (1 - slippage / 100)).toFixed(4)} {buyToken.symbol}
+                      </span>
                     </div>
-                  )}
-                </div>
-              )}
+                    <div className="flex justify-between">
+                      <span>{t.fee} (0.20% LP + 0.10% Protocol)</span>
+                      <span className="font-medium text-gray-800 dark:text-gray-200 tabular-nums">
+                        {quote.feeAmount} {buyToken.symbol}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>{t.contract}</span>
+                      <span className="font-mono text-gray-700 dark:text-gray-300">
+                        {sellToken.isBch ? 'BinaryLiquidEscrow.cash' : 'BinaryLiquidVault.sol'}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
-              <button 
-                onClick={() => setSwapModalOpen(false)}
-                className="w-full py-3 rounded-2xl bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 font-bold text-xs transition-all cursor-pointer"
+            {/* PRIMARY CTA BUTTON */}
+            <div className="pt-1.5">
+              <button
+                type="button"
+                disabled={ctaConfig.disabled}
+                onClick={activeTab === 'swap' ? handleSwap : handleCreateLimitOrder}
+                className={`w-full h-13 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${
+                  ctaConfig.variant === 'primary'
+                    ? 'bg-primary hover:brightness-105 text-black shadow-sm cursor-pointer'
+                    : ctaConfig.variant === 'connect'
+                    ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-950 hover:opacity-95 cursor-pointer'
+                    : 'bg-gray-100 dark:bg-white/[0.05] text-gray-400 dark:text-gray-500 cursor-not-allowed'
+                }`}
               >
-                {swapStep === 4 ? 'Done • Start Another Swap' : 'Close Window (Swap Remains Active in Background)'}
+                {executing && <Loader2 className="w-4 h-4 animate-spin" />}
+                <span>{ctaConfig.label}</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ================================================================ */}
+        {/* VIEW 2: MINIMALIST COVENANT PAYMENT FALLBACK (BCH Watch-Only QR) */}
+        {/* ================================================================ */}
+        {cardState === 'deposit' && activeSwap && (
+          <div className="p-2 space-y-4">
+            <div className="flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => setCardState('form')}
+                className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-gray-900 dark:hover:text-white cursor-pointer"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>{t.back}</span>
+              </button>
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                {t.awaitingPayment}
+              </span>
+            </div>
+
+            <div className="text-center space-y-1">
+              <div className="text-2xl font-bold text-gray-900 dark:text-white tabular-nums">
+                {activeSwap.fromAmount} {activeSwap.fromToken}
+              </div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">
+                → {activeSwap.toAmount} {activeSwap.toToken} ({formatAddress(activeSwap.recipientAddress)})
+              </div>
+            </div>
+
+            {/* Clean QR of Unique Per-Swap P2SH32 Covenant */}
+            <div className="flex flex-col items-center">
+              <div className="p-3 bg-white rounded-2xl border border-gray-200 shadow-2xs">
+                <img
+                  src={generateQrDataUrl(activeSwap.depositAddress, 5, 2)}
+                  alt="Covenant QR"
+                  className="w-44 h-44 object-contain"
+                />
+              </div>
+              <p className="text-[11px] text-gray-400 mt-2.5">{t.autoDetectHint}</p>
+            </div>
+
+            {/* Copy / Deep-Link Actions */}
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => handleCopy(activeSwap.depositAddress)}
+                className="h-10 rounded-xl bg-gray-100 dark:bg-white/[0.06] hover:bg-gray-200/70 dark:hover:bg-white/[0.1] text-xs font-semibold text-gray-800 dark:text-gray-200 flex items-center justify-center gap-1.5 transition cursor-pointer"
+              >
+                {copiedContract ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{copiedContract ? 'Copiado' : t.copyAddress}</span>
               </button>
 
-            </motion.div>
+              <a
+                href={activeSwap.depositAddress}
+                className="h-10 rounded-xl bg-primary text-black text-xs font-bold flex items-center justify-center gap-1.5 hover:brightness-105 transition"
+              >
+                <QrCode className="w-3.5 h-3.5" />
+                <span>{t.openPaytaca}</span>
+              </a>
+            </div>
+
+            {/* Optional Collapsible Manual TXID Input */}
+            <div className="pt-1 border-t border-gray-100 dark:border-white/[0.06]">
+              <button
+                type="button"
+                onClick={() => setManualTxOpen(!manualTxOpen)}
+                className="w-full text-center text-[11px] text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 py-1 cursor-pointer"
+              >
+                {t.manualTxToggle}
+              </button>
+              {manualTxOpen && (
+                <div className="flex items-center gap-2 mt-2">
+                  <input
+                    type="text"
+                    value={txHashInput}
+                    onChange={e => setTxHashInput(e.target.value)}
+                    placeholder="TXID (64 hex)..."
+                    className="flex-1 min-w-0 bg-gray-50 dark:bg-[#161B24] border border-gray-200 dark:border-white/[0.08] rounded-xl px-3 py-2 text-xs font-mono text-gray-900 dark:text-white outline-none"
+                  />
+                  <button
+                    type="button"
+                    disabled={verifyingTx}
+                    onClick={handleVerifyDeposit}
+                    className="px-3.5 py-2 rounded-xl bg-gray-900 dark:bg-white text-white dark:text-gray-950 text-xs font-semibold cursor-pointer disabled:opacity-50"
+                  >
+                    {verifyingTx ? '...' : t.verifyNow}
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         )}
-      </AnimatePresence>
 
-      {/* SETTINGS / SLIPPAGE MODAL */}
-      <AnimatePresence>
-        {showSettingsModal && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white dark:bg-[#0E131E] rounded-2xl p-5 sm:p-6 w-full max-w-sm shadow-2xl relative text-left"
+        {/* ================================================================ */}
+        {/* VIEW 3: MINIMALIST SUCCESS RECEIPT                               */}
+        {/* ================================================================ */}
+        {cardState === 'success' && activeSwap && (
+          <div className="p-3 text-center space-y-4">
+            <div className="w-12 h-12 rounded-full bg-emerald-500/15 text-emerald-500 flex items-center justify-center mx-auto">
+              <CheckCircle2 className="w-6 h-6" />
+            </div>
+
+            <div>
+              <h3 className="text-base font-bold text-gray-900 dark:text-white">{t.completed}</h3>
+              <p className="text-2xl font-bold text-emerald-500 mt-1 tabular-nums">
+                +{activeSwap.toAmount} {activeSwap.toToken}
+              </p>
+              <p className="text-xs text-gray-400 mt-1 font-mono">
+                {t.sentTo}: {formatAddress(activeSwap.recipientAddress)}
+              </p>
+            </div>
+
+            {activeSwap.payoutExplorerUrl && (
+              <a
+                href={activeSwap.payoutExplorerUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
+              >
+                <span>Explorer TX</span>
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            )}
+
+            <button
+              type="button"
+              onClick={() => {
+                setActiveSwap(null);
+                setCardState('form');
+              }}
+              className="w-full h-11 rounded-2xl bg-gray-900 dark:bg-white text-white dark:text-gray-950 font-bold text-xs hover:opacity-95 transition cursor-pointer"
             >
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="font-bold text-zinc-900 dark:text-white">{t.settingsTitle}</h3>
-                <button onClick={() => setShowSettingsModal(false)} className="text-zinc-400 hover:text-zinc-900 dark:hover:text-white font-bold cursor-pointer">✕</button>
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 block mb-2">
-                    {t.slippageTolerance}
-                  </label>
-                  <div className="flex gap-2">
-                    {[0.1, 0.5, 1.0].map(s => (
-                      <button 
-                        key={s} 
-                        onClick={() => setSlippage(s)}
-                        className={`flex-1 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
-                          slippage === s 
-                            ? 'bg-orange-500 text-white' 
-                            : 'bg-zinc-100 dark:bg-[#161D2B] text-zinc-700 dark:text-zinc-300'
-                        }`}
-                      >
-                        {s}%
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="pt-2 text-[11px] text-zinc-400 leading-relaxed">
-                  {t.slippageNotice}
-                </div>
-              </div>
-            </motion.div>
+              {t.newSwap}
+            </button>
           </div>
         )}
-      </AnimatePresence>
+      </div>
+
+      {/* COMPACT OPEN LIMIT ORDERS LIST */}
+      {activeTab === 'limit' && limitOrders.length > 0 && (
+        <div className="mt-4 bg-white dark:bg-[#0F131A] border border-gray-200/80 dark:border-white/[0.07] rounded-2xl p-3.5 space-y-2">
+          <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 px-1">
+            {t.openOrders}
+          </div>
+          {limitOrders.slice(0, 5).map(order => (
+            <div
+              key={order.id}
+              className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-gray-50 dark:bg-[#161B24] text-xs"
+            >
+              <div>
+                <div className="font-semibold text-gray-900 dark:text-white tabular-nums">
+                  {order.fromAmount} {order.fromToken} → {order.expectedOutput} {order.toToken}
+                </div>
+                <div className="text-[11px] text-gray-400 tabular-nums">
+                  @ {order.targetRate} • {order.status}
+                </div>
+              </div>
+              {order.status === 'OPEN' && (
+                <button
+                  type="button"
+                  onClick={() => handleCancelLimitOrder(order.id)}
+                  className="text-[11px] font-semibold text-rose-500 hover:underline cursor-pointer"
+                >
+                  {t.cancel}
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* TOKEN SELECTOR MODAL */}
       <TokenSelectModal
-        isOpen={modalType !== null}
-        onClose={() => setModalType(null)}
-        onSelect={token => {
-          if (modalType === 'sell') {
-            if (token.symbol === buyToken.symbol) {
-              setBuyToken(sellToken);
-            }
-            setSellToken(token);
-          } else {
-            if (token.symbol === sellToken.symbol) {
-              setSellToken(buyToken);
-            }
-            setBuyToken(token);
-          }
-        }}
-        selectedTokenSymbol={modalType === 'sell' ? sellToken.symbol : buyToken.symbol}
-        title={modalType === 'sell' ? 'Select Token to Sell' : 'Select Token to Buy'}
-        customTokens={customTokens}
+        isOpen={tokenModalTarget !== null}
+        onClose={() => setTokenModalTarget(null)}
+        onSelect={handleSelectToken}
+        selectedTokenSymbol={tokenModalTarget === 'sell' ? sellToken.symbol : buyToken.symbol}
+        title={tokenModalTarget === 'sell' ? t.selectPayToken : t.selectReceiveToken}
         isTestnet={isTestnet}
       />
-
     </div>
   );
 }
