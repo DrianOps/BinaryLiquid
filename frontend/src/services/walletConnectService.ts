@@ -772,3 +772,55 @@ export async function executeWeb3VaultDeposit(params: {
 
   return { txHash: depositTxHash };
 }
+
+/**
+ * 1-Click Non-Custodial Liquidity Pool Deposit into `BinaryLiquidVault.sol`:
+ * Transfers ERC-20 (`USDT` / `USDC`) directly into the Vault's liquidity reserve in a single signature.
+ */
+export async function executeWeb3LpDeposit(params: {
+  isTestnet: boolean;
+  vaultAddress: string;
+  tokenAddress: string;
+  amount: number;
+  decimals?: number;
+  onStatus?: (msg: string) => void;
+}): Promise<{ txHash: string; sender: string }> {
+  const {
+    isTestnet,
+    vaultAddress,
+    tokenAddress,
+    amount,
+    decimals = 6,
+    onStatus
+  } = params;
+
+  const eipProvider = getActiveEip1193Provider();
+  const accounts = await eipProvider.request({ method: 'eth_requestAccounts' });
+  const sender = accounts?.[0];
+  if (!sender) {
+    throw new Error('No se encontró cuenta activa en tu billetera Web3.');
+  }
+
+  const targetChainHex = isTestnet ? AMOY_CHAIN_CONFIG.chainIdHex : POLYGON_MAINNET_CONFIG.chainIdHex;
+  const currentChainHex = await eipProvider.request({ method: 'eth_chainId' });
+
+  if (String(currentChainHex || '').toLowerCase() !== targetChainHex.toLowerCase()) {
+    onStatus?.(isTestnet ? 'Cambiando red a Polygon Amoy Testnet...' : 'Cambiando red a Polygon Mainnet...');
+    await switchEvmNetwork(isTestnet, eipProvider);
+  }
+
+  const rawUnits = BigInt(Math.round(amount * (10 ** decimals)));
+  // ERC-20 `transfer(address,uint256)` selector = 0xa9059cbb
+  const transferData = `0xa9059cbb${pad32(vaultAddress)}${pad32(rawUnits.toString(16))}`;
+
+  onStatus?.('Confirma el depósito de liquidez al Smart Contract Vault en tu billetera...');
+  const txHash = await eipProvider.request({
+    method: 'eth_sendTransaction',
+    params: [{ from: sender, to: tokenAddress, data: transferData }]
+  });
+
+  onStatus?.('Esperando confirmación del bloque en Polygon...');
+  await waitForTxReceipt(eipProvider, txHash);
+
+  return { txHash, sender };
+}

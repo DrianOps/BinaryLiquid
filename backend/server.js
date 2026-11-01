@@ -561,8 +561,9 @@ app.post('/api/limit-orders/:id/cancel', (req, res) => {
 // ==========================================
 app.get('/api/pools', async (req, res) => {
   try {
-    const pools = await poolService.getAllPools();
-    res.json({ success: true, count: pools.length, pools });
+    const network = String(req.query.network || 'mainnet').toLowerCase();
+    const pools = await poolService.getAllPools({ network });
+    res.json({ success: true, network, count: pools.length, pools });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -570,24 +571,29 @@ app.get('/api/pools', async (req, res) => {
 
 app.get('/api/pools/stats', async (req, res) => {
   try {
-    const poolId = req.query.poolId || 'PUSD_USDC';
-    const [stats, bchBalances, evmBalances] = await Promise.all([
-      poolService.getStats(poolId),
+    const poolId = req.query.poolId || 'PUSD_USDT';
+    const network = String(req.query.network || 'mainnet').toLowerCase();
+    const [bchBalances, evmBalances] = await Promise.all([
       bchService.getBalances(),
       evmService.getBalances()
     ]);
+    const vaultBalances = {
+      chipnetPusd: bchBalances.chipnet?.PUSD || 0,
+      chipnetBch: bchBalances.chipnet?.bch || 0,
+      amoyUsdt: evmBalances.amoy?.USDT || 0,
+      amoyUsdc: evmBalances.amoy?.USDC || 0,
+      mainnetPusd: bchBalances.mainnet?.PUSD || 0,
+      mainnetUsdc: evmBalances.mainnet?.USDC || 0,
+      mainnetUsdt: evmBalances.mainnet?.USDT || 0
+    };
+    const stats = await poolService.getStats(poolId, { network, vaultBalances });
     res.json({ 
       success: true, 
+      network,
       pool: stats.pool, 
       allPools: stats.allPools, 
       protocolStats: stats.protocolStats,
-      vaultBalances: {
-        chipnetPusd: bchBalances.chipnet?.PUSD || 0,
-        amoyUsdt: evmBalances.amoy?.USDT || 0,
-        amoyUsdc: evmBalances.amoy?.USDC || 0,
-        mainnetPusd: bchBalances.mainnet?.PUSD || 0,
-        mainnetUsdc: evmBalances.mainnet?.USDC || 0
-      },
+      vaultBalances,
       hotWalletBalances: {
         bch: bchBalances.chipnet?.bch || bchBalances.mainnet?.bch || 0,
         pusd: bchBalances.chipnet?.PUSD || bchBalances.mainnet?.PUSD || 0,
@@ -604,8 +610,9 @@ app.get('/api/pools/stats', async (req, res) => {
 
 app.get('/api/pools/:poolId', async (req, res) => {
   try {
+    const network = String(req.query.network || 'mainnet').toLowerCase();
     const pool = poolService.getPool(req.params.poolId);
-    const enriched = await poolService.enrichPoolData(pool);
+    const enriched = await poolService.enrichPoolData(pool, { network });
     res.json({ success: true, pool: enriched });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -614,8 +621,17 @@ app.get('/api/pools/:poolId', async (req, res) => {
 
 app.post('/api/pools/add-liquidity', async (req, res) => {
   try {
-    const { providerAddress, token, amount, poolId } = req.body;
-    const result = await poolService.addLiquidity({ providerAddress, token, amount, poolId });
+    const { providerAddress, bchAddress, evmAddress, token, amount, poolId, txHash, network } = req.body;
+    const result = await poolService.addLiquidity({
+      providerAddress,
+      bchAddress,
+      evmAddress,
+      token,
+      amount,
+      poolId,
+      txHash,
+      network
+    });
     res.json(result);
   } catch (err) {
     res.status(400).json({ success: false, error: err.message });
@@ -624,8 +640,16 @@ app.post('/api/pools/add-liquidity', async (req, res) => {
 
 app.post('/api/pools/remove-liquidity', async (req, res) => {
   try {
-    const { positionId, providerAddress, sharesToBurn, poolId } = req.body;
-    const result = await poolService.removeLiquidity({ positionId, providerAddress, sharesToBurn, poolId });
+    const { positionId, providerAddress, bchAddress, evmAddress, sharesToBurn, poolId, withdrawToken } = req.body;
+    const result = await poolService.removeLiquidity({
+      positionId,
+      providerAddress,
+      bchAddress,
+      evmAddress,
+      sharesToBurn,
+      poolId,
+      withdrawToken
+    });
     res.json(result);
   } catch (err) {
     res.status(400).json({ success: false, error: err.message });
@@ -641,8 +665,12 @@ app.post('/api/pools/create', async (req, res) => {
       tokenB,
       tokenAName,
       tokenBName,
+      network,
       networkA,
       networkB,
+      networkBadgeA,
+      networkBadgeB,
+      iconA,
       categoryIdA,
       decimalsA,
       decimalsB,
@@ -659,8 +687,12 @@ app.post('/api/pools/create', async (req, res) => {
       tokenB,
       tokenAName,
       tokenBName,
+      network,
       networkA,
       networkB,
+      networkBadgeA,
+      networkBadgeB,
+      iconA,
       categoryIdA,
       decimalsA,
       decimalsB,
@@ -674,8 +706,8 @@ app.post('/api/pools/create', async (req, res) => {
     res.json({
       success: true,
       message: poolMode === 'BOOTSTRAPPING'
-        ? `¡Par ${result.pair} creado exitosamente en modo Bootstrapping con Liquidez Bloqueada Anti-Rug! Ganarás 0.05% de comisión continua.`
-        : `¡Par ${result.pair} creado y activo inmediatamente estilo Uniswap V2!`,
+        ? `¡Par ${result.pair} registrado en modo Bootstrapping (Meta: $${result.targetTvlUsd})!`
+        : `¡Par ${result.pair} registrado en el protocolo!`,
       pool: result
     });
   } catch (err) {
@@ -687,7 +719,15 @@ app.get('/api/pools/positions/:address', async (req, res) => {
   try {
     const { address } = req.params;
     const poolId = req.query.poolId || null;
-    const positions = await poolService.getPositionsForAddress(address, poolId);
+    const bchAddress = req.query.bchAddress || null;
+    const evmAddress = req.query.evmAddress || null;
+    const network = String(req.query.network || 'testnet').toLowerCase();
+    const positions = await poolService.getPositionsForAddress(address, {
+      bchAddress,
+      evmAddress,
+      poolId,
+      network
+    });
     res.json({ success: true, count: positions.length, positions });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });

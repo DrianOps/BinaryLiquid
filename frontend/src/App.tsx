@@ -1296,6 +1296,8 @@ export default function App() {
             bchAddress={bchWallet?.tokenAddress || bchWallet?.address || ''}
             evmAddress={evmWallet?.address || ''}
             platformNetwork={platformNetwork}
+            onToggleNetwork={setPlatformNetwork}
+            onRefreshBalances={() => refreshWalletBalances()}
             onConnectWallet={() => setShowWalletModal(true)}
             showToast={showToast}
             lang={lang}

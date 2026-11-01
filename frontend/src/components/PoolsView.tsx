@@ -1,33 +1,33 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Droplets, 
-  TrendingUp, 
-  DollarSign, 
-  Coins, 
-  ArrowRight, 
-  Plus, 
-  Minus, 
-  RefreshCw, 
-  CheckCircle2, 
-  Sparkles, 
+import {
+  Droplets,
+  TrendingUp,
+  DollarSign,
+  Coins,
+  Plus,
+  RefreshCw,
+  Sparkles,
   ExternalLink,
-  ShieldAlert,
   PieChart,
-  Percent,
   Wallet,
   Lock,
-  Unlock,
   Flame,
-  AlertCircle,
   ChevronDown,
-  Info,
   Layers,
   ShieldCheck,
-  Server,
-  Check
+  Check,
+  Copy
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
+import {
+  executeWeb3LpDeposit,
+  DEPLOYED_TESTNET_CONTRACTS
+} from '../services/walletConnectService';
+import {
+  convertCashAddressNetwork,
+  generateQrDataUrl
+} from '../utils/bchAddress';
 
 interface PoolData {
   id: string;
@@ -35,6 +35,7 @@ interface PoolData {
   name: string;
   tokenA: string;
   tokenB: string;
+  network?: string;
   networkA: string;
   networkB: string;
   networkBadgeA: string;
@@ -51,7 +52,9 @@ interface PoolData {
   priceB: number;
   totalShares: number;
   targetTvlUsd: number;
-  status: 'ACTIVE' | 'BOOTSTRAPPING';
+  status: 'ACTIVE' | 'BOOTSTRAPPING' | 'NO_LIQUIDITY';
+  hasLiquidity?: boolean;
+  liquidityBadge?: string;
   feePercent: number;
   lpFeePercent: number;
   protocolFeePercent: number;
@@ -71,11 +74,14 @@ interface PoolData {
   liquidityLocked?: boolean;
   creatorAddress?: string;
   categoryIdA?: string | null;
+  vaultAddressA?: string | null;
+  vaultAddressB?: string | null;
+  tokenAddressB?: string | null;
+  contractExplorerA?: string | null;
+  contractExplorerB?: string | null;
   creatorFeePercent?: number;
   isVerified?: boolean;
   verificationBadge?: string;
-  creatorFeesEarnedA?: number;
-  creatorFeesEarnedB?: number;
 }
 
 interface UserPosition {
@@ -83,10 +89,15 @@ interface UserPosition {
   poolId: string;
   pair: string;
   providerAddress: string;
+  bchAddress?: string | null;
+  evmAddress?: string | null;
   shares: number;
   depositedAmount: number;
   tokenSymbol: string;
   depositUsd: number;
+  txHash?: string;
+  explorerUrl?: string;
+  network?: string;
   createdAt: string;
   updatedAt: string;
   tokenA: string;
@@ -108,6 +119,8 @@ interface PoolsViewProps {
   bchAddress?: string;
   evmAddress?: string;
   platformNetwork?: 'mainnet' | 'testnet';
+  onToggleNetwork?: (net: 'mainnet' | 'testnet') => void;
+  onRefreshBalances?: () => void;
   onConnectWallet: () => void;
   showToast: (msg: string, type: 'success' | 'error') => void;
   lang?: 'en' | 'es';
@@ -115,266 +128,254 @@ interface PoolsViewProps {
 
 const poolTexts = {
   en: {
-    // Header
-    badge: "Mainnet Cross-Chain AMM Liquidity",
-    title: "Liquidity Pools & Automated Yield",
-    subtitle: "Provide liquidity on Bitcoin Cash Mainnet and Polygon PoS. Earn passive 0.20% fees from every swap auto-compounded into reserves with zero impermanent loss on stable pairs.",
+    badgeTestnet: 'Non-Custodial Smart Contract Vaults • Testnet',
+    badgeMainnet: 'Cross-Chain AMM Liquidity • Mainnet',
+    title: 'Liquidity Pools & Automated Yield',
+    subtitleTestnet:
+      'Provide real on-chain liquidity into BinaryLiquidVault.cash (BCH Chipnet) and BinaryLiquidVault.sol (Polygon Amoy). Earn 0.20% fees from every PUSD ⟷ USDT cross-chain swap.',
+    subtitleMainnet:
+      'Mainnet vaults currently have no active liquidity (Sin Liquidez). Switch to Testnet to test live non-custodial liquidity provision on PUSD ⟷ USDT.',
 
-    // Protocol metrics stats cards
-    statTvlLabel: "Total Protocol TVL",
-    statTvlSub: "100% Solvent on Mainnet",
-    statVolumeLabel: "Cumulative Volume",
-    statVolumeSub: "On Verified On-Chain Pairs",
-    statFeesLabel: "LP Fees Paid",
-    statFeesSub: "0.20% to LPs • 0.10% Treasury",
-    statPairsLabel: "Active Pairs / Funding",
-    statActive: "Active",
-    statGoal: "Goal",
-    statPairsSub: "Auto-unlocks at 100%",
+    statTvlLabel: 'Total Protocol TVL',
+    statTvlSubTestnet: 'Verified On-Chain Smart Contracts',
+    statTvlSubMainnet: 'Mainnet: No Liquidity Active',
+    statVolumeLabel: 'Settled Swap Volume',
+    statVolumeSub: 'Real On-Chain Settlements',
+    statFeesLabel: 'LP Fees Accrued',
+    statFeesSub: '0.20% to LPs • 0.10% Protocol',
+    statPairsLabel: 'Active Pairs / No Liquidity',
+    statActive: 'Active',
+    statNoLiq: 'No Liq.',
+    statPairsSub: 'PUSD / USDT active on Testnet',
 
-    // Filter tabs & buttons
-    tabAll: "All Pools",
-    tabActive: "Active",
-    tabBootstrapping: "Funding / Goal",
-    tabMyPositions: "My Positions",
-    btnCreatePair: "+ Create New Pair",
-    refreshTooltip: "Refresh Data",
+    tabAll: 'All Pools',
+    tabActive: 'Active',
+    tabBootstrapping: 'Bootstrapping',
+    tabMyPositions: 'My Positions',
+    btnCreatePair: '+ Register Pair',
+    refreshTooltip: 'Refresh On-Chain Data',
 
-    // Pool cards
-    sponsorBadge: "BLAZE Sponsor",
-    antiRugLock: "Anti-Rug Lock • Goal",
-    standardPair: "Standard AMM (Uniswap)",
-    verifiedOfficial: "Official Verified",
-    communityBadge: "Community",
-    verifyAction: "Verify (5 PUSD)",
-    verifyTitle: "Verify this token with a trust badge",
-    viewExplorer: "View CashToken on block explorer",
-    statusActive: "Active",
-    statusFunding: "Funding",
-    unlockGoal: "Unlock Goal",
-    unlockRemainingPrefix: "Contribute the remaining",
-    unlockRemainingSuffix: "USD to automatically unlock instant swaps on this pair.",
-    poolTvl: "Pool TVL",
-    annualApy: "Annual APY",
-    lpFee: "LP Fee",
-    reservePrefix: "Reserve",
-    btnProvideLiquidity: "Provide Liquidity & Earn Yield",
+    sponsorBadge: 'BLAZE Sponsor',
+    antiRugLock: 'Anti-Rug Lock • Goal',
+    standardPair: 'Standard AMM',
+    verifiedOfficial: 'Official Vault',
+    communityBadge: 'Community',
+    verifyAction: 'Verify Pair',
+    verifyTitle: 'Mark custom pair as verified',
+    viewExplorer: 'Inspect Smart Contract on Explorer',
+    statusActive: 'Active',
+    statusNoLiquidity: 'Sin Liquidez',
+    statusFunding: 'Bootstrapping',
+    unlockGoal: 'Unlock Goal',
+    unlockRemainingPrefix: 'Remaining:',
+    unlockRemainingSuffix: 'USD to unlock active swaps.',
+    poolTvl: 'Vault TVL',
+    annualApy: 'Estimated APY',
+    lpFee: 'LP Fee Tier',
+    reservePrefix: 'Vault Reserve',
+    btnProvideLiquidity: 'Provide Liquidity & Earn Yield',
+    btnSwitchToTestnet: 'Sin Liquidez on Mainnet • Switch to Testnet',
+    btnNoLiquidityDisabled: 'Sin Liquidez Available',
 
-    // User positions table
-    positionsTitle: "My Active Liquidity Positions",
-    refresh: "Refresh",
-    noPositionsTitle: "You have no liquidity positions yet",
-    noPositionsDesc: "Provide liquidity in any of the pools to automatically accrue 0.20% of all swap transactions in your balance.",
-    btnExplorePools: "Explore Pools",
-    thPair: "Pair",
-    thShares: "Shares (LP Shares)",
-    thPoolShare: "Pool Share",
-    thDeposit: "Initial Deposit",
-    thCurrentValue: "Current Value",
-    thProfit: "Earned Profit",
-    thAction: "Action",
-    btnWithdraw: "Withdraw Funds",
+    positionsTitle: 'My Non-Custodial LP Positions',
+    refresh: 'Refresh',
+    noPositionsTitle: 'No active LP positions found',
+    noPositionsDesc:
+      'Deposit PUSD (Chipnet) or USDT (Polygon Amoy) into the PUSD / USDT Smart Contract Vault to mint LP Shares and earn 0.20% swap fees.',
+    btnExplorePools: 'View Active Pools',
+    thPair: 'Pool',
+    thShares: 'LP Shares',
+    thPoolShare: 'Vault Share',
+    thDeposit: 'On-Chain Deposit',
+    thCurrentValue: 'Redeemable Value',
+    thProfit: 'Accrued Fees',
+    thAction: 'Action',
+    btnWithdraw: 'Withdraw On-Chain',
 
-    // Add Liquidity modal
-    modalAddTitle: "Provide Liquidity •",
-    depositTabPrefix: "Deposit",
-    depositAmountLabel: "Amount to Deposit",
-    balanceLabel: "Balance:",
-    sharesToReceive: "Liquidity Shares to Receive:",
-    newShareRatio: "Your Resulting Pool Share:",
-    projectedYield: "Projected Yield (1 yr):",
-    fundingGoalNotePrefix: "Your deposit moves this pool closer to the",
-    fundingGoalNoteSuffix: "USD goal for unlock!",
-    btnSubmittingAdd: "Minting Liquidity Shares...",
-    btnConfirmAdd: "Confirm & Deposit Liquidity",
+    modalAddTitle: 'Provide Liquidity •',
+    depositTabPrefix: 'Deposit',
+    depositAmountLabel: 'Amount to Deposit',
+    balanceLabel: 'Wallet Balance:',
+    sharesToReceive: 'LP Shares to Mint:',
+    newShareRatio: 'Resulting Vault Share:',
+    projectedYield: 'Estimated Annual Yield:',
+    fundingGoalNotePrefix: 'Moves this pool toward its',
+    fundingGoalNoteSuffix: 'USD funding target.',
+    btnSubmittingAdd: 'Verifying On-Chain Deposit...',
+    btnConfirmAddEvm: '⚡ Sign & Deposit USDT via Web3 Vault',
+    btnConfirmAddBch: 'Verify BCH Covenant TX & Mint LP Shares',
 
-    // Remove Liquidity modal
-    modalRemoveTitle: "Withdraw Liquidity •",
-    withdrawPctLabel: "Percentage to Withdraw",
-    sharesToBurn: "Shares to Burn:",
-    payoutToReceive: "Payout to receive",
-    totalUsdReturn: "Total USD Return:",
-    feeProfit: "Net Yield from Fees:",
-    btnSubmittingRemove: "Burning Shares & Crediting Funds...",
-    btnConfirmRemove: "Burn Shares & Withdraw Funds to Wallet",
+    modalRemoveTitle: 'Withdraw Liquidity •',
+    withdrawPctLabel: 'Shares to Burn',
+    sharesToBurn: 'LP Shares to Burn:',
+    payoutToReceive: 'On-Chain Payout:',
+    totalUsdReturn: 'Total Redemption Value:',
+    feeProfit: 'Accrued LP Fee Yield:',
+    btnSubmittingRemove: 'Releasing Funds from Smart Contract...',
+    btnConfirmRemove: 'Burn LP Shares & Release to Wallet',
 
-    // Create Pair modal
-    createTitle: "Create Liquidity Pair",
-    createSubtitle: "Launch a new CashToken cross-chain AMM pool",
-    baseTokenTitle: "Token 1 (CashToken / BCH)",
-    quoteTokenTitle: "Token 2 (Quote Asset)",
-    symbolPlaceholder: "e.g. LIFT",
-    namePlaceholder: "Project Name (optional)",
-    initialPrice: "Initial Price (USD)",
-    advancedOptions: "Advanced (Category ID & Icon)",
-    categoryIdLabel: "CashToken Category ID (64 hex):",
-    categoryIdPlaceholder: "Contract Category ID (optional if BCH)...",
-    iconLabel: "Logo URL or IPFS Hash (ipfs://...):",
-    iconPlaceholder: "https://... or ipfs://...",
-    modeLabel: "Pool Launch Mode",
-    modeStandard: "Standard AMM",
-    modeStandardBadge: "Instant Trading",
-    modeStandardDesc: "Deposit both tokens now. Trading activates immediately with 0.20% LP fees.",
-    modeBootstrapping: "Fair Launch",
-    modeBootstrappingBadge: "Anti-Rug",
-    modeBootstrappingDesc: "Deposit base token now. Community funds quote asset until target TVL is reached.",
-    amountToDeposit: "Amount to Deposit",
-    amountTokenB: "Amount of",
-    targetTvl: "Target TVL Goal (USD)",
-    previewTitle: "Pair Summary",
-    pairLabel: "Pair:",
-    priceLabel: "Price:",
-    typeLabel: "Type:",
-    feeLabel: "Fee:",
-    btnCreating: "Registering Liquidity Pair...",
-    btnCreate: "Create & Register Pair",
+    createTitle: 'Register Custom CashToken Pair',
+    createSubtitle: 'List a Bitcoin Cash CashToken pair in Bootstrapping mode',
+    baseTokenTitle: 'Token 1 (CashToken / BCH)',
+    quoteTokenTitle: 'Token 2 (Quote Asset)',
+    symbolPlaceholder: 'e.g. LIFT',
+    namePlaceholder: 'Token Name (optional)',
+    advancedOptions: 'Advanced (Category ID & Logo)',
+    categoryIdLabel: 'CashToken Category ID (64 hex):',
+    categoryIdPlaceholder: '64-character hex category ID...',
+    iconLabel: 'Logo URL or IPFS URI (ipfs://...):',
+    iconPlaceholder: 'https://... or ipfs://...',
+    modeStandard: 'Standard Pair',
+    modeStandardDesc: 'Registers the pair entry (starts with Sin Liquidez until funded on-chain).',
+    modeBootstrapping: 'Fair Launch Goal',
+    modeBootstrappingDesc: 'Sets a community TVL target with Anti-Rug protection.',
+    amountToDeposit: 'Target Base Supply',
+    targetTvl: 'Target TVL Goal (USD)',
+    btnCreating: 'Registering Pair...',
+    btnCreate: 'Register Liquidity Pair',
 
-    // Toasts & Notifications
-    toastVerified: "Pair officially verified! Badge assigned.",
-    toastVerifyError: "Could not verify pair",
-    toastNetworkError: "Network connection error",
-    toastEnterSymbol: "Please enter Bitcoin Cash token symbol (e.g. LIFT)",
-    toastInvalidCatId: "CashToken Category ID must be exactly 64 hex characters",
-    toastCreateSuccess: "Liquidity pair created successfully!",
-    toastCreateError: "Error creating pair",
-    toastInvalidAmount: "Enter a valid deposit amount",
-    toastInsufficientBalance: (bal: number, token: string) => `Insufficient balance. You have ${bal.toLocaleString()} ${token}`,
-    toastGoalReached: (pair: string) => `🎉 Congratulations! Your deposit completed the funding goal. ${pair} is now 100% ACTIVE on Mainnet!`,
-    toastDepositSuccess: (amt: number, token: string, shares: any) => `Successfully deposited ${amt} ${token}! You received ${shares} LP Shares.`,
-    toastDepositError: "Failed to add liquidity",
-    toastWithdrawSuccess: (pct: number, aAmt: any, aTok: string, bAmt: any, bTok: string, usd: any) => `Redeemed ${pct}% shares! Received ${aAmt} ${aTok} + ${bAmt} ${bTok} ($${usd} USD) directly in your wallet.`,
-    toastWithdrawError: "Failed to withdraw liquidity"
+    toastVerified: 'Pool verified successfully!',
+    toastVerifyError: 'Could not verify pool',
+    toastNetworkError: 'Network communication error',
+    toastEnterSymbol: 'Please enter a valid CashToken symbol',
+    toastInvalidCatId: 'CashToken Category ID must be exactly 64 hexadecimal characters',
+    toastCreateSuccess: 'Custom pair registered successfully!',
+    toastCreateError: 'Error registering pair',
+    toastInvalidAmount: 'Enter a deposit amount greater than zero',
+    toastInsufficientBalance: (bal: number, token: string) =>
+      `Insufficient wallet balance (${bal.toLocaleString()} ${token} available)`,
+    toastGoalReached: (pair: string) => `🎉 Funding goal reached! ${pair} is now ACTIVE!`,
+    toastDepositSuccess: (amt: number, token: string, shares: any) =>
+      `Verified on-chain deposit of ${amt} ${token}! Minted ${shares} LP Shares.`,
+    toastDepositError: 'Failed to verify liquidity deposit',
+    toastWithdrawSuccess: (amt: any, tok: string, tx: string) =>
+      `Smart Contract released ${amt} ${tok} on-chain! TX: ${tx.slice(0, 12)}...`,
+    toastWithdrawError: 'Failed to release liquidity from Vault'
   },
   es: {
-    // Header
-    badge: "Liquidez AMM Cross-Chain en Mainnet",
-    title: "Pools de Liquidez & Rendimiento Automatizado",
-    subtitle: "Provee liquidez en la red principal de Bitcoin Cash Mainnet y Polygon PoS. Gana comisiones pasivas del 0.20% de cada swap auto-compuestas en las reservas sin pérdida impermanente en pares estables.",
+    badgeTestnet: 'Smart Contract Vaults No-Custodios • Testnet',
+    badgeMainnet: 'Liquidez AMM Cross-Chain • Mainnet',
+    title: 'Pools de Liquidez & Rendimiento On-Chain',
+    subtitleTestnet:
+      'Aporta liquidez real no-custodia directamente en BinaryLiquidVault.cash (BCH Chipnet) y BinaryLiquidVault.sol (Polygon Amoy). Gana el 0.20% de cada swap PUSD ⟷ USDT.',
+    subtitleMainnet:
+      'Actualmente todos los pares en Mainnet se encuentran Sin Liquidez ($0 reservas activas). Cambia a Testnet para operar y proveer liquidez real en el par oficial PUSD ⟷ USDT.',
 
-    // Protocol metrics stats cards
-    statTvlLabel: "TVL Total del Protocolo",
-    statTvlSub: "{t.statTvlSub}",
-    statVolumeLabel: "Volumen Acumulado",
-    statVolumeSub: "{t.statVolumeSub}",
-    statFeesLabel: "Comisiones a LPs Pagadas",
-    statFeesSub: "{t.statFeesSub}",
-    statPairsLabel: "Pares Activos / Fondeo",
-    statActive: "Activos",
-    statGoal: "Meta",
-    statPairsSub: "{t.statPairsSub}",
+    statTvlLabel: 'TVL Total en Contratos',
+    statTvlSubTestnet: 'Verificado On-Chain en Vivo',
+    statTvlSubMainnet: 'Mainnet: Sin Liquidez Activa',
+    statVolumeLabel: 'Volumen Liquidado',
+    statVolumeSub: 'Swaps Reales Liquidados On-Chain',
+    statFeesLabel: 'Comisiones de LPs',
+    statFeesSub: '0.20% a LPs • 0.10% Protocolo',
+    statPairsLabel: 'Pares Activos / Sin Liquidez',
+    statActive: 'Activo',
+    statNoLiq: 'Sin Liq.',
+    statPairsSub: 'PUSD / USDT habilitado en Testnet',
 
-    // Filter tabs & buttons
-    tabAll: "Todos los Pools",
-    tabActive: "Activos",
-    tabBootstrapping: "En Fondeo / Meta",
-    tabMyPositions: "Mis Posiciones",
-    btnCreatePair: "+ Crear Nuevo Par",
-    refreshTooltip: "Actualizar Datos",
+    tabAll: 'Todos los Pools',
+    tabActive: 'Con Liquidez',
+    tabBootstrapping: 'En Fondeo',
+    tabMyPositions: 'Mis Posiciones',
+    btnCreatePair: '+ Registrar Par',
+    refreshTooltip: 'Actualizar Reservas On-Chain',
 
-    // Pool cards
-    sponsorBadge: "Patrocinador BLAZE",
-    antiRugLock: "Anti-Rug Lock • Meta",
-    standardPair: "Par Estándar (Uniswap)",
-    verifiedOfficial: "Verificado Oficial",
-    communityBadge: "Comunitario",
-    verifyAction: "{t.verifyAction}",
-    verifyTitle: "Verificar este token con insignia de confianza",
-    viewExplorer: "Ver CashToken en explorador de bloques",
-    statusActive: "Activo",
-    statusFunding: "Fondeo",
-    unlockGoal: "Meta de Desbloqueo",
-    unlockRemainingPrefix: "Aporta los",
-    unlockRemainingSuffix: "USD restantes para desbloquear automáticamente los swaps instantáneos en este par.",
-    poolTvl: "{t.poolTvl}",
-    annualApy: "{t.annualApy}",
-    lpFee: "{t.lpFee}",
-    reservePrefix: "Reserva",
-    btnProvideLiquidity: "Aportar Liquidez & Ganar Rendimiento",
+    sponsorBadge: 'Patrocinador BLAZE',
+    antiRugLock: 'Anti-Rug Lock • Meta',
+    standardPair: 'AMM Estándar',
+    verifiedOfficial: 'Vault Oficial',
+    communityBadge: 'Comunitario',
+    verifyAction: 'Verificar Par',
+    verifyTitle: 'Solicitar insignia de verificación para este par',
+    viewExplorer: 'Ver Smart Contract en el Explorador de Bloques',
+    statusActive: 'Activo',
+    statusNoLiquidity: 'Sin Liquidez',
+    statusFunding: 'En Fondeo',
+    unlockGoal: 'Meta de Desbloqueo',
+    unlockRemainingPrefix: 'Faltan',
+    unlockRemainingSuffix: 'USD para habilitar swaps en este par.',
+    poolTvl: 'TVL en Vault',
+    annualApy: 'APY Estimado',
+    lpFee: 'Comisión LP',
+    reservePrefix: 'Reserva en Contrato',
+    btnProvideLiquidity: 'Aportar Liquidez & Ganar Rendimiento',
+    btnSwitchToTestnet: 'Sin Liquidez en Mainnet • Cambiar a Testnet (PUSD / USDT)',
+    btnNoLiquidityDisabled: 'Sin Liquidez Disponible',
 
-    // User positions table
-    positionsTitle: "{t.positionsTitle}",
-    refresh: "Actualizar",
-    noPositionsTitle: "No tienes posiciones de liquidez aún",
-    noPositionsDesc: "Aporta liquidez en cualquiera de los pools para acumular automáticamente el 0.20% de todas las transacciones en tu saldo.",
-    btnExplorePools: "Explorar Pools",
-    thPair: "Par",
-    thShares: "Acciones (LP Shares)",
-    thPoolShare: "Participación",
-    thDeposit: "Depósito Inicial",
-    thCurrentValue: "Valor Actual",
-    thProfit: "Rendimiento Ganado",
-    thAction: "Acción",
-    btnWithdraw: "Retirar Fondos",
+    positionsTitle: 'Mis Posiciones de Liquidez No-Custodias',
+    refresh: 'Actualizar',
+    noPositionsTitle: 'Aún no tienes posiciones de liquidez activas',
+    noPositionsDesc:
+      'Deposita PUSD (Chipnet) o USDT (Polygon Amoy) en el Smart Contract Vault PUSD / USDT para emitir LP Shares y ganar el 0.20% de los swaps.',
+    btnExplorePools: 'Ver Pools Disponibles',
+    thPair: 'Par',
+    thShares: 'Acciones (LP Shares)',
+    thPoolShare: 'Participación',
+    thDeposit: 'Depósito On-Chain',
+    thCurrentValue: 'Valor Rescatable',
+    thProfit: 'Comisiones Ganadas',
+    thAction: 'Acción',
+    btnWithdraw: 'Retirar On-Chain',
 
-    // Add Liquidity modal
-    modalAddTitle: "Aportar Liquidez •",
-    depositTabPrefix: "Depositar",
-    depositAmountLabel: "Monto a Depositar",
-    balanceLabel: "Saldo:",
-    sharesToReceive: "Acciones de Liquidez a Recibir:",
-    newShareRatio: "Tu Participación Resultante:",
-    projectedYield: "Rendimiento Proyectado (1 año):",
-    fundingGoalNotePrefix: "¡Tu depósito acerca este pool a la meta de",
-    fundingGoalNoteSuffix: "USD para desbloquearlo!",
-    btnSubmittingAdd: "Emitiendo Acciones de Liquidez...",
-    btnConfirmAdd: "Confirmar y Depositar Liquidez",
+    modalAddTitle: 'Aportar Liquidez •',
+    depositTabPrefix: 'Depositar',
+    depositAmountLabel: 'Monto a Depositar',
+    balanceLabel: 'Saldo en Wallet:',
+    sharesToReceive: 'LP Shares a Recibir:',
+    newShareRatio: 'Participación en el Vault:',
+    projectedYield: 'Rendimiento Anual Proyectado:',
+    fundingGoalNotePrefix: 'Tu aporte acerca este par a su meta de',
+    fundingGoalNoteSuffix: 'USD.',
+    btnSubmittingAdd: 'Verificando Depósito On-Chain...',
+    btnConfirmAddEvm: '⚡ Firmar y Depositar USDT en BinaryLiquidVault.sol',
+    btnConfirmAddBch: 'Verificar TX en Covenant BCH y Emitir LP Shares',
 
-    // Remove Liquidity modal
-    modalRemoveTitle: "Retirar Liquidez •",
-    withdrawPctLabel: "Porcentaje a Retirar",
-    sharesToBurn: "Acciones a Quemar:",
-    payoutToReceive: "Pago a recibir",
-    totalUsdReturn: "Retorno Total en USD:",
-    feeProfit: "Ganancia Neta por Comisiones:",
-    btnSubmittingRemove: "Quemando Acciones y Acreditando Fondos...",
-    btnConfirmRemove: "Quemar Acciones y Retirar Fondos a Billetera",
+    modalRemoveTitle: 'Retirar Liquidez •',
+    withdrawPctLabel: 'Porcentaje de Acciones a Quemar',
+    sharesToBurn: 'LP Shares a Quemar:',
+    payoutToReceive: 'Retiro On-Chain a Recibir:',
+    totalUsdReturn: 'Valor Total de Rescate:',
+    feeProfit: 'Rendimiento por Comisiones:',
+    btnSubmittingRemove: 'Liberando Fondos desde el Smart Contract...',
+    btnConfirmRemove: 'Quemar LP Shares y Liberar Fondos a mi Wallet',
 
-    // Create Pair modal
-    createTitle: "Crear Par de Liquidez",
-    createSubtitle: "Lanza un nuevo pool AMM para cualquier CashToken",
-    baseTokenTitle: "Token 1 (CashToken / BCH)",
-    quoteTokenTitle: "Token 2 (Activo de Cotización)",
-    symbolPlaceholder: "Ej: LIFT",
-    namePlaceholder: "Nombre del Proyecto (opcional)",
-    initialPrice: "Precio Inicial (USD)",
-    advancedOptions: "Opciones Avanzadas (Category ID y Logo)",
-    categoryIdLabel: "CashToken Category ID (64 hex):",
-    categoryIdPlaceholder: "Category ID del contrato (opcional si es BCH)...",
-    iconLabel: "URL del Logo o Hash IPFS (ipfs://...):",
-    iconPlaceholder: "https://... o ipfs://...",
-    modeLabel: "Modalidad de Lanzamiento",
-    modeStandard: "Par Estándar AMM",
-    modeStandardBadge: "Trading Inmediato",
-    modeStandardDesc: "Depositas ambos tokens ahora. Queda activo de inmediato para trading libre con 0.20% para LPs.",
-    modeBootstrapping: "Recaudo Comunitario",
-    modeBootstrappingBadge: "Anti-Rug",
-    modeBootstrappingDesc: "Depositas el token base ahora y la comunidad fondea la contraparte hasta alcanzar la meta de TVL.",
-    amountToDeposit: "Cantidad a Depositar",
-    amountTokenB: "Cantidad de",
-    targetTvl: "Meta de Recaudo (USD)",
-    previewTitle: "Resumen del Par",
-    pairLabel: "Par:",
-    priceLabel: "Precio:",
-    typeLabel: "Tipo:",
-    feeLabel: "Comisión:",
-    btnCreating: "Registrando Par en el Protocolo...",
-    btnCreate: "Crear y Registrar Par",
+    createTitle: 'Registrar Par CashToken Personalizado',
+    createSubtitle: 'Registra un nuevo par de Bitcoin Cash CashTokens en el protocolo',
+    baseTokenTitle: 'Token 1 (CashToken / BCH)',
+    quoteTokenTitle: 'Token 2 (Activo Contraparte)',
+    symbolPlaceholder: 'Ej: LIFT',
+    namePlaceholder: 'Nombre del Proyecto (opcional)',
+    advancedOptions: 'Opciones Avanzadas (Category ID y Logo)',
+    categoryIdLabel: 'CashToken Category ID (64 hex):',
+    categoryIdPlaceholder: 'Hash hexadecimal de 64 caracteres...',
+    iconLabel: 'URL del Logo o Hash IPFS (ipfs://...):',
+    iconPlaceholder: 'https://... o ipfs://...',
+    modeStandard: 'Par Estándar',
+    modeStandardDesc: 'Registra el par en el listado (inicia con etiqueta Sin Liquidez hasta fondear contrato).',
+    modeBootstrapping: 'Meta Comunitaria',
+    modeBootstrappingDesc: 'Define una meta de TVL comunitario con bloqueo Anti-Rug.',
+    amountToDeposit: 'Oferta Base Referencial',
+    targetTvl: 'Meta de TVL (USD)',
+    btnCreating: 'Registrando Par...',
+    btnCreate: 'Registrar Par de Liquidez',
 
-    // Toasts & Notifications
-    toastVerified: "¡Par verificado oficialmente! Insignia asignada.",
-    toastVerifyError: "No se pudo verificar el par",
-    toastNetworkError: "Error de red",
-    toastEnterSymbol: "Por favor ingresa el símbolo del token de Bitcoin Cash (ej: LIFT)",
-    toastInvalidCatId: "El CashToken Category ID debe tener exactamente 64 caracteres hexadecimales",
-    toastCreateSuccess: "¡Par de liquidez creado con éxito!",
-    toastCreateError: "Error al crear el par",
-    toastInvalidAmount: "Introduce un monto de depósito válido",
-    toastInsufficientBalance: (bal: number, token: string) => `Saldo insuficiente. Tienes ${bal.toLocaleString()} ${token}`,
-    toastGoalReached: (pair: string) => `🎉 ¡Felicidades! Tu depósito completó la meta de fondeo. ¡${pair} ahora está 100% ACTIVO en Mainnet!`,
-    toastDepositSuccess: (amt: number, token: string, shares: any) => `¡Depositados ${amt} ${token} con éxito! Recibiste ${shares} LP Shares.`,
-    toastDepositError: "Fallo al agregar liquidez",
-    toastWithdrawSuccess: (pct: number, aAmt: any, aTok: string, bAmt: any, bTok: string, usd: any) => `¡Rescatadas ${pct}% acciones! Recibiste ${aAmt} ${aTok} + ${bAmt} ${bTok} ($${usd} USD) directamente en tu billetera.`,
-    toastWithdrawError: "Fallo al retirar liquidez"
+    toastVerified: '¡Par verificado exitosamente!',
+    toastVerifyError: 'No se pudo verificar el par',
+    toastNetworkError: 'Error de conexión con el servidor',
+    toastEnterSymbol: 'Ingresa el símbolo del token CashToken (ej: LIFT)',
+    toastInvalidCatId: 'El Category ID debe tener exactamente 64 caracteres hexadecimales',
+    toastCreateSuccess: '¡Par registrado exitosamente!',
+    toastCreateError: 'Error al registrar el par',
+    toastInvalidAmount: 'Ingresa un monto de depósito mayor a cero',
+    toastInsufficientBalance: (bal: number, token: string) =>
+      `Saldo insuficiente en tu billetera (${bal.toLocaleString()} ${token} disponibles)`,
+    toastGoalReached: (pair: string) => `🎉 ¡Meta completada! ${pair} ahora está ACTIVO.`,
+    toastDepositSuccess: (amt: number, token: string, shares: any) =>
+      `¡Depósito on-chain verificado de ${amt} ${token}! Recibiste ${shares} LP Shares.`,
+    toastDepositError: 'No se pudo verificar el depósito de liquidez',
+    toastWithdrawSuccess: (amt: any, tok: string, tx: string) =>
+      `¡Smart Contract liberó ${amt} ${tok} a tu wallet! TX: ${tx.slice(0, 12)}...`,
+    toastWithdrawError: 'Error al liberar liquidez desde el Smart Contract'
   }
 };
 
@@ -384,18 +385,22 @@ export default function PoolsView({
   bchAddress = '',
   evmAddress = '',
   platformNetwork = 'mainnet',
+  onToggleNetwork,
+  onRefreshBalances,
   onConnectWallet,
   showToast,
-  lang = 'en'
+  lang = 'es'
 }: PoolsViewProps) {
-  const t = poolTexts[lang] || poolTexts.en;
+  const isTestnet = platformNetwork === 'testnet';
+  const t = poolTexts[lang] || poolTexts.es;
+
   const [allPools, setAllPools] = useState<PoolData[]>([]);
   const [protocolStats, setProtocolStats] = useState<any>(null);
   const [positions, setPositions] = useState<UserPosition[]>([]);
   const [walletBalances, setWalletBalances] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState<boolean>(true);
   const [activeTab, setActiveTab] = useState<'all' | 'active' | 'bootstrapping' | 'my-positions'>('all');
-  
+
   // Modal states
   const [actionModal, setActionModal] = useState<'add' | 'remove' | null>(null);
   const [selectedPool, setSelectedPool] = useState<PoolData | null>(null);
@@ -404,6 +409,19 @@ export default function PoolsView({
   const [isCreatingPool, setIsCreatingPool] = useState<boolean>(false);
   const [showAdvanced, setShowAdvanced] = useState<boolean>(false);
 
+  // Add Liquidity state
+  const [depositToken, setDepositToken] = useState<string>('USDT');
+  const [depositAmount, setDepositAmount] = useState<string>('');
+  const [bchDepositTxHash, setBchDepositTxHash] = useState<string>('');
+  const [bchVaultQr, setBchVaultQr] = useState<string>('');
+  const [copiedVault, setCopiedVault] = useState<boolean>(false);
+  const [web3StepMsg, setWeb3StepMsg] = useState<string>('');
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+
+  // Remove Liquidity state
+  const [burnPercentage, setBurnPercentage] = useState<number>(100);
+  const [withdrawToken, setWithdrawToken] = useState<'USDT' | 'PUSD'>('USDT');
+
   // Create Pool Form State
   const [createForm, setCreateForm] = useState({
     tokenA: '',
@@ -411,32 +429,45 @@ export default function PoolsView({
     categoryIdA: '',
     decimalsA: '6',
     iconA: '',
-    tokenB: 'USDC',
-    tokenBName: 'USD Coin',
-    networkB: 'Polygon (Mainnet)',
-    networkBadgeB: 'Polygon PoS',
+    tokenB: 'USDT',
+    tokenBName: 'Tether USD',
+    networkB: 'Polygon Amoy (Testnet)',
+    networkBadgeB: 'Polygon Amoy',
     poolMode: 'BOOTSTRAPPING' as 'BOOTSTRAPPING' | 'STANDARD',
     targetTvlUsd: '2500',
-    initialAmountA: '1000000',
+    initialAmountA: '100000',
     initialAmountB: '0',
-    initialPriceUsd: '0.0025'
+    initialPriceUsd: '0.01'
   });
 
-  // Add Liquidity form state
-  const [depositToken, setDepositToken] = useState<string>('');
-  const [depositAmount, setDepositAmount] = useState<string>('');
-  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const connectedBch =
+    bchAddress ||
+    (userAddress && (userAddress.startsWith('bchtest:') || userAddress.startsWith('bitcoincash:'))
+      ? userAddress
+      : '');
+  const connectedEvm =
+    evmAddress || (userAddress && userAddress.startsWith('0x') ? userAddress : '');
+  const effectiveAddress = connectedBch || connectedEvm || userAddress || '';
 
-  // Remove Liquidity form state
-  const [burnPercentage, setBurnPercentage] = useState<number>(100);
+  useEffect(() => {
+    const addr = selectedPool?.vaultAddressA || DEPLOYED_TESTNET_CONTRACTS.chipnetVaultTokenAddress;
+    if (actionModal === 'add' && depositToken === 'PUSD' && addr) {
+      setBchVaultQr(generateQrDataUrl(addr));
+    }
+  }, [actionModal, depositToken, selectedPool?.vaultAddressA]);
 
-  // Active connected address (strictly non-custodial — no hardcoded fake fallback)
-  const effectiveAddress = bchAddress || evmAddress || userAddress || '';
+  const copyText = (txt: string) => {
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(txt);
+    }
+    setCopiedVault(true);
+    setTimeout(() => setCopiedVault(false), 2000);
+  };
 
-  // Fetch live pool statistics & all pools from backend
+  // Fetch live network-aware pool statistics
   const fetchPoolsData = async () => {
     try {
-      const res = await fetch(`${backendUrl}/api/pools/stats`);
+      const res = await fetch(`${backendUrl}/api/pools/stats?network=${platformNetwork}`);
       const data = await res.json();
       if (data.success) {
         if (data.allPools) setAllPools(data.allPools);
@@ -458,8 +489,8 @@ export default function PoolsView({
     try {
       const qs = new URLSearchParams({
         network: platformNetwork,
-        ...(bchAddress ? { bchAddress } : {}),
-        ...(evmAddress ? { evmAddress } : {})
+        ...(connectedBch ? { bchAddress: connectedBch } : {}),
+        ...(connectedEvm ? { evmAddress: connectedEvm } : {})
       });
       const res = await fetch(
         `${backendUrl}/api/wallet/balances/${encodeURIComponent(effectiveAddress)}?${qs.toString()}`
@@ -473,14 +504,21 @@ export default function PoolsView({
     }
   };
 
-  // Fetch user LP positions
+  // Fetch user LP positions unified across both BCH and EVM connected wallets
   const fetchUserPositions = async () => {
-    if (!userAddress) {
+    if (!effectiveAddress) {
       setPositions([]);
       return;
     }
     try {
-      const res = await fetch(`${backendUrl}/api/pools/positions/${encodeURIComponent(userAddress)}`);
+      const qs = new URLSearchParams({
+        network: platformNetwork,
+        ...(connectedBch ? { bchAddress: connectedBch } : {}),
+        ...(connectedEvm ? { evmAddress: connectedEvm } : {})
+      });
+      const res = await fetch(
+        `${backendUrl}/api/pools/positions/${encodeURIComponent(effectiveAddress)}?${qs.toString()}`
+      );
       const data = await res.json();
       if (data.success && data.positions) {
         setPositions(data.positions);
@@ -490,7 +528,23 @@ export default function PoolsView({
     }
   };
 
+  useEffect(() => {
+    fetchPoolsData();
+    fetchWalletBalances();
+    fetchUserPositions();
+    const interval = setInterval(() => {
+      fetchPoolsData();
+      fetchWalletBalances();
+      fetchUserPositions();
+    }, 8000);
+    return () => clearInterval(interval);
+  }, [backendUrl, effectiveAddress, connectedBch, connectedEvm, platformNetwork]);
+
   const handleVerifyPool = async (poolId: string) => {
+    if (!effectiveAddress) {
+      onConnectWallet();
+      return;
+    }
     try {
       const res = await fetch(`${backendUrl}/api/pools/${poolId}/verify`, {
         method: 'POST',
@@ -510,47 +564,47 @@ export default function PoolsView({
     }
   };
 
-  useEffect(() => {
-    fetchPoolsData();
-    fetchWalletBalances();
-    fetchUserPositions();
-    const interval = setInterval(() => {
-      fetchPoolsData();
-      fetchWalletBalances();
-      fetchUserPositions();
-    }, 6000);
-    return () => clearInterval(interval);
-  }, [backendUrl, userAddress, bchAddress, evmAddress, platformNetwork, effectiveAddress]);
-
-  // Open Add Liquidity modal for a pool
   const handleOpenAddModal = (pool: PoolData) => {
+    if (!isTestnet) {
+      if (onToggleNetwork) onToggleNetwork('testnet');
+      showToast('Red cambiada a Testnet (PUSD ⟷ USDT con liquidez activa)', 'success');
+      return;
+    }
+    if (!pool.hasLiquidity && pool.id !== 'PUSD_USDT') {
+      showToast(`El par ${pool.pair} se encuentra Sin Liquidez actualmente.`, 'error');
+      return;
+    }
     if (!effectiveAddress) {
       onConnectWallet();
       return;
     }
     setSelectedPool(pool);
-    setDepositToken(pool.tokenA);
+    // Default to USDT if EVM wallet is connected, otherwise PUSD
+    setDepositToken(connectedEvm ? pool.tokenB : pool.tokenA);
     setDepositAmount('');
+    setBchDepositTxHash('');
+    setWeb3StepMsg('');
     setActionModal('add');
   };
 
-  // Available balance for the selected deposit token
   const getSelectedTokenBalance = (): number => {
     if (!depositToken) return 0;
-    return walletBalances[depositToken.toUpperCase()] || 0;
+    return Number(walletBalances[depositToken.toUpperCase()] || 0);
   };
 
-  // Quick percentage balance setter
   const handleSetQuickAmount = (pct: number) => {
     const bal = getSelectedTokenBalance();
     if (bal <= 0) return;
-    const calc = (bal * (pct / 100));
-    setDepositAmount(pct === 100 ? bal.toString() : calc.toFixed(4));
+    const calc = bal * (pct / 100);
+    setDepositAmount(pct === 100 ? String(Number(bal.toFixed(4))) : calc.toFixed(4));
   };
 
-  // Create Custom Pool Handler
   const handleCreatePool = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!effectiveAddress) {
+      onConnectWallet();
+      return;
+    }
     if (!createForm.tokenA.trim()) {
       showToast(t.toastEnterSymbol, 'error');
       return;
@@ -567,13 +621,14 @@ export default function PoolsView({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           creatorAddress: effectiveAddress,
+          network: platformNetwork,
           tokenA: createForm.tokenA.trim().toUpperCase(),
           tokenB: createForm.tokenB.trim().toUpperCase(),
           tokenAName: createForm.tokenAName.trim() || createForm.tokenA.trim().toUpperCase(),
           tokenBName: createForm.tokenBName,
-          networkA: 'Bitcoin Cash (Mainnet)',
+          networkA: isTestnet ? 'BCH Chipnet (Testnet4)' : 'Bitcoin Cash (Mainnet)',
           networkB: createForm.networkB,
-          networkBadgeA: 'BCH CashTokens',
+          networkBadgeA: isTestnet ? 'Chipnet CashTokens' : 'BCH CashTokens',
           networkBadgeB: createForm.networkBadgeB,
           categoryIdA: createForm.categoryIdA.trim() || null,
           iconA: createForm.iconA.trim() || null,
@@ -583,7 +638,7 @@ export default function PoolsView({
           targetTvlUsd: parseFloat(createForm.targetTvlUsd) || 2500,
           initialAmountA: parseFloat(createForm.initialAmountA) || 0,
           initialAmountB: parseFloat(createForm.initialAmountB) || 0,
-          initialPriceUsd: parseFloat(createForm.initialPriceUsd) || 0.0025
+          initialPriceUsd: parseFloat(createForm.initialPriceUsd) || 0.01
         })
       });
 
@@ -592,28 +647,14 @@ export default function PoolsView({
 
       if (data.success) {
         showToast(data.message || t.toastCreateSuccess, 'success');
-        confetti({
-          particleCount: 100,
-          spread: 80,
-          origin: { y: 0.6 },
-          colors: ['#0AC18E', '#F7931A', '#8B5CF6', '#FFFFFF']
-        });
+        confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
         setCreateModalOpen(false);
         setCreateForm({
+          ...createForm,
           tokenA: '',
           tokenAName: '',
           categoryIdA: '',
-          decimalsA: '6',
-          iconA: '',
-          tokenB: 'USDC',
-          tokenBName: 'USD Coin',
-          networkB: 'Polygon (Mainnet)',
-          networkBadgeB: 'Polygon PoS',
-          poolMode: 'BOOTSTRAPPING',
-          targetTvlUsd: '2500',
-          initialAmountA: '1000000',
-          initialAmountB: '0',
-          initialPriceUsd: '0.0025'
+          iconA: ''
         });
         await fetchPoolsData();
       } else {
@@ -625,8 +666,6 @@ export default function PoolsView({
     }
   };
 
-
-  // Calculations for Add Liquidity preview
   const calcEstimatedShares = () => {
     if (!selectedPool) return 0;
     const num = parseFloat(depositAmount);
@@ -638,11 +677,11 @@ export default function PoolsView({
   };
 
   const calcNewPoolSharePercent = () => {
-    if (!selectedPool) return '0.000';
+    if (!selectedPool) return '0.0000';
     const shares = calcEstimatedShares();
     const newTotal = selectedPool.totalShares + shares;
-    if (newTotal <= 0) return '0.000';
-    return ((shares / newTotal) * 100).toFixed(3);
+    if (newTotal <= 0) return '0.0000';
+    return ((shares / newTotal) * 100).toFixed(4);
   };
 
   const calcEstimatedAnnualYieldUsd = () => {
@@ -651,11 +690,12 @@ export default function PoolsView({
     if (isNaN(num) || num <= 0) return 0;
     const price = depositToken === selectedPool.tokenA ? selectedPool.priceA : selectedPool.priceB;
     const depositUsd = num * price;
-    return Number(((depositUsd * (selectedPool.apyPercentage / 100))).toFixed(2));
+    return Number((depositUsd * (selectedPool.apyPercentage / 100)).toFixed(2));
   };
 
-  // Submit Add Liquidity
+  // Submit 100% Non-Custodial Add Liquidity (Web3 Vault Transfer for USDT / Covenant TXID Verify for PUSD)
   const handleAddLiquidity = async () => {
+    if (!selectedPool) return;
     const num = parseFloat(depositAmount);
     const bal = getSelectedTokenBalance();
 
@@ -663,51 +703,107 @@ export default function PoolsView({
       showToast(t.toastInvalidAmount, 'error');
       return;
     }
-    if (num > bal) {
+
+    const isEvmDeposit = depositToken === 'USDT' || depositToken === 'USDC';
+    if (isEvmDeposit && !connectedEvm) {
+      onConnectWallet();
+      return;
+    }
+    if (!isEvmDeposit && !connectedBch) {
+      onConnectWallet();
+      return;
+    }
+
+    if (bal > 0 && num > bal + 0.0001) {
       showToast(t.toastInsufficientBalance(bal, depositToken), 'error');
       return;
     }
-    if (!selectedPool) return;
 
     setIsSubmitting(true);
+    setWeb3StepMsg('');
+
     try {
+      let confirmedTxHash = bchDepositTxHash.trim();
+      let activeProviderAddr = isEvmDeposit ? connectedEvm : connectedBch;
+
+      if (isEvmDeposit) {
+        const vaultAddr = selectedPool.vaultAddressB || DEPLOYED_TESTNET_CONTRACTS.amoyVaultAddress;
+        const tokenAddr = selectedPool.tokenAddressB || DEPLOYED_TESTNET_CONTRACTS.amoyUsdtAddress;
+
+        const { txHash, sender } = await executeWeb3LpDeposit({
+          isTestnet,
+          vaultAddress: vaultAddr,
+          tokenAddress: tokenAddr,
+          amount: num,
+          decimals: selectedPool.decimalsB || 6,
+          onStatus: msg => setWeb3StepMsg(msg)
+        });
+        confirmedTxHash = txHash;
+        activeProviderAddr = sender || connectedEvm;
+      } else {
+        if (!confirmedTxHash || confirmedTxHash.length < 64) {
+          setIsSubmitting(false);
+          showToast(
+            'Envía primero los PUSD al Covenant BinaryLiquidVault.cash y pega el TXID (64 caracteres hex) para verificar tu depósito.',
+            'error'
+          );
+          return;
+        }
+      }
+
+      setWeb3StepMsg('Registrando LP Shares tras verificación on-chain...');
       const res = await fetch(`${backendUrl}/api/pools/add-liquidity`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          providerAddress: effectiveAddress,
+          providerAddress: activeProviderAddr,
+          bchAddress: connectedBch ? convertCashAddressNetwork(connectedBch, isTestnet, true) : null,
+          evmAddress: connectedEvm || null,
           token: depositToken,
           amount: num,
-          poolId: selectedPool.id
+          poolId: selectedPool.id,
+          txHash: confirmedTxHash,
+          network: platformNetwork
         })
       });
       const data = await res.json();
 
       if (data.success) {
-        if (data.unlockedNow) {
-          showToast(t.toastGoalReached(selectedPool.pair), 'success');
-        } else {
-          showToast(t.toastDepositSuccess(num, depositToken, data.sharesMinted), 'success');
-        }
+        showToast(t.toastDepositSuccess(num, depositToken, data.sharesMinted), 'success');
         confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
         setActionModal(null);
         setDepositAmount('');
+        setBchDepositTxHash('');
+        setWeb3StepMsg('');
+        onRefreshBalances?.();
         await Promise.all([fetchPoolsData(), fetchWalletBalances(), fetchUserPositions()]);
       } else {
         showToast(data.error || t.toastDepositError, 'error');
       }
     } catch (err: any) {
-      showToast(err.message || 'Error de red', 'error');
+      showToast(err.message || t.toastDepositError, 'error');
     } finally {
       setIsSubmitting(false);
+      setWeb3StepMsg('');
     }
   };
 
-  // Submit Remove Liquidity
+  // Submit 100% Non-Custodial Remove Liquidity (Watchman Smart Contract Vault Release)
   const handleRemoveLiquidity = async () => {
     if (!selectedPosition) return;
-    const sharesToBurn = (selectedPosition.shares * (burnPercentage / 100));
+    const sharesToBurn = selectedPosition.shares * (burnPercentage / 100);
     if (sharesToBurn <= 0) return;
+
+    if (withdrawToken === 'USDT' && !connectedEvm) {
+      showToast('Conecta tu billetera EVM (MetaMask / WalletConnect) para recibir tus USDT en Polygon Amoy.', 'error');
+      onConnectWallet();
+      return;
+    }
+    if (withdrawToken === 'PUSD' && !connectedBch) {
+      showToast('Conecta tu billetera BCH (Paytaca / Cashonize) para recibir tus PUSD en Chipnet.', 'error');
+      onConnectWallet();
+      return;
+    }
 
     setIsSubmitting(true);
     try {
@@ -717,49 +813,108 @@ export default function PoolsView({
         body: JSON.stringify({
           positionId: selectedPosition.id,
           providerAddress: effectiveAddress,
+          bchAddress: connectedBch ? convertCashAddressNetwork(connectedBch, true, true) : null,
+          evmAddress: connectedEvm || null,
           sharesToBurn: Number(sharesToBurn.toFixed(4)),
-          poolId: selectedPosition.poolId
+          poolId: selectedPosition.poolId,
+          withdrawToken
         })
       });
       const data = await res.json();
 
       if (data.success) {
-        showToast(t.toastWithdrawSuccess(burnPercentage, data.payout.amountA, data.payout.tokenA, data.payout.amountB, data.payout.tokenB, data.payout.totalUsdValue), 'success');
-        confetti({ particleCount: 60, spread: 50, origin: { y: 0.65 } });
+        showToast(
+          t.toastWithdrawSuccess(
+            data.payout.withdrawnAmount,
+            data.payout.withdrawnToken,
+            data.txHash || ''
+          ),
+          'success'
+        );
+        confetti({ particleCount: 65, spread: 55, origin: { y: 0.65 } });
         setActionModal(null);
         setSelectedPosition(null);
+        onRefreshBalances?.();
         await Promise.all([fetchPoolsData(), fetchWalletBalances(), fetchUserPositions()]);
       } else {
         showToast(data.error || t.toastWithdrawError, 'error');
       }
     } catch (err: any) {
-      showToast(err.message || 'Error de red', 'error');
+      showToast(err.message || t.toastNetworkError, 'error');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // Filtered pools
   const filteredPools = allPools.filter(p => {
-    if (activeTab === 'active') return p.status === 'ACTIVE';
+    if (activeTab === 'active') return p.status === 'ACTIVE' && p.hasLiquidity;
     if (activeTab === 'bootstrapping') return p.status === 'BOOTSTRAPPING';
     return true;
   });
 
   return (
     <div className="w-full max-w-6xl mx-auto px-3 sm:px-4 py-6 sm:py-10 selection:bg-orange-500 selection:text-white">
-      
+      {/* NETWORK STATUS & 1-CLICK SWITCHER BANNER */}
+      <div className="max-w-4xl mx-auto mb-6">
+        {isTestnet ? (
+          <div className="px-4 py-2.5 rounded-2xl bg-amber-500/10 border border-amber-500/25 text-amber-700 dark:text-amber-300 text-xs flex flex-wrap items-center justify-between gap-2">
+            <span className="font-bold flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+              <span>
+                Testnet Activa: Vault Oficial <strong>PUSD (Chipnet) ⟷ USDT (Polygon Amoy)</strong> con liquidez real on-chain • Otros pares: <strong>Sin Liquidez</strong>
+              </span>
+            </span>
+            {onToggleNetwork && (
+              <button
+                type="button"
+                onClick={() => onToggleNetwork('mainnet')}
+                className="text-[11px] font-bold bg-white/80 dark:bg-[#161c28] px-2.5 py-1 rounded-lg border border-amber-500/30 hover:bg-amber-500/20 transition-colors cursor-pointer"
+              >
+                Ver Mainnet
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="px-4 py-2.5 rounded-2xl bg-rose-500/10 border border-rose-500/25 text-rose-600 dark:text-rose-400 text-xs flex flex-wrap items-center justify-between gap-2">
+            <span className="font-bold flex items-center gap-2">
+              <Lock className="w-3.5 h-3.5 shrink-0" />
+              <span>
+                Mainnet: Todos los pools están marcados como <strong>Sin Liquidez</strong> actualmente • Liquidez activa disponible en <strong>Testnet (PUSD / USDT)</strong>
+              </span>
+            </span>
+            {onToggleNetwork && (
+              <button
+                type="button"
+                onClick={() => {
+                  onToggleNetwork('testnet');
+                  showToast('Red cambiada: Testnet activa (PUSD / USDT)', 'success');
+                }}
+                className="text-[11px] font-bold bg-amber-500 hover:bg-amber-600 text-white px-3 py-1 rounded-lg transition-colors cursor-pointer shrink-0"
+              >
+                Cambiar a Testnet
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* HEADER SECTION */}
       <div className="text-center max-w-3xl mx-auto mb-8 sm:mb-10">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-xs font-bold uppercase tracking-wider mb-3">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-          <span>{t.badge}</span>
+        <div
+          className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-3 border ${
+            isTestnet
+              ? 'bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+              : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20'
+          }`}
+        >
+          <span className={`w-2 h-2 rounded-full ${isTestnet ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`}></span>
+          <span>{isTestnet ? t.badgeTestnet : t.badgeMainnet}</span>
         </div>
         <h1 className="text-3xl sm:text-4xl md:text-5xl font-black text-gray-950 dark:text-white tracking-tight">
           {t.title}
         </h1>
         <p className="text-xs sm:text-sm md:text-base text-gray-500 dark:text-gray-400 mt-2 sm:mt-3 leading-relaxed">
-          {t.subtitle}
+          {isTestnet ? t.subtitleTestnet : t.subtitleMainnet}
         </p>
       </div>
 
@@ -771,11 +926,15 @@ export default function PoolsView({
             <DollarSign className="w-4 h-4 text-emerald-500" />
           </div>
           <div className="text-xl sm:text-2xl md:text-3xl font-black text-gray-900 dark:text-white font-mono">
-            ${(protocolStats?.totalTvlUsd ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            {loading ? '...' : `$${(protocolStats?.totalTvlUsd ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
           </div>
-          <span className="text-[10px] sm:text-[11px] text-emerald-600 dark:text-emerald-400 font-bold mt-1 inline-flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-            {t.statTvlSub}
+          <span
+            className={`text-[10px] sm:text-[11px] font-bold mt-1 inline-flex items-center gap-1 ${
+              isTestnet ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'
+            }`}
+          >
+            <span className={`w-1.5 h-1.5 rounded-full ${isTestnet ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`}></span>
+            {isTestnet ? t.statTvlSubTestnet : t.statTvlSubMainnet}
           </span>
         </div>
 
@@ -798,7 +957,7 @@ export default function PoolsView({
             <Coins className="w-4 h-4 text-primary" />
           </div>
           <div className="text-xl sm:text-2xl md:text-3xl font-black text-gray-900 dark:text-white font-mono">
-            ${(protocolStats?.totalCumulativeFeesUsd ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            ${(protocolStats?.totalCumulativeFeesUsd ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
           </div>
           <span className="text-[10px] sm:text-[11px] text-emerald-600 dark:text-emerald-400 font-medium mt-1 block">
             {t.statFeesSub}
@@ -814,8 +973,8 @@ export default function PoolsView({
             <span>{protocolStats?.activePoolsCount ?? 0}</span>
             <span className="text-xs text-emerald-500 font-bold uppercase">{t.statActive}</span>
             <span className="text-xs text-gray-400">/</span>
-            <span>{protocolStats?.bootstrappingPoolsCount ?? 0}</span>
-            <span className="text-xs text-amber-500 font-bold uppercase">{t.statGoal}</span>
+            <span>{protocolStats?.noLiquidityPoolsCount ?? 0}</span>
+            <span className="text-xs text-rose-500 font-bold uppercase">{t.statNoLiq}</span>
           </div>
           <span className="text-[10px] sm:text-[11px] text-gray-400 font-medium mt-1 block">
             {t.statPairsSub}
@@ -825,12 +984,12 @@ export default function PoolsView({
 
       {/* FILTER TABS */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6">
-        <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-gray-100/90 dark:bg-[#131826] border border-gray-200/70 dark:border-gray-800">
+        <div className="flex flex-wrap items-center gap-1.5 p-1 rounded-2xl bg-gray-100/90 dark:bg-[#131826] border border-gray-200/70 dark:border-gray-800">
           <button
             onClick={() => setActiveTab('all')}
             className={`px-3 py-1.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${
-              activeTab === 'all' 
-                ? 'bg-white dark:bg-[#1e2538] text-gray-950 dark:text-white shadow-xs' 
+              activeTab === 'all'
+                ? 'bg-white dark:bg-[#1e2538] text-gray-950 dark:text-white shadow-xs'
                 : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
             }`}
           >
@@ -840,19 +999,19 @@ export default function PoolsView({
           <button
             onClick={() => setActiveTab('active')}
             className={`px-3 py-1.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${
-              activeTab === 'active' 
-                ? 'bg-white dark:bg-[#1e2538] text-emerald-600 dark:text-emerald-400 shadow-xs' 
+              activeTab === 'active'
+                ? 'bg-white dark:bg-[#1e2538] text-emerald-600 dark:text-emerald-400 shadow-xs'
                 : 'text-gray-500 dark:text-gray-400 hover:text-emerald-600'
             }`}
           >
-            {t.tabActive} ({allPools.filter(p => p.status === 'ACTIVE').length})
+            {t.tabActive} ({allPools.filter(p => p.status === 'ACTIVE' && p.hasLiquidity).length})
           </button>
 
           <button
             onClick={() => setActiveTab('bootstrapping')}
             className={`px-3 py-1.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${
-              activeTab === 'bootstrapping' 
-                ? 'bg-white dark:bg-[#1e2538] text-amber-600 dark:text-amber-400 shadow-xs' 
+              activeTab === 'bootstrapping'
+                ? 'bg-white dark:bg-[#1e2538] text-amber-600 dark:text-amber-400 shadow-xs'
                 : 'text-gray-500 dark:text-gray-400 hover:text-amber-600'
             }`}
           >
@@ -862,8 +1021,8 @@ export default function PoolsView({
           <button
             onClick={() => setActiveTab('my-positions')}
             className={`px-3 py-1.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${
-              activeTab === 'my-positions' 
-                ? 'bg-white dark:bg-[#1e2538] text-primary shadow-xs' 
+              activeTab === 'my-positions'
+                ? 'bg-white dark:bg-[#1e2538] text-primary shadow-xs'
                 : 'text-gray-500 dark:text-gray-400 hover:text-primary'
             }`}
           >
@@ -873,15 +1032,25 @@ export default function PoolsView({
 
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setCreateModalOpen(true)}
+            onClick={() => {
+              if (!effectiveAddress) {
+                onConnectWallet();
+                return;
+              }
+              setCreateModalOpen(true);
+            }}
             className="px-3.5 py-1.5 rounded-xl bg-primary hover:bg-orange-600 text-white text-xs font-bold transition-all shadow-md shadow-orange-500/20 flex items-center gap-1.5 cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>{t.btnCreatePair}</span>
           </button>
 
-          <button 
-            onClick={() => { fetchPoolsData(); fetchWalletBalances(); fetchUserPositions(); }}
+          <button
+            onClick={() => {
+              fetchPoolsData();
+              fetchWalletBalances();
+              fetchUserPositions();
+            }}
             className="text-xs text-gray-400 hover:text-primary transition-colors flex items-center gap-1.5 cursor-pointer font-bold px-2 py-1.5"
             title={t.refreshTooltip}
           >
@@ -893,205 +1062,264 @@ export default function PoolsView({
       {/* POOLS GRID */}
       {activeTab !== 'my-positions' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5 mb-10">
-          {filteredPools.map(pool => (
-            <motion.div
-              key={pool.id}
-              whileHover={{ y: -2 }}
-              className="rounded-3xl bg-white dark:bg-[#121622] border border-gray-200/90 dark:border-gray-800/90 p-5 sm:p-6 shadow-2xs hover:shadow-md transition-all flex flex-col justify-between"
-            >
-              <div>
-                {/* POOL HEADER WITH LOGOS AND BADGES */}
-                <div className="flex items-start justify-between gap-3 pb-4 border-b border-gray-100 dark:border-gray-800">
-                  <div className="flex items-center gap-3">
-                    {/* OVERLAPPING COIN LOGOS */}
-                    <div className="flex -space-x-3 shrink-0">
-                      <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-gray-50 dark:bg-[#1a2130] border-2 border-white dark:border-[#121622] flex items-center justify-center p-1 shadow-xs">
-                        <img src={pool.iconA} alt={pool.tokenA} className="w-full h-full object-contain rounded-full" />
+          {filteredPools.map(pool => {
+            const isPoolActive = pool.status === 'ACTIVE' && Boolean(pool.hasLiquidity);
+            return (
+              <motion.div
+                key={pool.id}
+                whileHover={{ y: -2 }}
+                className={`rounded-3xl bg-white dark:bg-[#121622] border p-5 sm:p-6 shadow-2xs hover:shadow-md transition-all flex flex-col justify-between ${
+                  isPoolActive
+                    ? 'border-emerald-500/30 dark:border-emerald-500/25'
+                    : 'border-gray-200/90 dark:border-gray-800/90 opacity-90'
+                }`}
+              >
+                <div>
+                  {/* POOL HEADER WITH LOGOS AND BADGES */}
+                  <div className="flex items-start justify-between gap-3 pb-4 border-b border-gray-100 dark:border-gray-800">
+                    <div className="flex items-center gap-3">
+                      <div className="flex -space-x-3 shrink-0">
+                        <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-gray-50 dark:bg-[#1a2130] border-2 border-white dark:border-[#121622] flex items-center justify-center p-1 shadow-xs">
+                          <img src={pool.iconA} alt={pool.tokenA} className="w-full h-full object-contain rounded-full" />
+                        </div>
+                        <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-gray-50 dark:bg-[#1a2130] border-2 border-white dark:border-[#121622] flex items-center justify-center p-1 shadow-xs">
+                          <img src={pool.iconB} alt={pool.tokenB} className="w-full h-full object-contain rounded-full" />
+                        </div>
                       </div>
-                      <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-gray-50 dark:bg-[#1a2130] border-2 border-white dark:border-[#121622] flex items-center justify-center p-1 shadow-xs">
-                        <img src={pool.iconB} alt={pool.tokenB} className="w-full h-full object-contain rounded-full" />
+
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className="font-extrabold text-base sm:text-lg text-gray-950 dark:text-white leading-tight">
+                            {pool.pair}
+                          </h3>
+                          {pool.isSponsorPool && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 flex items-center gap-1">
+                              <Flame className="w-3 h-3 fill-amber-500" /> {t.sponsorBadge}
+                            </span>
+                          )}
+
+                          {pool.isVerified ? (
+                            <span className="text-[10px] font-bold text-blue-500 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded-full flex items-center gap-1">
+                              <Check className="w-3 h-3 text-blue-500" />
+                              <span>{t.verifiedOfficial}</span>
+                            </span>
+                          ) : pool.isCustom ? (
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[10px] text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-full">
+                                {t.communityBadge}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleVerifyPool(pool.id)}
+                                className="text-[10px] font-bold text-blue-500 hover:text-blue-400 underline cursor-pointer"
+                                title={t.verifyTitle}
+                              >
+                                {t.verifyAction}
+                              </button>
+                            </div>
+                          ) : null}
+                        </div>
+                        <p className="text-[11px] text-gray-400 mt-0.5 truncate">
+                          {pool.networkBadgeA} ⟷ {pool.networkBadgeB}
+                        </p>
                       </div>
                     </div>
 
-                    <div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="font-extrabold text-base sm:text-lg text-gray-950 dark:text-white leading-tight">
-                          {pool.pair}
-                        </h3>
-                        {pool.isSponsorPool && (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 flex items-center gap-1">
-                            <Flame className="w-3 h-3 fill-amber-500" /> {t.sponsorBadge}
-                          </span>
-                        )}
-                        {pool.isCustom && (
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1 border ${
-                            pool.poolMode === 'BOOTSTRAPPING'
-                              ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/25'
-                              : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/25'
-                          }`}>
-                            {pool.poolMode === 'BOOTSTRAPPING' ? (
-                              <>
-                                <Lock className="w-3 h-3 text-amber-500" />
-                                <span>{t.antiRugLock} ${(pool.targetTvlUsd || 0).toLocaleString()}</span>
-                              </>
-                            ) : (
-                              <>
-                                <Sparkles className="w-3 h-3 text-emerald-500" />
-                                <span>{t.standardPair}</span>
-                              </>
-                            )}
-                          </span>
-                        )}
+                    {/* STATUS BADGE */}
+                    <div className="shrink-0">
+                      {isPoolActive ? (
+                        <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                          {t.statusActive}
+                        </span>
+                      ) : pool.status === 'BOOTSTRAPPING' ? (
+                        <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 flex items-center gap-1.5">
+                          <Lock className="w-3 h-3 text-amber-500" />
+                          {t.statusFunding}
+                        </span>
+                      ) : (
+                        <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/25 flex items-center gap-1.5">
+                          <Lock className="w-3 h-3 text-rose-500" />
+                          {t.statusNoLiquidity}
+                        </span>
+                      )}
+                    </div>
+                  </div>
 
-                        {/* TOKEN VERIFICATION BADGE */}
-                        {pool.isVerified ? (
-                          <span className="text-[10px] font-bold text-blue-500 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded-full flex items-center gap-1">
-                            <Check className="w-3 h-3 text-blue-500" />
-                            <span>{t.verifiedOfficial}</span>
-                          </span>
-                        ) : pool.isCustom ? (
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-[10px] text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-full">
-                              {t.communityBadge}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => handleVerifyPool(pool.id)}
-                              className="text-[10px] font-bold text-blue-500 hover:text-blue-400 underline cursor-pointer"
-                              title={t.verifyTitle}
-                            >
-                              {t.verifyAction}
-                            </button>
-                          </div>
-                        ) : null}
-
-                        {pool.categoryIdA && (
+                  {/* SMART CONTRACT EXPLORER LINKS FOR ACTIVE ON-CHAIN VAULTS */}
+                  {isPoolActive && (pool.contractExplorerA || pool.contractExplorerB) && (
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-xl bg-emerald-500/5 border border-emerald-500/15 text-[11px]">
+                      <span className="font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                        <ShieldCheck className="w-3.5 h-3.5" />
+                        <span>Contratos No-Custodios Auditables:</span>
+                      </span>
+                      <div className="flex items-center gap-3 font-mono font-bold">
+                        {pool.contractExplorerA && (
                           <a
-                            href={`https://3xpl.com/bitcoin-cash/token/${pool.categoryIdA}`}
+                            href={pool.contractExplorerA}
                             target="_blank"
                             rel="noreferrer"
-                            className="text-[10px] text-gray-400 hover:text-primary font-mono flex items-center gap-1"
+                            className="text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1"
                             title={t.viewExplorer}
                           >
-                            <span>Cat: {pool.categoryIdA.substring(0, 8)}...</span>
-                            <ExternalLink className="w-2.5 h-2.5" />
+                            <span>BCH Covenant</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        )}
+                        {pool.contractExplorerB && (
+                          <a
+                            href={pool.contractExplorerB}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-blue-500 hover:underline flex items-center gap-1"
+                            title={t.viewExplorer}
+                          >
+                            <span>Amoy Vault</span>
+                            <ExternalLink className="w-3 h-3" />
                           </a>
                         )}
                       </div>
-                      <p className="text-[11px] text-gray-400 mt-0.5 truncate">
-                        {pool.networkBadgeA} ⟷ {pool.networkBadgeB}
+                    </div>
+                  )}
+
+                  {/* BOOTSTRAPPING GOAL PROGRESS BAR */}
+                  {pool.status === 'BOOTSTRAPPING' && (
+                    <div className="mt-3.5 p-3 rounded-2xl bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/20">
+                      <div className="flex justify-between items-center text-xs mb-1.5">
+                        <span className="font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                          <Sparkles className="w-3.5 h-3.5" />
+                          {t.unlockGoal} ({pool.fundingProgress}%)
+                        </span>
+                        <span className="font-mono text-gray-600 dark:text-gray-300 font-semibold">
+                          ${pool.tvlUsd.toLocaleString()} / ${pool.targetTvlUsd.toLocaleString()} USD
+                        </span>
+                      </div>
+
+                      <div className="w-full bg-gray-200 dark:bg-gray-700 h-2.5 rounded-full overflow-hidden">
+                        <motion.div
+                          initial={{ width: 0 }}
+                          animate={{ width: `${pool.fundingProgress}%` }}
+                          transition={{ duration: 0.8, ease: 'easeOut' }}
+                          className="bg-gradient-to-r from-amber-500 to-orange-500 h-full rounded-full"
+                        />
+                      </div>
+
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1.5">
+                        {t.unlockRemainingPrefix}{' '}
+                        <strong className="text-gray-900 dark:text-white">
+                          ${pool.remainingFundingUsd.toLocaleString()}
+                        </strong>{' '}
+                        {t.unlockRemainingSuffix}
                       </p>
                     </div>
+                  )}
+
+                  {/* METRICS ROW */}
+                  <div className="grid grid-cols-3 gap-2 py-4 my-1">
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-gray-400 block mb-0.5">
+                        {t.poolTvl}
+                      </span>
+                      <span className="text-sm sm:text-base font-black text-gray-900 dark:text-white font-mono">
+                        ${pool.tvlUsd.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-gray-400 block mb-0.5">
+                        {t.annualApy}
+                      </span>
+                      <span
+                        className={`text-sm sm:text-base font-black font-mono ${
+                          isPoolActive ? 'text-orange-500' : 'text-gray-400'
+                        }`}
+                      >
+                        {isPoolActive ? `${pool.apyPercentage}%` : '—'}
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-gray-400 block mb-0.5">
+                        {t.lpFee}
+                      </span>
+                      <span className="text-sm sm:text-base font-black text-emerald-600 dark:text-emerald-400 font-mono">
+                        0.20%
+                      </span>
+                    </div>
                   </div>
 
-                  {/* STATUS BADGE */}
-                  <div className="shrink-0">
-                    {pool.status === 'ACTIVE' ? (
-                      <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 flex items-center gap-1.5">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                        {t.statusActive}
+                  {/* RESERVES BREAKDOWN */}
+                  <div className="p-3 rounded-2xl bg-gray-50 dark:bg-[#161c28] border border-gray-100 dark:border-gray-800 text-xs space-y-1.5 mb-4">
+                    <div className="flex justify-between items-center text-gray-500 dark:text-gray-400">
+                      <span className="flex items-center gap-1.5">
+                        <img src={pool.iconA} className="w-3.5 h-3.5 rounded-full" alt="" />
+                        <span>
+                          {t.reservePrefix} {pool.tokenA}:
+                        </span>
                       </span>
-                    ) : (
-                      <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 flex items-center gap-1.5">
-                        <Lock className="w-3 h-3 text-amber-500" />
-                        {t.statusFunding}
+                      <span className="font-mono font-bold text-gray-900 dark:text-white">
+                        {pool.reserveA.toLocaleString()} {pool.tokenA} (${pool.reserveAValueUsd.toLocaleString()})
                       </span>
-                    )}
+                    </div>
+
+                    <div className="flex justify-between items-center text-gray-500 dark:text-gray-400">
+                      <span className="flex items-center gap-1.5">
+                        <img src={pool.iconB} className="w-3.5 h-3.5 rounded-full" alt="" />
+                        <span>
+                          {t.reservePrefix} {pool.tokenB}:
+                        </span>
+                      </span>
+                      <span className="font-mono font-bold text-gray-900 dark:text-white">
+                        {pool.reserveB.toLocaleString()} {pool.tokenB} (${pool.reserveBValueUsd.toLocaleString()})
+                      </span>
+                    </div>
                   </div>
                 </div>
 
-                {/* BOOTSTRAPPING GOAL PROGRESS BAR (IF IN FUNDING MODE) */}
-                {pool.status === 'BOOTSTRAPPING' && (
-                  <div className="mt-3.5 p-3 rounded-2xl bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/20">
-                    <div className="flex justify-between items-center text-xs mb-1.5">
-                      <span className="font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                        <Sparkles className="w-3.5 h-3.5" />
-                        {t.unlockGoal} ({pool.fundingProgress}%)
-                      </span>
-                      <span className="font-mono text-gray-600 dark:text-gray-300 font-semibold">
-                        ${pool.tvlUsd.toLocaleString()} / ${pool.targetTvlUsd.toLocaleString()} USD
-                      </span>
-                    </div>
-
-                    <div className="w-full bg-gray-200 dark:bg-gray-700 h-2.5 rounded-full overflow-hidden">
-                      <motion.div 
-                        initial={{ width: 0 }}
-                        animate={{ width: `${pool.fundingProgress}%` }}
-                        transition={{ duration: 0.8, ease: "easeOut" }}
-                        className="bg-gradient-to-r from-amber-500 to-orange-500 h-full rounded-full"
-                      />
-                    </div>
-
-                    <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1.5">
-                      {t.unlockRemainingPrefix} <strong className="text-gray-900 dark:text-white">${pool.remainingFundingUsd.toLocaleString()}</strong> {t.unlockRemainingSuffix}
-                    </p>
-                  </div>
+                {/* ACTION BUTTON */}
+                {!isTestnet ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (onToggleNetwork) onToggleNetwork('testnet');
+                      showToast('Red cambiada: Testnet activa (PUSD / USDT)', 'success');
+                    }}
+                    className="w-full py-3 rounded-2xl font-bold text-xs sm:text-sm bg-rose-500/10 hover:bg-amber-500/15 border border-rose-500/25 hover:border-amber-500/40 text-rose-600 dark:text-rose-400 hover:text-amber-600 dark:hover:text-amber-400 flex items-center justify-center gap-2 cursor-pointer transition-all mt-2"
+                  >
+                    <Lock className="w-4 h-4" />
+                    <span>{t.btnSwitchToTestnet}</span>
+                  </button>
+                ) : isPoolActive ? (
+                  <motion.button
+                    whileHover={{ scale: 1.01 }}
+                    whileTap={{ scale: 0.99 }}
+                    onClick={() => handleOpenAddModal(pool)}
+                    className="w-full py-3 rounded-2xl font-bold text-xs sm:text-sm bg-primary hover:bg-orange-600 text-white shadow-md shadow-orange-500/20 flex items-center justify-center gap-2 cursor-pointer transition-all mt-2"
+                  >
+                    <Plus className="w-4 h-4" /> {t.btnProvideLiquidity}
+                  </motion.button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled
+                    className="w-full py-3 rounded-2xl font-bold text-xs sm:text-sm bg-gray-100 dark:bg-[#161c28] text-rose-500/80 border border-rose-500/20 flex items-center justify-center gap-2 cursor-not-allowed mt-2"
+                  >
+                    <Lock className="w-4 h-4" />
+                    <span>{t.btnNoLiquidityDisabled}</span>
+                  </button>
                 )}
-
-                {/* METRICS ROW */}
-                <div className="grid grid-cols-3 gap-2 py-4 my-1">
-                  <div>
-                    <span className="text-[10px] uppercase font-bold text-gray-400 block mb-0.5">{t.poolTvl}</span>
-                    <span className="text-sm sm:text-base font-black text-gray-900 dark:text-white font-mono">
-                      ${pool.tvlUsd.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
-                    </span>
-                  </div>
-
-                  <div>
-                    <span className="text-[10px] uppercase font-bold text-gray-400 block mb-0.5">{t.annualApy}</span>
-                    <span className="text-sm sm:text-base font-black text-orange-500 font-mono">
-                      {pool.apyPercentage}%
-                    </span>
-                  </div>
-
-                  <div>
-                    <span className="text-[10px] uppercase font-bold text-gray-400 block mb-0.5">{t.lpFee}</span>
-                    <span className="text-sm sm:text-base font-black text-emerald-600 dark:text-emerald-400 font-mono">
-                      0.20%
-                    </span>
-                  </div>
-                </div>
-
-                {/* RESERVES BREAKDOWN */}
-                <div className="p-3 rounded-2xl bg-gray-50 dark:bg-[#161c28] border border-gray-100 dark:border-gray-800 text-xs space-y-1.5 mb-4">
-                  <div className="flex justify-between items-center text-gray-500 dark:text-gray-400">
-                    <span className="flex items-center gap-1.5">
-                      <img src={pool.iconA} className="w-3.5 h-3.5 rounded-full" alt="" />
-                      <span>{t.reservePrefix} {pool.tokenA}:</span>
-                    </span>
-                    <span className="font-mono font-bold text-gray-900 dark:text-white">
-                      {pool.reserveA.toLocaleString()} {pool.tokenA} (${pool.reserveAValueUsd.toLocaleString()})
-                    </span>
-                  </div>
-
-                  <div className="flex justify-between items-center text-gray-500 dark:text-gray-400">
-                    <span className="flex items-center gap-1.5">
-                      <img src={pool.iconB} className="w-3.5 h-3.5 rounded-full" alt="" />
-                      <span>{t.reservePrefix} {pool.tokenB}:</span>
-                    </span>
-                    <span className="font-mono font-bold text-gray-900 dark:text-white">
-                      {pool.reserveB.toLocaleString()} {pool.tokenB} (${pool.reserveBValueUsd.toLocaleString()})
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* ACTION BUTTON */}
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => handleOpenAddModal(pool)}
-                className="w-full py-3 rounded-2xl font-bold text-xs sm:text-sm bg-primary hover:bg-orange-600 text-white shadow-md shadow-orange-500/20 flex items-center justify-center gap-2 cursor-pointer transition-all mt-2"
-              >
-                <Plus className="w-4 h-4" /> {t.btnProvideLiquidity}
-              </motion.button>
-            </motion.div>
-          ))}
+              </motion.div>
+            );
+          })}
         </div>
       ) : null}
 
       {/* USER POSITIONS TABLE VIEW */}
-      <div className={`rounded-3xl bg-white dark:bg-[#111622] border border-gray-200 dark:border-gray-800 p-5 sm:p-8 shadow-sm ${activeTab !== 'my-positions' ? 'mt-8' : ''}`}>
+      <div
+        className={`rounded-3xl bg-white dark:bg-[#111622] border border-gray-200 dark:border-gray-800 p-5 sm:p-8 shadow-sm ${
+          activeTab !== 'my-positions' ? 'mt-8' : ''
+        }`}
+      >
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-2">
             <h3 className="text-lg sm:text-xl font-black text-gray-950 dark:text-white">
@@ -1104,27 +1332,43 @@ export default function PoolsView({
             )}
           </div>
 
-          <button 
-            onClick={() => { fetchUserPositions(); fetchWalletBalances(); }}
+          <button
+            onClick={() => {
+              fetchUserPositions();
+              fetchWalletBalances();
+            }}
             className="text-xs text-gray-400 hover:text-primary transition-colors flex items-center gap-1.5 cursor-pointer font-bold"
           >
             <RefreshCw className="w-3.5 h-3.5" /> {t.refresh}
           </button>
         </div>
 
-        {positions.length === 0 ? (
+        {!effectiveAddress ? (
+          <div className="py-12 text-center text-gray-400 space-y-3">
+            <Wallet className="w-11 h-11 mx-auto text-gray-300 dark:text-gray-600" />
+            <h4 className="font-bold text-base text-gray-900 dark:text-white">
+              Conecta tu billetera BCH o EVM para ver tus LP Shares
+            </h4>
+            <button
+              onClick={onConnectWallet}
+              className="px-5 py-2.5 rounded-2xl bg-primary hover:bg-orange-600 text-white text-xs font-bold cursor-pointer transition-all"
+            >
+              Conectar Billetera
+            </button>
+          </div>
+        ) : positions.length === 0 ? (
           <div className="py-14 text-center text-gray-400 space-y-3">
             <Droplets className="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600" />
             <h4 className="font-bold text-base text-gray-900 dark:text-white">{t.noPositionsTitle}</h4>
-            <p className="text-xs sm:text-sm max-w-md mx-auto text-gray-500">
-              {t.noPositionsDesc}
-            </p>
-            <button
-              onClick={() => setActiveTab('all')}
-              className="px-5 py-2.5 rounded-2xl bg-gray-900 dark:bg-white text-white dark:text-gray-950 text-xs font-bold hover:opacity-90 cursor-pointer transition-all"
-            >
-              {t.btnExplorePools}
-            </button>
+            <p className="text-xs sm:text-sm max-w-md mx-auto text-gray-500">{t.noPositionsDesc}</p>
+            {activeTab === 'my-positions' && (
+              <button
+                onClick={() => setActiveTab('all')}
+                className="px-5 py-2.5 rounded-2xl bg-gray-900 dark:bg-white text-white dark:text-gray-950 text-xs font-bold hover:opacity-90 cursor-pointer transition-all"
+              >
+                {t.btnExplorePools}
+              </button>
+            )}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -1158,8 +1402,21 @@ export default function PoolsView({
                     <td className="py-4 px-3 font-mono text-emerald-600 dark:text-emerald-400 font-bold">
                       {pos.poolSharePercent}%
                     </td>
-                    <td className="py-4 px-3 font-mono text-gray-500">
-                      ${(pos.depositUsd || pos.depositedAmount).toFixed(2)}
+                    <td className="py-4 px-3 font-mono text-gray-600 dark:text-gray-300">
+                      <div>
+                        {pos.depositedAmount} {pos.tokenSymbol} (${(pos.depositUsd || pos.depositedAmount).toFixed(2)})
+                      </div>
+                      {pos.explorerUrl && (
+                        <a
+                          href={pos.explorerUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-[10px] text-primary hover:underline inline-flex items-center gap-1"
+                        >
+                          <span>TX Verificada</span>
+                          <ExternalLink className="w-2.5 h-2.5" />
+                        </a>
+                      )}
                     </td>
                     <td className="py-4 px-3 font-mono font-bold text-gray-900 dark:text-white text-sm">
                       ${pos.totalValueUsd.toFixed(2)}
@@ -1172,6 +1429,7 @@ export default function PoolsView({
                         onClick={() => {
                           setSelectedPosition(pos);
                           setBurnPercentage(100);
+                          setWithdrawToken((pos.tokenSymbol === 'PUSD' ? 'PUSD' : 'USDT') as 'PUSD' | 'USDT');
                           setActionModal('remove');
                         }}
                         className="px-3.5 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 font-bold text-xs cursor-pointer transition-all"
@@ -1187,15 +1445,15 @@ export default function PoolsView({
         )}
       </div>
 
-      {/* ADD LIQUIDITY MODAL */}
+      {/* ADD LIQUIDITY MODAL (100% NON-CUSTODIAL SMART CONTRACT DEPOSIT) */}
       <AnimatePresence>
         {actionModal === 'add' && selectedPool && (
-          <div className="fixed inset-0 bg-black/75 backdrop-blur-md z-[120] flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/75 backdrop-blur-md z-[120] flex items-start sm:items-center justify-center p-4 overflow-y-auto">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-md bg-white dark:bg-[#121622] rounded-3xl p-6 sm:p-7 border border-gray-200 dark:border-gray-800 shadow-2xl relative"
+              className="w-full max-w-md bg-white dark:bg-[#121622] rounded-3xl p-5 sm:p-7 border border-gray-200 dark:border-gray-800 shadow-2xl relative my-6"
             >
               <div className="flex justify-between items-center mb-5">
                 <div className="flex items-center gap-2">
@@ -1207,7 +1465,7 @@ export default function PoolsView({
                     {t.modalAddTitle} {selectedPool.pair}
                   </h3>
                 </div>
-                <button 
+                <button
                   onClick={() => setActionModal(null)}
                   className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 hover:text-gray-900 dark:hover:text-white flex items-center justify-center cursor-pointer transition-colors"
                 >
@@ -1218,27 +1476,39 @@ export default function PoolsView({
               {/* TOKEN SELECTOR TABS */}
               <div className="flex gap-2 mb-4">
                 <button
-                  onClick={() => { setDepositToken(selectedPool.tokenA); setDepositAmount(''); }}
+                  type="button"
+                  onClick={() => {
+                    setDepositToken(selectedPool.tokenB);
+                    setDepositAmount('');
+                  }}
                   className={`flex-1 py-2.5 px-3 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition-all ${
-                    depositToken === selectedPool.tokenA 
-                      ? 'bg-primary text-white shadow-sm' 
-                      : 'bg-gray-100 dark:bg-[#171d2c] text-gray-500 hover:text-gray-900 dark:hover:text-white'
-                  }`}
-                >
-                  <img src={selectedPool.iconA} className="w-4 h-4 rounded-full" alt="" />
-                  <span>{t.depositTabPrefix} {selectedPool.tokenA}</span>
-                </button>
-
-                <button
-                  onClick={() => { setDepositToken(selectedPool.tokenB); setDepositAmount(''); }}
-                  className={`flex-1 py-2.5 px-3 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition-all ${
-                    depositToken === selectedPool.tokenB 
-                      ? 'bg-blue-600 text-white shadow-sm' 
+                    depositToken === selectedPool.tokenB
+                      ? 'bg-teal-600 text-white shadow-sm'
                       : 'bg-gray-100 dark:bg-[#171d2c] text-gray-500 hover:text-gray-900 dark:hover:text-white'
                   }`}
                 >
                   <img src={selectedPool.iconB} className="w-4 h-4 rounded-full" alt="" />
-                  <span>{t.depositTabPrefix} {selectedPool.tokenB}</span>
+                  <span>
+                    {t.depositTabPrefix} {selectedPool.tokenB} (Amoy)
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDepositToken(selectedPool.tokenA);
+                    setDepositAmount('');
+                  }}
+                  className={`flex-1 py-2.5 px-3 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition-all ${
+                    depositToken === selectedPool.tokenA
+                      ? 'bg-emerald-600 text-white shadow-sm'
+                      : 'bg-gray-100 dark:bg-[#171d2c] text-gray-500 hover:text-gray-900 dark:hover:text-white'
+                  }`}
+                >
+                  <img src={selectedPool.iconA} className="w-4 h-4 rounded-full" alt="" />
+                  <span>
+                    {t.depositTabPrefix} {selectedPool.tokenA} (Chipnet)
+                  </span>
                 </button>
               </div>
 
@@ -1248,12 +1518,15 @@ export default function PoolsView({
                   <span>{t.depositAmountLabel}</span>
                   <div className="flex items-center gap-2">
                     <span className="font-mono">
-                      {t.balanceLabel} <strong className="text-gray-900 dark:text-white font-bold">{getSelectedTokenBalance().toLocaleString()} {depositToken}</strong>
+                      {t.balanceLabel}{' '}
+                      <strong className="text-gray-900 dark:text-white font-bold">
+                        {getSelectedTokenBalance().toLocaleString()} {depositToken}
+                      </strong>
                     </span>
                     {getSelectedTokenBalance() > 0 && (
                       <button
                         type="button"
-                        onClick={() => setDepositAmount(String(getSelectedTokenBalance()))}
+                        onClick={() => handleSetQuickAmount(100)}
                         className="text-[10px] font-bold text-primary hover:text-orange-600 bg-primary/10 px-1.5 py-0.5 rounded cursor-pointer transition-colors"
                       >
                         MAX
@@ -1275,7 +1548,6 @@ export default function PoolsView({
                   </span>
                 </div>
 
-                {/* QUICK PERCENTAGE CHIPS */}
                 <div className="flex gap-2 mt-3 pt-3 border-t border-gray-200/50 dark:border-gray-700/50">
                   {[25, 50, 75, 100].map(pct => (
                     <button
@@ -1290,8 +1562,53 @@ export default function PoolsView({
                 </div>
               </div>
 
+              {/* BCH COVENANT DEPOSIT INSTRUCTIONS WHEN PUSD IS SELECTED */}
+              {depositToken === 'PUSD' && (
+                <div className="p-3.5 rounded-2xl bg-emerald-500/5 border border-emerald-500/20 space-y-2.5 mb-4 text-xs">
+                  <div className="flex items-center justify-between text-[11px] font-bold text-emerald-700 dark:text-emerald-300">
+                    <span>1. Envía los PUSD al Covenant No-Custodio:</span>
+                    <span className="font-mono text-[10px] px-2 py-0.5 rounded bg-emerald-500/15">P2SH32</span>
+                  </div>
+
+                  {bchVaultQr && (
+                    <div className="w-32 h-32 mx-auto p-2 bg-white rounded-xl border border-gray-200">
+                      <img src={bchVaultQr} alt="Covenant QR" className="w-full h-full object-contain" />
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between gap-2 bg-white dark:bg-[#0E131E] p-2 rounded-xl border border-gray-200/70 dark:border-gray-800">
+                    <span className="font-mono text-[11px] text-gray-800 dark:text-gray-200 truncate">
+                      {selectedPool.vaultAddressA || DEPLOYED_TESTNET_CONTRACTS.chipnetVaultTokenAddress}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        copyText(selectedPool.vaultAddressA || DEPLOYED_TESTNET_CONTRACTS.chipnetVaultTokenAddress)
+                      }
+                      className="px-2 py-1 rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-bold text-[10px] flex items-center gap-1 shrink-0 cursor-pointer"
+                    >
+                      {copiedVault ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                      <span>{copiedVault ? 'Copiado' : 'Copiar'}</span>
+                    </button>
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-gray-600 dark:text-gray-300 block mb-1">
+                      2. Pega el TXID de tu envío en Chipnet (64 hex):
+                    </label>
+                    <input
+                      type="text"
+                      value={bchDepositTxHash}
+                      onChange={e => setBchDepositTxHash(e.target.value)}
+                      placeholder="Ej: 8f3a1c..."
+                      className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#0E131E] border border-gray-200 dark:border-gray-700 font-mono text-xs text-gray-900 dark:text-white outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                </div>
+              )}
+
               {/* REAL-TIME PREVIEW METRICS */}
-              <div className="p-4 rounded-2xl bg-gray-50 dark:bg-[#161c28] border border-gray-100 dark:border-gray-800 text-xs space-y-2 mb-6">
+              <div className="p-4 rounded-2xl bg-gray-50 dark:bg-[#161c28] border border-gray-100 dark:border-gray-800 text-xs space-y-2 mb-5">
                 <div className="flex justify-between text-gray-500 dark:text-gray-400">
                   <span>{t.sharesToReceive}</span>
                   <span className="font-mono font-bold text-gray-900 dark:text-white">
@@ -1312,43 +1629,66 @@ export default function PoolsView({
                     +${calcEstimatedAnnualYieldUsd().toFixed(2)} USD ({selectedPool.apyPercentage}%)
                   </span>
                 </div>
-
-                {selectedPool.status === 'BOOTSTRAPPING' && (
-                  <div className="pt-2 border-t border-gray-200 dark:border-gray-700 text-[11px] text-amber-600 dark:text-amber-400 flex items-center gap-1.5 font-medium">
-                    <Sparkles className="w-3.5 h-3.5 shrink-0" />
-                    <span>{t.fundingGoalNotePrefix} ${(selectedPool.targetTvlUsd || 2500).toLocaleString()} {t.fundingGoalNoteSuffix}</span>
-                  </div>
-                )}
               </div>
 
-              {/* SUBMIT BUTTON */}
-              <button
-                onClick={handleAddLiquidity}
-                disabled={isSubmitting}
-                className="w-full py-4 rounded-2xl font-bold text-sm bg-primary hover:bg-orange-600 text-white shadow-lg shadow-orange-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-              >
-                {isSubmitting ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 animate-spin" /> {t.btnSubmittingAdd}
-                  </>
-                ) : (
-                  t.btnConfirmAdd
-                )}
-              </button>
+              {/* SUBMIT / CONNECT DESTINATION CHAIN BUTTON */}
+              {depositToken === 'USDT' && !connectedEvm ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActionModal(null);
+                    onConnectWallet();
+                  }}
+                  className="w-full py-3.5 rounded-2xl font-bold text-sm bg-amber-500 hover:bg-amber-600 text-white transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Wallet className="w-4 h-4" />
+                  <span>Conectar MetaMask / WalletConnect EVM primero</span>
+                </button>
+              ) : depositToken === 'PUSD' && !connectedBch ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActionModal(null);
+                    onConnectWallet();
+                  }}
+                  className="w-full py-3.5 rounded-2xl font-bold text-sm bg-emerald-600 hover:bg-emerald-700 text-white transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Wallet className="w-4 h-4" />
+                  <span>Conectar Billetera BCH (Paytaca / Cashonize) primero</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleAddLiquidity}
+                  disabled={isSubmitting}
+                  className="w-full py-4 rounded-2xl font-bold text-xs sm:text-sm bg-primary hover:bg-orange-600 text-white shadow-lg shadow-orange-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>{web3StepMsg || t.btnSubmittingAdd}</span>
+                    </>
+                  ) : depositToken === 'USDT' ? (
+                    t.btnConfirmAddEvm
+                  ) : (
+                    t.btnConfirmAddBch
+                  )}
+                </button>
+              )}
             </motion.div>
           </div>
         )}
       </AnimatePresence>
 
-      {/* REMOVE LIQUIDITY MODAL */}
+      {/* REMOVE LIQUIDITY MODAL (REAL ON-CHAIN VAULT RELEASE) */}
       <AnimatePresence>
         {actionModal === 'remove' && selectedPosition && (
-          <div className="fixed inset-0 bg-black/75 backdrop-blur-md z-[120] flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/75 backdrop-blur-md z-[120] flex items-start sm:items-center justify-center p-4 overflow-y-auto">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-md bg-white dark:bg-[#121622] rounded-3xl p-6 sm:p-7 border border-gray-200 dark:border-gray-800 shadow-2xl relative"
+              className="w-full max-w-md bg-white dark:bg-[#121622] rounded-3xl p-5 sm:p-7 border border-gray-200 dark:border-gray-800 shadow-2xl relative my-6"
             >
               <div className="flex justify-between items-center mb-5">
                 <div className="flex items-center gap-2">
@@ -1360,15 +1700,18 @@ export default function PoolsView({
                     {t.modalRemoveTitle} {selectedPosition.pair}
                   </h3>
                 </div>
-                <button 
-                  onClick={() => { setActionModal(null); setSelectedPosition(null); }}
+                <button
+                  onClick={() => {
+                    setActionModal(null);
+                    setSelectedPosition(null);
+                  }}
                   className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 hover:text-gray-900 dark:hover:text-white flex items-center justify-center cursor-pointer transition-colors"
                 >
                   ✕
                 </button>
               </div>
 
-              {/* SLIDER TO SELECT PERCENTAGE */}
+              {/* PERCENTAGE SLIDER */}
               <div className="p-4 rounded-2xl bg-gray-50 dark:bg-[#161c28] border border-gray-100 dark:border-gray-800 mb-4">
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-xs text-gray-400 font-bold uppercase">{t.withdrawPctLabel}</span>
@@ -1391,8 +1734,8 @@ export default function PoolsView({
                       type="button"
                       onClick={() => setBurnPercentage(pct)}
                       className={`flex-1 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
-                        burnPercentage === pct 
-                          ? 'bg-primary text-white shadow-xs' 
+                        burnPercentage === pct
+                          ? 'bg-primary text-white shadow-xs'
                           : 'bg-gray-200/60 dark:bg-gray-800 text-gray-600 dark:text-gray-300'
                       }`}
                     >
@@ -1402,26 +1745,61 @@ export default function PoolsView({
                 </div>
               </div>
 
+              {/* SELECT ON-CHAIN PAYOUT ASSET */}
+              <div className="mb-4">
+                <label className="text-[11px] font-bold text-gray-500 dark:text-gray-400 block mb-1.5">
+                  Elige el activo y red para recibir tu retiro on-chain:
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setWithdrawToken('USDT')}
+                    className={`py-2.5 px-3 rounded-xl font-bold text-xs border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                      withdrawToken === 'USDT'
+                        ? 'bg-teal-600 text-white border-teal-600 shadow-xs'
+                        : 'bg-gray-50 dark:bg-[#161c28] text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700'
+                    }`}
+                  >
+                    <img src="/USDT.png" className="w-4 h-4 rounded-full" alt="" />
+                    <span>USDT (Polygon Amoy)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setWithdrawToken('PUSD')}
+                    className={`py-2.5 px-3 rounded-xl font-bold text-xs border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                      withdrawToken === 'PUSD'
+                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                        : 'bg-gray-50 dark:bg-[#161c28] text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700'
+                    }`}
+                  >
+                    <img src="/PUSD.png" className="w-4 h-4 rounded-full" alt="" />
+                    <span>PUSD (BCH Chipnet)</span>
+                  </button>
+                </div>
+                <div className="mt-1.5 text-[11px] font-mono text-gray-500 dark:text-gray-400 truncate">
+                  Destino:{' '}
+                  {withdrawToken === 'USDT'
+                    ? connectedEvm || '⚠️ Conecta tu billetera EVM'
+                    : connectedBch
+                    ? convertCashAddressNetwork(connectedBch, true, true)
+                    : '⚠️ Conecta tu billetera BCH'}
+                </div>
+              </div>
+
               {/* PAYOUT METRICS */}
               <div className="p-4 rounded-2xl bg-gray-50 dark:bg-[#161c28] border border-gray-100 dark:border-gray-800 text-xs space-y-2.5 mb-6">
                 <div className="flex justify-between text-gray-500 dark:text-gray-400">
                   <span>{t.sharesToBurn}</span>
                   <span className="font-mono font-bold text-gray-900 dark:text-white">
-                    {(selectedPosition.shares * (burnPercentage / 100)).toFixed(4)} / {selectedPosition.shares.toFixed(4)}
+                    {(selectedPosition.shares * (burnPercentage / 100)).toFixed(4)} /{' '}
+                    {selectedPosition.shares.toFixed(4)}
                   </span>
                 </div>
 
                 <div className="flex justify-between text-gray-500 dark:text-gray-400">
-                  <span>{t.payoutToReceive} ({selectedPosition.tokenA}):</span>
+                  <span>{t.payoutToReceive}</span>
                   <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                    {(selectedPosition.currentAmountA * (burnPercentage / 100)).toFixed(4)} {selectedPosition.tokenA}
-                  </span>
-                </div>
-
-                <div className="flex justify-between text-gray-500 dark:text-gray-400">
-                  <span>{t.payoutToReceive} ({selectedPosition.tokenB}):</span>
-                  <span className="font-mono font-bold text-blue-600 dark:text-blue-400">
-                    {(selectedPosition.currentAmountB * (burnPercentage / 100)).toFixed(4)} {selectedPosition.tokenB}
+                    {(selectedPosition.totalValueUsd * (burnPercentage / 100)).toFixed(4)} {withdrawToken}
                   </span>
                 </div>
 
@@ -1435,16 +1813,17 @@ export default function PoolsView({
                 <div className="flex justify-between text-[11px] text-gray-500">
                   <span>{t.feeProfit}</span>
                   <span className="font-mono font-bold text-orange-500">
-                    +${(selectedPosition.profitUsd * (burnPercentage / 100)).toFixed(4)} ({selectedPosition.profitPercentage}%)
+                    +${(selectedPosition.profitUsd * (burnPercentage / 100)).toFixed(4)} (
+                    {selectedPosition.profitPercentage}%)
                   </span>
                 </div>
               </div>
 
-              {/* ACTION BUTTON */}
               <button
+                type="button"
                 onClick={handleRemoveLiquidity}
                 disabled={isSubmitting}
-                className="w-full py-4 rounded-2xl font-bold text-sm bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-600/25 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                className="w-full py-4 rounded-2xl font-bold text-xs sm:text-sm bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-600/25 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
               >
                 {isSubmitting ? (
                   <>
@@ -1458,17 +1837,16 @@ export default function PoolsView({
           </div>
         )}
 
-        {/* CREATE CUSTOM POOL MODAL - MINIMALIST & FLUID REDESIGN */}
+        {/* CREATE CUSTOM POOL MODAL */}
         {createModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-md overflow-y-auto">
+          <div className="fixed inset-0 z-[120] flex items-start sm:items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-md overflow-y-auto">
             <motion.div
               initial={{ scale: 0.95, opacity: 0, y: 10 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.95, opacity: 0, y: 10 }}
-              transition={{ type: "spring", stiffness: 350, damping: 25 }}
-              className="w-full max-w-lg bg-white dark:bg-[#121622] rounded-3xl border border-gray-200/90 dark:border-gray-800 p-5 sm:p-6 shadow-2xl space-y-4 my-8 text-left"
+              transition={{ type: 'spring', stiffness: 350, damping: 25 }}
+              className="w-full max-w-lg bg-white dark:bg-[#121622] rounded-3xl border border-gray-200/90 dark:border-gray-800 p-5 sm:p-6 shadow-2xl space-y-4 my-6 text-left"
             >
-              {/* MODAL HEADER */}
               <div className="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-gray-800">
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 rounded-2xl bg-primary/10 text-primary flex items-center justify-center shadow-xs">
@@ -1478,9 +1856,7 @@ export default function PoolsView({
                     <h3 className="font-black text-base sm:text-lg text-gray-900 dark:text-white">
                       {t.createTitle}
                     </h3>
-                    <p className="text-xs text-gray-400 font-medium">
-                      {t.createSubtitle}
-                    </p>
+                    <p className="text-xs text-gray-400 font-medium">{t.createSubtitle}</p>
                   </div>
                 </div>
                 <button
@@ -1493,9 +1869,7 @@ export default function PoolsView({
               </div>
 
               <form onSubmit={handleCreatePool} className="space-y-3.5">
-                {/* 2-TOKEN PAIR BUILDER */}
                 <div className="space-y-1.5">
-                  {/* TOKEN A: BASE CASHTOKEN */}
                   <div className="p-3 rounded-2xl bg-gray-50/90 dark:bg-[#161c28] border border-gray-100 dark:border-gray-800/80 space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="text-[11px] font-black uppercase tracking-wider text-orange-500 flex items-center gap-1.5">
@@ -1503,7 +1877,7 @@ export default function PoolsView({
                         {t.baseTokenTitle}
                       </span>
                       <span className="text-[10px] font-mono font-bold text-gray-400 bg-black/5 dark:bg-white/5 px-2 py-0.5 rounded-full">
-                        BCH CashToken
+                        {isTestnet ? 'Chipnet CashToken' : 'BCH CashToken'}
                       </span>
                     </div>
 
@@ -1512,28 +1886,26 @@ export default function PoolsView({
                         type="text"
                         required
                         value={createForm.tokenA}
-                        onChange={(e) => setCreateForm({ ...createForm, tokenA: e.target.value.toUpperCase() })}
+                        onChange={e => setCreateForm({ ...createForm, tokenA: e.target.value.toUpperCase() })}
                         placeholder={t.symbolPlaceholder}
                         className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#10141f] border border-gray-200 dark:border-gray-700/80 font-mono font-black text-sm text-gray-900 dark:text-white placeholder:text-gray-400 placeholder:font-normal focus:outline-none focus:border-primary transition-colors"
                       />
                       <input
                         type="text"
                         value={createForm.tokenAName}
-                        onChange={(e) => setCreateForm({ ...createForm, tokenAName: e.target.value })}
+                        onChange={e => setCreateForm({ ...createForm, tokenAName: e.target.value })}
                         placeholder={t.namePlaceholder}
                         className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#10141f] border border-gray-200 dark:border-gray-700/80 text-xs font-medium text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:border-primary transition-colors"
                       />
                     </div>
                   </div>
 
-                  {/* CENTRAL LINK CONNECTOR */}
                   <div className="flex justify-center -my-2.5 relative z-10">
                     <div className="w-7 h-7 rounded-full bg-white dark:bg-[#1a2233] border border-gray-200 dark:border-gray-700 shadow-xs flex items-center justify-center text-primary">
                       <Plus className="w-3.5 h-3.5 stroke-[3]" />
                     </div>
                   </div>
 
-                  {/* TOKEN B: QUOTE ASSET & PRICE */}
                   <div className="p-3 rounded-2xl bg-gray-50/90 dark:bg-[#161c28] border border-gray-100 dark:border-gray-800/80 space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="text-[11px] font-black uppercase tracking-wider text-blue-500 flex items-center gap-1.5">
@@ -1548,48 +1920,39 @@ export default function PoolsView({
                     <div className="grid grid-cols-2 gap-2">
                       <select
                         value={createForm.tokenB}
-                        onChange={(e) => {
+                        onChange={e => {
                           const val = e.target.value;
-                          if (val === 'USDC') {
-                            setCreateForm({
-                              ...createForm,
-                              tokenB: 'USDC',
-                              tokenBName: 'USD Coin',
-                              networkB: 'Polygon (Mainnet)',
-                              networkBadgeB: 'Polygon PoS'
-                            });
-                          } else if (val === 'USDT') {
+                          if (val === 'USDT') {
                             setCreateForm({
                               ...createForm,
                               tokenB: 'USDT',
                               tokenBName: 'Tether USD',
-                              networkB: 'Polygon (Mainnet)',
-                              networkBadgeB: 'Polygon PoS'
+                              networkB: isTestnet ? 'Polygon Amoy (Testnet)' : 'Polygon (Mainnet)',
+                              networkBadgeB: isTestnet ? 'Polygon Amoy' : 'Polygon PoS'
                             });
                           } else if (val === 'PUSD') {
                             setCreateForm({
                               ...createForm,
                               tokenB: 'PUSD',
                               tokenBName: 'ParyonUSD',
-                              networkB: 'Bitcoin Cash (Mainnet)',
-                              networkBadgeB: 'BCH CashTokens'
+                              networkB: isTestnet ? 'BCH Chipnet (Testnet4)' : 'Bitcoin Cash (Mainnet)',
+                              networkBadgeB: isTestnet ? 'Chipnet CashTokens' : 'BCH CashTokens'
                             });
-                          } else if (val === 'BCH') {
+                          } else if (val === 'USDC') {
                             setCreateForm({
                               ...createForm,
-                              tokenB: 'BCH',
-                              tokenBName: 'Bitcoin Cash',
-                              networkB: 'Bitcoin Cash (Mainnet)',
-                              networkBadgeB: 'BCH Layer 1'
+                              tokenB: 'USDC',
+                              tokenBName: 'USD Coin',
+                              networkB: isTestnet ? 'Polygon Amoy (Testnet)' : 'Polygon (Mainnet)',
+                              networkBadgeB: isTestnet ? 'Polygon Amoy' : 'Polygon PoS'
                             });
                           }
                         }}
                         className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#10141f] border border-gray-200 dark:border-gray-700/80 font-bold text-xs text-gray-900 dark:text-white focus:outline-none focus:border-primary transition-colors cursor-pointer"
                       >
-                        <option value="USDC">USDC (Polygon PoS)</option>
-                        <option value="PUSD">PUSD (BCH CashTokens)</option>
-                        <option value="USDT">USDT (Polygon PoS)</option>
-                        <option value="BCH">BCH (Native)</option>
+                        <option value="USDT">USDT ({isTestnet ? 'Polygon Amoy' : 'Polygon PoS'})</option>
+                        <option value="PUSD">PUSD ({isTestnet ? 'BCH Chipnet' : 'BCH CashTokens'})</option>
+                        <option value="USDC">USDC ({isTestnet ? 'Polygon Amoy' : 'Polygon PoS'})</option>
                       </select>
 
                       <div className="relative">
@@ -1597,8 +1960,8 @@ export default function PoolsView({
                           type="number"
                           step="any"
                           value={createForm.initialPriceUsd}
-                          onChange={(e) => setCreateForm({ ...createForm, initialPriceUsd: e.target.value })}
-                          placeholder="0.0025"
+                          onChange={e => setCreateForm({ ...createForm, initialPriceUsd: e.target.value })}
+                          placeholder="0.01"
                           className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#10141f] border border-gray-200 dark:border-gray-700/80 font-mono font-bold text-xs text-gray-900 dark:text-white focus:outline-none focus:border-primary transition-colors pr-11"
                         />
                         <span className="absolute right-3 top-2 text-[10px] font-bold text-gray-400 pointer-events-none">
@@ -1609,7 +1972,6 @@ export default function PoolsView({
                   </div>
                 </div>
 
-                {/* EXPANDABLE ADVANCED OPTIONS (Clean & Tidy Accordion) */}
                 <div className="border border-gray-100 dark:border-gray-800 rounded-2xl p-2.5 bg-gray-50/50 dark:bg-[#141924]">
                   <button
                     type="button"
@@ -1620,7 +1982,11 @@ export default function PoolsView({
                       <Layers className="w-3.5 h-3.5 text-primary" />
                       {t.advancedOptions}
                     </span>
-                    <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showAdvanced ? 'rotate-180 text-primary' : 'text-gray-400'}`} />
+                    <ChevronDown
+                      className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                        showAdvanced ? 'rotate-180 text-primary' : 'text-gray-400'
+                      }`}
+                    />
                   </button>
 
                   <AnimatePresence>
@@ -1638,7 +2004,9 @@ export default function PoolsView({
                           <input
                             type="text"
                             value={createForm.categoryIdA}
-                            onChange={(e) => setCreateForm({ ...createForm, categoryIdA: e.target.value.toLowerCase() })}
+                            onChange={e =>
+                              setCreateForm({ ...createForm, categoryIdA: e.target.value.toLowerCase() })
+                            }
                             placeholder={t.categoryIdPlaceholder}
                             className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#10141f] border border-gray-200 dark:border-gray-700 font-mono text-[11px] text-gray-900 dark:text-white focus:outline-none focus:border-primary"
                           />
@@ -1648,45 +2016,21 @@ export default function PoolsView({
                           <label className="text-[10px] font-medium text-gray-400 block mb-1">
                             {t.iconLabel}
                           </label>
-                          <div className="flex gap-2 items-center">
-                            <input
-                              type="text"
-                              value={createForm.iconA}
-                              onChange={(e) => setCreateForm({ ...createForm, iconA: e.target.value })}
-                              placeholder={t.iconPlaceholder}
-                              className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#10141f] border border-gray-200 dark:border-gray-700 font-mono text-[11px] text-gray-900 dark:text-white focus:outline-none focus:border-primary"
-                            />
-                            {createForm.iconA && (
-                              <div className="w-8 h-8 rounded-lg bg-gray-100 dark:bg-gray-800 p-0.5 border border-gray-200 dark:border-gray-700 shrink-0 flex items-center justify-center overflow-hidden">
-                                <img 
-                                  src={createForm.iconA.startsWith('ipfs://') ? `https://ipfs.io/ipfs/${createForm.iconA.replace('ipfs://', '')}` : createForm.iconA} 
-                                  alt="Logo" 
-                                  className="w-full h-full object-contain rounded"
-                                  onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
-                                />
-                              </div>
-                            )}
-                          </div>
+                          <input
+                            type="text"
+                            value={createForm.iconA}
+                            onChange={e => setCreateForm({ ...createForm, iconA: e.target.value })}
+                            placeholder={t.iconPlaceholder}
+                            className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#10141f] border border-gray-200 dark:border-gray-700 font-mono text-[11px] text-gray-900 dark:text-white focus:outline-none focus:border-primary"
+                          />
                         </div>
                       </motion.div>
                     )}
                   </AnimatePresence>
                 </div>
 
-                {/* POOL MODE SELECTOR - MINIMALIST PILL SWITCH */}
                 <div className="space-y-1.5">
                   <div className="grid grid-cols-2 p-1 rounded-2xl bg-gray-100 dark:bg-[#161c28] border border-gray-200/80 dark:border-gray-800 text-xs">
-                    <button
-                      type="button"
-                      onClick={() => setCreateForm({ ...createForm, poolMode: 'STANDARD' })}
-                      className={`py-2 px-3 rounded-xl font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                        createForm.poolMode === 'STANDARD'
-                          ? 'bg-white dark:bg-[#202737] text-gray-900 dark:text-white shadow-xs font-black'
-                          : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'
-                      }`}
-                    >
-                      <span>⚡ {t.modeStandard}</span>
-                    </button>
                     <button
                       type="button"
                       onClick={() => setCreateForm({ ...createForm, poolMode: 'BOOTSTRAPPING' })}
@@ -1698,15 +2042,24 @@ export default function PoolsView({
                     >
                       <span>🔒 {t.modeBootstrapping}</span>
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => setCreateForm({ ...createForm, poolMode: 'STANDARD' })}
+                      className={`py-2 px-3 rounded-xl font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                        createForm.poolMode === 'STANDARD'
+                          ? 'bg-white dark:bg-[#202737] text-gray-900 dark:text-white shadow-xs font-black'
+                          : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'
+                      }`}
+                    >
+                      <span>⚡ {t.modeStandard}</span>
+                    </button>
                   </div>
-
                   <p className="text-[11px] text-gray-500 dark:text-gray-400 px-1 leading-snug">
                     {createForm.poolMode === 'STANDARD' ? t.modeStandardDesc : t.modeBootstrappingDesc}
                   </p>
                 </div>
 
-                {/* INITIAL LIQUIDITY INPUTS */}
-                {createForm.poolMode === 'BOOTSTRAPPING' ? (
+                {createForm.poolMode === 'BOOTSTRAPPING' && (
                   <div className="grid grid-cols-2 gap-2.5 p-3 rounded-2xl bg-amber-500/5 border border-amber-500/20">
                     <div>
                       <label className="text-[10px] font-bold text-gray-400 block mb-1">
@@ -1715,8 +2068,8 @@ export default function PoolsView({
                       <input
                         type="number"
                         value={createForm.initialAmountA}
-                        onChange={(e) => setCreateForm({ ...createForm, initialAmountA: e.target.value })}
-                        placeholder="1000000"
+                        onChange={e => setCreateForm({ ...createForm, initialAmountA: e.target.value })}
+                        placeholder="100000"
                         className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#10141f] border border-gray-200 dark:border-gray-700 font-mono font-bold text-xs text-gray-900 dark:text-white focus:outline-none focus:border-amber-500"
                       />
                     </div>
@@ -1727,62 +2080,14 @@ export default function PoolsView({
                       <input
                         type="number"
                         value={createForm.targetTvlUsd}
-                        onChange={(e) => setCreateForm({ ...createForm, targetTvlUsd: e.target.value })}
+                        onChange={e => setCreateForm({ ...createForm, targetTvlUsd: e.target.value })}
                         placeholder="2500"
                         className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#10141f] border border-gray-200 dark:border-gray-700 font-mono font-bold text-xs text-gray-900 dark:text-white focus:outline-none focus:border-amber-500"
                       />
                     </div>
                   </div>
-                ) : (
-                  <div className="grid grid-cols-2 gap-2.5 p-3 rounded-2xl bg-emerald-500/5 border border-emerald-500/20">
-                    <div>
-                      <label className="text-[10px] font-bold text-gray-400 block mb-1">
-                        {createForm.tokenA || 'Token A'}:
-                      </label>
-                      <input
-                        type="number"
-                        value={createForm.initialAmountA}
-                        onChange={(e) => setCreateForm({ ...createForm, initialAmountA: e.target.value })}
-                        placeholder="500000"
-                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#10141f] border border-gray-200 dark:border-gray-700 font-mono font-bold text-xs text-gray-900 dark:text-white focus:outline-none focus:border-emerald-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-bold text-gray-400 block mb-1">
-                        {createForm.tokenB}:
-                      </label>
-                      <input
-                        type="number"
-                        value={createForm.initialAmountB}
-                        onChange={(e) => setCreateForm({ ...createForm, initialAmountB: e.target.value })}
-                        placeholder="500"
-                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#10141f] border border-gray-200 dark:border-gray-700 font-mono font-bold text-xs text-gray-900 dark:text-white focus:outline-none focus:border-emerald-500"
-                      />
-                    </div>
-                  </div>
                 )}
 
-                {/* LIVE PREVIEW BADGE */}
-                <div className="flex items-center justify-between p-3 rounded-2xl bg-gray-50 dark:bg-[#161c28] border border-gray-100 dark:border-gray-800 text-[11px]">
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono font-black text-gray-900 dark:text-white text-xs">
-                      {createForm.tokenA || 'TOKEN'} / {createForm.tokenB}
-                    </span>
-                    <span className="text-gray-400">•</span>
-                    <span className="text-emerald-500 font-mono font-bold">
-                      ${createForm.initialPriceUsd || '0.00'} USD
-                    </span>
-                  </div>
-                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                    createForm.poolMode === 'STANDARD'
-                      ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
-                      : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
-                  }`}>
-                    {createForm.poolMode === 'STANDARD' ? 'Active AMM' : `Goal: $${createForm.targetTvlUsd}`}
-                  </span>
-                </div>
-
-                {/* SUBMIT BUTTON */}
                 <button
                   type="submit"
                   disabled={isCreatingPool || !createForm.tokenA}
