@@ -436,10 +436,10 @@ export default function BridgeSwap({
 
     setClaimingFaucet(true);
     try {
-      const res = await fetch(`${backendUrl}/api/testnet/faucet`, {
+      const res = await fetch(`${backendUrl}/api/faucet/testnet`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ recipientAddress: cleanAddr, amount: 50 })
+        body: JSON.stringify({ recipient: cleanAddr, recipientAddress: cleanAddr, token: 'PUSD', amount: 50 })
       });
       const data = await res.json();
       if (!data.success) throw new Error(data.error || 'Faucet error');

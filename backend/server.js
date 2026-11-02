@@ -1256,9 +1256,10 @@ const faucetLimiter = rateLimit({
 });
 
 // Real On-Chain Testnet Faucet (Polygon Amoy USDT + BCH Chipnet PUSD CashTokens)
-app.post('/api/faucet/testnet', faucetLimiter, async (req, res) => {
+app.post(['/api/faucet/testnet', '/api/testnet/faucet'], faucetLimiter, async (req, res) => {
   try {
-    const { token, amount, recipient } = req.body;
+    const { token, amount } = req.body;
+    const recipient = req.body.recipient || req.body.recipientAddress;
     const sym = (token || 'PUSD').toUpperCase();
     if (!recipient) {
       return res.status(400).json({ success: false, error: 'Por favor ingresa tu dirección de billetera de destino.' });
