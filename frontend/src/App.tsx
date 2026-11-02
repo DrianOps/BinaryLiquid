@@ -731,14 +731,14 @@ export default function App() {
         
         {/* RIGHT CONTROLS (Responsive) */}
         <div className="flex items-center gap-2 sm:gap-2.5">
-          {/* Network Switcher Pill (Desktop + Mobile) */}
+          {/* Network Switcher Pill (Desktop/Tablet: hidden on mobile to avoid navbar crowding) */}
           <button
             onClick={() => {
               const next = platformNetwork === 'mainnet' ? 'testnet' : 'mainnet';
               setPlatformNetwork(next);
               showToast(next === 'mainnet' ? 'Red activa: Bitcoin Cash Mainnet (Producción)' : 'Red activa: BCH Chipnet (Testnet)');
             }}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-medium border border-line bg-surface hover:bg-surface-2 text-ink-2 transition-all cursor-pointer shadow-2xs"
+            className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-medium border border-line bg-surface hover:bg-surface-2 text-ink-2 transition-all cursor-pointer shadow-2xs"
             title="Click para alternar red (Mainnet / Testnet)"
           >
             <span className={`w-2 h-2 rounded-full ${platformNetwork === 'mainnet' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'}`} />
