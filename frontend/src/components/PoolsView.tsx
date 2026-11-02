@@ -854,177 +854,141 @@ export default function PoolsView({
 
   return (
     <div className="w-full max-w-6xl mx-auto px-3 sm:px-4 py-6 sm:py-10 selection:bg-orange-500 selection:text-white">
-      {/* NETWORK STATUS & 1-CLICK SWITCHER BANNER */}
-      <div className="max-w-4xl mx-auto mb-6">
-        {isTestnet ? (
-          <div className="px-4 py-2.5 rounded-2xl bg-amber-500/10 border border-amber-500/25 text-amber-700 dark:text-amber-300 text-xs flex flex-wrap items-center justify-between gap-2">
-            <span className="font-bold flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
-              <span>
-                Testnet Activa: Vault Oficial <strong>PUSD (Chipnet) ⟷ USDT (Polygon Amoy)</strong> con liquidez real on-chain • Otros pares: <strong>Sin Liquidez</strong>
-              </span>
-            </span>
-            {onToggleNetwork && (
-              <button
-                type="button"
-                onClick={() => onToggleNetwork('mainnet')}
-                className="text-[11px] font-bold bg-white/80 dark:bg-[#161c28] px-2.5 py-1 rounded-lg border border-amber-500/30 hover:bg-amber-500/20 transition-colors cursor-pointer"
-              >
-                Ver Mainnet
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="px-4 py-2.5 rounded-2xl bg-rose-500/10 border border-rose-500/25 text-rose-600 dark:text-rose-400 text-xs flex flex-wrap items-center justify-between gap-2">
-            <span className="font-bold flex items-center gap-2">
-              <Lock className="w-3.5 h-3.5 shrink-0" />
-              <span>
-                Mainnet: Todos los pools están marcados como <strong>Sin Liquidez</strong> actualmente • Liquidez activa disponible en <strong>Testnet (PUSD / USDT)</strong>
-              </span>
-            </span>
-            {onToggleNetwork && (
-              <button
-                type="button"
-                onClick={() => {
-                  onToggleNetwork('testnet');
-                  showToast('Red cambiada: Testnet activa (PUSD / USDT)', 'success');
-                }}
-                className="text-[11px] font-bold bg-amber-500 hover:bg-amber-600 text-white px-3 py-1 rounded-lg transition-colors cursor-pointer shrink-0"
-              >
-                Cambiar a Testnet
-              </button>
-            )}
-          </div>
-        )}
-      </div>
+      {/* NETWORK ALERT BANNER (Only on Mainnet) */}
+      {!isTestnet && (
+        <div className="mb-6 px-4 py-2.5 rounded-panel bg-rose-500/10 border border-rose-500/20 text-xs flex items-center justify-between gap-2">
+          <span className="font-medium text-rose-600 dark:text-rose-400 flex items-center gap-2">
+            <Lock className="w-3.5 h-3.5 shrink-0" />
+            <span>Mainnet sin liquidez activa. La liquidez de prueba está en Testnet (PUSD / USDT).</span>
+          </span>
+          {onToggleNetwork && (
+            <button
+              type="button"
+              onClick={() => {
+                onToggleNetwork('testnet');
+                showToast('Red cambiada a Testnet', 'success');
+              }}
+              className="ui-btn-sm ui-btn-primary shrink-0"
+            >
+              Cambiar a Testnet
+            </button>
+          )}
+        </div>
+      )}
 
       {/* HEADER SECTION */}
-      <div className="text-center max-w-3xl mx-auto mb-8 sm:mb-10">
-        <div
-          className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-3 border ${
-            isTestnet
-              ? 'bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
-              : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20'
-          }`}
-        >
-          <span className={`w-2 h-2 rounded-full ${isTestnet ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`}></span>
-          <span>{isTestnet ? t.badgeTestnet : t.badgeMainnet}</span>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <h1 className="ui-title">{t.title}</h1>
+            <span className={isTestnet ? 'ui-badge-warn' : 'ui-badge-danger'}>
+              {isTestnet ? 'Testnet' : 'Sin Liquidez'}
+            </span>
+          </div>
+          <p className="ui-subtitle">
+            {isTestnet
+              ? 'Provee liquidez en BinaryLiquidVault y gana 0.20% de comisiones por swap.'
+              : 'Mainnet sin liquidez activa. Cambia a Testnet para operar.'}
+          </p>
         </div>
-        <h1 className="text-3xl sm:text-4xl md:text-5xl font-black text-gray-950 dark:text-white tracking-tight">
-          {t.title}
-        </h1>
-        <p className="text-xs sm:text-sm md:text-base text-gray-500 dark:text-gray-400 mt-2 sm:mt-3 leading-relaxed">
-          {isTestnet ? t.subtitleTestnet : t.subtitleMainnet}
-        </p>
+
+        <div className="flex items-center gap-2">
+          {!isTestnet && onToggleNetwork && (
+            <button
+              type="button"
+              onClick={() => onToggleNetwork('testnet')}
+              className="ui-btn-sm ui-btn-primary"
+            >
+              Cambiar a Testnet
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              fetchPoolsData();
+              fetchWalletBalances();
+              fetchUserPositions();
+            }}
+            className="ui-btn-sm ui-btn-secondary"
+            title={t.refreshTooltip}
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Actualizar</span>
+          </button>
+        </div>
       </div>
 
       {/* PROTOCOL METRICS STATS CARDS */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-8">
-        <div className="p-4 sm:p-5 rounded-2xl bg-white dark:bg-[#121622] border border-gray-200/80 dark:border-gray-800 shadow-2xs">
-          <div className="flex items-center justify-between text-gray-400 mb-1.5 sm:mb-2">
-            <span className="text-[11px] sm:text-xs font-medium">{t.statTvlLabel}</span>
-            <DollarSign className="w-4 h-4 text-emerald-500" />
+      <div className="ui-card p-4 sm:p-5 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 divide-y md:divide-y-0 md:divide-x divide-line">
+          <div className="pt-2 md:pt-0 md:px-3 first:pl-0">
+            <div className="ui-label mb-1">{t.statTvlLabel}</div>
+            <div className="ui-stat">
+              {loading ? '...' : `$${(protocolStats?.totalTvlUsd ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+            </div>
+            <div className="text-[11px] text-ink-3 mt-1 flex items-center gap-1.5">
+              <span className={`w-1.5 h-1.5 rounded-full ${isTestnet ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+              <span>{isTestnet ? 'Bóvedas activas' : 'Sin liquidez'}</span>
+            </div>
           </div>
-          <div className="text-xl sm:text-2xl md:text-3xl font-black text-gray-900 dark:text-white font-mono">
-            {loading ? '...' : `$${(protocolStats?.totalTvlUsd ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-          </div>
-          <span
-            className={`text-[10px] sm:text-[11px] font-bold mt-1 inline-flex items-center gap-1 ${
-              isTestnet ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'
-            }`}
-          >
-            <span className={`w-1.5 h-1.5 rounded-full ${isTestnet ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`}></span>
-            {isTestnet ? t.statTvlSubTestnet : t.statTvlSubMainnet}
-          </span>
-        </div>
 
-        <div className="p-4 sm:p-5 rounded-2xl bg-white dark:bg-[#121622] border border-gray-200/80 dark:border-gray-800 shadow-2xs">
-          <div className="flex items-center justify-between text-gray-400 mb-1.5 sm:mb-2">
-            <span className="text-[11px] sm:text-xs font-medium">{t.statVolumeLabel}</span>
-            <TrendingUp className="w-4 h-4 text-orange-500" />
+          <div className="pt-2 md:pt-0 md:px-3">
+            <div className="ui-label mb-1">{t.statVolumeLabel}</div>
+            <div className="ui-stat">
+              ${(protocolStats?.totalVolumeUsd ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+            <div className="text-[11px] text-ink-3 mt-1">En cadena</div>
           </div>
-          <div className="text-xl sm:text-2xl md:text-3xl font-black text-orange-500 font-mono">
-            ${(protocolStats?.totalVolumeUsd ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </div>
-          <span className="text-[10px] sm:text-[11px] text-gray-400 font-medium mt-1 block">
-            {t.statVolumeSub}
-          </span>
-        </div>
 
-        <div className="p-4 sm:p-5 rounded-2xl bg-white dark:bg-[#121622] border border-gray-200/80 dark:border-gray-800 shadow-2xs">
-          <div className="flex items-center justify-between text-gray-400 mb-1.5 sm:mb-2">
-            <span className="text-[11px] sm:text-xs font-medium">{t.statFeesLabel}</span>
-            <Coins className="w-4 h-4 text-primary" />
+          <div className="pt-2 md:pt-0 md:px-3">
+            <div className="ui-label mb-1">{t.statFeesLabel}</div>
+            <div className="ui-stat text-emerald-600 dark:text-emerald-400">
+              ${(protocolStats?.totalCumulativeFeesUsd ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
+            </div>
+            <div className="text-[11px] text-ink-3 mt-1">0.20% a LPs</div>
           </div>
-          <div className="text-xl sm:text-2xl md:text-3xl font-black text-gray-900 dark:text-white font-mono">
-            ${(protocolStats?.totalCumulativeFeesUsd ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
-          </div>
-          <span className="text-[10px] sm:text-[11px] text-emerald-600 dark:text-emerald-400 font-medium mt-1 block">
-            {t.statFeesSub}
-          </span>
-        </div>
 
-        <div className="p-4 sm:p-5 rounded-2xl bg-white dark:bg-[#121622] border border-gray-200/80 dark:border-gray-800 shadow-2xs">
-          <div className="flex items-center justify-between text-gray-400 mb-1.5 sm:mb-2">
-            <span className="text-[11px] sm:text-xs font-medium">{t.statPairsLabel}</span>
-            <PieChart className="w-4 h-4 text-blue-500" />
+          <div className="pt-2 md:pt-0 md:px-3">
+            <div className="ui-label mb-1">{t.statPairsLabel}</div>
+            <div className="ui-stat flex items-baseline gap-1.5">
+              <span>{protocolStats?.activePoolsCount ?? 0}</span>
+              <span className="text-xs text-emerald-500 font-semibold">{t.statActive}</span>
+              <span className="text-xs text-ink-3">/</span>
+              <span>{protocolStats?.noLiquidityPoolsCount ?? 0}</span>
+              <span className="text-xs text-rose-500 font-semibold">{t.statNoLiq}</span>
+            </div>
+            <div className="text-[11px] text-ink-3 mt-1">PUSD / USDT en Testnet</div>
           </div>
-          <div className="text-xl sm:text-2xl md:text-3xl font-black text-gray-900 dark:text-white font-mono flex items-baseline gap-1.5">
-            <span>{protocolStats?.activePoolsCount ?? 0}</span>
-            <span className="text-xs text-emerald-500 font-bold uppercase">{t.statActive}</span>
-            <span className="text-xs text-gray-400">/</span>
-            <span>{protocolStats?.noLiquidityPoolsCount ?? 0}</span>
-            <span className="text-xs text-rose-500 font-bold uppercase">{t.statNoLiq}</span>
-          </div>
-          <span className="text-[10px] sm:text-[11px] text-gray-400 font-medium mt-1 block">
-            {t.statPairsSub}
-          </span>
         </div>
       </div>
 
       {/* FILTER TABS */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6">
-        <div className="flex flex-wrap items-center gap-1.5 p-1 rounded-2xl bg-gray-100/90 dark:bg-[#131826] border border-gray-200/70 dark:border-gray-800">
+        <div className="ui-segment flex-wrap">
           <button
             onClick={() => setActiveTab('all')}
-            className={`px-3 py-1.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${
-              activeTab === 'all'
-                ? 'bg-white dark:bg-[#1e2538] text-gray-950 dark:text-white shadow-xs'
-                : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-            }`}
+            className={`ui-segment-item ${activeTab === 'all' ? 'ui-segment-item-active' : ''}`}
           >
             {t.tabAll} ({allPools.length})
           </button>
 
           <button
             onClick={() => setActiveTab('active')}
-            className={`px-3 py-1.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${
-              activeTab === 'active'
-                ? 'bg-white dark:bg-[#1e2538] text-emerald-600 dark:text-emerald-400 shadow-xs'
-                : 'text-gray-500 dark:text-gray-400 hover:text-emerald-600'
-            }`}
+            className={`ui-segment-item ${activeTab === 'active' ? 'ui-segment-item-active text-emerald-600 dark:text-emerald-400' : ''}`}
           >
             {t.tabActive} ({allPools.filter(p => p.status === 'ACTIVE' && p.hasLiquidity).length})
           </button>
 
           <button
             onClick={() => setActiveTab('bootstrapping')}
-            className={`px-3 py-1.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${
-              activeTab === 'bootstrapping'
-                ? 'bg-white dark:bg-[#1e2538] text-amber-600 dark:text-amber-400 shadow-xs'
-                : 'text-gray-500 dark:text-gray-400 hover:text-amber-600'
-            }`}
+            className={`ui-segment-item ${activeTab === 'bootstrapping' ? 'ui-segment-item-active text-amber-600 dark:text-amber-400' : ''}`}
           >
             {t.tabBootstrapping} ({allPools.filter(p => p.status === 'BOOTSTRAPPING').length})
           </button>
 
           <button
             onClick={() => setActiveTab('my-positions')}
-            className={`px-3 py-1.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${
-              activeTab === 'my-positions'
-                ? 'bg-white dark:bg-[#1e2538] text-primary shadow-xs'
-                : 'text-gray-500 dark:text-gray-400 hover:text-primary'
-            }`}
+            className={`ui-segment-item ${activeTab === 'my-positions' ? 'ui-segment-item-active text-primary' : ''}`}
           >
             {t.tabMyPositions} {positions.length > 0 && `(${positions.length})`}
           </button>
@@ -1039,22 +1003,10 @@ export default function PoolsView({
               }
               setCreateModalOpen(true);
             }}
-            className="px-3.5 py-1.5 rounded-xl bg-primary hover:bg-orange-600 text-white text-xs font-bold transition-all shadow-md shadow-orange-500/20 flex items-center gap-1.5 cursor-pointer"
+            className="ui-btn-sm ui-btn-primary"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>{t.btnCreatePair}</span>
-          </button>
-
-          <button
-            onClick={() => {
-              fetchPoolsData();
-              fetchWalletBalances();
-              fetchUserPositions();
-            }}
-            className="text-xs text-gray-400 hover:text-primary transition-colors flex items-center gap-1.5 cursor-pointer font-bold px-2 py-1.5"
-            title={t.refreshTooltip}
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
@@ -1068,58 +1020,26 @@ export default function PoolsView({
               <motion.div
                 key={pool.id}
                 whileHover={{ y: -2 }}
-                className={`rounded-3xl bg-white dark:bg-[#121622] border p-5 sm:p-6 shadow-2xs hover:shadow-md transition-all flex flex-col justify-between ${
+                className={`rounded-3xl bg-surface border p-5 sm:p-6 shadow-2xs hover:shadow-md transition-all flex flex-col justify-between ${
                   isPoolActive
                     ? 'border-emerald-500/30 dark:border-emerald-500/25'
-                    : 'border-gray-200/90 dark:border-gray-800/90 opacity-90'
+                    : 'border-line opacity-90'
                 }`}
               >
                 <div>
-                  {/* POOL HEADER WITH LOGOS AND BADGES */}
-                  <div className="flex items-start justify-between gap-3 pb-4 border-b border-gray-100 dark:border-gray-800">
+                  {/* POOL HEADER WITH LOGOS AND STATUS */}
+                  <div className="flex items-start justify-between gap-3 pb-3 border-b border-line">
                     <div className="flex items-center gap-3">
-                      <div className="flex -space-x-3 shrink-0">
-                        <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-gray-50 dark:bg-[#1a2130] border-2 border-white dark:border-[#121622] flex items-center justify-center p-1 shadow-xs">
-                          <img src={pool.iconA} alt={pool.tokenA} className="w-full h-full object-contain rounded-full" />
-                        </div>
-                        <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-gray-50 dark:bg-[#1a2130] border-2 border-white dark:border-[#121622] flex items-center justify-center p-1 shadow-xs">
-                          <img src={pool.iconB} alt={pool.tokenB} className="w-full h-full object-contain rounded-full" />
-                        </div>
+                      <div className="flex -space-x-2 shrink-0">
+                        <img src={pool.iconA} alt={pool.tokenA} className="w-8 h-8 rounded-full border-2 border-surface object-contain" />
+                        <img src={pool.iconB} alt={pool.tokenB} className="w-8 h-8 rounded-full border-2 border-surface object-contain" />
                       </div>
 
                       <div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h3 className="font-extrabold text-base sm:text-lg text-gray-950 dark:text-white leading-tight">
-                            {pool.pair}
-                          </h3>
-                          {pool.isSponsorPool && (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 flex items-center gap-1">
-                              <Flame className="w-3 h-3 fill-amber-500" /> {t.sponsorBadge}
-                            </span>
-                          )}
-
-                          {pool.isVerified ? (
-                            <span className="text-[10px] font-bold text-blue-500 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded-full flex items-center gap-1">
-                              <Check className="w-3 h-3 text-blue-500" />
-                              <span>{t.verifiedOfficial}</span>
-                            </span>
-                          ) : pool.isCustom ? (
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-[10px] text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-full">
-                                {t.communityBadge}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => handleVerifyPool(pool.id)}
-                                className="text-[10px] font-bold text-blue-500 hover:text-blue-400 underline cursor-pointer"
-                                title={t.verifyTitle}
-                              >
-                                {t.verifyAction}
-                              </button>
-                            </div>
-                          ) : null}
-                        </div>
-                        <p className="text-[11px] text-gray-400 mt-0.5 truncate">
+                        <h3 className="font-semibold text-base text-ink leading-tight">
+                          {pool.pair}
+                        </h3>
+                        <p className="text-xs text-ink-3 mt-0.5">
                           {pool.networkBadgeA} ⟷ {pool.networkBadgeB}
                         </p>
                       </div>
@@ -1128,39 +1048,34 @@ export default function PoolsView({
                     {/* STATUS BADGE */}
                     <div className="shrink-0">
                       {isPoolActive ? (
-                        <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 flex items-center gap-1.5">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                        <span className="ui-badge-success">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                           {t.statusActive}
                         </span>
                       ) : pool.status === 'BOOTSTRAPPING' ? (
-                        <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 flex items-center gap-1.5">
-                          <Lock className="w-3 h-3 text-amber-500" />
+                        <span className="ui-badge-warn">
                           {t.statusFunding}
                         </span>
                       ) : (
-                        <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/25 flex items-center gap-1.5">
-                          <Lock className="w-3 h-3 text-rose-500" />
+                        <span className="ui-badge-danger">
+                          <Lock className="w-2.5 h-2.5" />
                           {t.statusNoLiquidity}
                         </span>
                       )}
                     </div>
                   </div>
 
-                  {/* SMART CONTRACT EXPLORER LINKS FOR ACTIVE ON-CHAIN VAULTS */}
+                  {/* SMART CONTRACT EXPLORER LINKS */}
                   {isPoolActive && (pool.contractExplorerA || pool.contractExplorerB) && (
-                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-xl bg-emerald-500/5 border border-emerald-500/15 text-[11px]">
-                      <span className="font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                        <ShieldCheck className="w-3.5 h-3.5" />
-                        <span>Contratos No-Custodios Auditables:</span>
-                      </span>
-                      <div className="flex items-center gap-3 font-mono font-bold">
+                    <div className="mt-2.5 flex items-center justify-between text-[11px] text-ink-3">
+                      <span>Contratos:</span>
+                      <div className="flex items-center gap-3">
                         {pool.contractExplorerA && (
                           <a
                             href={pool.contractExplorerA}
                             target="_blank"
                             rel="noreferrer"
-                            className="text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1"
-                            title={t.viewExplorer}
+                            className="hover:text-ink hover:underline inline-flex items-center gap-1"
                           >
                             <span>BCH Covenant</span>
                             <ExternalLink className="w-3 h-3" />
@@ -1171,10 +1086,9 @@ export default function PoolsView({
                             href={pool.contractExplorerB}
                             target="_blank"
                             rel="noreferrer"
-                            className="text-blue-500 hover:underline flex items-center gap-1"
-                            title={t.viewExplorer}
+                            className="hover:text-ink hover:underline inline-flex items-center gap-1"
                           >
-                            <span>Amoy Vault</span>
+                            <span>Polygon Vault</span>
                             <ExternalLink className="w-3 h-3" />
                           </a>
                         )}
@@ -1190,7 +1104,7 @@ export default function PoolsView({
                           <Sparkles className="w-3.5 h-3.5" />
                           {t.unlockGoal} ({pool.fundingProgress}%)
                         </span>
-                        <span className="font-mono text-gray-600 dark:text-gray-300 font-semibold">
+                        <span className="font-mono text-ink-2 font-semibold">
                           ${pool.tvlUsd.toLocaleString()} / ${pool.targetTvlUsd.toLocaleString()} USD
                         </span>
                       </div>
@@ -1204,9 +1118,9 @@ export default function PoolsView({
                         />
                       </div>
 
-                      <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1.5">
+                      <p className="text-[10px] text-ink-2 mt-1.5">
                         {t.unlockRemainingPrefix}{' '}
-                        <strong className="text-gray-900 dark:text-white">
+                        <strong className="text-ink">
                           ${pool.remainingFundingUsd.toLocaleString()}
                         </strong>{' '}
                         {t.unlockRemainingSuffix}
@@ -1217,21 +1131,21 @@ export default function PoolsView({
                   {/* METRICS ROW */}
                   <div className="grid grid-cols-3 gap-2 py-4 my-1">
                     <div>
-                      <span className="text-[10px] uppercase font-bold text-gray-400 block mb-0.5">
+                      <span className="text-[10px] uppercase font-bold text-ink-3 block mb-0.5">
                         {t.poolTvl}
                       </span>
-                      <span className="text-sm sm:text-base font-black text-gray-900 dark:text-white font-mono">
+                      <span className="text-sm sm:text-base font-semibold text-ink font-mono">
                         ${pool.tvlUsd.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                       </span>
                     </div>
 
                     <div>
-                      <span className="text-[10px] uppercase font-bold text-gray-400 block mb-0.5">
+                      <span className="text-[10px] uppercase font-bold text-ink-3 block mb-0.5">
                         {t.annualApy}
                       </span>
                       <span
-                        className={`text-sm sm:text-base font-black font-mono ${
-                          isPoolActive ? 'text-orange-500' : 'text-gray-400'
+                        className={`text-sm sm:text-base font-semibold font-mono ${
+                          isPoolActive ? 'text-orange-500' : 'text-ink-3'
                         }`}
                       >
                         {isPoolActive ? `${pool.apyPercentage}%` : '—'}
@@ -1239,37 +1153,37 @@ export default function PoolsView({
                     </div>
 
                     <div>
-                      <span className="text-[10px] uppercase font-bold text-gray-400 block mb-0.5">
+                      <span className="text-[10px] uppercase font-bold text-ink-3 block mb-0.5">
                         {t.lpFee}
                       </span>
-                      <span className="text-sm sm:text-base font-black text-emerald-600 dark:text-emerald-400 font-mono">
+                      <span className="text-sm sm:text-base font-semibold text-emerald-600 dark:text-emerald-400 font-mono">
                         0.20%
                       </span>
                     </div>
                   </div>
 
                   {/* RESERVES BREAKDOWN */}
-                  <div className="p-3 rounded-2xl bg-gray-50 dark:bg-[#161c28] border border-gray-100 dark:border-gray-800 text-xs space-y-1.5 mb-4">
-                    <div className="flex justify-between items-center text-gray-500 dark:text-gray-400">
+                  <div className="p-3 rounded-2xl bg-surface-2 border border-line text-xs space-y-1.5 mb-4">
+                    <div className="flex justify-between items-center text-ink-2">
                       <span className="flex items-center gap-1.5">
                         <img src={pool.iconA} className="w-3.5 h-3.5 rounded-full" alt="" />
                         <span>
                           {t.reservePrefix} {pool.tokenA}:
                         </span>
                       </span>
-                      <span className="font-mono font-bold text-gray-900 dark:text-white">
+                      <span className="font-mono font-bold text-ink">
                         {pool.reserveA.toLocaleString()} {pool.tokenA} (${pool.reserveAValueUsd.toLocaleString()})
                       </span>
                     </div>
 
-                    <div className="flex justify-between items-center text-gray-500 dark:text-gray-400">
+                    <div className="flex justify-between items-center text-ink-2">
                       <span className="flex items-center gap-1.5">
                         <img src={pool.iconB} className="w-3.5 h-3.5 rounded-full" alt="" />
                         <span>
                           {t.reservePrefix} {pool.tokenB}:
                         </span>
                       </span>
-                      <span className="font-mono font-bold text-gray-900 dark:text-white">
+                      <span className="font-mono font-bold text-ink">
                         {pool.reserveB.toLocaleString()} {pool.tokenB} (${pool.reserveBValueUsd.toLocaleString()})
                       </span>
                     </div>
@@ -1282,29 +1196,29 @@ export default function PoolsView({
                     type="button"
                     onClick={() => {
                       if (onToggleNetwork) onToggleNetwork('testnet');
-                      showToast('Red cambiada: Testnet activa (PUSD / USDT)', 'success');
+                      showToast('Red cambiada a Testnet', 'success');
                     }}
-                    className="w-full py-3 rounded-2xl font-bold text-xs sm:text-sm bg-rose-500/10 hover:bg-amber-500/15 border border-rose-500/25 hover:border-amber-500/40 text-rose-600 dark:text-rose-400 hover:text-amber-600 dark:hover:text-amber-400 flex items-center justify-center gap-2 cursor-pointer transition-all mt-2"
+                    className="w-full ui-btn ui-btn-secondary mt-2"
                   >
-                    <Lock className="w-4 h-4" />
+                    <Lock className="w-4 h-4 text-rose-500" />
                     <span>{t.btnSwitchToTestnet}</span>
                   </button>
                 ) : isPoolActive ? (
-                  <motion.button
-                    whileHover={{ scale: 1.01 }}
-                    whileTap={{ scale: 0.99 }}
+                  <button
+                    type="button"
                     onClick={() => handleOpenAddModal(pool)}
-                    className="w-full py-3 rounded-2xl font-bold text-xs sm:text-sm bg-primary hover:bg-orange-600 text-white shadow-md shadow-orange-500/20 flex items-center justify-center gap-2 cursor-pointer transition-all mt-2"
+                    className="w-full ui-btn ui-btn-primary mt-2"
                   >
-                    <Plus className="w-4 h-4" /> {t.btnProvideLiquidity}
-                  </motion.button>
+                    <Plus className="w-4 h-4" />
+                    <span>{t.btnProvideLiquidity}</span>
+                  </button>
                 ) : (
                   <button
                     type="button"
                     disabled
-                    className="w-full py-3 rounded-2xl font-bold text-xs sm:text-sm bg-gray-100 dark:bg-[#161c28] text-rose-500/80 border border-rose-500/20 flex items-center justify-center gap-2 cursor-not-allowed mt-2"
+                    className="w-full ui-btn ui-btn-disabled mt-2"
                   >
-                    <Lock className="w-4 h-4" />
+                    <Lock className="w-4 h-4 text-ink-3" />
                     <span>{t.btnNoLiquidityDisabled}</span>
                   </button>
                 )}
@@ -1316,13 +1230,13 @@ export default function PoolsView({
 
       {/* USER POSITIONS TABLE VIEW */}
       <div
-        className={`rounded-3xl bg-white dark:bg-[#111622] border border-gray-200 dark:border-gray-800 p-5 sm:p-8 shadow-sm ${
+        className={`rounded-3xl bg-surface border border-line p-5 sm:p-8 shadow-sm ${
           activeTab !== 'my-positions' ? 'mt-8' : ''
         }`}
       >
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-2">
-            <h3 className="text-lg sm:text-xl font-black text-gray-950 dark:text-white">
+            <h3 className="text-lg sm:text-xl font-semibold text-ink">
               {t.positionsTitle}
             </h3>
             {positions.length > 0 && (
@@ -1337,16 +1251,16 @@ export default function PoolsView({
               fetchUserPositions();
               fetchWalletBalances();
             }}
-            className="text-xs text-gray-400 hover:text-primary transition-colors flex items-center gap-1.5 cursor-pointer font-bold"
+            className="text-xs text-ink-3 hover:text-primary transition-colors flex items-center gap-1.5 cursor-pointer font-bold"
           >
             <RefreshCw className="w-3.5 h-3.5" /> {t.refresh}
           </button>
         </div>
 
         {!effectiveAddress ? (
-          <div className="py-12 text-center text-gray-400 space-y-3">
-            <Wallet className="w-11 h-11 mx-auto text-gray-300 dark:text-gray-600" />
-            <h4 className="font-bold text-base text-gray-900 dark:text-white">
+          <div className="py-12 text-center text-ink-3 space-y-3">
+            <Wallet className="w-11 h-11 mx-auto text-ink-3/60" />
+            <h4 className="font-bold text-base text-ink">
               Conecta tu billetera BCH o EVM para ver tus LP Shares
             </h4>
             <button
@@ -1357,14 +1271,14 @@ export default function PoolsView({
             </button>
           </div>
         ) : positions.length === 0 ? (
-          <div className="py-14 text-center text-gray-400 space-y-3">
-            <Droplets className="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600" />
-            <h4 className="font-bold text-base text-gray-900 dark:text-white">{t.noPositionsTitle}</h4>
+          <div className="py-14 text-center text-ink-3 space-y-3">
+            <Droplets className="w-12 h-12 mx-auto text-ink-3/60" />
+            <h4 className="font-bold text-base text-ink">{t.noPositionsTitle}</h4>
             <p className="text-xs sm:text-sm max-w-md mx-auto text-gray-500">{t.noPositionsDesc}</p>
             {activeTab === 'my-positions' && (
               <button
                 onClick={() => setActiveTab('all')}
-                className="px-5 py-2.5 rounded-2xl bg-gray-900 dark:bg-white text-white dark:text-gray-950 text-xs font-bold hover:opacity-90 cursor-pointer transition-all"
+                className="px-5 py-2.5 rounded-2xl bg-ink text-canvas text-xs font-bold hover:opacity-90 cursor-pointer transition-all"
               >
                 {t.btnExplorePools}
               </button>
@@ -1373,7 +1287,7 @@ export default function PoolsView({
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="border-b border-gray-100 dark:border-gray-800 text-gray-400 font-semibold uppercase text-[10px] tracking-wider">
+              <thead className="border-b border-line text-ink-3 font-semibold uppercase text-[10px] ">
                 <tr>
                   <th className="py-3 px-3">{t.thPair}</th>
                   <th className="py-3 px-3">{t.thShares}</th>
@@ -1386,23 +1300,23 @@ export default function PoolsView({
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                 {positions.map(pos => (
-                  <tr key={pos.id} className="hover:bg-gray-50/50 dark:hover:bg-[#161c28]/50 transition-colors">
+                  <tr key={pos.id} className="hover:bg-gray-50/50 dark:hover:bg-surface-3 transition-colors">
                     <td className="py-4 px-3">
                       <div className="flex items-center gap-2">
                         <div className="flex -space-x-2 shrink-0">
-                          <img src={pos.iconA} className="w-6 h-6 rounded-full border border-white dark:border-[#121622]" alt="" />
-                          <img src={pos.iconB} className="w-6 h-6 rounded-full border border-white dark:border-[#121622]" alt="" />
+                          <img src={pos.iconA} className="w-6 h-6 rounded-full border border-white dark:border-surface" alt="" />
+                          <img src={pos.iconB} className="w-6 h-6 rounded-full border border-white dark:border-surface" alt="" />
                         </div>
-                        <span className="font-bold text-gray-900 dark:text-white text-sm">{pos.pair}</span>
+                        <span className="font-bold text-ink text-sm">{pos.pair}</span>
                       </div>
                     </td>
-                    <td className="py-4 px-3 font-mono font-bold text-gray-900 dark:text-white">
+                    <td className="py-4 px-3 font-mono font-bold text-ink">
                       {pos.shares.toFixed(4)}
                     </td>
                     <td className="py-4 px-3 font-mono text-emerald-600 dark:text-emerald-400 font-bold">
                       {pos.poolSharePercent}%
                     </td>
-                    <td className="py-4 px-3 font-mono text-gray-600 dark:text-gray-300">
+                    <td className="py-4 px-3 font-mono text-ink-2">
                       <div>
                         {pos.depositedAmount} {pos.tokenSymbol} (${(pos.depositUsd || pos.depositedAmount).toFixed(2)})
                       </div>
@@ -1418,7 +1332,7 @@ export default function PoolsView({
                         </a>
                       )}
                     </td>
-                    <td className="py-4 px-3 font-mono font-bold text-gray-900 dark:text-white text-sm">
+                    <td className="py-4 px-3 font-mono font-bold text-ink text-sm">
                       ${pos.totalValueUsd.toFixed(2)}
                     </td>
                     <td className="py-4 px-3 font-mono text-emerald-600 dark:text-emerald-400 font-semibold">
@@ -1453,7 +1367,7 @@ export default function PoolsView({
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-md bg-white dark:bg-[#121622] rounded-3xl p-5 sm:p-7 border border-gray-200 dark:border-gray-800 shadow-2xl relative my-6"
+              className="w-full max-w-md bg-surface rounded-3xl p-5 sm:p-7 border border-line shadow-2xl relative my-6"
             >
               <div className="flex justify-between items-center mb-5">
                 <div className="flex items-center gap-2">
@@ -1461,13 +1375,13 @@ export default function PoolsView({
                     <img src={selectedPool.iconA} className="w-6 h-6 rounded-full" alt="" />
                     <img src={selectedPool.iconB} className="w-6 h-6 rounded-full" alt="" />
                   </div>
-                  <h3 className="text-lg font-black text-gray-950 dark:text-white">
+                  <h3 className="text-lg font-semibold text-ink">
                     {t.modalAddTitle} {selectedPool.pair}
                   </h3>
                 </div>
                 <button
                   onClick={() => setActionModal(null)}
-                  className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 hover:text-gray-900 dark:hover:text-white flex items-center justify-center cursor-pointer transition-colors"
+                  className="w-8 h-8 rounded-full bg-surface-2 text-gray-500 hover:text-ink flex items-center justify-center cursor-pointer transition-colors"
                 >
                   ✕
                 </button>
@@ -1484,7 +1398,7 @@ export default function PoolsView({
                   className={`flex-1 py-2.5 px-3 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition-all ${
                     depositToken === selectedPool.tokenB
                       ? 'bg-teal-600 text-white shadow-sm'
-                      : 'bg-gray-100 dark:bg-[#171d2c] text-gray-500 hover:text-gray-900 dark:hover:text-white'
+                      : 'bg-surface-2 text-gray-500 hover:text-ink'
                   }`}
                 >
                   <img src={selectedPool.iconB} className="w-4 h-4 rounded-full" alt="" />
@@ -1502,7 +1416,7 @@ export default function PoolsView({
                   className={`flex-1 py-2.5 px-3 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition-all ${
                     depositToken === selectedPool.tokenA
                       ? 'bg-emerald-600 text-white shadow-sm'
-                      : 'bg-gray-100 dark:bg-[#171d2c] text-gray-500 hover:text-gray-900 dark:hover:text-white'
+                      : 'bg-surface-2 text-gray-500 hover:text-ink'
                   }`}
                 >
                   <img src={selectedPool.iconA} className="w-4 h-4 rounded-full" alt="" />
@@ -1513,13 +1427,13 @@ export default function PoolsView({
               </div>
 
               {/* AMOUNT INPUT BOX */}
-              <div className="p-4 rounded-2xl bg-gray-50 dark:bg-[#161c28] border border-gray-100 dark:border-gray-800 mb-4">
-                <div className="flex justify-between items-center text-xs text-gray-400 mb-1.5">
+              <div className="p-4 rounded-2xl bg-surface-2 border border-line mb-4">
+                <div className="flex justify-between items-center text-xs text-ink-3 mb-1.5">
                   <span>{t.depositAmountLabel}</span>
                   <div className="flex items-center gap-2">
                     <span className="font-mono">
                       {t.balanceLabel}{' '}
-                      <strong className="text-gray-900 dark:text-white font-bold">
+                      <strong className="text-ink font-bold">
                         {getSelectedTokenBalance().toLocaleString()} {depositToken}
                       </strong>
                     </span>
@@ -1541,14 +1455,14 @@ export default function PoolsView({
                     value={depositAmount}
                     onChange={e => setDepositAmount(e.target.value)}
                     placeholder="0.0"
-                    className="w-full bg-transparent text-2xl font-mono font-bold text-gray-900 dark:text-white outline-none"
+                    className="w-full bg-transparent text-2xl font-mono font-bold text-ink outline-none"
                   />
-                  <span className="font-bold text-sm text-gray-700 dark:text-gray-200 shrink-0">
+                  <span className="font-bold text-sm text-ink shrink-0">
                     {depositToken}
                   </span>
                 </div>
 
-                <div className="flex gap-2 mt-3 pt-3 border-t border-gray-200/50 dark:border-gray-700/50">
+                <div className="flex gap-2 mt-3 pt-3 border-t border-line">
                   {[25, 50, 75, 100].map(pct => (
                     <button
                       key={pct}
@@ -1576,8 +1490,8 @@ export default function PoolsView({
                     </div>
                   )}
 
-                  <div className="flex items-center justify-between gap-2 bg-white dark:bg-[#0E131E] p-2 rounded-xl border border-gray-200/70 dark:border-gray-800">
-                    <span className="font-mono text-[11px] text-gray-800 dark:text-gray-200 truncate">
+                  <div className="flex items-center justify-between gap-2 bg-surface p-2 rounded-xl border border-line">
+                    <span className="font-mono text-[11px] text-ink truncate">
                       {selectedPool.vaultAddressA || DEPLOYED_TESTNET_CONTRACTS.chipnetVaultTokenAddress}
                     </span>
                     <button
@@ -1593,7 +1507,7 @@ export default function PoolsView({
                   </div>
 
                   <div>
-                    <label className="text-[11px] font-bold text-gray-600 dark:text-gray-300 block mb-1">
+                    <label className="text-[11px] font-bold text-ink-2 block mb-1">
                       2. Pega el TXID de tu envío en Chipnet (64 hex):
                     </label>
                     <input
@@ -1601,29 +1515,29 @@ export default function PoolsView({
                       value={bchDepositTxHash}
                       onChange={e => setBchDepositTxHash(e.target.value)}
                       placeholder="Ej: 8f3a1c..."
-                      className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#0E131E] border border-gray-200 dark:border-gray-700 font-mono text-xs text-gray-900 dark:text-white outline-none focus:border-emerald-500"
+                      className="w-full px-3 py-2 rounded-xl bg-surface border border-line font-mono text-xs text-ink outline-none focus:border-emerald-500"
                     />
                   </div>
                 </div>
               )}
 
               {/* REAL-TIME PREVIEW METRICS */}
-              <div className="p-4 rounded-2xl bg-gray-50 dark:bg-[#161c28] border border-gray-100 dark:border-gray-800 text-xs space-y-2 mb-5">
-                <div className="flex justify-between text-gray-500 dark:text-gray-400">
+              <div className="p-4 rounded-2xl bg-surface-2 border border-line text-xs space-y-2 mb-5">
+                <div className="flex justify-between text-ink-2">
                   <span>{t.sharesToReceive}</span>
-                  <span className="font-mono font-bold text-gray-900 dark:text-white">
+                  <span className="font-mono font-bold text-ink">
                     {calcEstimatedShares().toFixed(4)} LP Shares
                   </span>
                 </div>
 
-                <div className="flex justify-between text-gray-500 dark:text-gray-400">
+                <div className="flex justify-between text-ink-2">
                   <span>{t.newShareRatio}</span>
                   <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
                     {calcNewPoolSharePercent()}%
                   </span>
                 </div>
 
-                <div className="flex justify-between text-gray-500 dark:text-gray-400">
+                <div className="flex justify-between text-ink-2">
                   <span>{t.projectedYield}</span>
                   <span className="font-mono font-bold text-orange-500">
                     +${calcEstimatedAnnualYieldUsd().toFixed(2)} USD ({selectedPool.apyPercentage}%)
@@ -1688,7 +1602,7 @@ export default function PoolsView({
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-md bg-white dark:bg-[#121622] rounded-3xl p-5 sm:p-7 border border-gray-200 dark:border-gray-800 shadow-2xl relative my-6"
+              className="w-full max-w-md bg-surface rounded-3xl p-5 sm:p-7 border border-line shadow-2xl relative my-6"
             >
               <div className="flex justify-between items-center mb-5">
                 <div className="flex items-center gap-2">
@@ -1696,7 +1610,7 @@ export default function PoolsView({
                     <img src={selectedPosition.iconA} className="w-6 h-6 rounded-full" alt="" />
                     <img src={selectedPosition.iconB} className="w-6 h-6 rounded-full" alt="" />
                   </div>
-                  <h3 className="text-lg font-black text-gray-950 dark:text-white">
+                  <h3 className="text-lg font-semibold text-ink">
                     {t.modalRemoveTitle} {selectedPosition.pair}
                   </h3>
                 </div>
@@ -1705,17 +1619,17 @@ export default function PoolsView({
                     setActionModal(null);
                     setSelectedPosition(null);
                   }}
-                  className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 hover:text-gray-900 dark:hover:text-white flex items-center justify-center cursor-pointer transition-colors"
+                  className="w-8 h-8 rounded-full bg-surface-2 text-gray-500 hover:text-ink flex items-center justify-center cursor-pointer transition-colors"
                 >
                   ✕
                 </button>
               </div>
 
               {/* PERCENTAGE SLIDER */}
-              <div className="p-4 rounded-2xl bg-gray-50 dark:bg-[#161c28] border border-gray-100 dark:border-gray-800 mb-4">
+              <div className="p-4 rounded-2xl bg-surface-2 border border-line mb-4">
                 <div className="flex justify-between items-center mb-2">
-                  <span className="text-xs text-gray-400 font-bold uppercase">{t.withdrawPctLabel}</span>
-                  <span className="text-lg font-black text-primary font-mono">{burnPercentage}%</span>
+                  <span className="text-xs text-ink-3 font-bold uppercase">{t.withdrawPctLabel}</span>
+                  <span className="text-lg font-semibold text-primary font-mono">{burnPercentage}%</span>
                 </div>
 
                 <input
@@ -1736,7 +1650,7 @@ export default function PoolsView({
                       className={`flex-1 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
                         burnPercentage === pct
                           ? 'bg-primary text-white shadow-xs'
-                          : 'bg-gray-200/60 dark:bg-gray-800 text-gray-600 dark:text-gray-300'
+                          : 'bg-gray-200/60 dark:bg-gray-800 text-ink-2'
                       }`}
                     >
                       {pct}%
@@ -1747,7 +1661,7 @@ export default function PoolsView({
 
               {/* SELECT ON-CHAIN PAYOUT ASSET */}
               <div className="mb-4">
-                <label className="text-[11px] font-bold text-gray-500 dark:text-gray-400 block mb-1.5">
+                <label className="text-[11px] font-bold text-ink-2 block mb-1.5">
                   Elige el activo y red para recibir tu retiro on-chain:
                 </label>
                 <div className="grid grid-cols-2 gap-2">
@@ -1757,7 +1671,7 @@ export default function PoolsView({
                     className={`py-2.5 px-3 rounded-xl font-bold text-xs border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
                       withdrawToken === 'USDT'
                         ? 'bg-teal-600 text-white border-teal-600 shadow-xs'
-                        : 'bg-gray-50 dark:bg-[#161c28] text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700'
+                        : 'bg-surface-2 text-ink-2 border-line'
                     }`}
                   >
                     <img src="/USDT.png" className="w-4 h-4 rounded-full" alt="" />
@@ -1769,14 +1683,14 @@ export default function PoolsView({
                     className={`py-2.5 px-3 rounded-xl font-bold text-xs border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
                       withdrawToken === 'PUSD'
                         ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
-                        : 'bg-gray-50 dark:bg-[#161c28] text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700'
+                        : 'bg-surface-2 text-ink-2 border-line'
                     }`}
                   >
                     <img src="/PUSD.png" className="w-4 h-4 rounded-full" alt="" />
                     <span>PUSD (BCH Chipnet)</span>
                   </button>
                 </div>
-                <div className="mt-1.5 text-[11px] font-mono text-gray-500 dark:text-gray-400 truncate">
+                <div className="mt-1.5 text-[11px] font-mono text-ink-2 truncate">
                   Destino:{' '}
                   {withdrawToken === 'USDT'
                     ? connectedEvm || '⚠️ Conecta tu billetera EVM'
@@ -1787,24 +1701,24 @@ export default function PoolsView({
               </div>
 
               {/* PAYOUT METRICS */}
-              <div className="p-4 rounded-2xl bg-gray-50 dark:bg-[#161c28] border border-gray-100 dark:border-gray-800 text-xs space-y-2.5 mb-6">
-                <div className="flex justify-between text-gray-500 dark:text-gray-400">
+              <div className="p-4 rounded-2xl bg-surface-2 border border-line text-xs space-y-2.5 mb-6">
+                <div className="flex justify-between text-ink-2">
                   <span>{t.sharesToBurn}</span>
-                  <span className="font-mono font-bold text-gray-900 dark:text-white">
+                  <span className="font-mono font-bold text-ink">
                     {(selectedPosition.shares * (burnPercentage / 100)).toFixed(4)} /{' '}
                     {selectedPosition.shares.toFixed(4)}
                   </span>
                 </div>
 
-                <div className="flex justify-between text-gray-500 dark:text-gray-400">
+                <div className="flex justify-between text-ink-2">
                   <span>{t.payoutToReceive}</span>
                   <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
                     {(selectedPosition.totalValueUsd * (burnPercentage / 100)).toFixed(4)} {withdrawToken}
                   </span>
                 </div>
 
-                <div className="pt-2 border-t border-gray-200 dark:border-gray-700 flex justify-between font-bold">
-                  <span className="text-gray-900 dark:text-white">{t.totalUsdReturn}</span>
+                <div className="pt-2 border-t border-line flex justify-between font-bold">
+                  <span className="text-ink">{t.totalUsdReturn}</span>
                   <span className="text-emerald-600 dark:text-emerald-400 font-mono text-sm">
                     ${(selectedPosition.totalValueUsd * (burnPercentage / 100)).toFixed(2)} USD
                   </span>
@@ -1845,24 +1759,24 @@ export default function PoolsView({
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.95, opacity: 0, y: 10 }}
               transition={{ type: 'spring', stiffness: 350, damping: 25 }}
-              className="w-full max-w-lg bg-white dark:bg-[#121622] rounded-3xl border border-gray-200/90 dark:border-gray-800 p-5 sm:p-6 shadow-2xl space-y-4 my-6 text-left"
+              className="w-full max-w-lg bg-surface rounded-3xl border border-line p-5 sm:p-6 shadow-2xl space-y-4 my-6 text-left"
             >
-              <div className="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-gray-800">
+              <div className="flex items-center justify-between pb-3 border-b border-line">
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 rounded-2xl bg-primary/10 text-primary flex items-center justify-center shadow-xs">
                     <Sparkles className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="font-black text-base sm:text-lg text-gray-900 dark:text-white">
+                    <h3 className="font-semibold text-base sm:text-lg text-ink">
                       {t.createTitle}
                     </h3>
-                    <p className="text-xs text-gray-400 font-medium">{t.createSubtitle}</p>
+                    <p className="text-xs text-ink-3 font-medium">{t.createSubtitle}</p>
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => setCreateModalOpen(false)}
-                  className="w-8 h-8 rounded-xl flex items-center justify-center text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer text-sm font-bold"
+                  className="w-8 h-8 rounded-xl flex items-center justify-center text-ink-3 hover:text-ink hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer text-sm font-bold"
                 >
                   ✕
                 </button>
@@ -1870,13 +1784,13 @@ export default function PoolsView({
 
               <form onSubmit={handleCreatePool} className="space-y-3.5">
                 <div className="space-y-1.5">
-                  <div className="p-3 rounded-2xl bg-gray-50/90 dark:bg-[#161c28] border border-gray-100 dark:border-gray-800/80 space-y-2">
+                  <div className="p-3 rounded-2xl bg-surface-2 border border-line/80 space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-black uppercase tracking-wider text-orange-500 flex items-center gap-1.5">
+                      <span className="text-[11px] font-semibold  text-orange-500 flex items-center gap-1.5">
                         <span className="w-1.5 h-1.5 rounded-full bg-orange-500"></span>
                         {t.baseTokenTitle}
                       </span>
-                      <span className="text-[10px] font-mono font-bold text-gray-400 bg-black/5 dark:bg-white/5 px-2 py-0.5 rounded-full">
+                      <span className="text-[10px] font-mono font-bold text-ink-3 bg-black/5 dark:bg-white/5 px-2 py-0.5 rounded-full">
                         {isTestnet ? 'Chipnet CashToken' : 'BCH CashToken'}
                       </span>
                     </div>
@@ -1888,31 +1802,31 @@ export default function PoolsView({
                         value={createForm.tokenA}
                         onChange={e => setCreateForm({ ...createForm, tokenA: e.target.value.toUpperCase() })}
                         placeholder={t.symbolPlaceholder}
-                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#10141f] border border-gray-200 dark:border-gray-700/80 font-mono font-black text-sm text-gray-900 dark:text-white placeholder:text-gray-400 placeholder:font-normal focus:outline-none focus:border-primary transition-colors"
+                        className="w-full px-3 py-2 rounded-xl bg-surface border border-line/80 font-mono font-semibold text-sm text-ink placeholder:text-ink-3 placeholder:font-normal focus:outline-none focus:border-primary transition-colors"
                       />
                       <input
                         type="text"
                         value={createForm.tokenAName}
                         onChange={e => setCreateForm({ ...createForm, tokenAName: e.target.value })}
                         placeholder={t.namePlaceholder}
-                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#10141f] border border-gray-200 dark:border-gray-700/80 text-xs font-medium text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:border-primary transition-colors"
+                        className="w-full px-3 py-2 rounded-xl bg-surface border border-line/80 text-xs font-medium text-ink placeholder:text-ink-3 focus:outline-none focus:border-primary transition-colors"
                       />
                     </div>
                   </div>
 
                   <div className="flex justify-center -my-2.5 relative z-10">
-                    <div className="w-7 h-7 rounded-full bg-white dark:bg-[#1a2233] border border-gray-200 dark:border-gray-700 shadow-xs flex items-center justify-center text-primary">
+                    <div className="w-7 h-7 rounded-full bg-surface-2 border border-line shadow-xs flex items-center justify-center text-primary">
                       <Plus className="w-3.5 h-3.5 stroke-[3]" />
                     </div>
                   </div>
 
-                  <div className="p-3 rounded-2xl bg-gray-50/90 dark:bg-[#161c28] border border-gray-100 dark:border-gray-800/80 space-y-2">
+                  <div className="p-3 rounded-2xl bg-surface-2 border border-line/80 space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-black uppercase tracking-wider text-blue-500 flex items-center gap-1.5">
+                      <span className="text-[11px] font-semibold  text-blue-500 flex items-center gap-1.5">
                         <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
                         {t.quoteTokenTitle}
                       </span>
-                      <span className="text-[10px] font-mono font-bold text-gray-400 bg-black/5 dark:bg-white/5 px-2 py-0.5 rounded-full">
+                      <span className="text-[10px] font-mono font-bold text-ink-3 bg-black/5 dark:bg-white/5 px-2 py-0.5 rounded-full">
                         {createForm.networkBadgeB}
                       </span>
                     </div>
@@ -1948,7 +1862,7 @@ export default function PoolsView({
                             });
                           }
                         }}
-                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#10141f] border border-gray-200 dark:border-gray-700/80 font-bold text-xs text-gray-900 dark:text-white focus:outline-none focus:border-primary transition-colors cursor-pointer"
+                        className="w-full px-3 py-2 rounded-xl bg-surface border border-line/80 font-bold text-xs text-ink focus:outline-none focus:border-primary transition-colors cursor-pointer"
                       >
                         <option value="USDT">USDT ({isTestnet ? 'Polygon Amoy' : 'Polygon PoS'})</option>
                         <option value="PUSD">PUSD ({isTestnet ? 'BCH Chipnet' : 'BCH CashTokens'})</option>
@@ -1962,9 +1876,9 @@ export default function PoolsView({
                           value={createForm.initialPriceUsd}
                           onChange={e => setCreateForm({ ...createForm, initialPriceUsd: e.target.value })}
                           placeholder="0.01"
-                          className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#10141f] border border-gray-200 dark:border-gray-700/80 font-mono font-bold text-xs text-gray-900 dark:text-white focus:outline-none focus:border-primary transition-colors pr-11"
+                          className="w-full px-3 py-2 rounded-xl bg-surface border border-line/80 font-mono font-bold text-xs text-ink focus:outline-none focus:border-primary transition-colors pr-11"
                         />
-                        <span className="absolute right-3 top-2 text-[10px] font-bold text-gray-400 pointer-events-none">
+                        <span className="absolute right-3 top-2 text-[10px] font-bold text-ink-3 pointer-events-none">
                           USD
                         </span>
                       </div>
@@ -1972,11 +1886,11 @@ export default function PoolsView({
                   </div>
                 </div>
 
-                <div className="border border-gray-100 dark:border-gray-800 rounded-2xl p-2.5 bg-gray-50/50 dark:bg-[#141924]">
+                <div className="border border-line rounded-2xl p-2.5 bg-surface">
                   <button
                     type="button"
                     onClick={() => setShowAdvanced(!showAdvanced)}
-                    className="w-full flex items-center justify-between text-xs font-bold text-gray-600 dark:text-gray-300 px-1 py-0.5 cursor-pointer hover:text-primary transition-colors"
+                    className="w-full flex items-center justify-between text-xs font-bold text-ink-2 px-1 py-0.5 cursor-pointer hover:text-primary transition-colors"
                   >
                     <span className="flex items-center gap-1.5">
                       <Layers className="w-3.5 h-3.5 text-primary" />
@@ -1984,7 +1898,7 @@ export default function PoolsView({
                     </span>
                     <ChevronDown
                       className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                        showAdvanced ? 'rotate-180 text-primary' : 'text-gray-400'
+                        showAdvanced ? 'rotate-180 text-primary' : 'text-ink-3'
                       }`}
                     />
                   </button>
@@ -1995,10 +1909,10 @@ export default function PoolsView({
                         initial={{ opacity: 0, height: 0 }}
                         animate={{ opacity: 1, height: 'auto' }}
                         exit={{ opacity: 0, height: 0 }}
-                        className="space-y-2 pt-2.5 border-t border-gray-200/50 dark:border-gray-700/50 mt-2 text-xs"
+                        className="space-y-2 pt-2.5 border-t border-line mt-2 text-xs"
                       >
                         <div>
-                          <label className="text-[10px] font-medium text-gray-400 block mb-1">
+                          <label className="text-[10px] font-medium text-ink-3 block mb-1">
                             {t.categoryIdLabel}
                           </label>
                           <input
@@ -2008,12 +1922,12 @@ export default function PoolsView({
                               setCreateForm({ ...createForm, categoryIdA: e.target.value.toLowerCase() })
                             }
                             placeholder={t.categoryIdPlaceholder}
-                            className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#10141f] border border-gray-200 dark:border-gray-700 font-mono text-[11px] text-gray-900 dark:text-white focus:outline-none focus:border-primary"
+                            className="w-full px-3 py-2 rounded-xl bg-surface border border-line font-mono text-[11px] text-ink focus:outline-none focus:border-primary"
                           />
                         </div>
 
                         <div>
-                          <label className="text-[10px] font-medium text-gray-400 block mb-1">
+                          <label className="text-[10px] font-medium text-ink-3 block mb-1">
                             {t.iconLabel}
                           </label>
                           <input
@@ -2021,7 +1935,7 @@ export default function PoolsView({
                             value={createForm.iconA}
                             onChange={e => setCreateForm({ ...createForm, iconA: e.target.value })}
                             placeholder={t.iconPlaceholder}
-                            className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#10141f] border border-gray-200 dark:border-gray-700 font-mono text-[11px] text-gray-900 dark:text-white focus:outline-none focus:border-primary"
+                            className="w-full px-3 py-2 rounded-xl bg-surface border border-line font-mono text-[11px] text-ink focus:outline-none focus:border-primary"
                           />
                         </div>
                       </motion.div>
@@ -2030,14 +1944,14 @@ export default function PoolsView({
                 </div>
 
                 <div className="space-y-1.5">
-                  <div className="grid grid-cols-2 p-1 rounded-2xl bg-gray-100 dark:bg-[#161c28] border border-gray-200/80 dark:border-gray-800 text-xs">
+                  <div className="grid grid-cols-2 p-1 rounded-2xl bg-surface-2 border border-line text-xs">
                     <button
                       type="button"
                       onClick={() => setCreateForm({ ...createForm, poolMode: 'BOOTSTRAPPING' })}
                       className={`py-2 px-3 rounded-xl font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                         createForm.poolMode === 'BOOTSTRAPPING'
-                          ? 'bg-white dark:bg-[#202737] text-amber-500 shadow-xs font-black'
-                          : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'
+                          ? 'bg-surface text-amber-500 shadow-xs font-semibold'
+                          : 'text-gray-500 hover:text-ink'
                       }`}
                     >
                       <span>🔒 {t.modeBootstrapping}</span>
@@ -2047,14 +1961,14 @@ export default function PoolsView({
                       onClick={() => setCreateForm({ ...createForm, poolMode: 'STANDARD' })}
                       className={`py-2 px-3 rounded-xl font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                         createForm.poolMode === 'STANDARD'
-                          ? 'bg-white dark:bg-[#202737] text-gray-900 dark:text-white shadow-xs font-black'
-                          : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'
+                          ? 'bg-surface text-ink shadow-xs font-semibold'
+                          : 'text-gray-500 hover:text-ink'
                       }`}
                     >
                       <span>⚡ {t.modeStandard}</span>
                     </button>
                   </div>
-                  <p className="text-[11px] text-gray-500 dark:text-gray-400 px-1 leading-snug">
+                  <p className="text-[11px] text-ink-2 px-1 leading-snug">
                     {createForm.poolMode === 'STANDARD' ? t.modeStandardDesc : t.modeBootstrappingDesc}
                   </p>
                 </div>
@@ -2062,7 +1976,7 @@ export default function PoolsView({
                 {createForm.poolMode === 'BOOTSTRAPPING' && (
                   <div className="grid grid-cols-2 gap-2.5 p-3 rounded-2xl bg-amber-500/5 border border-amber-500/20">
                     <div>
-                      <label className="text-[10px] font-bold text-gray-400 block mb-1">
+                      <label className="text-[10px] font-bold text-ink-3 block mb-1">
                         {t.amountToDeposit} ({createForm.tokenA || 'Base'}):
                       </label>
                       <input
@@ -2070,11 +1984,11 @@ export default function PoolsView({
                         value={createForm.initialAmountA}
                         onChange={e => setCreateForm({ ...createForm, initialAmountA: e.target.value })}
                         placeholder="100000"
-                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#10141f] border border-gray-200 dark:border-gray-700 font-mono font-bold text-xs text-gray-900 dark:text-white focus:outline-none focus:border-amber-500"
+                        className="w-full px-3 py-2 rounded-xl bg-surface border border-line font-mono font-bold text-xs text-ink focus:outline-none focus:border-amber-500"
                       />
                     </div>
                     <div>
-                      <label className="text-[10px] font-bold text-gray-400 block mb-1">
+                      <label className="text-[10px] font-bold text-ink-3 block mb-1">
                         {t.targetTvl}:
                       </label>
                       <input
@@ -2082,7 +1996,7 @@ export default function PoolsView({
                         value={createForm.targetTvlUsd}
                         onChange={e => setCreateForm({ ...createForm, targetTvlUsd: e.target.value })}
                         placeholder="2500"
-                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#10141f] border border-gray-200 dark:border-gray-700 font-mono font-bold text-xs text-gray-900 dark:text-white focus:outline-none focus:border-amber-500"
+                        className="w-full px-3 py-2 rounded-xl bg-surface border border-line font-mono font-bold text-xs text-ink focus:outline-none focus:border-amber-500"
                       />
                     </div>
                   </div>

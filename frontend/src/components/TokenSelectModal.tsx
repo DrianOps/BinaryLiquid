@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, X, Check, Flame, Lock } from 'lucide-react';
+import { Search, X, Check, Lock } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { DEPLOYED_TESTNET_CONTRACTS } from '../services/walletConnectService';
 
@@ -209,105 +209,56 @@ export default function TokenSelectModal({
     t.network.toLowerCase().includes(search.toLowerCase())
   );
 
-  const quickPills = allAvailable.slice(0, 4);
-
   return (
     <div
-      className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/50 backdrop-blur-md"
+      className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/50 backdrop-blur-sm"
       onClick={onClose}
     >
       <motion.div
-        initial={{ opacity: 0, scale: 0.95, y: 15 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.95, y: 15 }}
-        transition={{ type: 'spring', stiffness: 350, damping: 25 }}
-        className="w-full max-w-md bg-white dark:bg-[#12161f] rounded-[30px] border border-gray-100 dark:border-gray-800 shadow-2xl overflow-hidden flex flex-col max-h-[85vh]"
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 16 }}
+        transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+        className="w-full sm:max-w-[400px] bg-surface rounded-t-card sm:rounded-card border border-line shadow-soft overflow-hidden flex flex-col max-h-[80vh]"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="px-5 pt-5 pb-3.5 flex items-center justify-between border-b border-gray-100 dark:border-white/[0.06]">
+        <div className="px-5 pt-5 pb-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <h3 className="text-base font-bold text-gray-900 dark:text-white">{title}</h3>
-            <span
-              className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                isTestnet
-                  ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
-                  : 'bg-rose-500/10 text-rose-500 dark:text-rose-400'
-              }`}
-            >
+            <h3 className="ui-section-title">{title}</h3>
+            <span className={isTestnet ? 'ui-badge-warn' : 'ui-badge-danger'}>
               {isTestnet ? 'Testnet' : 'Sin Liquidez'}
             </span>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="w-7 h-7 rounded-full bg-gray-100 dark:bg-white/[0.06] text-gray-400 hover:text-gray-900 dark:hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+            aria-label="Cerrar"
+            className="w-8 h-8 rounded-full text-ink-3 hover:text-ink hover:bg-surface-2 flex items-center justify-center transition-colors cursor-pointer"
           >
-            <X className="w-3.5 h-3.5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Search Input */}
-        <div className="p-4 border-b border-gray-100 dark:border-gray-800/60">
-          <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl bg-gray-50 dark:bg-[#181e2b] border border-gray-200/80 dark:border-gray-700 focus-within:border-primary transition-all">
-            <Search className="w-4 h-4 text-gray-400" />
+        {/* Search */}
+        <div className="px-5 pb-3">
+          <div className="flex items-center gap-2.5 px-3.5 h-11 rounded-control bg-surface-2 border border-transparent focus-within:border-line-strong transition-colors">
+            <Search className="w-4 h-4 text-ink-3" />
             <input
               type="text"
               value={search}
               onChange={e => setSearch(e.target.value)}
-              placeholder="Search name, symbol, or network..."
-              className="w-full bg-transparent text-sm text-gray-900 dark:text-white outline-none placeholder:text-gray-400"
+              placeholder="Search token"
+              className="w-full bg-transparent text-sm text-ink outline-none placeholder:text-ink-3"
               autoFocus
             />
-          </div>
-
-          {/* Quick filter pills */}
-          <div className="flex flex-wrap gap-2 mt-3">
-            {quickPills.map(t => (
-              <button
-                key={t.symbol}
-                type="button"
-                disabled={t.disabled}
-                onClick={() => {
-                  if (t.disabled) return;
-                  onSelect(t);
-                  onClose();
-                }}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all border ${
-                  t.disabled
-                    ? 'opacity-45 cursor-not-allowed bg-gray-100 dark:bg-[#161b26] text-gray-400 border-gray-200 dark:border-gray-800'
-                    : selectedTokenSymbol === t.symbol
-                    ? 'bg-primary/10 text-primary border-primary/30 cursor-pointer'
-                    : 'bg-white dark:bg-[#181e2b] text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-gray-400 cursor-pointer'
-                }`}
-              >
-                <img src={t.icon} alt={t.symbol} className="w-4 h-4 rounded-full object-contain" />
-                <span>{t.symbol}</span>
-                {t.disabled ? (
-                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-rose-500/10 text-rose-500 dark:text-rose-400 font-semibold">
-                    Sin Liquidez
-                  </span>
-                ) : (
-                  <>
-                    {t.isVerified && (
-                      <span
-                        className="inline-flex items-center justify-center w-3 h-3 rounded-full bg-blue-500 text-white"
-                        title="Oficial"
-                      >
-                        <Check className="w-2 h-2 stroke-[3]" />
-                      </span>
-                    )}
-                    {t.isSponsor && <Flame className="w-3 h-3 text-orange-500 fill-orange-500" />}
-                  </>
-                )}
-              </button>
-            ))}
           </div>
         </div>
 
         {/* Token List */}
-        <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto px-2 pb-3 custom-scrollbar">
           {filtered.length === 0 ? (
-            <div className="text-center py-10 text-sm text-gray-400">No tokens found</div>
+            <div className="text-center py-10 ui-muted">No tokens found</div>
           ) : (
             filtered.map(t => {
               const isSelected = selectedTokenSymbol === t.symbol && !t.disabled;
@@ -321,60 +272,38 @@ export default function TokenSelectModal({
                     onSelect(t);
                     onClose();
                   }}
-                  className={`w-full flex items-center justify-between p-3.5 rounded-2xl transition-all text-left group ${
+                  className={`w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-panel text-left transition-colors ${
                     t.disabled
-                      ? 'opacity-50 cursor-not-allowed bg-gray-50/40 dark:bg-[#141822]/40'
+                      ? 'cursor-not-allowed'
                       : isSelected
-                      ? 'bg-primary/5 dark:bg-primary/10 border border-primary/20 cursor-pointer'
-                      : 'hover:bg-gray-50 dark:hover:bg-[#181e2b] cursor-pointer'
+                      ? 'bg-surface-2 cursor-pointer'
+                      : 'hover:bg-surface-2 cursor-pointer'
                   }`}
                 >
-                  <div className="flex items-center gap-3.5 min-w-0">
-                    <div className="w-10 h-10 rounded-full bg-white dark:bg-[#202737] shadow-xs border border-gray-100 dark:border-gray-700 flex items-center justify-center p-1.5 shrink-0">
-                      <img src={t.icon} alt={t.symbol} className="w-full h-full object-contain rounded-full" />
-                    </div>
+                  <div className={`flex items-center gap-3 min-w-0 ${t.disabled ? 'opacity-45' : ''}`}>
+                    <img src={t.icon} alt={t.symbol} className="w-9 h-9 rounded-full object-contain shrink-0" />
                     <div className="min-w-0">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="font-bold text-gray-900 dark:text-white text-base">{t.symbol}</span>
-                        {t.isVerified && !t.disabled && (
-                          <span
-                            className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-blue-500 text-white shadow-2xs"
-                            title="Token Oficial Verificado"
-                          >
-                            <Check className="w-2.5 h-2.5 stroke-[3]" />
-                          </span>
-                        )}
-                        {t.disabled && t.unavailableBadge && (
-                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center gap-1">
-                            <Lock className="w-2.5 h-2.5" />
-                            <span>{t.unavailableBadge}</span>
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-xs text-gray-400 dark:text-gray-500 font-medium flex items-center gap-1.5 truncate">
-                        <span>{t.name}</span>
-                        <span>•</span>
-                        <span className="text-gray-500 dark:text-gray-400">{t.networkBadge}</span>
+                      <div className="text-sm font-semibold text-ink">{t.symbol}</div>
+                      <div className="text-xs text-ink-3 truncate">
+                        {t.name} · {t.networkBadge}
                       </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 shrink-0">
-                    {isSelected && (
-                      <div className="w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center">
-                        <Check className="w-4 h-4" />
-                      </div>
-                    )}
+                  <div className="shrink-0">
+                    {t.disabled && t.unavailableBadge ? (
+                      <span className="ui-badge-danger">
+                        <Lock className="w-2.5 h-2.5" />
+                        {t.unavailableBadge}
+                      </span>
+                    ) : isSelected ? (
+                      <Check className="w-4 h-4 text-ink" />
+                    ) : null}
                   </div>
                 </button>
               );
             })
           )}
-        </div>
-
-        {/* Footer info */}
-        <div className="px-5 py-3 border-t border-gray-100 dark:border-gray-800 text-center text-[11px] text-gray-400">
-          100% Non-Custodial Smart Contract Vaults & CashScript Covenants
         </div>
       </motion.div>
     </div>

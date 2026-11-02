@@ -114,7 +114,13 @@ const PLATFORM_NETWORKS = {
 };
 
 export default function App() {
-  const [mainView, setMainView] = useState<'bridge' | 'gateway' | 'pools' | 'docs' | 'sdk' | 'lend'>('gateway');
+  const [mainView, setMainView] = useState<'bridge' | 'gateway' | 'pools' | 'docs' | 'sdk' | 'lend'>(() => {
+    // Deep links: bsprotocol.xyz/#bridge, #pools, #lend, #docs, #sdk
+    const hash = typeof window !== 'undefined' ? window.location.hash.replace('#', '') : '';
+    return (['bridge', 'pools', 'lend', 'docs', 'sdk'] as const).includes(hash as any)
+      ? (hash as 'bridge' | 'pools' | 'lend' | 'docs' | 'sdk')
+      : 'gateway';
+  });
   const [darkMode, setDarkMode] = useState<boolean>(() => {
     return localStorage.getItem('bliq_theme') === 'dark' || 
       (!localStorage.getItem('bliq_theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);

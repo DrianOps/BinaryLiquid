@@ -836,91 +836,64 @@ export default function LendingView({
 
   return (
     <div className="w-full max-w-6xl mx-auto px-3 sm:px-4 py-6 sm:py-10 selection:bg-orange-500 selection:text-white">
-      {/* NETWORK STATUS BANNER (TESTNET ACTIVE vs MAINNET SIN LIQUIDEZ) */}
-      {!isTestnet ? (
-        <div className="mb-6 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <div className="flex items-start gap-3">
-            <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-black uppercase tracking-wider text-amber-600 dark:text-amber-400">
-                  {t.mainnetBannerTitle}
-                </span>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-600 dark:text-amber-300">
-                  {t.sinLiquidezBadge}
-                </span>
-              </div>
-              <p className="text-xs text-gray-600 dark:text-gray-300 mt-0.5">{t.mainnetBannerDesc}</p>
-            </div>
-          </div>
+      {/* NETWORK STATUS BANNER (Only on Mainnet) */}
+      {!isTestnet && (
+        <div className="mb-6 px-4 py-2.5 rounded-panel bg-rose-500/10 border border-rose-500/20 text-xs flex items-center justify-between gap-2">
+          <span className="font-medium text-rose-600 dark:text-rose-400 flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            <span>{t.mainnetBannerDesc}</span>
+          </span>
           {onToggleNetwork && (
             <button
+              type="button"
               onClick={() => onToggleNetwork('testnet')}
-              className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs shrink-0 transition-all cursor-pointer shadow-xs"
+              className="ui-btn-sm ui-btn-primary shrink-0"
             >
               {t.switchToTestnetBtn}
             </button>
           )}
         </div>
-      ) : (
-        <div className="mb-6 p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5 flex-wrap">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 text-[11px] font-extrabold">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              {t.testnetBannerBadge}
-            </span>
-            <span className="text-xs text-gray-600 dark:text-gray-300">{t.testnetBannerDesc}</span>
-          </div>
-          <div className="flex items-center gap-2 text-[11px] font-mono">
-            <a
-              href={`https://chipnet.imaginary.cash/address/${pusdVaultAddress}`}
-              target="_blank"
-              rel="noreferrer"
-              className="px-2.5 py-1 rounded-lg bg-white/80 dark:bg-[#161c28] border border-gray-200 dark:border-gray-700 text-emerald-600 dark:text-emerald-400 hover:underline inline-flex items-center gap-1"
-            >
-              <span>PUSD Covenant</span>
-              <ExternalLink className="w-3 h-3" />
-            </a>
-            <a
-              href={`https://amoy.polygonscan.com/address/${usdtVaultAddress}`}
-              target="_blank"
-              rel="noreferrer"
-              className="px-2.5 py-1 rounded-lg bg-white/80 dark:bg-[#161c28] border border-gray-200 dark:border-gray-700 text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1"
-            >
-              <span>Amoy USDT Vault</span>
-              <ExternalLink className="w-3 h-3" />
-            </a>
-          </div>
-        </div>
       )}
 
       {/* HEADER SECTION */}
-      <div className="text-center max-w-3xl mx-auto mb-8 sm:mb-10">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-xs font-bold uppercase tracking-wider mb-3">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-          <span>{t.heroBadge}</span>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <h1 className="ui-title">{t.heroTitle}</h1>
+            <span className={isTestnet ? 'ui-badge-warn' : 'ui-badge-danger'}>
+              {isTestnet ? 'Testnet' : 'Sin Liquidez'}
+            </span>
+          </div>
+          <p className="ui-subtitle">
+            {isTestnet
+              ? 'Bloquea colateral BCH en tu Covenant personal y toma préstamos en PUSD o USDT.'
+              : 'Mainnet sin liquidez activa. Cambia a Testnet para operar.'}
+          </p>
         </div>
-        <h1 className="text-3xl sm:text-4xl md:text-5xl font-black text-gray-950 dark:text-white tracking-tight">
-          {t.heroTitle}
-        </h1>
-        <p className="text-xs sm:text-sm md:text-base text-gray-500 dark:text-gray-400 mt-2 sm:mt-3 leading-relaxed">
-          {t.heroSubtitle1}
-          <strong className="text-gray-900 dark:text-white font-bold">{t.heroSubtitleBch}</strong>
-          {t.heroSubtitle2}
-          <strong className="text-primary font-bold">{t.heroSubtitlePusd}</strong>
-          {t.heroSubtitleOr}
-          <strong className="text-emerald-500 font-bold">{t.heroSubtitleUsdt}</strong>
-          {t.heroSubtitle3}
-        </p>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              fetchData();
+              onRefreshBalances?.();
+            }}
+            className="ui-btn-sm ui-btn-secondary"
+            title="Actualizar datos en cadena"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Actualizar</span>
+          </button>
+        </div>
       </div>
 
       {/* LAST ON-CHAIN TX RECEIPT BANNER */}
       {lastTxResult && (
-        <div className="mb-6 p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 text-xs">
+        <div className="mb-6 px-4 py-2.5 rounded-panel bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2">
             <Check className="w-4 h-4 text-emerald-500 shrink-0" />
-            <span className="font-bold text-gray-900 dark:text-white">{lastTxResult.label}:</span>
-            <span className="font-mono text-gray-500 dark:text-gray-300 truncate max-w-[180px] sm:max-w-xs">
+            <span className="font-semibold text-ink">{lastTxResult.label}:</span>
+            <span className="font-mono text-ink-2 truncate max-w-[200px] sm:max-w-xs">
               {lastTxResult.txHash}
             </span>
           </div>
@@ -928,7 +901,7 @@ export default function LendingView({
             href={lastTxResult.explorerUrl}
             target="_blank"
             rel="noreferrer"
-            className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline inline-flex items-center gap-1 shrink-0"
+            className="font-semibold text-emerald-600 dark:text-emerald-400 hover:underline inline-flex items-center gap-1 shrink-0"
           >
             <span>Explorer</span>
             <ExternalLink className="w-3.5 h-3.5" />
@@ -937,108 +910,91 @@ export default function LendingView({
       )}
 
       {/* TOP USER METRICS DASHBOARD */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-8">
-        {/* CARD 1: COLLATERAL */}
-        <div className="p-4 sm:p-5 rounded-3xl bg-white dark:bg-[#121622] border border-gray-200/80 dark:border-gray-800 shadow-2xs">
-          <div className="flex items-center justify-between text-gray-400 mb-1.5 sm:mb-2">
-            <span className="text-[11px] sm:text-xs font-medium">{t.cardCollateralTitle}</span>
-            <div className="flex items-center gap-1">
-              <img src="/BCH.png" alt="BCH" className="w-4 h-4 rounded-full" />
-              <span className="inline-flex items-center justify-center w-3 h-3 rounded-full bg-emerald-500 text-white">
-                <Check className="w-2 h-2 stroke-[3]" />
-              </span>
+      <div className="ui-card p-4 sm:p-5 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 divide-y md:divide-y-0 md:divide-x divide-line">
+          {/* CARD 1: COLLATERAL */}
+          <div className="pt-2 md:pt-0 md:px-3 first:pl-0">
+            <div className="ui-label mb-1">{t.cardCollateralTitle}</div>
+            <div className="ui-stat">
+              {vault.collateralBch.toFixed(4)} <span className="text-xs font-normal text-ink-3">BCH</span>
+            </div>
+            <div className="flex items-center justify-between text-[11px] text-ink-3 mt-1">
+              <span>≈ ${vault.collateralUsd.toLocaleString()} USD</span>
+              <span className="text-emerald-500 font-semibold">{t.cardCollateralLtv}</span>
             </div>
           </div>
-          <div className="text-xl sm:text-2xl md:text-3xl font-black text-gray-900 dark:text-white font-mono">
-            {vault.collateralBch.toFixed(4)} <span className="text-xs font-sans text-gray-400">BCH</span>
-          </div>
-          <div className="flex items-center justify-between text-[11px] text-gray-500 mt-1">
-            <span>≈ ${vault.collateralUsd.toLocaleString()} USD</span>
-            <span className="text-emerald-500 font-bold">{t.cardCollateralLtv}</span>
-          </div>
-        </div>
 
-        {/* CARD 2: BORROWED DEBT */}
-        <div className="p-4 sm:p-5 rounded-3xl bg-white dark:bg-[#121622] border border-gray-200/80 dark:border-gray-800 shadow-2xs">
-          <div className="flex items-center justify-between text-gray-400 mb-1.5 sm:mb-2">
-            <span className="text-[11px] sm:text-xs font-medium">{t.cardDebtTitle}</span>
-            <Coins className="w-4 h-4 text-orange-500" />
-          </div>
-          <div className="text-xl sm:text-2xl md:text-3xl font-black text-orange-500 font-mono">
-            ${vault.totalDebtUsd.toFixed(2)} <span className="text-xs font-sans text-gray-400">USD</span>
-          </div>
-          <div className="flex items-center justify-between text-[11px] text-gray-500 mt-1">
-            <span>
+          {/* CARD 2: BORROWED DEBT */}
+          <div className="pt-2 md:pt-0 md:px-3">
+            <div className="ui-label mb-1">{t.cardDebtTitle}</div>
+            <div className="ui-stat text-orange-500">
+              ${vault.totalDebtUsd.toFixed(2)} <span className="text-xs font-normal text-ink-3">USD</span>
+            </div>
+            <div className="text-[11px] text-ink-3 mt-1 truncate">
               {vault.totalPusdDebt.toFixed(2)} PUSD • {(vault.totalUsdtDebt || 0).toFixed(2)} USDT
-            </span>
+            </div>
           </div>
-        </div>
 
-        {/* CARD 3: HEALTH FACTOR */}
-        <div className="p-4 sm:p-5 rounded-3xl bg-white dark:bg-[#121622] border border-gray-200/80 dark:border-gray-800 shadow-2xs">
-          <div className="flex items-center justify-between text-gray-400 mb-1.5 sm:mb-2">
-            <span className="text-[11px] sm:text-xs font-medium">{t.cardHealthTitle}</span>
-            <ShieldCheck className="w-4 h-4 text-emerald-500" />
-          </div>
-          <div className="text-xl sm:text-2xl md:text-3xl font-black font-mono flex items-baseline gap-2">
-            {vault.totalDebtUsd === 0 ? (
-              <span className="text-emerald-500">{t.cardHealthInfinite}</span>
-            ) : (
+          {/* CARD 3: HEALTH FACTOR */}
+          <div className="pt-2 md:pt-0 md:px-3">
+            <div className="ui-label mb-1">{t.cardHealthTitle}</div>
+            <div className="ui-stat flex items-baseline gap-2">
+              {vault.totalDebtUsd === 0 ? (
+                <span className="text-emerald-500">{t.cardHealthInfinite}</span>
+              ) : (
+                <span
+                  className={
+                    vault.healthFactor >= 1.5
+                      ? 'text-emerald-500'
+                      : vault.healthFactor >= 1.15
+                      ? 'text-amber-500'
+                      : 'text-rose-500'
+                  }
+                >
+                  {vault.healthFactor.toFixed(2)}
+                </span>
+              )}
               <span
-                className={
-                  vault.healthFactor >= 1.5
-                    ? 'text-emerald-500'
-                    : vault.healthFactor >= 1.15
-                    ? 'text-amber-500'
-                    : 'text-rose-500'
-                }
+                className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                  vault.healthStatus === 'SAFE'
+                    ? 'ui-badge-success'
+                    : vault.healthStatus === 'MODERATE'
+                    ? 'ui-badge-warn'
+                    : 'ui-badge-danger'
+                }`}
               >
-                {vault.healthFactor.toFixed(2)}
-              </span>
-            )}
-            <span
-              className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                vault.healthStatus === 'SAFE'
-                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
+                {vault.healthStatus === 'SAFE'
+                  ? t.cardHealthSafe
                   : vault.healthStatus === 'MODERATE'
-                  ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
-                  : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20'
-              }`}
-            >
-              {vault.healthStatus === 'SAFE'
-                ? t.cardHealthSafe
-                : vault.healthStatus === 'MODERATE'
-                ? t.cardHealthModerate
-                : t.cardHealthAlert}
+                  ? t.cardHealthModerate
+                  : t.cardHealthAlert}
+              </span>
+            </div>
+            <span className="text-[11px] text-ink-3 mt-1 block">{t.cardHealthSub}</span>
+          </div>
+
+          {/* CARD 4: AVAILABLE TO BORROW */}
+          <div className="pt-2 md:pt-0 md:px-3">
+            <div className="ui-label mb-1">{t.cardAvailableTitle}</div>
+            <div className="ui-stat">
+              ${vault.availableBorrowUsd.toFixed(2)}
+            </div>
+            <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold mt-1 inline-flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              {t.cardAvailableSub}
             </span>
           </div>
-          <span className="text-[11px] text-gray-400 mt-1 block">{t.cardHealthSub}</span>
-        </div>
-
-        {/* CARD 4: AVAILABLE TO BORROW */}
-        <div className="p-4 sm:p-5 rounded-3xl bg-white dark:bg-[#121622] border border-gray-200/80 dark:border-gray-800 shadow-2xs">
-          <div className="flex items-center justify-between text-gray-400 mb-1.5 sm:mb-2">
-            <span className="text-[11px] sm:text-xs font-medium">{t.cardAvailableTitle}</span>
-            <DollarSign className="w-4 h-4 text-primary" />
-          </div>
-          <div className="text-xl sm:text-2xl md:text-3xl font-black text-gray-900 dark:text-white font-mono">
-            ${vault.availableBorrowUsd.toFixed(2)}
-          </div>
-          <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold mt-1 inline-flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-            {t.cardAvailableSub}
-          </span>
         </div>
       </div>
 
       {/* NAVIGATION TABS */}
-      <div className="flex items-center gap-2 p-1 rounded-2xl bg-gray-100/90 dark:bg-[#131826] border border-gray-200/70 dark:border-gray-800 mb-8 max-w-md mx-auto">
+      <div className="flex items-center gap-2 p-1 rounded-2xl bg-surface border border-line mb-8 max-w-md mx-auto">
         <button
           onClick={() => setActiveTab('vault')}
           className={`flex-1 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
             activeTab === 'vault'
-              ? 'bg-white dark:bg-[#1e2538] text-gray-950 dark:text-white shadow-xs'
-              : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+              ? 'bg-surface-2 text-ink shadow-xs'
+              : 'text-ink-2 hover:text-ink'
           }`}
         >
           <Lock className="w-3.5 h-3.5 text-primary" />
@@ -1049,8 +1005,8 @@ export default function LendingView({
           onClick={() => setActiveTab('supply')}
           className={`flex-1 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
             activeTab === 'supply'
-              ? 'bg-white dark:bg-[#1e2538] text-gray-950 dark:text-white shadow-xs'
-              : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+              ? 'bg-surface-2 text-ink shadow-xs'
+              : 'text-ink-2 hover:text-ink'
           }`}
         >
           <TrendingUp className="w-3.5 h-3.5 text-emerald-500" />
@@ -1061,8 +1017,8 @@ export default function LendingView({
           onClick={() => setActiveTab('markets')}
           className={`flex-1 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
             activeTab === 'markets'
-              ? 'bg-white dark:bg-[#1e2538] text-gray-950 dark:text-white shadow-xs'
-              : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+              ? 'bg-surface-2 text-ink shadow-xs'
+              : 'text-ink-2 hover:text-ink'
           }`}
         >
           <Activity className="w-3.5 h-3.5 text-blue-500" />
@@ -1076,15 +1032,15 @@ export default function LendingView({
       {activeTab === 'vault' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           {/* LEFT: ACTION CARD */}
-          <div className="lg:col-span-7 rounded-3xl bg-white dark:bg-[#121622] border border-gray-200/90 dark:border-gray-800 p-5 sm:p-7 shadow-2xs">
+          <div className="lg:col-span-7 rounded-3xl bg-surface border border-line p-5 sm:p-7 shadow-2xs">
             {/* SUBTABS */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 p-1 rounded-2xl bg-gray-50 dark:bg-[#181f2f] mb-6">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 p-1 rounded-2xl bg-surface-2 mb-6">
               <button
                 onClick={() => setVaultSubTab('deposit_collateral')}
                 className={`py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                   vaultSubTab === 'deposit_collateral'
-                    ? 'bg-white dark:bg-[#222c42] text-gray-900 dark:text-white shadow-xs'
-                    : 'text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                    ? 'bg-surface-2 text-ink shadow-xs'
+                    : 'text-ink-3 hover:text-gray-700 dark:hover:text-gray-200'
                 }`}
               >
                 {t.subTabDeposit}
@@ -1093,8 +1049,8 @@ export default function LendingView({
                 onClick={() => setVaultSubTab('borrow')}
                 className={`py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                   vaultSubTab === 'borrow'
-                    ? 'bg-white dark:bg-[#222c42] text-primary shadow-xs'
-                    : 'text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                    ? 'bg-surface-2 text-primary shadow-xs'
+                    : 'text-ink-3 hover:text-gray-700 dark:hover:text-gray-200'
                 }`}
               >
                 {t.subTabBorrow}
@@ -1103,8 +1059,8 @@ export default function LendingView({
                 onClick={() => setVaultSubTab('repay')}
                 className={`py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                   vaultSubTab === 'repay'
-                    ? 'bg-white dark:bg-[#222c42] text-emerald-500 shadow-xs'
-                    : 'text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                    ? 'bg-surface-2 text-emerald-500 shadow-xs'
+                    : 'text-ink-3 hover:text-gray-700 dark:hover:text-gray-200'
                 }`}
               >
                 {t.subTabRepay}
@@ -1113,8 +1069,8 @@ export default function LendingView({
                 onClick={() => setVaultSubTab('withdraw_collateral')}
                 className={`py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                   vaultSubTab === 'withdraw_collateral'
-                    ? 'bg-white dark:bg-[#222c42] text-gray-900 dark:text-white shadow-xs'
-                    : 'text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                    ? 'bg-surface-2 text-ink shadow-xs'
+                    : 'text-ink-3 hover:text-gray-700 dark:hover:text-gray-200'
                 }`}
               >
                 {t.subTabWithdraw}
@@ -1125,16 +1081,16 @@ export default function LendingView({
             {vaultSubTab === 'deposit_collateral' && (
               <div className="space-y-4">
                 <div>
-                  <h3 className="text-base font-extrabold text-gray-900 dark:text-white">
+                  <h3 className="text-base font-semibold text-ink">
                     {t.depositTitle}
                   </h3>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{t.depositDesc}</p>
+                  <p className="text-xs text-ink-2 mt-0.5">{t.depositDesc}</p>
                 </div>
 
                 {!connectedBch ? (
                   <div className="p-5 rounded-2xl bg-orange-500/10 border border-orange-500/25 text-center space-y-3">
                     <Wallet className="w-8 h-8 text-primary mx-auto" />
-                    <p className="text-xs text-gray-600 dark:text-gray-300 max-w-md mx-auto">
+                    <p className="text-xs text-ink-2 max-w-md mx-auto">
                       {t.connectBchPrompt}
                     </p>
                     <button
@@ -1149,7 +1105,7 @@ export default function LendingView({
                     {/* PERSONAL P2SH32 COVENANT BOX */}
                     <div className="p-4 rounded-2xl bg-emerald-500/5 dark:bg-[#151d2b] border border-emerald-500/25 space-y-3">
                       <div className="flex items-center justify-between flex-wrap gap-2">
-                        <span className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                        <span className="text-[11px] font-semibold  text-emerald-600 dark:text-emerald-400">
                           {t.personalVaultLabel}
                         </span>
                         {collateralCovenant?.explorerUrl && (
@@ -1177,8 +1133,8 @@ export default function LendingView({
                             </div>
                           )}
 
-                          <div className="flex items-center justify-between gap-2 bg-white dark:bg-[#0E131E] p-2.5 rounded-xl border border-gray-200 dark:border-gray-800">
-                            <span className="font-mono text-[11px] text-gray-800 dark:text-gray-200 truncate">
+                          <div className="flex items-center justify-between gap-2 bg-surface p-2.5 rounded-xl border border-line">
+                            <span className="font-mono text-[11px] text-ink truncate">
                               {collateralCovenant.vaultAddress}
                             </span>
                             <button
@@ -1195,15 +1151,15 @@ export default function LendingView({
                             </button>
                           </div>
 
-                          <div className="text-[11px] text-gray-500 dark:text-gray-400 flex items-center justify-between">
+                          <div className="text-[11px] text-ink-2 flex items-center justify-between">
                             <span>Billetera vinculada:</span>
-                            <span className="font-mono font-bold text-gray-800 dark:text-gray-200">
+                            <span className="font-mono font-bold text-ink">
                               {formatAddress(connectedBch)}
                             </span>
                           </div>
                         </>
                       ) : (
-                        <div className="text-xs text-gray-400 py-3 text-center">
+                        <div className="text-xs text-ink-3 py-3 text-center">
                           {isTestnet
                             ? 'Instanciando tu Covenant P2SH32 en BCH Chipnet...'
                             : t.mainnetBannerTitle}
@@ -1212,8 +1168,8 @@ export default function LendingView({
                     </div>
 
                     {/* CAPACITY SIMULATOR */}
-                    <div className="p-4 rounded-2xl bg-gray-50 dark:bg-[#161c28] border border-gray-100 dark:border-gray-800 space-y-2.5">
-                      <div className="flex justify-between items-center text-xs text-gray-400">
+                    <div className="p-4 rounded-2xl bg-surface-2 border border-line space-y-2.5">
+                      <div className="flex justify-between items-center text-xs text-ink-3">
                         <span>Simulador de capacidad (tBCH)</span>
                         <span className="font-mono">
                           {t.bchPriceLabel} <strong>${bchPrice.toFixed(2)} USD</strong>
@@ -1226,15 +1182,15 @@ export default function LendingView({
                           value={depositCollateralAmount}
                           onChange={e => setDepositCollateralAmount(e.target.value)}
                           placeholder="0.01"
-                          className="w-full bg-transparent text-2xl font-mono font-bold text-gray-900 dark:text-white outline-none"
+                          className="w-full bg-transparent text-2xl font-mono font-bold text-ink outline-none"
                         />
-                        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white dark:bg-[#202737] border border-gray-200 dark:border-gray-700 shrink-0">
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface border border-line shrink-0">
                           <img src="/BCH.png" alt="BCH" className="w-5 h-5 rounded-full object-contain" />
-                          <span className="font-bold text-xs text-gray-900 dark:text-white">tBCH</span>
+                          <span className="font-bold text-xs text-ink">tBCH</span>
                         </div>
                       </div>
-                      <div className="flex items-center justify-between text-xs pt-2 border-t border-gray-200/60 dark:border-gray-800">
-                        <span className="text-gray-400">{t.newBorrowCapacity}</span>
+                      <div className="flex items-center justify-between text-xs pt-2 border-t border-line">
+                        <span className="text-ink-3">{t.newBorrowCapacity}</span>
                         <strong className="font-mono font-bold text-emerald-500">
                           +${(((parseFloat(depositCollateralAmount) || 0) * bchPrice) * 0.65).toFixed(2)} USD
                         </strong>
@@ -1243,7 +1199,7 @@ export default function LendingView({
 
                     {/* OPTIONAL TXID INPUT */}
                     <div>
-                      <label className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 block mb-1.5">
+                      <label className="text-[11px] font-semibold text-ink-2 block mb-1.5">
                         {t.optionalTxidLabel}
                       </label>
                       <input
@@ -1251,7 +1207,7 @@ export default function LendingView({
                         value={collateralTxId}
                         onChange={e => setCollateralTxId(e.target.value)}
                         placeholder={t.txidPlaceholder}
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-gray-50 dark:bg-[#161c28] border border-gray-200 dark:border-gray-800 text-xs font-mono text-gray-900 dark:text-white outline-none focus:border-primary"
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-surface-2 border border-line text-xs font-mono text-ink outline-none focus:border-primary"
                       />
                     </div>
 
@@ -1281,8 +1237,8 @@ export default function LendingView({
             {vaultSubTab === 'borrow' && (
               <div className="space-y-4">
                 <div>
-                  <h3 className="text-base font-extrabold text-gray-900 dark:text-white">{t.borrowTitle}</h3>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{t.borrowDesc}</p>
+                  <h3 className="text-base font-semibold text-ink">{t.borrowTitle}</h3>
+                  <p className="text-xs text-ink-2 mt-0.5">{t.borrowDesc}</p>
                 </div>
 
                 {/* TOKEN SELECTOR (PUSD + USDT Active, USDC Sin Liquidez) */}
@@ -1291,8 +1247,8 @@ export default function LendingView({
                     onClick={() => setBorrowToken('PUSD')}
                     className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
                       borrowToken === 'PUSD'
-                        ? 'bg-primary/10 border-primary text-gray-950 dark:text-white shadow-xs'
-                        : 'bg-gray-50 dark:bg-[#161c28] border-gray-100 dark:border-gray-800 text-gray-500'
+                        ? 'bg-primary/10 border-primary text-ink shadow-xs'
+                        : 'bg-surface-2 border-line text-gray-500'
                     }`}
                   >
                     <div className="flex items-center justify-between mb-1">
@@ -1300,11 +1256,11 @@ export default function LendingView({
                         <img src="/PUSD.png" alt="PUSD" className="w-5 h-5 rounded-full" />
                         <span className="font-bold text-xs">PUSD</span>
                       </div>
-                      <span className="text-[9px] font-black uppercase text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded">
+                      <span className="text-[9px] font-semibold uppercase text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded">
                         Sponsor
                       </span>
                     </div>
-                    <span className="text-[10px] text-gray-400 block">{t.borrowRatePusd}</span>
+                    <span className="text-[10px] text-ink-3 block">{t.borrowRatePusd}</span>
                     <span className="text-[10px] font-mono text-emerald-500 font-bold block mt-0.5">
                       {isTestnet ? `${pusdAvailLiquidity.toLocaleString()} PUSD` : t.sinLiquidezBadge}
                     </span>
@@ -1314,8 +1270,8 @@ export default function LendingView({
                     onClick={() => setBorrowToken('USDT')}
                     className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
                       borrowToken === 'USDT'
-                        ? 'bg-emerald-500/10 border-emerald-500 text-gray-950 dark:text-white shadow-xs'
-                        : 'bg-gray-50 dark:bg-[#161c28] border-gray-100 dark:border-gray-800 text-gray-500'
+                        ? 'bg-emerald-500/10 border-emerald-500 text-ink shadow-xs'
+                        : 'bg-surface-2 border-line text-gray-500'
                     }`}
                   >
                     <div className="flex items-center justify-between mb-1">
@@ -1327,13 +1283,13 @@ export default function LendingView({
                         Amoy
                       </span>
                     </div>
-                    <span className="text-[10px] text-gray-400 block">{t.borrowRateUsdt}</span>
+                    <span className="text-[10px] text-ink-3 block">{t.borrowRateUsdt}</span>
                     <span className="text-[10px] font-mono text-emerald-500 font-bold block mt-0.5">
                       {isTestnet ? `${usdtAvailLiquidity.toLocaleString()} USDT` : t.sinLiquidezBadge}
                     </span>
                   </button>
 
-                  <div className="p-3 rounded-2xl border border-gray-200/60 dark:border-gray-800 bg-gray-100/60 dark:bg-[#141824] opacity-60 cursor-not-allowed">
+                  <div className="p-3 rounded-2xl border border-line bg-surface opacity-60 cursor-not-allowed">
                     <div className="flex items-center justify-between mb-1">
                       <div className="flex items-center gap-1.5">
                         <img src="/USDC.png" alt="USDC" className="w-5 h-5 rounded-full grayscale" />
@@ -1343,14 +1299,14 @@ export default function LendingView({
                         {t.sinLiquidezBadge}
                       </span>
                     </div>
-                    <span className="text-[10px] text-gray-400 block">4.2% APR • Polygon</span>
-                    <span className="text-[10px] font-mono text-gray-400 block mt-0.5">0.00 USDC</span>
+                    <span className="text-[10px] text-ink-3 block">4.2% APR • Polygon</span>
+                    <span className="text-[10px] font-mono text-ink-3 block mt-0.5">0.00 USDC</span>
                   </div>
                 </div>
 
                 {/* DESTINATION WALLET CHECK */}
-                <div className="p-3 rounded-xl bg-gray-50 dark:bg-[#161c28] border border-gray-200/70 dark:border-gray-800 flex items-center justify-between text-xs">
-                  <span className="text-gray-500 dark:text-gray-400">
+                <div className="p-3 rounded-xl bg-surface-2 border border-line flex items-center justify-between text-xs">
+                  <span className="text-ink-2">
                     Wallet receptora ({borrowToken === 'PUSD' ? 'BCH Chipnet' : 'Polygon Amoy'}):
                   </span>
                   {borrowToken === 'PUSD' ? (
@@ -1376,8 +1332,8 @@ export default function LendingView({
                   )}
                 </div>
 
-                <div className="p-4 rounded-2xl bg-gray-50 dark:bg-[#161c28] border border-gray-100 dark:border-gray-800">
-                  <div className="flex justify-between items-center text-xs text-gray-400 mb-2">
+                <div className="p-4 rounded-2xl bg-surface-2 border border-line">
+                  <div className="flex justify-between items-center text-xs text-ink-3 mb-2">
                     <span>{t.borrowAmountLabel}</span>
                     <div className="flex items-center gap-2">
                       <span className="font-mono">
@@ -1401,9 +1357,9 @@ export default function LendingView({
                       value={borrowAmount}
                       onChange={e => setBorrowAmount(e.target.value)}
                       placeholder="0.0"
-                      className="w-full bg-transparent text-2xl sm:text-3xl font-mono font-bold text-gray-900 dark:text-white outline-none"
+                      className="w-full bg-transparent text-2xl sm:text-3xl font-mono font-bold text-ink outline-none"
                     />
-                    <span className="font-bold text-sm text-gray-700 dark:text-gray-200 shrink-0">
+                    <span className="font-bold text-sm text-ink shrink-0">
                       {borrowToken}
                     </span>
                   </div>
@@ -1412,7 +1368,7 @@ export default function LendingView({
                 {parseFloat(borrowAmount) > 0 && (
                   <div className="p-3.5 rounded-2xl bg-black/5 dark:bg-[#181f2f] text-xs space-y-1.5">
                     <div className="flex justify-between items-center">
-                      <span className="text-gray-400">{t.healthImpactLabel}</span>
+                      <span className="text-ink-3">{t.healthImpactLabel}</span>
                       <span className="font-mono font-bold text-emerald-500">
                         {vault.collateralUsd > 0
                           ? ((vault.collateralUsd * 0.8) / (vault.totalDebtUsd + parseFloat(borrowAmount))).toFixed(2)
@@ -1420,7 +1376,7 @@ export default function LendingView({
                       </span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-gray-400">{t.originationFeeLabel}</span>
+                      <span className="text-ink-3">{t.originationFeeLabel}</span>
                       <span className="text-emerald-500 font-bold font-mono">{t.originationFeeFree}</span>
                     </div>
                   </div>
@@ -1458,8 +1414,8 @@ export default function LendingView({
             {vaultSubTab === 'repay' && (
               <div className="space-y-4">
                 <div>
-                  <h3 className="text-base font-extrabold text-gray-900 dark:text-white">{t.repayTitle}</h3>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{t.repayDesc}</p>
+                  <h3 className="text-base font-semibold text-ink">{t.repayTitle}</h3>
+                  <p className="text-xs text-ink-2 mt-0.5">{t.repayDesc}</p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
@@ -1467,15 +1423,15 @@ export default function LendingView({
                     onClick={() => setRepayToken('PUSD')}
                     className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
                       repayToken === 'PUSD'
-                        ? 'bg-primary/10 border-primary text-gray-950 dark:text-white shadow-xs'
-                        : 'bg-gray-50 dark:bg-[#161c28] border-gray-100 dark:border-gray-800 text-gray-500'
+                        ? 'bg-primary/10 border-primary text-ink shadow-xs'
+                        : 'bg-surface-2 border-line text-gray-500'
                     }`}
                   >
                     <div className="flex items-center gap-1.5 mb-1">
                       <img src="/PUSD.png" alt="PUSD" className="w-5 h-5 rounded-full" />
                       <span className="font-bold text-sm">PUSD</span>
                     </div>
-                    <span className="text-[11px] text-gray-400 block font-mono">
+                    <span className="text-[11px] text-ink-3 block font-mono">
                       {t.debtLabel} <strong>{vault.totalPusdDebt.toFixed(4)} PUSD</strong>
                     </span>
                   </button>
@@ -1484,22 +1440,22 @@ export default function LendingView({
                     onClick={() => setRepayToken('USDT')}
                     className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
                       repayToken === 'USDT'
-                        ? 'bg-emerald-500/10 border-emerald-500 text-gray-950 dark:text-white shadow-xs'
-                        : 'bg-gray-50 dark:bg-[#161c28] border-gray-100 dark:border-gray-800 text-gray-500'
+                        ? 'bg-emerald-500/10 border-emerald-500 text-ink shadow-xs'
+                        : 'bg-surface-2 border-line text-gray-500'
                     }`}
                   >
                     <div className="flex items-center gap-1.5 mb-1">
                       <img src="/USDT.png" alt="USDT" className="w-5 h-5 rounded-full" />
                       <span className="font-bold text-sm">USDT</span>
                     </div>
-                    <span className="text-[11px] text-gray-400 block font-mono">
+                    <span className="text-[11px] text-ink-3 block font-mono">
                       {t.debtLabel} <strong>{(vault.totalUsdtDebt || 0).toFixed(4)} USDT</strong>
                     </span>
                   </button>
                 </div>
 
-                <div className="p-4 rounded-2xl bg-gray-50 dark:bg-[#161c28] border border-gray-100 dark:border-gray-800">
-                  <div className="flex justify-between items-center text-xs text-gray-400 mb-2">
+                <div className="p-4 rounded-2xl bg-surface-2 border border-line">
+                  <div className="flex justify-between items-center text-xs text-ink-3 mb-2">
                     <span>{t.repayAmountLabel}</span>
                     <div className="flex items-center gap-2">
                       <span className="font-mono">
@@ -1531,9 +1487,9 @@ export default function LendingView({
                       value={repayAmount}
                       onChange={e => setRepayAmount(e.target.value)}
                       placeholder="0.0"
-                      className="w-full bg-transparent text-2xl sm:text-3xl font-mono font-bold text-gray-900 dark:text-white outline-none"
+                      className="w-full bg-transparent text-2xl sm:text-3xl font-mono font-bold text-ink outline-none"
                     />
-                    <span className="font-bold text-sm text-gray-700 dark:text-gray-200 shrink-0">
+                    <span className="font-bold text-sm text-ink shrink-0">
                       {repayToken}
                     </span>
                   </div>
@@ -1541,9 +1497,9 @@ export default function LendingView({
 
                 {repayToken === 'PUSD' && isTestnet && (
                   <div className="p-3.5 rounded-2xl bg-emerald-500/5 border border-emerald-500/20 space-y-2.5">
-                    <p className="text-[11px] text-gray-600 dark:text-gray-300 font-medium">{t.pusdSendStep}</p>
-                    <div className="flex items-center justify-between gap-2 bg-white dark:bg-[#0E131E] p-2 rounded-xl border border-gray-200 dark:border-gray-800">
-                      <span className="font-mono text-[11px] text-gray-800 dark:text-gray-200 truncate">
+                    <p className="text-[11px] text-ink-2 font-medium">{t.pusdSendStep}</p>
+                    <div className="flex items-center justify-between gap-2 bg-surface p-2 rounded-xl border border-line">
+                      <span className="font-mono text-[11px] text-ink truncate">
                         {pusdVaultAddress}
                       </span>
                       <button
@@ -1560,7 +1516,7 @@ export default function LendingView({
                       value={repayPusdTxId}
                       onChange={e => setRepayPusdTxId(e.target.value)}
                       placeholder={t.txidPlaceholder}
-                      className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#0E131E] border border-gray-200 dark:border-gray-800 text-xs font-mono text-gray-900 dark:text-white outline-none"
+                      className="w-full px-3 py-2 rounded-xl bg-surface border border-line text-xs font-mono text-ink outline-none"
                     />
                   </div>
                 )}
@@ -1589,12 +1545,12 @@ export default function LendingView({
             {vaultSubTab === 'withdraw_collateral' && (
               <div className="space-y-4">
                 <div>
-                  <h3 className="text-base font-extrabold text-gray-900 dark:text-white">{t.withdrawTitle}</h3>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{t.withdrawDesc}</p>
+                  <h3 className="text-base font-semibold text-ink">{t.withdrawTitle}</h3>
+                  <p className="text-xs text-ink-2 mt-0.5">{t.withdrawDesc}</p>
                 </div>
 
-                <div className="p-4 rounded-2xl bg-gray-50 dark:bg-[#161c28] border border-gray-100 dark:border-gray-800">
-                  <div className="flex justify-between items-center text-xs text-gray-400 mb-2">
+                <div className="p-4 rounded-2xl bg-surface-2 border border-line">
+                  <div className="flex justify-between items-center text-xs text-ink-3 mb-2">
                     <span>{t.withdrawAmountLabel}</span>
                     <div className="flex items-center gap-2">
                       <span className="font-mono">
@@ -1618,11 +1574,11 @@ export default function LendingView({
                       value={withdrawCollateralAmount}
                       onChange={e => setWithdrawCollateralAmount(e.target.value)}
                       placeholder="0.0"
-                      className="w-full bg-transparent text-2xl sm:text-3xl font-mono font-bold text-gray-900 dark:text-white outline-none"
+                      className="w-full bg-transparent text-2xl sm:text-3xl font-mono font-bold text-ink outline-none"
                     />
-                    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white dark:bg-[#202737] border border-gray-200 dark:border-gray-700 shrink-0">
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface border border-line shrink-0">
                       <img src="/BCH.png" alt="BCH" className="w-5 h-5 rounded-full object-contain" />
-                      <span className="font-bold text-sm text-gray-900 dark:text-white">BCH</span>
+                      <span className="font-bold text-sm text-ink">BCH</span>
                     </div>
                   </div>
                 </div>
@@ -1656,71 +1612,25 @@ export default function LendingView({
             )}
           </div>
 
-          {/* RIGHT: HOW IT WORKS + SPONSOR + RECENT ON-CHAIN ACTIVITY */}
+          {/* RIGHT: RECENT ON-CHAIN VAULT ACTIVITY */}
           <div className="lg:col-span-5 space-y-4">
-            <div className="p-5 rounded-3xl bg-white dark:bg-[#121622] border border-gray-200/90 dark:border-gray-800 shadow-2xs">
-              <div className="flex items-center gap-2 mb-3">
-                <Sparkles className="w-4 h-4 text-primary" />
-                <h4 className="font-extrabold text-sm text-gray-900 dark:text-white">{t.howItWorksTitle}</h4>
-              </div>
-              <div className="space-y-3 text-xs text-gray-500 dark:text-gray-400">
-                <div className="flex items-start gap-2.5">
-                  <span className="w-5 h-5 rounded-full bg-primary/10 text-primary font-bold flex items-center justify-center shrink-0 text-[11px]">
-                    1
-                  </span>
-                  <p>
-                    <strong className="text-gray-900 dark:text-white">{t.step1Title}</strong>
-                    {t.step1Desc}
-                  </p>
-                </div>
-                <div className="flex items-start gap-2.5">
-                  <span className="w-5 h-5 rounded-full bg-primary/10 text-primary font-bold flex items-center justify-center shrink-0 text-[11px]">
-                    2
-                  </span>
-                  <p>
-                    <strong className="text-gray-900 dark:text-white">{t.step2Title}</strong>
-                    {t.step2Desc}
-                  </p>
-                </div>
-                <div className="flex items-start gap-2.5">
-                  <span className="w-5 h-5 rounded-full bg-primary/10 text-primary font-bold flex items-center justify-center shrink-0 text-[11px]">
-                    3
-                  </span>
-                  <p>
-                    <strong className="text-gray-900 dark:text-white">{t.step3Title}</strong>
-                    {t.step3Desc}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="p-5 rounded-3xl bg-gradient-to-br from-amber-500/10 via-orange-500/10 to-emerald-500/10 border border-amber-500/20 shadow-2xs">
-              <div className="flex items-center gap-2 mb-2">
-                <Flame className="w-4 h-4 text-orange-500 fill-orange-500" />
-                <span className="text-xs font-black uppercase text-orange-600 dark:text-orange-400 tracking-wider">
-                  {t.sponsorBadge}
-                </span>
-              </div>
-              <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed">{t.sponsorDesc}</p>
-            </div>
-
             {/* RECENT ON-CHAIN VAULT TRANSACTIONS */}
-            <div className="p-5 rounded-3xl bg-white dark:bg-[#121622] border border-gray-200/90 dark:border-gray-800 shadow-2xs">
-              <h4 className="font-extrabold text-sm text-gray-900 dark:text-white mb-3">{t.recentTxTitle}</h4>
+            <div className="p-5 rounded-card bg-surface border border-line shadow-soft">
+              <h4 className="font-semibold text-sm text-ink mb-3">{t.recentTxTitle}</h4>
               {recentTransactions.length === 0 ? (
-                <p className="text-xs text-gray-400">{t.noRecentTx}</p>
+                <p className="text-xs text-ink-3">{t.noRecentTx}</p>
               ) : (
-                <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                <div className="space-y-2 max-h-72 overflow-y-auto pr-1 custom-scrollbar">
                   {recentTransactions.map((tx: any) => (
                     <div
                       key={tx.id}
-                      className="p-2.5 rounded-xl bg-gray-50 dark:bg-[#161c28] border border-gray-100 dark:border-gray-800 flex items-center justify-between gap-2 text-xs"
+                      className="p-2.5 rounded-control bg-surface-2 border border-line flex items-center justify-between gap-2 text-xs"
                     >
                       <div>
-                        <span className="font-bold text-gray-900 dark:text-white block">
+                        <span className="font-semibold text-ink block">
                           {tx.action.replace('_', ' ')} • {tx.amount} {tx.token}
                         </span>
-                        <span className="font-mono text-[10px] text-gray-400">
+                        <span className="font-mono text-[10px] text-ink-3">
                           {tx.txHash?.slice(0, 10)}...{tx.txHash?.slice(-6)}
                         </span>
                       </div>
@@ -1729,7 +1639,7 @@ export default function LendingView({
                           href={tx.explorerUrl}
                           target="_blank"
                           rel="noreferrer"
-                          className="text-emerald-500 hover:underline inline-flex items-center gap-1 font-bold text-[11px]"
+                          className="text-emerald-500 hover:underline inline-flex items-center gap-1 font-semibold text-[11px]"
                         >
                           <span>TX</span>
                           <ExternalLink className="w-3 h-3" />
@@ -1749,18 +1659,18 @@ export default function LendingView({
       {/* =================================================================== */}
       {activeTab === 'supply' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          <div className="lg:col-span-7 rounded-3xl bg-white dark:bg-[#121622] border border-gray-200/90 dark:border-gray-800 p-5 sm:p-7 shadow-2xs space-y-5">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-gray-100 dark:border-gray-800">
+          <div className="lg:col-span-7 rounded-3xl bg-surface border border-line p-5 sm:p-7 shadow-2xs space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-line">
               <div>
-                <h3 className="text-lg font-extrabold text-gray-900 dark:text-white">{t.supplyTitle}</h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{t.supplyDesc}</p>
+                <h3 className="text-lg font-semibold text-ink">{t.supplyTitle}</h3>
+                <p className="text-xs text-ink-2 mt-0.5">{t.supplyDesc}</p>
               </div>
-              <div className="flex items-center gap-1 p-1 rounded-xl bg-gray-100 dark:bg-[#181f2f] shrink-0">
+              <div className="flex items-center gap-1 p-1 rounded-xl bg-surface-2 shrink-0">
                 <button
                   onClick={() => setSupplyMode('deposit')}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all ${
                     supplyMode === 'deposit'
-                      ? 'bg-white dark:bg-[#222c42] text-emerald-600 dark:text-emerald-400 shadow-xs'
+                      ? 'bg-surface-2 text-emerald-600 dark:text-emerald-400 shadow-xs'
                       : 'text-gray-500'
                   }`}
                 >
@@ -1770,7 +1680,7 @@ export default function LendingView({
                   onClick={() => setSupplyMode('withdraw')}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all ${
                     supplyMode === 'withdraw'
-                      ? 'bg-white dark:bg-[#222c42] text-primary shadow-xs'
+                      ? 'bg-surface-2 text-primary shadow-xs'
                       : 'text-gray-500'
                   }`}
                 >
@@ -1785,8 +1695,8 @@ export default function LendingView({
                 onClick={() => setSupplyToken('PUSD')}
                 className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
                   supplyToken === 'PUSD'
-                    ? 'bg-primary/10 border-primary text-gray-900 dark:text-white shadow-xs'
-                    : 'bg-gray-50 dark:bg-[#161c28] border-gray-100 dark:border-gray-800 text-gray-500'
+                    ? 'bg-primary/10 border-primary text-ink shadow-xs'
+                    : 'bg-surface-2 border-line text-gray-500'
                 }`}
               >
                 <div className="flex items-center justify-between mb-1">
@@ -1794,9 +1704,9 @@ export default function LendingView({
                     <img src="/PUSD.png" alt="PUSD" className="w-5 h-5 rounded-full" />
                     <span className="font-bold text-xs">PUSD</span>
                   </div>
-                  <span className="text-xs font-black text-emerald-500">{isTestnet ? '5.8% APY' : '0%'}</span>
+                  <span className="text-xs font-semibold text-emerald-500">{isTestnet ? '5.8% APY' : '0%'}</span>
                 </div>
-                <span className="text-[10px] text-gray-400 block font-mono">
+                <span className="text-[10px] text-ink-3 block font-mono">
                   {t.suppliedLabel} <strong>{supply.suppliedPusd.toFixed(2)} PUSD</strong>
                 </span>
               </button>
@@ -1805,8 +1715,8 @@ export default function LendingView({
                 onClick={() => setSupplyToken('USDT')}
                 className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
                   supplyToken === 'USDT'
-                    ? 'bg-emerald-500/10 border-emerald-500 text-gray-900 dark:text-white shadow-xs'
-                    : 'bg-gray-50 dark:bg-[#161c28] border-gray-100 dark:border-gray-800 text-gray-500'
+                    ? 'bg-emerald-500/10 border-emerald-500 text-ink shadow-xs'
+                    : 'bg-surface-2 border-line text-gray-500'
                 }`}
               >
                 <div className="flex items-center justify-between mb-1">
@@ -1814,14 +1724,14 @@ export default function LendingView({
                     <img src="/USDT.png" alt="USDT" className="w-5 h-5 rounded-full" />
                     <span className="font-bold text-xs">USDT</span>
                   </div>
-                  <span className="text-xs font-black text-emerald-500">{isTestnet ? '6.4% APY' : '0%'}</span>
+                  <span className="text-xs font-semibold text-emerald-500">{isTestnet ? '6.4% APY' : '0%'}</span>
                 </div>
-                <span className="text-[10px] text-gray-400 block font-mono">
+                <span className="text-[10px] text-ink-3 block font-mono">
                   {t.suppliedLabel} <strong>{(supply.suppliedUsdt || 0).toFixed(2)} USDT</strong>
                 </span>
               </button>
 
-              <div className="p-3.5 rounded-2xl border border-gray-200/60 dark:border-gray-800 bg-gray-100/60 dark:bg-[#141824] opacity-60 cursor-not-allowed">
+              <div className="p-3.5 rounded-2xl border border-line bg-surface opacity-60 cursor-not-allowed">
                 <div className="flex items-center justify-between mb-1">
                   <div className="flex items-center gap-1.5">
                     <img src="/USDC.png" alt="USDC" className="w-5 h-5 rounded-full grayscale" />
@@ -1831,14 +1741,14 @@ export default function LendingView({
                     {t.sinLiquidezBadge}
                   </span>
                 </div>
-                <span className="text-[10px] text-gray-400 block font-mono">0.00 USDC</span>
+                <span className="text-[10px] text-ink-3 block font-mono">0.00 USDC</span>
               </div>
             </div>
 
             {supplyMode === 'deposit' ? (
               <>
-                <div className="p-4 rounded-2xl bg-gray-50 dark:bg-[#161c28] border border-gray-100 dark:border-gray-800">
-                  <span className="text-xs text-gray-400 block mb-2">{t.supplyAmountLabel}</span>
+                <div className="p-4 rounded-2xl bg-surface-2 border border-line">
+                  <span className="text-xs text-ink-3 block mb-2">{t.supplyAmountLabel}</span>
                   <div className="flex items-center gap-3">
                     <input
                       type="number"
@@ -1846,9 +1756,9 @@ export default function LendingView({
                       value={supplyAmount}
                       onChange={e => setSupplyAmount(e.target.value)}
                       placeholder="0.0"
-                      className="w-full bg-transparent text-2xl sm:text-3xl font-mono font-bold text-gray-900 dark:text-white outline-none"
+                      className="w-full bg-transparent text-2xl sm:text-3xl font-mono font-bold text-ink outline-none"
                     />
-                    <span className="font-bold text-sm text-gray-700 dark:text-gray-200 shrink-0">
+                    <span className="font-bold text-sm text-ink shrink-0">
                       {supplyToken}
                     </span>
                   </div>
@@ -1856,14 +1766,14 @@ export default function LendingView({
 
                 {supplyToken === 'PUSD' && isTestnet && (
                   <div className="p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/20 space-y-3">
-                    <p className="text-xs text-gray-600 dark:text-gray-300 font-medium">{t.pusdSendStep}</p>
+                    <p className="text-xs text-ink-2 font-medium">{t.pusdSendStep}</p>
                     {pusdVaultQr && (
                       <div className="w-28 h-28 mx-auto bg-white p-2 rounded-xl shadow-xs">
                         <img src={pusdVaultQr} alt="PUSD Vault QR" className="w-full h-full object-contain" />
                       </div>
                     )}
-                    <div className="flex items-center justify-between gap-2 bg-white dark:bg-[#0E131E] p-2 rounded-xl border border-gray-200 dark:border-gray-800">
-                      <span className="font-mono text-[11px] text-gray-800 dark:text-gray-200 truncate">
+                    <div className="flex items-center justify-between gap-2 bg-surface p-2 rounded-xl border border-line">
+                      <span className="font-mono text-[11px] text-ink truncate">
                         {pusdVaultAddress}
                       </span>
                       <button
@@ -1880,7 +1790,7 @@ export default function LendingView({
                       value={supplyPusdTxId}
                       onChange={e => setSupplyPusdTxId(e.target.value)}
                       placeholder={t.txidPlaceholder}
-                      className="w-full px-3 py-2.5 rounded-xl bg-white dark:bg-[#0E131E] border border-gray-200 dark:border-gray-800 text-xs font-mono text-gray-900 dark:text-white outline-none"
+                      className="w-full px-3 py-2.5 rounded-xl bg-surface border border-line text-xs font-mono text-ink outline-none"
                     />
                   </div>
                 )}
@@ -1905,8 +1815,8 @@ export default function LendingView({
               </>
             ) : (
               <>
-                <div className="p-4 rounded-2xl bg-gray-50 dark:bg-[#161c28] border border-gray-100 dark:border-gray-800">
-                  <div className="flex justify-between items-center text-xs text-gray-400 mb-2">
+                <div className="p-4 rounded-2xl bg-surface-2 border border-line">
+                  <div className="flex justify-between items-center text-xs text-ink-3 mb-2">
                     <span>{t.withdrawSupplyAmountLabel}</span>
                     <div className="flex items-center gap-2">
                       <span className="font-mono">
@@ -1932,9 +1842,9 @@ export default function LendingView({
                       value={withdrawSupplyAmount}
                       onChange={e => setWithdrawSupplyAmount(e.target.value)}
                       placeholder="0.0"
-                      className="w-full bg-transparent text-2xl sm:text-3xl font-mono font-bold text-gray-900 dark:text-white outline-none"
+                      className="w-full bg-transparent text-2xl sm:text-3xl font-mono font-bold text-ink outline-none"
                     />
-                    <span className="font-bold text-sm text-gray-700 dark:text-gray-200 shrink-0">
+                    <span className="font-bold text-sm text-ink shrink-0">
                       {supplyToken}
                     </span>
                   </div>
@@ -1970,27 +1880,27 @@ export default function LendingView({
           </div>
 
           <div className="lg:col-span-5 space-y-4">
-            <div className="p-5 rounded-3xl bg-white dark:bg-[#121622] border border-gray-200/90 dark:border-gray-800 shadow-2xs">
-              <h4 className="font-extrabold text-sm text-gray-900 dark:text-white mb-3">{t.myYieldTitle}</h4>
+            <div className="p-5 rounded-3xl bg-surface border border-line shadow-2xs">
+              <h4 className="font-semibold text-sm text-ink mb-3">{t.myYieldTitle}</h4>
 
               <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-center mb-4">
-                <span className="text-xs text-gray-400 block uppercase font-bold">{t.yieldEarnedLabel}</span>
-                <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400 font-mono mt-1 block">
+                <span className="text-xs text-ink-3 block uppercase font-bold">{t.yieldEarnedLabel}</span>
+                <span className="text-2xl font-semibold text-emerald-600 dark:text-emerald-400 font-mono mt-1 block">
                   +${((supply.yieldEarnedPusd || 0) + (supply.yieldEarnedUsdt || 0)).toFixed(6)} USD
                 </span>
                 <span className="text-[10px] text-emerald-500 font-medium">{t.yieldEarnedSub}</span>
               </div>
 
               <div className="space-y-2 text-xs font-mono">
-                <div className="flex justify-between items-center p-2.5 rounded-xl bg-gray-50 dark:bg-[#161c28]">
-                  <span className="text-gray-400">{t.pusdSuppliedLabel}</span>
-                  <span className="font-bold text-gray-900 dark:text-white">
+                <div className="flex justify-between items-center p-2.5 rounded-xl bg-surface-2">
+                  <span className="text-ink-3">{t.pusdSuppliedLabel}</span>
+                  <span className="font-bold text-ink">
                     {supply.suppliedPusd.toFixed(4)} PUSD
                   </span>
                 </div>
-                <div className="flex justify-between items-center p-2.5 rounded-xl bg-gray-50 dark:bg-[#161c28]">
-                  <span className="text-gray-400">{t.usdtSuppliedLabel}</span>
-                  <span className="font-bold text-gray-900 dark:text-white">
+                <div className="flex justify-between items-center p-2.5 rounded-xl bg-surface-2">
+                  <span className="text-ink-3">{t.usdtSuppliedLabel}</span>
+                  <span className="font-bold text-ink">
                     {(supply.suppliedUsdt || 0).toFixed(4)} USDT
                   </span>
                 </div>
@@ -2004,14 +1914,14 @@ export default function LendingView({
       {/* TAB 3: LIVE ON-CHAIN MARKETS & RISK PARAMETERS                      */}
       {/* =================================================================== */}
       {activeTab === 'markets' && (
-        <div className="rounded-3xl bg-white dark:bg-[#121622] border border-gray-200/90 dark:border-gray-800 p-5 sm:p-7 shadow-2xs">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-gray-100 dark:border-gray-800 mb-6">
+        <div className="rounded-3xl bg-surface border border-line p-5 sm:p-7 shadow-2xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-line mb-6">
             <div>
-              <h3 className="text-lg font-extrabold text-gray-900 dark:text-white">{t.marketsTitle}</h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{t.marketsDesc}</p>
+              <h3 className="text-lg font-semibold text-ink">{t.marketsTitle}</h3>
+              <p className="text-xs text-ink-2 mt-0.5">{t.marketsDesc}</p>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-xs font-mono text-gray-400">{t.oracleSource}</span>
+              <span className="text-xs font-mono text-ink-3">{t.oracleSource}</span>
               <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-primary/10 text-primary border border-primary/20">
                 Binance / CoinGecko Live (${bchPrice.toFixed(2)})
               </span>
@@ -2020,13 +1930,13 @@ export default function LendingView({
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* 1. BCH COLLATERAL MARKET */}
-            <div className="p-5 rounded-2xl bg-gray-50 dark:bg-[#161c28] border border-gray-100 dark:border-gray-800">
+            <div className="p-5 rounded-2xl bg-surface-2 border border-line">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <img src="/BCH.png" alt="BCH" className="w-8 h-8 rounded-full" />
                   <div>
-                    <h4 className="font-extrabold text-sm text-gray-900 dark:text-white">Bitcoin Cash</h4>
-                    <span className="text-[10px] text-gray-400">
+                    <h4 className="font-semibold text-sm text-ink">Bitcoin Cash</h4>
+                    <span className="text-[10px] text-ink-3">
                       {markets?.BCH_COLLATERAL?.network || 'BCH'}
                     </span>
                   </div>
@@ -2042,21 +1952,21 @@ export default function LendingView({
                 </span>
               </div>
               <div className="space-y-2 text-xs">
-                <div className="flex justify-between text-gray-400">
+                <div className="flex justify-between text-ink-3">
                   <span>{t.referencePrice}</span>
-                  <span className="font-mono font-bold text-gray-900 dark:text-white">
+                  <span className="font-mono font-bold text-ink">
                     ${bchPrice.toFixed(2)}
                   </span>
                 </div>
-                <div className="flex justify-between text-gray-400">
+                <div className="flex justify-between text-ink-3">
                   <span>{t.maxLtv}</span>
                   <span className="font-mono font-bold text-emerald-500">65%</span>
                 </div>
-                <div className="flex justify-between text-gray-400">
+                <div className="flex justify-between text-ink-3">
                   <span>{t.liquidationThreshold}</span>
                   <span className="font-mono font-bold text-rose-500">80%</span>
                 </div>
-                <div className="flex justify-between text-gray-400">
+                <div className="flex justify-between text-ink-3">
                   <span>{t.settlementNetwork}</span>
                   <span className="font-mono font-bold text-[11px]">CollateralVault.cash</span>
                 </div>
@@ -2064,13 +1974,13 @@ export default function LendingView({
             </div>
 
             {/* 2. PUSD BORROW & SUPPLY MARKET */}
-            <div className="p-5 rounded-2xl bg-gray-50 dark:bg-[#161c28] border border-gray-100 dark:border-gray-800">
+            <div className="p-5 rounded-2xl bg-surface-2 border border-line">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <img src="/PUSD.png" alt="PUSD" className="w-8 h-8 rounded-full" />
                   <div>
-                    <h4 className="font-extrabold text-sm text-gray-900 dark:text-white">ParyonUSD</h4>
-                    <span className="text-[10px] text-gray-400">
+                    <h4 className="font-semibold text-sm text-ink">ParyonUSD</h4>
+                    <span className="text-[10px] text-ink-3">
                       {markets?.PUSD_BORROW?.network || 'BCH CashTokens'}
                     </span>
                   </div>
@@ -2086,21 +1996,21 @@ export default function LendingView({
                 </span>
               </div>
               <div className="space-y-2 text-xs">
-                <div className="flex justify-between text-gray-400">
+                <div className="flex justify-between text-ink-3">
                   <span>{t.borrowRate}</span>
                   <span className="font-mono font-bold text-primary">3.5% APR</span>
                 </div>
-                <div className="flex justify-between text-gray-400">
+                <div className="flex justify-between text-ink-3">
                   <span>{t.supplyRate}</span>
                   <span className="font-mono font-bold text-emerald-500">5.8% APY</span>
                 </div>
-                <div className="flex justify-between text-gray-400">
+                <div className="flex justify-between text-ink-3">
                   <span>{t.availLiquidity}</span>
-                  <span className="font-mono font-bold text-gray-900 dark:text-white">
+                  <span className="font-mono font-bold text-ink">
                     {pusdAvailLiquidity.toLocaleString()} PUSD
                   </span>
                 </div>
-                <div className="flex justify-between text-gray-400">
+                <div className="flex justify-between text-ink-3">
                   <span>{t.settlementNetwork}</span>
                   <span className="font-mono font-bold text-[11px]">BinaryLiquidVault.cash</span>
                 </div>
@@ -2108,13 +2018,13 @@ export default function LendingView({
             </div>
 
             {/* 3. USDT BORROW & SUPPLY MARKET */}
-            <div className="p-5 rounded-2xl bg-gray-50 dark:bg-[#161c28] border border-gray-100 dark:border-gray-800">
+            <div className="p-5 rounded-2xl bg-surface-2 border border-line">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <img src="/USDT.png" alt="USDT" className="w-8 h-8 rounded-full" />
                   <div>
-                    <h4 className="font-extrabold text-sm text-gray-900 dark:text-white">Tether USD</h4>
-                    <span className="text-[10px] text-gray-400">
+                    <h4 className="font-semibold text-sm text-ink">Tether USD</h4>
+                    <span className="text-[10px] text-ink-3">
                       {markets?.USDT_BORROW?.network || 'Polygon'}
                     </span>
                   </div>
@@ -2130,21 +2040,21 @@ export default function LendingView({
                 </span>
               </div>
               <div className="space-y-2 text-xs">
-                <div className="flex justify-between text-gray-400">
+                <div className="flex justify-between text-ink-3">
                   <span>{t.borrowRate}</span>
                   <span className="font-mono font-bold text-emerald-500">4.0% APR</span>
                 </div>
-                <div className="flex justify-between text-gray-400">
+                <div className="flex justify-between text-ink-3">
                   <span>{t.supplyRate}</span>
                   <span className="font-mono font-bold text-emerald-500">6.4% APY</span>
                 </div>
-                <div className="flex justify-between text-gray-400">
+                <div className="flex justify-between text-ink-3">
                   <span>{t.availLiquidity}</span>
-                  <span className="font-mono font-bold text-gray-900 dark:text-white">
+                  <span className="font-mono font-bold text-ink">
                     {usdtAvailLiquidity.toLocaleString()} USDT
                   </span>
                 </div>
-                <div className="flex justify-between text-gray-400">
+                <div className="flex justify-between text-ink-3">
                   <span>{t.settlementNetwork}</span>
                   <span className="font-mono font-bold text-[11px]">BinaryLiquidVault.sol</span>
                 </div>
@@ -2152,13 +2062,13 @@ export default function LendingView({
             </div>
 
             {/* 4. USDC MARKET (MARKED SIN LIQUIDEZ) */}
-            <div className="p-5 rounded-2xl bg-gray-100/70 dark:bg-[#141824] border border-gray-200/70 dark:border-gray-800 opacity-75">
+            <div className="p-5 rounded-2xl bg-surface border border-line opacity-75">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <img src="/USDC.png" alt="USDC" className="w-8 h-8 rounded-full grayscale" />
                   <div>
-                    <h4 className="font-extrabold text-sm text-gray-600 dark:text-gray-300">USD Coin</h4>
-                    <span className="text-[10px] text-gray-400">Polygon</span>
+                    <h4 className="font-semibold text-sm text-ink-2">USD Coin</h4>
+                    <span className="text-[10px] text-ink-3">Polygon</span>
                   </div>
                 </div>
                 <span className="text-[10px] font-bold text-amber-500 bg-amber-500/15 px-2 py-0.5 rounded-full">
@@ -2166,19 +2076,19 @@ export default function LendingView({
                 </span>
               </div>
               <div className="space-y-2 text-xs">
-                <div className="flex justify-between text-gray-400">
+                <div className="flex justify-between text-ink-3">
                   <span>{t.borrowRate}</span>
                   <span className="font-mono font-bold">4.2% APR</span>
                 </div>
-                <div className="flex justify-between text-gray-400">
+                <div className="flex justify-between text-ink-3">
                   <span>{t.supplyRate}</span>
                   <span className="font-mono font-bold">6.0% APY</span>
                 </div>
-                <div className="flex justify-between text-gray-400">
+                <div className="flex justify-between text-ink-3">
                   <span>{t.availLiquidity}</span>
                   <span className="font-mono font-bold text-amber-500">0.00 USDC</span>
                 </div>
-                <div className="flex justify-between text-gray-400">
+                <div className="flex justify-between text-ink-3">
                   <span>Estado:</span>
                   <span className="font-mono font-bold text-amber-500">{t.sinLiquidezBadge}</span>
                 </div>
