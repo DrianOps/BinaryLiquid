@@ -5,6 +5,7 @@ import {
   ShieldCheck, 
   Zap, 
   Wallet, 
+  Check, 
   CheckCircle2, 
   Loader2 
 } from 'lucide-react';
@@ -125,7 +126,11 @@ function AnimatedSwapPreview({ onLaunchApp }: { onLaunchApp: () => void }) {
   return (
     <div 
       onClick={onLaunchApp}
-      className="ui-card p-4 space-y-2 relative group cursor-pointer hover:border-line-strong transition-all duration-300 min-h-[380px] flex flex-col justify-between overflow-hidden"
+      className={`bg-surface rounded-card p-4 space-y-2 relative group cursor-pointer transition-all duration-300 min-h-[380px] flex flex-col justify-between overflow-hidden ${
+        stage === 'success'
+          ? 'border-2 border-primary shadow-xl shadow-primary/20'
+          : 'border border-line hover:border-line-strong shadow-soft'
+      }`}
       title="Click to launch Bridge Swap"
     >
       {/* Top micro-header */}
@@ -233,11 +238,11 @@ function AnimatedSwapPreview({ onLaunchApp }: { onLaunchApp: () => void }) {
       <AnimatePresence>
         {stage === 'success' && (
           <motion.div
-            initial={{ opacity: 0, scale: 0.94 }}
+            initial={{ opacity: 0, scale: 0.96 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.96 }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="absolute inset-0 z-20 bg-surface/98 backdrop-blur-md rounded-2xl p-6 flex flex-col items-center justify-between text-center border-2 border-primary/50 shadow-2xl shadow-primary/15"
+            className="absolute inset-0 z-20 bg-surface rounded-[22px] p-6 flex flex-col items-center justify-between text-center"
           >
             {/* Top Status Pill in Bitcoin Orange */}
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 border border-primary/30 text-primary text-[11px] font-bold uppercase tracking-wider">
@@ -248,12 +253,12 @@ function AnimatedSwapPreview({ onLaunchApp }: { onLaunchApp: () => void }) {
             {/* Center: Big Animated Check & Amounts in Bitcoin Orange */}
             <div className="space-y-3 my-auto">
               <motion.div
-                initial={{ scale: 0, rotate: -25 }}
+                initial={{ scale: 0, rotate: -20 }}
                 animate={{ scale: 1, rotate: 0 }}
                 transition={{ type: 'spring', stiffness: 400, damping: 18, delay: 0.1 }}
                 className="w-16 h-16 rounded-full bg-primary/10 text-primary flex items-center justify-center mx-auto border-2 border-primary/40 shadow-lg shadow-primary/25"
               >
-                <CheckCircle2 className="w-9 h-9 text-primary" />
+                <Check className="w-8 h-8 text-primary stroke-[3]" />
               </motion.div>
 
               <div>

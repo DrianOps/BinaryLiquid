@@ -827,7 +827,11 @@ export default function BridgeSwap({
       )}
 
       {/* MAIN MINIMALIST SWAP CARD */}
-      <div className="bg-surface border border-line rounded-card p-3.5 sm:p-4 shadow-soft">
+      <div className={`bg-surface rounded-card p-3.5 sm:p-4 transition-all duration-300 ${
+        cardState === 'success'
+          ? 'border-2 border-primary shadow-xl shadow-primary/20'
+          : 'border border-line shadow-soft'
+      }`}>
         {/* CARD TOP BAR */}
         {cardState === 'form' && (
           <div className="flex items-center justify-between px-1 pb-3">
@@ -1350,7 +1354,7 @@ export default function BridgeSwap({
 
             {/* Big Animated Check Circle in Bitcoin Orange */}
             <div className="w-16 h-16 rounded-full bg-primary/10 text-primary flex items-center justify-center mx-auto border-2 border-primary/40 shadow-lg shadow-primary/25">
-              <CheckCircle2 className="w-9 h-9 text-primary" />
+              <Check className="w-8 h-8 text-primary stroke-[3]" />
             </div>
 
             {/* Received Amount & Source */}
