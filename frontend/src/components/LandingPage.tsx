@@ -6,8 +6,6 @@ import {
   Zap, 
   Wallet, 
   CheckCircle2, 
-  Lock, 
-  Sparkles, 
   Loader2 
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -46,7 +44,8 @@ const DEMO_PAIRS = [
     buyNetwork: 'Polygon PoS (EVM)',
     buyAmount: '99.70',
     rate: '1 PUSD = 1.00 USDT',
-    fee: '0.30% (0.30 PUSD)'
+    fee: '0.30% (0.30 PUSD)',
+    fakeTxId: '0x8f3c...e942'
   },
   {
     sellToken: 'BCH',
@@ -58,7 +57,8 @@ const DEMO_PAIRS = [
     buyNetwork: 'Polygon PoS (EVM)',
     buyAmount: '234.35',
     rate: '1 BCH = 470.10 USDT',
-    fee: '0.30% (0.70 USD)'
+    fee: '0.30% (0.70 USD)',
+    fakeTxId: '0x3d91...a78c'
   }
 ];
 
@@ -99,17 +99,17 @@ function AnimatedSwapPreview({ onLaunchApp }: { onLaunchApp: () => void }) {
             if (isCancelled) return;
             setStage('locking');
 
-            // 4. Instant Settlement Success
+            // 4. Instant Settlement Success (Full Receipt Overlay)
             timerId = setTimeout(() => {
               if (isCancelled) return;
               setStage('success');
 
-              // 5. Hold success, then advance to next pair and loop
+              // 5. Hold success receipt, then advance to next pair and loop
               timerId = setTimeout(() => {
                 if (isCancelled) return;
                 setPairIdx((prev) => (prev + 1) % DEMO_PAIRS.length);
-              }, 3800);
-            }, 2400);
+              }, 4500);
+            }, 2200);
           }, 600);
         }, 1200);
       }
@@ -125,7 +125,7 @@ function AnimatedSwapPreview({ onLaunchApp }: { onLaunchApp: () => void }) {
   return (
     <div 
       onClick={onLaunchApp}
-      className="ui-card p-4 space-y-2 relative group cursor-pointer hover:border-line-strong transition-all duration-300"
+      className="ui-card p-4 space-y-2 relative group cursor-pointer hover:border-line-strong transition-all duration-300 min-h-[380px] flex flex-col justify-between overflow-hidden"
       title="Click to launch Bridge Swap"
     >
       {/* Top micro-header */}
@@ -220,22 +220,6 @@ function AnimatedSwapPreview({ onLaunchApp }: { onLaunchApp: () => void }) {
             <span>Locking in CashScript Covenant (P2SH32)...</span>
           </motion.div>
         )}
-
-        {stage === 'success' && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="w-full py-3 px-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 flex flex-col items-center justify-center gap-1 text-center"
-          >
-            <div className="flex items-center gap-1.5 font-bold text-xs">
-              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-              <span>Swap Settled in ~2.8s</span>
-            </div>
-            <span className="text-[11px] text-ink-2 font-mono">
-              +{currentPair.buyAmount} {currentPair.buyToken} received in target wallet
-            </span>
-          </motion.div>
-        )}
       </div>
 
       {/* Non-custodial assurance banner */}
@@ -244,6 +228,65 @@ function AnimatedSwapPreview({ onLaunchApp }: { onLaunchApp: () => void }) {
           100% Non-custodial · Settled via smart contracts & CashScript covenants
         </span>
       </div>
+
+      {/* FULL RECEIPT OVERLAY ON SUCCESS */}
+      <AnimatePresence>
+        {stage === 'success' && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.94 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.96 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+            className="absolute inset-0 z-20 bg-surface/98 backdrop-blur-md rounded-2xl p-6 flex flex-col items-center justify-between text-center border-2 border-emerald-500/40 shadow-2xl"
+          >
+            {/* Top Status Pill */}
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-[11px] font-bold uppercase tracking-wider">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>Swap Confirmado On-Chain</span>
+            </div>
+
+            {/* Center: Big Animated Check & Amounts */}
+            <div className="space-y-3 my-auto">
+              <motion.div
+                initial={{ scale: 0, rotate: -25 }}
+                animate={{ scale: 1, rotate: 0 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 18, delay: 0.1 }}
+                className="w-16 h-16 rounded-full bg-emerald-500/10 text-emerald-500 flex items-center justify-center mx-auto border-2 border-emerald-500/30 shadow-lg shadow-emerald-500/20"
+              >
+                <CheckCircle2 className="w-9 h-9 text-emerald-500" />
+              </motion.div>
+
+              <div>
+                <div className="text-2xl sm:text-3xl font-extrabold text-ink tabular-nums tracking-tight">
+                  +{currentPair.buyAmount} {currentPair.buyToken}
+                </div>
+                <div className="text-xs text-ink-3 mt-1">
+                  Recibido desde {currentPair.sellAmount} {currentPair.sellToken}
+                </div>
+              </div>
+
+              {/* Fake TXID pill */}
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-2 border border-line text-xs font-mono text-ink-2 select-all">
+                <span className="text-[10px] uppercase font-bold text-ink-3 font-sans">TxID:</span>
+                <span>{currentPair.fakeTxId}</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              </div>
+            </div>
+
+            {/* Bottom info & specs */}
+            <div className="w-full space-y-1.5 pt-3 border-t border-line text-[11px]">
+              <div className="flex items-center justify-between text-ink-3">
+                <span>Tiempo de liquidación:</span>
+                <span className="font-bold text-emerald-500 font-mono">~2.8 segundos</span>
+              </div>
+              <div className="flex items-center justify-between text-ink-3">
+                <span>Seguridad:</span>
+                <span className="font-semibold text-ink-2">Covenant CashScript P2SH32</span>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
