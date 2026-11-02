@@ -14,7 +14,8 @@ import {
   Sparkles,
   BookOpen,
   Code2,
-  Coins
+  Coins,
+  FileText
 } from 'lucide-react';
 
 interface DocsViewProps {
@@ -22,6 +23,7 @@ interface DocsViewProps {
   platformNetwork: 'mainnet' | 'testnet';
   setPlatformNetwork: (net: 'mainnet' | 'testnet') => void;
   onLaunchApp: () => void;
+  onOpenWhitepaper?: () => void;
   showToast: (msg: string, type?: 'success' | 'error') => void;
   networks: Record<string, any>;
 }
@@ -31,6 +33,7 @@ export default function DocsView({
   platformNetwork,
   setPlatformNetwork,
   onLaunchApp,
+  onOpenWhitepaper,
   showToast,
   networks
 }: DocsViewProps) {
@@ -88,6 +91,17 @@ export default function DocsView({
             <span className={`w-2 h-2 rounded-full ${platformNetwork === 'mainnet' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'}`} />
             <span className="capitalize">{platformNetwork}</span>
           </button>
+
+          {onOpenWhitepaper && (
+            <button
+              type="button"
+              onClick={onOpenWhitepaper}
+              className="ui-btn-secondary ui-btn-sm flex items-center gap-1.5"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>Whitepaper</span>
+            </button>
+          )}
 
           <button 
             onClick={onLaunchApp}

@@ -14,6 +14,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 interface LandingPageProps {
   onLaunchApp: () => void;
   onOpenDocs: () => void;
+  onOpenWhitepaper?: () => void;
 }
 
 const FEATURES = [
@@ -296,7 +297,7 @@ function AnimatedSwapPreview({ onLaunchApp }: { onLaunchApp: () => void }) {
   );
 }
 
-export default function LandingPage({ onLaunchApp, onOpenDocs }: LandingPageProps) {
+export default function LandingPage({ onLaunchApp, onOpenDocs, onOpenWhitepaper }: LandingPageProps) {
   return (
     <div className="w-full flex flex-col flex-1 text-ink pb-28 md:pb-12 overflow-x-hidden">
       {/* HERO */}
@@ -347,7 +348,16 @@ export default function LandingPage({ onLaunchApp, onOpenDocs }: LandingPageProp
       {/* FOOTER */}
       <footer className="w-full max-w-5xl mx-auto px-4 sm:px-6 py-8 ui-divider flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-ink-3">
         <span>© 2026 BinaryLiquid</span>
-        <div className="flex gap-5">
+        <div className="flex flex-wrap items-center gap-5">
+          {onOpenWhitepaper && (
+            <button
+              type="button"
+              onClick={onOpenWhitepaper}
+              className="hover:text-ink font-semibold text-primary transition-colors cursor-pointer"
+            >
+              Whitepaper v1.0
+            </button>
+          )}
           <a href="https://bchblaze.cash" target="_blank" rel="noreferrer" className="hover:text-ink transition-colors">
             BCH BLAZE
           </a>

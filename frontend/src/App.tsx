@@ -23,6 +23,8 @@ import {
   ExternalLink, 
   ShieldCheck,
   ChevronRight,
+  ChevronDown,
+  BookOpen,
   Droplets,
   Coins,
   Layers,
@@ -39,6 +41,7 @@ import PoolsView from './components/PoolsView';
 import SdkView from './components/SdkView';
 import LendingView from './components/LendingView';
 import DocsView from './components/DocsView';
+import WhitepaperView from './components/WhitepaperView';
 import { useWizardConnect, AlphanumericQRCode } from '@wizardconnect/react';
 import {
   deriveCashAddressFromXpub,
@@ -114,11 +117,11 @@ const PLATFORM_NETWORKS = {
 };
 
 export default function App() {
-  const [mainView, setMainView] = useState<'bridge' | 'gateway' | 'pools' | 'docs' | 'sdk' | 'lend'>(() => {
-    // Deep links: bsprotocol.xyz/#bridge, #pools, #lend, #docs, #sdk
+  const [mainView, setMainView] = useState<'bridge' | 'gateway' | 'pools' | 'docs' | 'sdk' | 'lend' | 'whitepaper'>(() => {
+    // Deep links: bsprotocol.xyz/#bridge, #pools, #lend, #docs, #sdk, #whitepaper
     const hash = typeof window !== 'undefined' ? window.location.hash.replace('#', '') : '';
-    return (['bridge', 'pools', 'lend', 'docs', 'sdk'] as const).includes(hash as any)
-      ? (hash as 'bridge' | 'pools' | 'lend' | 'docs' | 'sdk')
+    return (['bridge', 'pools', 'lend', 'docs', 'sdk', 'whitepaper'] as const).includes(hash as any)
+      ? (hash as 'bridge' | 'pools' | 'lend' | 'docs' | 'sdk' | 'whitepaper')
       : 'gateway';
   });
   const [darkMode, setDarkMode] = useState<boolean>(() => {
@@ -131,11 +134,43 @@ export default function App() {
     window.location.search.includes('embed=true')
   );
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [brandMenuOpen, setBrandMenuOpen] = useState(false);
+  const brandMenuRef = useRef<HTMLDivElement | null>(null);
+  const brandHoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [toast, setToast] = useState<{message: string, type: 'success'|'error'} | null>(null);
   const [lang, setLang] = useState<'en' | 'es'>('en');
   const [isScrolled, setIsScrolled] = useState<boolean>(false);
   const [copied, setCopied] = useState<boolean>(false);
   const [platformNetwork, setPlatformNetwork] = useState<'mainnet' | 'testnet'>('testnet');
+
+  // Sync URL hash for shareable links (#whitepaper, #sdk, #docs, #bridge, #pools, #lend)
+  useEffect(() => {
+    if (typeof window === 'undefined' || isEmbed) return;
+    const nextHash = mainView === 'gateway' ? '' : `#${mainView}`;
+    if (window.location.hash !== nextHash) {
+      window.history.replaceState(null, '', nextHash || window.location.pathname + window.location.search);
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [mainView, isEmbed]);
+
+  // Close brand dropdown on outside click or Escape key
+  useEffect(() => {
+    if (!brandMenuOpen) return;
+    const handleOutside = (e: MouseEvent) => {
+      if (brandMenuRef.current && !brandMenuRef.current.contains(e.target as Node)) {
+        setBrandMenuOpen(false);
+      }
+    };
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setBrandMenuOpen(false);
+    };
+    document.addEventListener('mousedown', handleOutside);
+    document.addEventListener('keydown', handleEsc);
+    return () => {
+      document.removeEventListener('mousedown', handleOutside);
+      document.removeEventListener('keydown', handleEsc);
+    };
+  }, [brandMenuOpen]);
 
   // Dynamic navbar scroll listener
   useEffect(() => {
@@ -650,27 +685,165 @@ export default function App() {
     <div className="min-h-screen w-full bg-warm-mesh dark:bg-[#080B11] flex flex-col font-sans transition-colors duration-200 text-gray-900 dark:text-gray-100 selection:bg-orange-500 selection:text-white">
       
       {/* NAVBAR WITH SCROLL-REACTIVE BORDER & ELEVATION */}
-      <nav className={`h-16 sticky top-0 z-40 transition-all duration-300 flex items-center justify-between px-3 sm:px-8 ${
+      <nav className={`h-16 sticky top-0 z-40 print:hidden transition-all duration-300 flex items-center justify-between px-3 sm:px-8 ${
         isScrolled
           ? 'bg-canvas/90 backdrop-blur-md border-b border-line shadow-xs'
           : 'bg-transparent border-b border-transparent shadow-none'
       }`}>
         <div className="flex items-center gap-3 sm:gap-8">
           
-          {/* LOGO */}
-          <div 
-            className="flex items-center gap-2 sm:gap-2.5 cursor-pointer group py-1"
-            onClick={() => setMainView('gateway')}
+          {/* BRAND DROPDOWN (BinaryLiquid ▾ -> Gateway, Whitepaper, SDK & API, Docs) */}
+          <div
+            ref={brandMenuRef}
+            className="relative"
+            onMouseEnter={() => {
+              if (typeof window !== 'undefined' && window.innerWidth >= 768) {
+                if (brandHoverTimerRef.current) clearTimeout(brandHoverTimerRef.current);
+                setBrandMenuOpen(true);
+              }
+            }}
+            onMouseLeave={() => {
+              if (typeof window !== 'undefined' && window.innerWidth >= 768) {
+                brandHoverTimerRef.current = setTimeout(() => setBrandMenuOpen(false), 150);
+              }
+            }}
           >
-            <div className="w-8 h-8 rounded-xl overflow-hidden flex items-center justify-center shadow-xs group-hover:scale-105 transition-transform">
-              <img src="/logo.png" alt="BinaryLiquid" className="w-full h-full object-contain" />
-            </div>
-            <span className="text-lg sm:text-xl font-bold tracking-tight text-ink flex items-center">
-              Binary<span className="text-primary font-extrabold">Liquid</span>
-            </span>
+            <button
+              type="button"
+              onClick={() => setBrandMenuOpen((prev) => !prev)}
+              aria-expanded={brandMenuOpen}
+              className="flex items-center gap-2 sm:gap-2.5 cursor-pointer group py-1.5 px-1.5 -ml-1.5 rounded-xl hover:bg-surface-2/70 transition-colors"
+              title={lang === 'es' ? 'Menú de BinaryLiquid (Whitepaper, SDK & Inicio)' : 'BinaryLiquid Menu (Whitepaper, SDK & Home)'}
+            >
+              <div className="w-8 h-8 rounded-xl overflow-hidden flex items-center justify-center shadow-xs group-hover:scale-105 transition-transform shrink-0">
+                <img src="/logo.png" alt="BinaryLiquid" className="w-full h-full object-contain" />
+              </div>
+              <span className="text-lg sm:text-xl font-bold tracking-tight text-ink flex items-center">
+                Binary<span className="text-primary font-extrabold">Liquid</span>
+              </span>
+              <ChevronDown
+                className={`w-4 h-4 text-ink-3 group-hover:text-ink transition-transform duration-200 ${
+                  brandMenuOpen ? 'rotate-180 text-ink' : ''
+                }`}
+              />
+              {(mainView === 'whitepaper' || mainView === 'sdk') && (
+                <span className="hidden lg:inline-flex items-center px-2 py-0.5 rounded-full bg-surface-2 border border-line text-[11px] font-semibold text-ink-2">
+                  {mainView === 'whitepaper' ? 'Whitepaper' : 'SDK & API'}
+                </span>
+              )}
+            </button>
+
+            <AnimatePresence>
+              {brandMenuOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: 6, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 4, scale: 0.98 }}
+                  transition={{ duration: 0.14, ease: 'easeOut' }}
+                  className="absolute left-0 top-full mt-1.5 w-64 bg-surface border border-line rounded-panel shadow-soft p-1.5 z-50"
+                >
+                  {[
+                    {
+                      id: 'gateway',
+                      title: 'Gateway',
+                      desc: lang === 'es' ? 'Inicio y vista general' : 'Protocol home & overview',
+                      icon: Sparkles
+                    },
+                    {
+                      id: 'whitepaper',
+                      title: 'Whitepaper',
+                      desc: lang === 'es' ? 'Arquitectura & Covenants P2SH32' : 'Architecture & P2SH32 Covenants',
+                      badge: 'v1.0',
+                      icon: BookOpen
+                    },
+                    {
+                      id: 'sdk',
+                      title: 'SDK & API',
+                      desc: lang === 'es' ? 'Widget iFrame & endpoints DEX' : 'iFrame widget & DEX endpoints',
+                      icon: Code2
+                    },
+                    {
+                      id: 'docs',
+                      title: lang === 'es' ? 'Documentación' : 'Documentation',
+                      desc: lang === 'es' ? 'Guía de uso y contratos' : 'User guide & contracts',
+                      icon: FileText
+                    }
+                  ].map((item) => {
+                    const Icon = item.icon;
+                    const active = mainView === item.id;
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => {
+                          setMainView(item.id as any);
+                          setBrandMenuOpen(false);
+                        }}
+                        className={`w-full flex items-start gap-2.5 p-2.5 rounded-control text-left transition-colors cursor-pointer ${
+                          active ? 'bg-surface-2 text-ink' : 'hover:bg-surface-2/80 text-ink-2 hover:text-ink'
+                        }`}
+                      >
+                        <div
+                          className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 border ${
+                            active
+                              ? 'bg-primary/10 border-primary/30 text-primary'
+                              : 'bg-surface-2 border-line text-ink-3'
+                          }`}
+                        >
+                          <Icon className="w-3.5 h-3.5" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-1.5">
+                            <span className="text-xs font-semibold text-ink">{item.title}</span>
+                            {item.badge && (
+                              <span className="px-1.5 py-0.2 rounded-full bg-primary/10 text-primary text-[10px] font-semibold">
+                                {item.badge}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-ink-3 leading-snug mt-0.5 truncate">{item.desc}</p>
+                        </div>
+                      </button>
+                    );
+                  })}
+
+                  <div className="my-1 border-t border-line" />
+
+                  <div className="px-2.5 py-1.5 flex items-center justify-between text-[11px] text-ink-3">
+                    <a
+                      href="https://bchblaze.cash"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="hover:text-ink inline-flex items-center gap-1 transition-colors"
+                    >
+                      <span>BCH BLAZE</span>
+                      <ExternalLink className="w-2.5 h-2.5" />
+                    </a>
+                    <a
+                      href="https://paryonusd.com"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="hover:text-ink inline-flex items-center gap-1 transition-colors"
+                    >
+                      <span>ParyonUSD</span>
+                      <ExternalLink className="w-2.5 h-2.5" />
+                    </a>
+                    <a
+                      href={PLATFORM_NETWORKS[platformNetwork].explorerBch}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="hover:text-ink inline-flex items-center gap-1 transition-colors"
+                    >
+                      <span>Explorer</span>
+                      <ExternalLink className="w-2.5 h-2.5" />
+                    </a>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
           
-          {/* CENTER TABS (Desktop / Tablet) */}
+          {/* CENTER TABS (Desktop / Tablet — Core DeFi & Docs) */}
           <div className="hidden md:flex items-center p-1 bg-surface-2 rounded-full border border-line text-xs font-semibold">
             <button 
               onClick={() => setMainView('bridge')} 
@@ -714,17 +887,6 @@ export default function App() {
               }`}
             >
               <span>{t.navDocs}</span>
-            </button>
-
-            <button 
-              onClick={() => setMainView('sdk')} 
-              className={`px-3.5 py-1.5 rounded-full transition-all cursor-pointer ${
-                mainView === 'sdk' 
-                  ? 'bg-surface text-ink shadow-xs font-bold' 
-                  : 'text-ink-3 hover:text-ink font-medium'
-              }`}
-            >
-              <span>SDK & API</span>
             </button>
           </div>
         </div>
@@ -881,6 +1043,7 @@ export default function App() {
                     { id: 'pools', label: 'Pools', icon: Droplets },
                     { id: 'lend', label: 'Lend', icon: Lock },
                     { id: 'gateway', label: 'Gateway', icon: Sparkles },
+                    { id: 'whitepaper', label: 'Whitepaper', icon: BookOpen },
                     { id: 'docs', label: 'Docs', icon: FileText },
                     { id: 'sdk', label: 'SDK & API', icon: Code2 },
                   ].map(item => {
@@ -940,7 +1103,7 @@ export default function App() {
       </AnimatePresence>
 
       {/* MOBILE BOTTOM FLOATING DOCK (md:hidden: lightning 1-thumb navigation) */}
-      <div className="fixed bottom-3 left-3 right-3 z-40 md:hidden pointer-events-none">
+      <div className="fixed bottom-3 left-3 right-3 z-40 md:hidden print:hidden pointer-events-none">
         <div className="pointer-events-auto bg-surface/90 backdrop-blur-md border border-line shadow-lg rounded-2xl px-2 py-1.5 flex items-center justify-around">
           
           {/* Tab 1: Swap */}
@@ -1100,6 +1263,7 @@ export default function App() {
             platformNetwork={platformNetwork}
             setPlatformNetwork={setPlatformNetwork}
             onLaunchApp={() => setMainView('bridge')}
+            onOpenWhitepaper={() => setMainView('whitepaper')}
             showToast={showToast}
             networks={PLATFORM_NETWORKS}
           />
@@ -1111,6 +1275,7 @@ export default function App() {
         <LandingPage 
           onLaunchApp={() => setMainView('bridge')}
           onOpenDocs={() => setMainView('docs')}
+          onOpenWhitepaper={() => setMainView('whitepaper')}
         />
       )}
 
@@ -1176,6 +1341,20 @@ export default function App() {
       {mainView === 'sdk' && (
         <main className="flex-1 flex flex-col items-center justify-start p-4 sm:p-6 w-full max-w-7xl mx-auto pb-28 md:pb-12">
           <SdkView lang={lang} />
+        </main>
+      )}
+
+      {/* WHITEPAPER VIEW (Formal Cross-Chain Architecture & Covenants) */}
+      {mainView === 'whitepaper' && (
+        <main className="flex-1 p-4 sm:p-6 max-w-[1240px] w-full mx-auto animate-in fade-in zoom-in duration-300 pb-28 md:pb-12 text-left">
+          <WhitepaperView
+            lang={lang}
+            onChangeLang={(l) => setLang(l)}
+            onOpenSdk={() => setMainView('sdk')}
+            onOpenSwap={() => setMainView('bridge')}
+            onOpenPools={() => setMainView('pools')}
+            showToast={showToast}
+          />
         </main>
       )}
 
