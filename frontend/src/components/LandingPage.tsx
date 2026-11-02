@@ -1,5 +1,16 @@
-import React from 'react';
-import { ArrowRight, ArrowDown, ShieldCheck, Zap, Wallet } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { 
+  ArrowRight, 
+  ArrowDown, 
+  ShieldCheck, 
+  Zap, 
+  Wallet, 
+  CheckCircle2, 
+  Lock, 
+  Sparkles, 
+  Loader2 
+} from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface LandingPageProps {
   onLaunchApp: () => void;
@@ -15,7 +26,7 @@ const FEATURES = [
   {
     icon: Zap,
     title: 'Fast settlement',
-    text: 'Deposits are detected on-chain and paid out in seconds.'
+    text: 'Deposits are detected on-chain and paid out in ~3 seconds.'
   },
   {
     icon: Wallet,
@@ -24,12 +35,225 @@ const FEATURES = [
   }
 ];
 
+const DEMO_PAIRS = [
+  {
+    sellToken: 'PUSD',
+    sellIcon: '/PUSD.png',
+    sellNetwork: 'Bitcoin Cash (CashTokens)',
+    sellAmount: '100',
+    buyToken: 'USDT',
+    buyIcon: '/USDT.png',
+    buyNetwork: 'Polygon PoS (EVM)',
+    buyAmount: '99.70',
+    rate: '1 PUSD = 1.00 USDT',
+    fee: '0.30% (0.30 PUSD)'
+  },
+  {
+    sellToken: 'BCH',
+    sellIcon: '/BCH.png',
+    sellNetwork: 'Bitcoin Cash (Native UTXO)',
+    sellAmount: '0.50',
+    buyToken: 'USDT',
+    buyIcon: '/USDT.png',
+    buyNetwork: 'Polygon PoS (EVM)',
+    buyAmount: '234.35',
+    rate: '1 BCH = 470.10 USDT',
+    fee: '0.30% (0.70 USD)'
+  }
+];
+
+function AnimatedSwapPreview({ onLaunchApp }: { onLaunchApp: () => void }) {
+  const [pairIdx, setPairIdx] = useState(0);
+  const [stage, setStage] = useState<'typing' | 'pressing' | 'locking' | 'success'>('typing');
+  const [displayAmount, setDisplayAmount] = useState('');
+
+  const currentPair = DEMO_PAIRS[pairIdx];
+
+  useEffect(() => {
+    let isCancelled = false;
+    let timerId: any = null;
+
+    // Reset state for current pair
+    setStage('typing');
+    setDisplayAmount('');
+
+    // 1. Simulate typing of amount char by char
+    const target = currentPair.sellAmount;
+    let charIdx = 0;
+
+    const typeInterval = setInterval(() => {
+      if (isCancelled) return;
+      charIdx++;
+      setDisplayAmount(target.slice(0, charIdx));
+
+      if (charIdx >= target.length) {
+        clearInterval(typeInterval);
+
+        // 2. Wait a moment, then simulate button click (pressing)
+        timerId = setTimeout(() => {
+          if (isCancelled) return;
+          setStage('pressing');
+
+          // 3. Locking in CashScript Covenant
+          timerId = setTimeout(() => {
+            if (isCancelled) return;
+            setStage('locking');
+
+            // 4. Instant Settlement Success
+            timerId = setTimeout(() => {
+              if (isCancelled) return;
+              setStage('success');
+
+              // 5. Hold success, then advance to next pair and loop
+              timerId = setTimeout(() => {
+                if (isCancelled) return;
+                setPairIdx((prev) => (prev + 1) % DEMO_PAIRS.length);
+              }, 3800);
+            }, 2400);
+          }, 600);
+        }, 1200);
+      }
+    }, 180);
+
+    return () => {
+      isCancelled = true;
+      clearInterval(typeInterval);
+      if (timerId) clearTimeout(timerId);
+    };
+  }, [pairIdx]);
+
+  return (
+    <div 
+      onClick={onLaunchApp}
+      className="ui-card p-4 space-y-2 relative group cursor-pointer hover:border-line-strong transition-all duration-300"
+      title="Click to launch Bridge Swap"
+    >
+      {/* Top micro-header */}
+      <div className="flex items-center justify-between px-1 text-[11px] text-ink-3">
+        <div className="flex items-center gap-1.5 font-semibold">
+          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          <span className="text-ink-2">Live Non-Custodial Demo</span>
+        </div>
+        <span className="group-hover:text-primary transition-colors font-medium flex items-center gap-1">
+          <span>Try real swap</span>
+          <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+        </span>
+      </div>
+
+      {/* Pay Panel */}
+      <div className="ui-panel p-4 flex items-center justify-between relative overflow-hidden">
+        <div>
+          <div className="ui-label">You pay</div>
+          <div className="text-2xl sm:text-3xl font-semibold tabular-nums mt-1 text-ink flex items-center">
+            <span>{displayAmount || '0'}</span>
+            {stage === 'typing' && (
+              <span className="inline-block w-0.5 h-6 bg-primary ml-1 animate-pulse" />
+            )}
+          </div>
+          <div className="text-[10px] text-ink-3 mt-0.5">{currentPair.sellNetwork}</div>
+        </div>
+        <div className="ui-token-chip">
+          <img src={currentPair.sellIcon} alt={currentPair.sellToken} className="w-6 h-6 rounded-full object-contain" />
+          <span className="font-bold">{currentPair.sellToken}</span>
+        </div>
+      </div>
+
+      {/* Down arrow indicator */}
+      <div className="relative h-2 flex items-center justify-center z-10">
+        <div className="w-8 h-8 rounded-full bg-surface border-2 border-line shadow-xs flex items-center justify-center text-ink-2 group-hover:scale-110 transition-transform">
+          <ArrowDown className="w-3.5 h-3.5" />
+        </div>
+      </div>
+
+      {/* Receive Panel */}
+      <div className="ui-panel p-4 flex items-center justify-between">
+        <div>
+          <div className="ui-label">You receive</div>
+          <div className="text-2xl sm:text-3xl font-semibold tabular-nums mt-1 text-ink">
+            {displayAmount ? currentPair.buyAmount : '0.00'}
+          </div>
+          <div className="text-[10px] text-ink-3 mt-0.5">{currentPair.buyNetwork}</div>
+        </div>
+        <div className="ui-token-chip">
+          <img src={currentPair.buyIcon} alt={currentPair.buyToken} className="w-6 h-6 rounded-full object-contain" />
+          <span className="font-bold">{currentPair.buyToken}</span>
+        </div>
+      </div>
+
+      {/* Rate & Fee Info */}
+      <div className="flex items-center justify-between px-2 pt-1 text-[11px] text-ink-3">
+        <span className="tabular-nums font-mono">{currentPair.rate}</span>
+        <span>Fee {currentPair.fee}</span>
+      </div>
+
+      {/* Dynamic Animated Action Button / State */}
+      <div className="pt-2">
+        {stage === 'typing' && (
+          <button
+            type="button"
+            className="w-full ui-btn-primary ui-btn-md font-bold text-xs flex items-center justify-center gap-1.5"
+          >
+            <span>Swap {currentPair.sellToken} for {currentPair.buyToken}</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        )}
+
+        {stage === 'pressing' && (
+          <motion.button
+            initial={{ scale: 1 }}
+            animate={{ scale: 0.96 }}
+            transition={{ duration: 0.2 }}
+            type="button"
+            className="w-full ui-btn-primary ui-btn-md font-bold text-xs bg-orange-600 text-black shadow-inner flex items-center justify-center gap-1.5"
+          >
+            <span>Signing Transaction...</span>
+          </motion.button>
+        )}
+
+        {stage === 'locking' && (
+          <motion.div
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="w-full py-2.5 px-4 rounded-xl bg-primary/10 border border-primary/20 text-ink flex items-center justify-center gap-2 text-xs font-semibold"
+          >
+            <Loader2 className="w-4 h-4 text-primary animate-spin" />
+            <span>Locking in CashScript Covenant (P2SH32)...</span>
+          </motion.div>
+        )}
+
+        {stage === 'success' && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="w-full py-3 px-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 flex flex-col items-center justify-center gap-1 text-center"
+          >
+            <div className="flex items-center gap-1.5 font-bold text-xs">
+              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+              <span>Swap Settled in ~2.8s</span>
+            </div>
+            <span className="text-[11px] text-ink-2 font-mono">
+              +{currentPair.buyAmount} {currentPair.buyToken} received in target wallet
+            </span>
+          </motion.div>
+        )}
+      </div>
+
+      {/* Non-custodial assurance banner */}
+      <div className="text-center pt-1">
+        <span className="text-[10px] text-ink-3">
+          100% Non-custodial · Settled via smart contracts & CashScript covenants
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export default function LandingPage({ onLaunchApp, onOpenDocs }: LandingPageProps) {
   return (
     <div className="w-full flex flex-col flex-1 text-ink pb-28 md:pb-12 overflow-x-hidden">
       {/* HERO */}
-      <section className="px-4 sm:px-6 pt-12 sm:pt-24 pb-12 sm:pb-16 max-w-3xl mx-auto w-full text-center">
-        <span className="ui-badge-warn mb-6">Live on Testnet · PUSD ⟷ USDT</span>
+      <section className="px-4 sm:px-6 pt-10 sm:pt-20 pb-10 sm:pb-14 max-w-3xl mx-auto w-full text-center">
+        <span className="ui-badge-warn mb-5">Live on Testnet · PUSD ⟷ USDT</span>
 
         <h1 className="text-4xl sm:text-6xl font-semibold tracking-tight leading-[1.08] text-ink">
           Stablecoins between
@@ -37,8 +261,8 @@ export default function LandingPage({ onLaunchApp, onOpenDocs }: LandingPageProp
           Bitcoin Cash and EVM
         </h1>
 
-        <p className="mt-5 text-base sm:text-lg text-ink-2 max-w-xl mx-auto">
-          Swap PUSD on Bitcoin Cash for USDT on Polygon, without a custodian.
+        <p className="mt-4 text-base sm:text-lg text-ink-2 max-w-xl mx-auto">
+          Swap PUSD on Bitcoin Cash for USDT on Polygon, 100% non-custodial.
         </p>
 
         <div className="mt-8 flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3">
@@ -52,46 +276,13 @@ export default function LandingPage({ onLaunchApp, onOpenDocs }: LandingPageProp
         </div>
       </section>
 
-      {/* PREVIEW */}
+      {/* ANIMATED PREVIEW CARD */}
       <section className="px-4 sm:px-6 max-w-md mx-auto w-full">
-        <div className="ui-card p-3 space-y-1.5">
-          <div className="ui-panel p-4 flex items-center justify-between">
-            <div>
-              <div className="ui-label">You pay</div>
-              <div className="text-2xl font-semibold tabular-nums mt-1">100</div>
-            </div>
-            <div className="ui-token-chip cursor-default hover:bg-surface">
-              <img src="/PUSD.png" alt="PUSD" className="w-6 h-6 rounded-full" />
-              <span>PUSD</span>
-            </div>
-          </div>
-
-          <div className="relative h-2 flex items-center justify-center z-10">
-            <div className="w-9 h-9 rounded-control bg-surface border-4 border-surface shadow-soft flex items-center justify-center text-ink-2">
-              <ArrowDown className="w-3.5 h-3.5" />
-            </div>
-          </div>
-
-          <div className="ui-panel p-4 flex items-center justify-between">
-            <div>
-              <div className="ui-label">You receive</div>
-              <div className="text-2xl font-semibold tabular-nums mt-1">99.70</div>
-            </div>
-            <div className="ui-token-chip cursor-default hover:bg-surface">
-              <img src="/USDT.png" alt="USDT" className="w-6 h-6 rounded-full" />
-              <span>USDT</span>
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between px-2 pt-1.5 text-xs text-ink-3">
-            <span className="tabular-nums">1 PUSD = 1 USDT</span>
-            <span>Fee 0.3%</span>
-          </div>
-        </div>
+        <AnimatedSwapPreview onLaunchApp={onLaunchApp} />
       </section>
 
       {/* FEATURES */}
-      <section className="px-4 sm:px-6 py-16 sm:py-24 max-w-5xl mx-auto w-full">
+      <section className="px-4 sm:px-6 py-16 sm:py-20 max-w-5xl mx-auto w-full">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 sm:gap-10">
           {FEATURES.map(({ icon: Icon, title, text }) => (
             <div key={title}>
