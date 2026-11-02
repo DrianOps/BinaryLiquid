@@ -42,6 +42,7 @@ import SdkView from './components/SdkView';
 import LendingView from './components/LendingView';
 import DocsView from './components/DocsView';
 import WhitepaperView from './components/WhitepaperView';
+import PerpsView from './components/PerpsView';
 import { useWizardConnect, AlphanumericQRCode } from '@wizardconnect/react';
 import {
   deriveCashAddressFromXpub,
@@ -69,6 +70,7 @@ import {
 const translations = {
   en: {
     navSwap: "Bridge Swap",
+    navPerps: "Perps",
     navGateway: "Gateway",
     navPools: "Pools",
     navLend: "Lend",
@@ -80,6 +82,7 @@ const translations = {
   },
   es: {
     navSwap: "Bridge Swap",
+    navPerps: "Perps",
     navGateway: "Gateway",
     navPools: "Pools",
     navLend: "Lend",
@@ -117,11 +120,11 @@ const PLATFORM_NETWORKS = {
 };
 
 export default function App() {
-  const [mainView, setMainView] = useState<'bridge' | 'gateway' | 'pools' | 'docs' | 'sdk' | 'lend' | 'whitepaper'>(() => {
-    // Deep links: bsprotocol.xyz/#bridge, #pools, #lend, #docs, #sdk, #whitepaper
-    const hash = typeof window !== 'undefined' ? window.location.hash.replace('#', '') : '';
-    return (['bridge', 'pools', 'lend', 'docs', 'sdk', 'whitepaper'] as const).includes(hash as any)
-      ? (hash as 'bridge' | 'pools' | 'lend' | 'docs' | 'sdk' | 'whitepaper')
+  const [mainView, setMainView] = useState<'bridge' | 'gateway' | 'pools' | 'docs' | 'sdk' | 'lend' | 'whitepaper' | 'perps'>(() => {
+    // Deep links: bsprotocol.xyz/#bridge, #perps, #pools, #lend, #docs, #sdk, #whitepaper
+    const cleanHash = typeof window !== 'undefined' ? window.location.hash.replace('#', '').split('/')[0].split('?')[0] : '';
+    return (['bridge', 'perps', 'pools', 'lend', 'docs', 'sdk', 'whitepaper'] as const).includes(cleanHash as any)
+      ? (cleanHash as 'bridge' | 'perps' | 'pools' | 'lend' | 'docs' | 'sdk' | 'whitepaper')
       : 'gateway';
   });
   const [darkMode, setDarkMode] = useState<boolean>(() => {
@@ -857,6 +860,17 @@ export default function App() {
             </button>
 
             <button 
+              onClick={() => setMainView('perps')} 
+              className={`px-3.5 py-1.5 rounded-full transition-all cursor-pointer ${
+                mainView === 'perps' 
+                  ? 'bg-surface text-ink shadow-xs font-bold' 
+                  : 'text-ink-3 hover:text-ink font-medium'
+              }`}
+            >
+              <span>{t.navPerps}</span>
+            </button>
+
+            <button 
               onClick={() => setMainView('pools')} 
               className={`px-3.5 py-1.5 rounded-full transition-all cursor-pointer ${
                 mainView === 'pools' 
@@ -1040,6 +1054,7 @@ export default function App() {
                   <div className="text-[10px] uppercase font-bold tracking-wider text-ink-3 px-1 mb-1">Navegación</div>
                   {[
                     { id: 'bridge', label: 'Bridge Swap', icon: Zap },
+                    { id: 'perps', label: 'Perps (Futuros)', icon: TrendingUp },
                     { id: 'pools', label: 'Pools', icon: Droplets },
                     { id: 'lend', label: 'Lend', icon: Lock },
                     { id: 'gateway', label: 'Gateway', icon: Sparkles },
@@ -1119,7 +1134,20 @@ export default function App() {
             <span className="text-[10px]">Swap</span>
           </button>
 
-          {/* Tab 2: Pools */}
+          {/* Tab 2: Perps */}
+          <button 
+            onClick={() => setMainView('perps')}
+            className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-all cursor-pointer ${
+              mainView === 'perps' 
+                ? 'text-primary font-bold' 
+                : 'text-ink-3 hover:text-ink font-medium'
+            }`}
+          >
+            <TrendingUp className="w-4 h-4" />
+            <span className="text-[10px]">Perps</span>
+          </button>
+
+          {/* Tab 3: Pools */}
           <button 
             onClick={() => setMainView('pools')}
             className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-all cursor-pointer ${
@@ -1132,7 +1160,7 @@ export default function App() {
             <span className="text-[10px]">Pools</span>
           </button>
 
-          {/* Tab 3: Lend */}
+          {/* Tab 4: Lend */}
           <button 
             onClick={() => setMainView('lend')}
             className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-all cursor-pointer ${
@@ -1143,19 +1171,6 @@ export default function App() {
           >
             <Lock className="w-4 h-4" />
             <span className="text-[10px]">Lend</span>
-          </button>
-
-          {/* Tab 4: Docs */}
-          <button 
-            onClick={() => setMainView('docs')}
-            className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-all cursor-pointer ${
-              mainView === 'docs' 
-                ? 'text-primary font-bold' 
-                : 'text-ink-3 hover:text-ink font-medium'
-            }`}
-          >
-            <FileText className="w-4 h-4" />
-            <span className="text-[10px]">Docs</span>
           </button>
 
           {/* Tab 5: Menú (Opens Drawer!) */}
@@ -1296,6 +1311,25 @@ export default function App() {
             lang={lang}
             platformNetwork={platformNetwork}
             onToggleNetwork={setPlatformNetwork}
+          />
+        </main>
+      )}
+
+      {/* PERPETUAL FUTURES (PERPS) DEX VIEW */}
+      {mainView === 'perps' && (
+        <main className="flex-1 flex flex-col items-center justify-start p-3 sm:p-5 w-full max-w-[1360px] mx-auto pb-28 md:pb-12 text-left">
+          <PerpsView
+            backendUrl=""
+            userAddress={userContext?.address || ''}
+            bchAddress={bchWallet?.tokenAddress || bchWallet?.address || ''}
+            evmAddress={evmWallet?.address || ''}
+            walletBalances={walletBalances}
+            platformNetwork={platformNetwork}
+            onToggleNetwork={setPlatformNetwork}
+            onRefreshBalances={() => refreshWalletBalances()}
+            onConnectWallet={() => setShowWalletModal(true)}
+            showToast={showToast}
+            lang={lang}
           />
         </main>
       )}
