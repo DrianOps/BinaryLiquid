@@ -13,6 +13,7 @@ import {
   Sparkles,
   QrCode,
   ArrowLeft,
+  ArrowRight,
   CheckCircle2,
   ClipboardPaste
 } from 'lucide-react';
@@ -1337,45 +1338,94 @@ export default function BridgeSwap({
         )}
 
         {/* ================================================================ */}
-        {/* VIEW 3: MINIMALIST SUCCESS RECEIPT                               */}
+        {/* VIEW 3: CELEBRATORY ON-CHAIN SUCCESS RECEIPT                     */}
         {/* ================================================================ */}
         {cardState === 'success' && activeSwap && (
-          <div className="p-3 text-center space-y-4">
-            <div className="w-12 h-12 rounded-full bg-emerald-500/15 text-emerald-500 flex items-center justify-center mx-auto">
-              <CheckCircle2 className="w-6 h-6" />
+          <div className="p-4 sm:p-6 text-center space-y-5 animate-in fade-in zoom-in-95 duration-300">
+            {/* Top Status Badge */}
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-[11px] font-bold uppercase tracking-wider">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>{lang === 'es' ? 'Swap Confirmado On-Chain' : 'On-Chain Settlement Confirmed'}</span>
             </div>
 
-            <div>
-              <h3 className="text-base font-semibold text-ink">{t.completed}</h3>
-              <p className="text-2xl font-semibold text-emerald-500 mt-1 tabular-nums">
+            {/* Big Animated Check Circle */}
+            <div className="w-16 h-16 rounded-full bg-emerald-500/10 text-emerald-500 flex items-center justify-center mx-auto border-2 border-emerald-500/30 shadow-lg shadow-emerald-500/20">
+              <CheckCircle2 className="w-9 h-9 text-emerald-500" />
+            </div>
+
+            {/* Received Amount & Source */}
+            <div className="space-y-1">
+              <p className="text-3xl font-extrabold text-ink tabular-nums tracking-tight">
                 +{activeSwap.toAmount} {activeSwap.toToken}
               </p>
-              <p className="text-xs text-ink-3 mt-1 font-mono">
+              <p className="text-xs text-ink-3">
+                {lang === 'es' ? 'Recibido desde' : 'Swapped from'} {activeSwap.fromAmount} {activeSwap.fromToken}
+              </p>
+              <p className="text-xs text-ink-2 font-mono pt-1">
                 {t.sentTo}: {formatAddress(activeSwap.recipientAddress)}
               </p>
             </div>
 
-            {activeSwap.payoutExplorerUrl && (
-              <a
-                href={activeSwap.payoutExplorerUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
-              >
-                <span>Explorer TX</span>
-                <ExternalLink className="w-3.5 h-3.5" />
-              </a>
+            {/* Real TXID Pill with Copy & Explorer Link */}
+            {(activeSwap.payoutTxHash || activeSwap.depositTxHash) && (
+              <div className="p-3 rounded-xl bg-surface-2 border border-line space-y-2 text-left">
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="font-semibold text-ink-3 uppercase">
+                    {activeSwap.payoutTxHash ? (lang === 'es' ? 'TxID Despacho:' : 'Payout TxID:') : 'Deposit TxID:'}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(activeSwap.payoutTxHash || activeSwap.depositTxHash)}
+                      className="text-ink-3 hover:text-ink font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+                      title="Copiar TxID"
+                    >
+                      {copiedContract ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+                      <span>{copiedContract ? 'Copiado' : 'Copiar'}</span>
+                    </button>
+                    {activeSwap.payoutExplorerUrl && (
+                      <a
+                        href={activeSwap.payoutExplorerUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-primary hover:underline font-semibold flex items-center gap-1"
+                        title="Ver en explorador blockchain"
+                      >
+                        <span>Explorador</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    )}
+                  </div>
+                </div>
+                <div className="font-mono text-[11px] text-ink select-all break-all bg-surface p-2 rounded-lg border border-line/60">
+                  {activeSwap.payoutTxHash || activeSwap.depositTxHash}
+                </div>
+              </div>
             )}
 
+            {/* Settlement Guarantee Specs */}
+            <div className="space-y-1.5 pt-2 border-t border-line text-[11px] text-ink-3 text-left">
+              <div className="flex items-center justify-between">
+                <span>{lang === 'es' ? 'Seguridad:' : 'Security:'}</span>
+                <span className="font-semibold text-ink-2">Covenant CashScript P2SH32</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>{lang === 'es' ? 'Custodia:' : 'Custody:'}</span>
+                <span className="font-semibold text-emerald-500">100% No Custodial</span>
+              </div>
+            </div>
+
+            {/* New Swap Button */}
             <button
               type="button"
               onClick={() => {
                 setActiveSwap(null);
                 setCardState('form');
               }}
-              className="w-full h-11 rounded-panel bg-ink text-canvas font-semibold text-xs hover:opacity-95 transition cursor-pointer"
+              className="w-full ui-btn-primary ui-btn-lg font-bold text-xs cursor-pointer shadow-xs flex items-center justify-center gap-1.5"
             >
-              {t.newSwap}
+              <span>{t.newSwap}</span>
+              <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
         )}
