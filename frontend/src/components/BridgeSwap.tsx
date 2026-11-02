@@ -1342,15 +1342,15 @@ export default function BridgeSwap({
         {/* ================================================================ */}
         {cardState === 'success' && activeSwap && (
           <div className="p-4 sm:p-6 text-center space-y-5 animate-in fade-in zoom-in-95 duration-300">
-            {/* Top Status Badge */}
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-[11px] font-bold uppercase tracking-wider">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            {/* Top Status Badge in Bitcoin Orange */}
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 border border-primary/30 text-primary text-[11px] font-bold uppercase tracking-wider">
+              <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
               <span>{lang === 'es' ? 'Swap Confirmado On-Chain' : 'On-Chain Settlement Confirmed'}</span>
             </div>
 
-            {/* Big Animated Check Circle */}
-            <div className="w-16 h-16 rounded-full bg-emerald-500/10 text-emerald-500 flex items-center justify-center mx-auto border-2 border-emerald-500/30 shadow-lg shadow-emerald-500/20">
-              <CheckCircle2 className="w-9 h-9 text-emerald-500" />
+            {/* Big Animated Check Circle in Bitcoin Orange */}
+            <div className="w-16 h-16 rounded-full bg-primary/10 text-primary flex items-center justify-center mx-auto border-2 border-primary/40 shadow-lg shadow-primary/25">
+              <CheckCircle2 className="w-9 h-9 text-primary" />
             </div>
 
             {/* Received Amount & Source */}
@@ -1380,7 +1380,7 @@ export default function BridgeSwap({
                       className="text-ink-3 hover:text-ink font-semibold flex items-center gap-1 cursor-pointer transition-colors"
                       title="Copiar TxID"
                     >
-                      {copiedContract ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+                      {copiedContract ? <Check className="w-3 h-3 text-primary" /> : <Copy className="w-3 h-3" />}
                       <span>{copiedContract ? 'Copiado' : 'Copiar'}</span>
                     </button>
                     {activeSwap.payoutExplorerUrl && (
@@ -1411,7 +1411,7 @@ export default function BridgeSwap({
               </div>
               <div className="flex items-center justify-between">
                 <span>{lang === 'es' ? 'Custodia:' : 'Custody:'}</span>
-                <span className="font-semibold text-emerald-500">100% No Custodial</span>
+                <span className="font-semibold text-primary">100% No Custodial</span>
               </div>
             </div>
 

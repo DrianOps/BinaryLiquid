@@ -237,23 +237,23 @@ function AnimatedSwapPreview({ onLaunchApp }: { onLaunchApp: () => void }) {
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.96 }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="absolute inset-0 z-20 bg-surface/98 backdrop-blur-md rounded-2xl p-6 flex flex-col items-center justify-between text-center border-2 border-emerald-500/40 shadow-2xl"
+            className="absolute inset-0 z-20 bg-surface/98 backdrop-blur-md rounded-2xl p-6 flex flex-col items-center justify-between text-center border-2 border-primary/50 shadow-2xl shadow-primary/15"
           >
-            {/* Top Status Pill */}
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-[11px] font-bold uppercase tracking-wider">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            {/* Top Status Pill in Bitcoin Orange */}
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 border border-primary/30 text-primary text-[11px] font-bold uppercase tracking-wider">
+              <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
               <span>Swap Confirmado On-Chain</span>
             </div>
 
-            {/* Center: Big Animated Check & Amounts */}
+            {/* Center: Big Animated Check & Amounts in Bitcoin Orange */}
             <div className="space-y-3 my-auto">
               <motion.div
                 initial={{ scale: 0, rotate: -25 }}
                 animate={{ scale: 1, rotate: 0 }}
                 transition={{ type: 'spring', stiffness: 400, damping: 18, delay: 0.1 }}
-                className="w-16 h-16 rounded-full bg-emerald-500/10 text-emerald-500 flex items-center justify-center mx-auto border-2 border-emerald-500/30 shadow-lg shadow-emerald-500/20"
+                className="w-16 h-16 rounded-full bg-primary/10 text-primary flex items-center justify-center mx-auto border-2 border-primary/40 shadow-lg shadow-primary/25"
               >
-                <CheckCircle2 className="w-9 h-9 text-emerald-500" />
+                <CheckCircle2 className="w-9 h-9 text-primary" />
               </motion.div>
 
               <div>
@@ -268,8 +268,8 @@ function AnimatedSwapPreview({ onLaunchApp }: { onLaunchApp: () => void }) {
               {/* Fake TXID pill */}
               <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-2 border border-line text-xs font-mono text-ink-2 select-all">
                 <span className="text-[10px] uppercase font-bold text-ink-3 font-sans">TxID:</span>
-                <span>{currentPair.fakeTxId}</span>
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                <span className="text-ink font-semibold">{currentPair.fakeTxId}</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-primary" />
               </div>
             </div>
 
@@ -277,7 +277,7 @@ function AnimatedSwapPreview({ onLaunchApp }: { onLaunchApp: () => void }) {
             <div className="w-full space-y-1.5 pt-3 border-t border-line text-[11px]">
               <div className="flex items-center justify-between text-ink-3">
                 <span>Tiempo de liquidación:</span>
-                <span className="font-bold text-emerald-500 font-mono">~2.8 segundos</span>
+                <span className="font-bold text-primary font-mono">~2.8 segundos</span>
               </div>
               <div className="flex items-center justify-between text-ink-3">
                 <span>Seguridad:</span>
