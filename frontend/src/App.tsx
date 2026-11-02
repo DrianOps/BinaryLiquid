@@ -652,7 +652,7 @@ export default function App() {
       {/* NAVBAR WITH SCROLL-REACTIVE BORDER & ELEVATION */}
       <nav className={`h-16 sticky top-0 z-40 transition-all duration-300 flex items-center justify-between px-3 sm:px-8 ${
         isScrolled
-          ? 'bg-white/85 dark:bg-[#0d1119]/85 backdrop-blur-md border-b border-gray-200/80 dark:border-gray-800/80 shadow-[0_4px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.4)]'
+          ? 'bg-canvas/90 backdrop-blur-md border-b border-line shadow-xs'
           : 'bg-transparent border-b border-transparent shadow-none'
       }`}>
         <div className="flex items-center gap-3 sm:gap-8">
@@ -665,19 +665,19 @@ export default function App() {
             <div className="w-8 h-8 rounded-xl overflow-hidden flex items-center justify-center shadow-xs group-hover:scale-105 transition-transform">
               <img src="/logo.png" alt="BinaryLiquid" className="w-full h-full object-contain" />
             </div>
-            <span className="text-lg sm:text-xl font-bold tracking-tight text-gray-950 dark:text-white flex items-center">
+            <span className="text-lg sm:text-xl font-bold tracking-tight text-ink flex items-center">
               Binary<span className="text-primary font-extrabold">Liquid</span>
             </span>
           </div>
           
           {/* CENTER TABS (Desktop / Tablet) */}
-          <div className="hidden md:flex items-center gap-1">
+          <div className="hidden md:flex items-center p-1 bg-surface-2 rounded-full border border-line text-xs font-semibold">
             <button 
               onClick={() => setMainView('bridge')} 
-              className={`font-bold text-sm px-4 py-2 rounded-full transition-all ${
+              className={`px-3.5 py-1.5 rounded-full transition-all cursor-pointer ${
                 mainView === 'bridge' 
-                  ? 'bg-gray-100 dark:bg-[#1a202c] text-gray-900 dark:text-white shadow-2xs' 
-                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                  ? 'bg-surface text-ink shadow-xs font-bold' 
+                  : 'text-ink-3 hover:text-ink font-medium'
               }`}
             >
               <span>{t.navSwap}</span>
@@ -685,10 +685,10 @@ export default function App() {
 
             <button 
               onClick={() => setMainView('pools')} 
-              className={`font-bold text-sm px-4 py-2 rounded-full transition-all ${
+              className={`px-3.5 py-1.5 rounded-full transition-all cursor-pointer ${
                 mainView === 'pools' 
-                  ? 'bg-gray-100 dark:bg-[#1a202c] text-gray-900 dark:text-white shadow-2xs' 
-                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                  ? 'bg-surface text-ink shadow-xs font-bold' 
+                  : 'text-ink-3 hover:text-ink font-medium'
               }`}
             >
               <span>{t.navPools}</span>
@@ -696,10 +696,10 @@ export default function App() {
 
             <button 
               onClick={() => setMainView('lend')} 
-              className={`font-bold text-sm px-4 py-2 rounded-full transition-all ${
+              className={`px-3.5 py-1.5 rounded-full transition-all cursor-pointer ${
                 mainView === 'lend' 
-                  ? 'bg-gray-100 dark:bg-[#1a202c] text-gray-900 dark:text-white shadow-2xs' 
-                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                  ? 'bg-surface text-ink shadow-xs font-bold' 
+                  : 'text-ink-3 hover:text-ink font-medium'
               }`}
             >
               <span>{t.navLend}</span>
@@ -707,10 +707,10 @@ export default function App() {
 
             <button 
               onClick={() => setMainView('docs')} 
-              className={`font-bold text-sm px-4 py-2 rounded-full transition-all ${
+              className={`px-3.5 py-1.5 rounded-full transition-all cursor-pointer ${
                 mainView === 'docs' 
-                  ? 'bg-gray-100 dark:bg-[#1a202c] text-gray-900 dark:text-white shadow-2xs' 
-                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                  ? 'bg-surface text-ink shadow-xs font-bold' 
+                  : 'text-ink-3 hover:text-ink font-medium'
               }`}
             >
               <span>{t.navDocs}</span>
@@ -718,10 +718,10 @@ export default function App() {
 
             <button 
               onClick={() => setMainView('sdk')} 
-              className={`font-bold text-sm px-4 py-2 rounded-full transition-all ${
+              className={`px-3.5 py-1.5 rounded-full transition-all cursor-pointer ${
                 mainView === 'sdk' 
-                  ? 'bg-gray-100 dark:bg-[#1a202c] text-gray-900 dark:text-white shadow-2xs' 
-                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                  ? 'bg-surface text-ink shadow-xs font-bold' 
+                  : 'text-ink-3 hover:text-ink font-medium'
               }`}
             >
               <span>SDK & API</span>
@@ -731,46 +731,45 @@ export default function App() {
         
         {/* RIGHT CONTROLS (Responsive) */}
         <div className="flex items-center gap-2 sm:gap-2.5">
-          {/* Desktop Launch App / Gateway Switcher */}
-          {mainView !== 'bridge' ? (
-            <button 
-              onClick={() => setMainView('bridge')}
-              className="hidden sm:flex items-center bg-primary hover:bg-orange-600 text-white px-3.5 sm:px-4 py-2 rounded-full font-bold text-xs shadow-md shadow-orange-500/20 hover:scale-105 active:scale-95 transition-all shrink-0 cursor-pointer"
-            >
-              <span>Launch App</span>
-            </button>
-          ) : (
-            <button 
-              onClick={() => setMainView('gateway')}
-              className="hidden sm:flex items-center bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 px-3.5 py-2 rounded-full font-bold text-xs transition-all shrink-0 cursor-pointer"
-            >
-              <span>Gateway</span>
-            </button>
-          )}
+          {/* Network Switcher Pill (Desktop + Mobile) */}
+          <button
+            onClick={() => {
+              const next = platformNetwork === 'mainnet' ? 'testnet' : 'mainnet';
+              setPlatformNetwork(next);
+              showToast(next === 'mainnet' ? 'Red activa: Bitcoin Cash Mainnet (Producción)' : 'Red activa: BCH Chipnet (Testnet)');
+            }}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-medium border border-line bg-surface hover:bg-surface-2 text-ink-2 transition-all cursor-pointer shadow-2xs"
+            title="Click para alternar red (Mainnet / Testnet)"
+          >
+            <span className={`w-2 h-2 rounded-full ${platformNetwork === 'mainnet' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'}`} />
+            <span className="capitalize font-semibold text-[11px] sm:text-xs">
+              {platformNetwork === 'mainnet' ? 'Mainnet' : 'Chipnet'}
+            </span>
+          </button>
 
           {/* Theme Toggle Button (Desktop/Tablet) */}
           <button 
             onClick={() => setDarkMode(!darkMode)} 
-            className="hidden sm:flex w-9 h-9 rounded-full bg-white dark:bg-[#161c28] border border-gray-200/90 dark:border-gray-800 text-gray-600 dark:text-amber-400 shadow-2xs hover:scale-105 active:scale-95 transition-all items-center justify-center cursor-pointer"
+            className="hidden sm:flex w-8 h-8 rounded-full bg-surface hover:bg-surface-2 border border-line text-ink-2 hover:text-ink shadow-2xs transition-all items-center justify-center cursor-pointer"
             title={darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
           >
-            {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            {darkMode ? <Sun className="w-3.5 h-3.5 text-amber-400" /> : <Moon className="w-3.5 h-3.5 text-ink-3" />}
           </button>
 
           {/* Language Selector Pill (Desktop/Tablet) */}
           <button 
             onClick={() => setLang(lang === 'en' ? 'es' : 'en')} 
-            className="hidden sm:flex items-center gap-1.5 text-gray-700 dark:text-gray-300 font-bold text-xs bg-white dark:bg-[#161c28] px-3 py-2 rounded-full border border-gray-200/90 dark:border-gray-800 shadow-2xs hover:scale-105 transition-all cursor-pointer"
+            className="hidden sm:flex items-center gap-1 text-ink-2 hover:text-ink font-semibold text-xs bg-surface hover:bg-surface-2 px-2.5 py-1.5 rounded-full border border-line shadow-2xs transition-all cursor-pointer"
           >
-            <span className="text-sm">{lang === 'en' ? '🇺🇸' : '🇪🇸'}</span>
-            <span>{lang.toUpperCase()}</span>
+            <span className="text-xs">{lang === 'en' ? '🇺🇸' : '🇪🇸'}</span>
+            <span className="text-[11px]">{lang.toUpperCase()}</span>
           </button>
 
           {/* Non-Custodial Wallet Action Button (Shows Dual BCH+EVM Status) */}
           {userContext ? (
             <button 
               onClick={() => setShowAccountModal(true)} 
-              className="bg-white dark:bg-[#161c28] hover:bg-gray-50 dark:hover:bg-[#1e2535] text-gray-900 dark:text-white px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-full font-bold text-xs transition-all border border-gray-200/90 dark:border-gray-800 shadow-2xs flex items-center gap-1.5 sm:gap-2 hover:scale-105 cursor-pointer shrink-0"
+              className="bg-surface hover:bg-surface-2 text-ink px-2.5 sm:px-3.5 py-1.5 rounded-full font-semibold text-xs transition-all border border-line shadow-2xs flex items-center gap-1.5 sm:gap-2 hover:border-line-strong cursor-pointer shrink-0"
             >
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
               <span className="font-mono text-xs">
@@ -784,18 +783,18 @@ export default function App() {
           ) : (
             <button 
               onClick={() => setShowWalletModal(true)} 
-              className="bg-white dark:bg-[#161c28] hover:bg-gray-50 dark:hover:bg-[#1e2535] text-gray-900 dark:text-white px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-full font-bold text-xs transition-all border border-gray-200/90 dark:border-gray-800 shadow-2xs hover:scale-105 cursor-pointer shrink-0"
+              className="bg-primary hover:bg-primary-hover text-black px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-full font-bold text-xs transition-all shadow-xs cursor-pointer shrink-0"
             >
               <span className="hidden sm:inline">{wc.state === 'connecting' ? t.openWallet : t.navWallet}</span>
               <span className="sm:hidden font-semibold">Connect</span>
             </button>
           )}
 
-          {/* Hamburger Menu Trigger Button */}
+          {/* Hamburger Menu Trigger Button (Mobile Only) */}
           <button 
             onClick={() => setMobileMenuOpen(true)}
-            className="w-9 h-9 rounded-full bg-white dark:bg-[#161c28] border border-gray-200/90 dark:border-gray-800 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white shadow-2xs flex items-center justify-center transition-all hover:scale-105 cursor-pointer"
-            title="Open Menu"
+            className="md:hidden w-8 h-8 rounded-full bg-surface hover:bg-surface-2 border border-line text-ink-2 hover:text-ink shadow-2xs flex items-center justify-center transition-all cursor-pointer"
+            title="Abrir Menú"
           >
             <Menu className="w-4 h-4" />
           </button>
@@ -812,7 +811,7 @@ export default function App() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setMobileMenuOpen(false)}
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm cursor-pointer"
+              className="fixed inset-0 bg-black/60 backdrop-blur-xs cursor-pointer"
             />
 
             {/* Drawer Sheet */}
@@ -821,209 +820,40 @@ export default function App() {
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 250 }}
-              className="relative z-10 w-[85%] max-w-sm h-full bg-white dark:bg-[#121722] border-l border-gray-100 dark:border-gray-800 shadow-2xl p-6 flex flex-col justify-between overflow-y-auto"
+              className="relative z-10 w-72 max-w-[80vw] h-full bg-surface border-l border-line shadow-2xl p-5 flex flex-col justify-between overflow-y-auto"
             >
-              <div>
+              <div className="space-y-4">
                 {/* Header */}
-                <div className="flex items-center justify-between pb-5 border-b border-gray-100 dark:border-gray-800 mb-6">
-                  <div className="flex items-center gap-2.5">
-                    <img src="/logo.png" className="w-7 h-7 object-contain" alt="Logo" />
-                    <div>
-                      <div className="font-bold text-gray-900 dark:text-white text-base">BinaryLiquid</div>
-                      <div className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Cross-Chain Gateway</div>
-                    </div>
+                <div className="flex items-center justify-between pb-3 border-b border-line">
+                  <div className="flex items-center gap-2">
+                    <img src="/logo.png" className="w-6 h-6 object-contain" alt="Logo" />
+                    <span className="font-bold text-ink text-sm tracking-tight">Binary<span className="text-primary font-extrabold">Liquid</span></span>
                   </div>
                   <button 
                     onClick={() => setMobileMenuOpen(false)} 
-                    className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 hover:text-gray-900 dark:hover:text-white flex items-center justify-center font-bold text-xs cursor-pointer"
+                    className="w-7 h-7 rounded-lg hover:bg-surface-2 text-ink-3 hover:text-ink flex items-center justify-center transition-colors cursor-pointer"
+                    title="Cerrar"
                   >
                     <X className="w-4 h-4" />
                   </button>
                 </div>
 
-                {/* Primary Navigation Links */}
-                <div className="space-y-2 mb-6">
-                  <button 
-                    onClick={() => { setMainView('bridge'); setMobileMenuOpen(false); }}
-                    className={`w-full flex items-center gap-3 p-3.5 rounded-2xl font-bold text-sm transition-all cursor-pointer ${
-                      mainView === 'bridge' 
-                        ? 'bg-primary/10 text-primary border border-primary/20 shadow-2xs' 
-                        : 'hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200'
-                    }`}
-                  >
-                    <div className="w-9 h-9 rounded-xl bg-orange-500/10 text-orange-500 flex items-center justify-center shrink-0">
-                      <Zap className="w-4 h-4" />
-                    </div>
-                    <div className="text-left">
-                      <div>Bridge Swap</div>
-                      <div className="text-[10px] text-gray-400 font-normal">Cross-chain stablecoins</div>
-                    </div>
-                  </button>
-
-                  <button 
-                    onClick={() => { setMainView('pools'); setMobileMenuOpen(false); }}
-                    className={`w-full flex items-center gap-3 p-3.5 rounded-2xl font-bold text-sm transition-all cursor-pointer ${
-                      mainView === 'pools' 
-                        ? 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20 shadow-2xs' 
-                        : 'hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200'
-                    }`}
-                  >
-                    <div className="w-9 h-9 rounded-xl bg-cyan-500/10 text-cyan-500 flex items-center justify-center shrink-0">
-                      <Droplets className="w-4 h-4" />
-                    </div>
-                    <div className="text-left">
-                      <div>Liquidity Pools</div>
-                      <div className="text-[10px] text-gray-400 font-normal">Earn 0.20% passive yield</div>
-                    </div>
-                  </button>
-
-                  <button 
-                    onClick={() => { setMainView('lend'); setMobileMenuOpen(false); }}
-                    className={`w-full flex items-center gap-3 p-3.5 rounded-2xl font-bold text-sm transition-all cursor-pointer ${
-                      mainView === 'lend' 
-                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shadow-2xs' 
-                        : 'hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200'
-                    }`}
-                  >
-                    <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
-                      <Lock className="w-4 h-4" />
-                    </div>
-                    <div className="text-left">
-                      <div>Préstamos & Bóvedas</div>
-                      <div className="text-[10px] text-gray-400 font-normal">BCH Vaults • Borrow PUSD</div>
-                    </div>
-                  </button>
-
-                  <button 
-                    onClick={() => { setMainView('gateway'); setMobileMenuOpen(false); }}
-                    className={`w-full flex items-center gap-3 p-3.5 rounded-2xl font-bold text-sm transition-all cursor-pointer ${
-                      mainView === 'gateway' 
-                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shadow-2xs' 
-                        : 'hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200'
-                    }`}
-                  >
-                    <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
-                      <Sparkles className="w-4 h-4" />
-                    </div>
-                    <div className="text-left">
-                      <div>Liquidity Gateway</div>
-                      <div className="text-[10px] text-gray-400 font-normal">#1 Bitcoin Cash Hub</div>
-                    </div>
-                  </button>
-
-                  <button 
-                    onClick={() => { setMainView('docs'); setMobileMenuOpen(false); }}
-                    className={`w-full flex items-center gap-3 p-3.5 rounded-2xl font-bold text-sm transition-all cursor-pointer ${
-                      mainView === 'docs' 
-                        ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 shadow-2xs' 
-                        : 'hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200'
-                    }`}
-                  >
-                    <div className="w-9 h-9 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center shrink-0">
-                      <FileText className="w-4 h-4" />
-                    </div>
-                    <div className="text-left">
-                      <div>Docs</div>
-                      <div className="text-[10px] text-gray-400 font-normal">Tokenomics & BLAZE specs</div>
-                    </div>
-                  </button>
-
-                  <button 
-                    onClick={() => { setMainView('sdk'); setMobileMenuOpen(false); }}
-                    className={`w-full flex items-center gap-3 p-3.5 rounded-2xl font-bold text-sm transition-all cursor-pointer ${
-                      mainView === 'sdk' 
-                        ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 shadow-2xs' 
-                        : 'hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200'
-                    }`}
-                  >
-                    <div className="w-9 h-9 rounded-xl bg-purple-500/10 text-purple-500 flex items-center justify-center shrink-0">
-                      <Code2 className="w-4 h-4" />
-                    </div>
-                    <div className="text-left">
-                      <div>SDK & Integración</div>
-                      <div className="text-[10px] text-gray-400 font-normal">Widget iFrame & APIs Trackers</div>
-                    </div>
-                  </button>
-                </div>
-
-                {/* Mobile Quick Toggles (Theme & Language) */}
-                <div className="p-4 rounded-2xl bg-gray-50 dark:bg-[#171e2c] border border-gray-100 dark:border-gray-800 space-y-3 mb-6">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-gray-600 dark:text-gray-300">Appearance</span>
-                    <button 
-                      onClick={() => setDarkMode(!darkMode)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white dark:bg-[#202737] border border-gray-200 dark:border-gray-700 text-xs font-bold text-gray-800 dark:text-gray-200 shadow-2xs cursor-pointer"
-                    >
-                      {darkMode ? <Sun className="w-3.5 h-3.5 text-amber-400" /> : <Moon className="w-3.5 h-3.5 text-gray-600" />}
-                      <span>{darkMode ? 'Dark' : 'Light'}</span>
-                    </button>
-                  </div>
-
-                  <div className="flex items-center justify-between pt-2 border-t border-gray-200/50 dark:border-gray-700/50">
-                    <span className="text-xs font-bold text-gray-600 dark:text-gray-300">Language</span>
-                    <button 
-                      onClick={() => setLang(lang === 'en' ? 'es' : 'en')}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white dark:bg-[#202737] border border-gray-200 dark:border-gray-700 text-xs font-bold text-gray-800 dark:text-gray-200 shadow-2xs cursor-pointer"
-                    >
-                      <span>{lang === 'en' ? '🇺🇸 English' : '🇪🇸 Español'}</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Ecosystem & Resources */}
+                {/* Network Switcher (Clean Segment) */}
                 <div className="space-y-1.5">
-                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider px-1 mb-2">Ecosystem Links</div>
-                  <a 
-                    href="https://bchblaze.cash" 
-                    target="_blank" 
-                    rel="noreferrer"
-                    className="flex items-center justify-between p-2.5 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 text-xs font-bold text-gray-700 dark:text-gray-200 transition-colors"
-                  >
-                    <span className="flex items-center gap-2"><Flame className="w-4 h-4 text-orange-500" /> BCH BLAZE Hackathon</span>
-                    <ExternalLink className="w-3.5 h-3.5 text-gray-400" />
-                  </a>
-                  <a 
-                    href="https://paryonusd.com" 
-                    target="_blank" 
-                    rel="noreferrer"
-                    className="flex items-center justify-between p-2.5 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 text-xs font-bold text-gray-700 dark:text-gray-200 transition-colors"
-                  >
-                    <span className="flex items-center gap-2"><Sparkles className="w-4 h-4 text-emerald-500" /> ParyonUSD Sponsor</span>
-                    <ExternalLink className="w-3.5 h-3.5 text-gray-400" />
-                  </a>
-                  <a 
-                    href="https://t.me/bchblaze" 
-                    target="_blank" 
-                    rel="noreferrer"
-                    className="flex items-center justify-between p-2.5 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 text-xs font-bold text-gray-700 dark:text-gray-200 transition-colors"
-                  >
-                    <span className="flex items-center gap-2"><Globe className="w-4 h-4 text-blue-500" /> Telegram Community</span>
-                    <ExternalLink className="w-3.5 h-3.5 text-gray-400" />
-                  </a>
-                </div>
-              </div>
-
-              {/* Selector de Red de la Plataforma (Platform Network Switcher) */}
-              <div className="pt-4 border-t border-gray-100 dark:border-gray-800 text-xs">
-                <div className="flex items-center justify-between mb-2.5">
-                  <div className="font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1.5 text-xs">
-                    <Globe className="w-3.5 h-3.5 text-primary" />
-                    <span>Red de la Plataforma</span>
-                  </div>
-                  {/* Selector: Mainnet (Principal / Defecto) vs Testnet */}
-                  <div className="inline-flex p-0.5 bg-gray-100 dark:bg-[#1b2230] rounded-xl border border-gray-200/60 dark:border-gray-700/60 text-[10px]">
+                  <div className="text-[10px] uppercase font-bold tracking-wider text-ink-3 px-1">Red de la plataforma</div>
+                  <div className="grid grid-cols-2 p-0.5 bg-surface-2 rounded-xl border border-line text-xs">
                     <button
                       onClick={() => {
                         setPlatformNetwork('mainnet');
                         showToast('Red activa: Bitcoin Cash Mainnet (Producción)');
                       }}
-                      className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                      className={`py-1.5 rounded-lg font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
                         platformNetwork === 'mainnet'
-                          ? 'bg-primary text-black shadow-xs font-black'
-                          : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'
+                          ? 'bg-surface text-ink shadow-xs font-bold'
+                          : 'text-ink-3 hover:text-ink'
                       }`}
                     >
-                      <span className="w-1.5 h-1.5 rounded-full bg-black"></span>
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                       <span>Mainnet</span>
                     </button>
                     <button
@@ -1031,45 +861,77 @@ export default function App() {
                         setPlatformNetwork('testnet');
                         showToast('Red activa: BCH Chipnet (Testnet)');
                       }}
-                      className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                      className={`py-1.5 rounded-lg font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
                         platformNetwork === 'testnet'
-                          ? 'bg-amber-500 text-white shadow-xs font-black'
-                          : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'
+                          ? 'bg-surface text-amber-500 shadow-xs font-bold'
+                          : 'text-ink-3 hover:text-ink'
                       }`}
                     >
-                      <span className="w-1.5 h-1.5 rounded-full bg-white"></span>
+                      <span className="w-2 h-2 rounded-full bg-amber-500"></span>
                       <span>Testnet</span>
                     </button>
                   </div>
                 </div>
 
-                {/* Card de Estado de la Red */}
-                <div className="p-3 rounded-2xl bg-gray-50 dark:bg-[#171e2c] border border-gray-200/60 dark:border-gray-700/60 space-y-2">
-                  <div className="flex items-center justify-between text-[11px]">
-                    <span className="text-gray-500 dark:text-gray-400 font-medium">Modo Activo:</span>
-                    <span className={`font-bold flex items-center gap-1.5 ${
-                      platformNetwork === 'mainnet' ? 'text-emerald-500 dark:text-emerald-400' : 'text-amber-500'
-                    }`}>
-                      <span className={`w-2 h-2 rounded-full ${
-                        platformNetwork === 'mainnet' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'
-                      }`}></span>
-                      {PLATFORM_NETWORKS[platformNetwork].name}
-                    </span>
-                  </div>
+                {/* Primary Navigation Links (Minimalist single-line rows, NO subtitle clutter) */}
+                <div className="space-y-1 pt-2">
+                  <div className="text-[10px] uppercase font-bold tracking-wider text-ink-3 px-1 mb-1">Navegación</div>
+                  {[
+                    { id: 'bridge', label: 'Bridge Swap', icon: Zap },
+                    { id: 'pools', label: 'Pools', icon: Droplets },
+                    { id: 'lend', label: 'Lend', icon: Lock },
+                    { id: 'gateway', label: 'Gateway', icon: Sparkles },
+                    { id: 'docs', label: 'Docs', icon: FileText },
+                    { id: 'sdk', label: 'SDK & API', icon: Code2 },
+                  ].map(item => {
+                    const Icon = item.icon;
+                    const active = mainView === item.id;
+                    return (
+                      <button 
+                        key={item.id}
+                        onClick={() => { setMainView(item.id as any); setMobileMenuOpen(false); }}
+                        className={`w-full flex items-center justify-between px-3 py-2 rounded-xl font-medium text-xs sm:text-sm transition-all cursor-pointer ${
+                          active 
+                            ? 'bg-primary/10 text-primary font-bold' 
+                            : 'hover:bg-surface-2 text-ink-2 hover:text-ink'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <Icon className={`w-4 h-4 ${active ? 'text-primary' : 'text-ink-3'}`} />
+                          <span>{item.label}</span>
+                        </div>
+                        {active && <span className="w-1.5 h-1.5 rounded-full bg-primary" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
 
-                  <div className="flex items-center justify-between text-[11px] pt-1.5 border-t border-gray-200/50 dark:border-gray-700/50">
-                    <span className="text-gray-500 dark:text-gray-400 font-medium">Bitcoin Cash:</span>
-                    <span className="font-semibold text-gray-800 dark:text-gray-200">
-                      {PLATFORM_NETWORKS[platformNetwork].bchChain}
-                    </span>
-                  </div>
+              {/* Bottom Settings & Links */}
+              <div className="pt-4 border-t border-line space-y-3">
+                {/* Theme & Language Quick Toggles */}
+                <div className="grid grid-cols-2 gap-2">
+                  <button 
+                    onClick={() => setDarkMode(!darkMode)}
+                    className="flex items-center justify-center gap-1.5 py-1.5 px-2.5 rounded-xl border border-line bg-surface hover:bg-surface-2 text-xs font-semibold text-ink-2 transition-all cursor-pointer"
+                  >
+                    {darkMode ? <Sun className="w-3.5 h-3.5 text-amber-400" /> : <Moon className="w-3.5 h-3.5 text-ink-3" />}
+                    <span>{darkMode ? 'Claro' : 'Oscuro'}</span>
+                  </button>
+                  <button 
+                    onClick={() => setLang(lang === 'en' ? 'es' : 'en')}
+                    className="flex items-center justify-center gap-1.5 py-1.5 px-2.5 rounded-xl border border-line bg-surface hover:bg-surface-2 text-xs font-semibold text-ink-2 transition-all cursor-pointer"
+                  >
+                    <span>{lang === 'en' ? '🇺🇸 EN' : '🇪🇸 ES'}</span>
+                  </button>
+                </div>
 
-                  <div className="flex items-center justify-between text-[11px] pt-1 border-t border-gray-200/50 dark:border-gray-700/50">
-                    <span className="text-gray-500 dark:text-gray-400 font-medium">EVM:</span>
-                    <span className="font-semibold text-gray-800 dark:text-gray-200">
-                      {PLATFORM_NETWORKS[platformNetwork].evmChain}
-                    </span>
-                  </div>
+                {/* Minimal Footer Links */}
+                <div className="flex items-center justify-between text-[11px] text-ink-3 px-1 pt-1">
+                  <a href="https://bchblaze.cash" target="_blank" rel="noreferrer" className="hover:text-ink transition-colors">BLAZE</a>
+                  <a href="https://paryonusd.com" target="_blank" rel="noreferrer" className="hover:text-ink transition-colors">ParyonUSD</a>
+                  <a href="https://t.me/bchblaze" target="_blank" rel="noreferrer" className="hover:text-ink transition-colors">Telegram</a>
+                  <a href={PLATFORM_NETWORKS[platformNetwork].explorerBch} target="_blank" rel="noreferrer" className="hover:text-ink transition-colors">Explorer</a>
                 </div>
               </div>
             </motion.div>
@@ -1079,58 +941,45 @@ export default function App() {
 
       {/* MOBILE BOTTOM FLOATING DOCK (md:hidden: lightning 1-thumb navigation) */}
       <div className="fixed bottom-3 left-3 right-3 z-40 md:hidden pointer-events-none">
-        <div className="pointer-events-auto bg-white/95 dark:bg-[#121722]/95 backdrop-blur-xl border border-gray-200/90 dark:border-gray-800/90 shadow-[0_8px_32px_rgba(0,0,0,0.18)] rounded-2xl px-2 py-1.5 flex items-center justify-around">
+        <div className="pointer-events-auto bg-surface/90 backdrop-blur-md border border-line shadow-lg rounded-2xl px-2 py-1.5 flex items-center justify-around">
           
-          {/* Tab 1: Home / Gateway */}
-          <button 
-            onClick={() => setMainView('gateway')}
-            className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-all cursor-pointer ${
-              mainView === 'gateway' 
-                ? 'text-primary font-black scale-105' 
-                : 'text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 font-medium'
-            }`}
-          >
-            <Sparkles className="w-5 h-5" />
-            <span className="text-[10px] leading-tight">Home</span>
-          </button>
-
-          {/* Tab 2: Bridge Swap */}
+          {/* Tab 1: Swap */}
           <button 
             onClick={() => setMainView('bridge')}
             className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-all cursor-pointer ${
               mainView === 'bridge' 
-                ? 'text-primary font-black scale-105' 
-                : 'text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 font-medium'
+                ? 'text-primary font-bold' 
+                : 'text-ink-3 hover:text-ink font-medium'
             }`}
           >
-            <Zap className="w-5 h-5" />
-            <span className="text-[10px] leading-tight">Swap</span>
+            <Zap className="w-4 h-4" />
+            <span className="text-[10px]">Swap</span>
           </button>
 
-          {/* Tab 3: Pools */}
+          {/* Tab 2: Pools */}
           <button 
             onClick={() => setMainView('pools')}
             className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-all cursor-pointer ${
               mainView === 'pools' 
-                ? 'text-cyan-500 font-black scale-105' 
-                : 'text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 font-medium'
+                ? 'text-primary font-bold' 
+                : 'text-ink-3 hover:text-ink font-medium'
             }`}
           >
-            <Droplets className="w-5 h-5" />
-            <span className="text-[10px] leading-tight">Pools</span>
+            <Droplets className="w-4 h-4" />
+            <span className="text-[10px]">Pools</span>
           </button>
 
-          {/* Tab 3.5: Lend */}
+          {/* Tab 3: Lend */}
           <button 
             onClick={() => setMainView('lend')}
             className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-all cursor-pointer ${
               mainView === 'lend' 
-                ? 'text-emerald-500 font-black scale-105' 
-                : 'text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 font-medium'
+                ? 'text-primary font-bold' 
+                : 'text-ink-3 hover:text-ink font-medium'
             }`}
           >
-            <Lock className="w-5 h-5" />
-            <span className="text-[10px] leading-tight">Lend</span>
+            <Lock className="w-4 h-4" />
+            <span className="text-[10px]">Lend</span>
           </button>
 
           {/* Tab 4: Docs */}
@@ -1138,34 +987,25 @@ export default function App() {
             onClick={() => setMainView('docs')}
             className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-all cursor-pointer ${
               mainView === 'docs' 
-                ? 'text-blue-500 font-black scale-105' 
-                : 'text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 font-medium'
+                ? 'text-primary font-bold' 
+                : 'text-ink-3 hover:text-ink font-medium'
             }`}
           >
-            <FileText className="w-5 h-5" />
-            <span className="text-[10px] leading-tight">Docs</span>
+            <FileText className="w-4 h-4" />
+            <span className="text-[10px]">Docs</span>
           </button>
 
-          {/* Tab 4: Wallet */}
+          {/* Tab 5: Menú (Opens Drawer!) */}
           <button 
-            onClick={() => {
-              if (userContext) {
-                setShowAccountModal(true);
-              } else {
-                setShowWalletModal(true);
-              }
-            }}
-            className="flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 font-medium transition-all relative cursor-pointer"
+            onClick={() => setMobileMenuOpen(true)}
+            className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-all cursor-pointer ${
+              mobileMenuOpen 
+                ? 'text-primary font-bold' 
+                : 'text-ink-3 hover:text-ink font-medium'
+            }`}
           >
-            <div className="relative">
-              <Wallet className={`w-5 h-5 ${userContext ? 'text-emerald-500' : ''}`} />
-              {userContext && (
-                <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              )}
-            </div>
-            <span className={`text-[10px] leading-tight ${userContext ? 'text-emerald-500 font-bold' : ''}`}>
-              {userContext ? 'Active' : 'Wallet'}
-            </span>
+            <Menu className="w-4 h-4" />
+            <span className="text-[10px]">Menú</span>
           </button>
 
         </div>
