@@ -156,8 +156,12 @@ export default function PerpsView({
 
   // Mobile View Switcher: 'chart' | 'trade' | 'positions'
   const [mobileTab, setMobileTab] = useState<'chart' | 'trade' | 'positions'>(() => {
-    if (typeof window !== 'undefined' && window.location.hash.includes('trade')) return 'trade';
-    if (typeof window !== 'undefined' && window.location.hash.includes('positions')) return 'positions';
+    if (typeof window !== 'undefined') {
+      const search = window.location.search.toLowerCase();
+      const path = window.location.pathname.toLowerCase();
+      if (search.includes('tab=trade') || path.endsWith('/trade')) return 'trade';
+      if (search.includes('tab=positions') || path.endsWith('/positions')) return 'positions';
+    }
     return 'chart';
   });
   

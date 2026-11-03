@@ -119,14 +119,31 @@ const PLATFORM_NETWORKS = {
   }
 };
 
+const VALID_VIEWS = ['bridge', 'perps', 'pools', 'lend', 'docs', 'sdk', 'whitepaper'] as const;
+type MainView = typeof VALID_VIEWS[number] | 'gateway';
+
+function getViewFromUrl(): MainView {
+  if (typeof window === 'undefined') return 'gateway';
+  
+  // 1. Clean path routing: e.g. /perps, /swap, /bridge, /pools, /lend, /docs, /whitepaper, /sdk
+  const pathPart = window.location.pathname.replace(/^\/+/, '').split('/')[0].toLowerCase();
+  const normalizedPath = pathPart === 'swap' ? 'bridge' : pathPart;
+  if ((VALID_VIEWS as readonly string[]).includes(normalizedPath)) {
+    return normalizedPath as MainView;
+  }
+
+  // 2. Fallback to hash for legacy bookmarks (e.g. /#perps -> cleaned automatically)
+  const hashPart = window.location.hash.replace('#', '').split('/')[0].split('?')[0].toLowerCase();
+  const normalizedHash = hashPart === 'swap' ? 'bridge' : hashPart;
+  if ((VALID_VIEWS as readonly string[]).includes(normalizedHash)) {
+    return normalizedHash as MainView;
+  }
+
+  return 'gateway';
+}
+
 export default function App() {
-  const [mainView, setMainView] = useState<'bridge' | 'gateway' | 'pools' | 'docs' | 'sdk' | 'lend' | 'whitepaper' | 'perps'>(() => {
-    // Deep links: bsprotocol.xyz/#bridge, #perps, #pools, #lend, #docs, #sdk, #whitepaper
-    const cleanHash = typeof window !== 'undefined' ? window.location.hash.replace('#', '').split('/')[0].split('?')[0] : '';
-    return (['bridge', 'perps', 'pools', 'lend', 'docs', 'sdk', 'whitepaper'] as const).includes(cleanHash as any)
-      ? (cleanHash as 'bridge' | 'perps' | 'pools' | 'lend' | 'docs' | 'sdk' | 'whitepaper')
-      : 'gateway';
-  });
+  const [mainView, setMainView] = useState<MainView>(() => getViewFromUrl());
   const [darkMode, setDarkMode] = useState<boolean>(() => {
     return localStorage.getItem('bliq_theme') === 'dark' || 
       (!localStorage.getItem('bliq_theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
@@ -146,15 +163,27 @@ export default function App() {
   const [copied, setCopied] = useState<boolean>(false);
   const [platformNetwork, setPlatformNetwork] = useState<'mainnet' | 'testnet'>('testnet');
 
-  // Sync URL hash for shareable links (#whitepaper, #sdk, #docs, #bridge, #pools, #lend)
+  // Clean HTML5 History URL synchronization (No '#' hashes in URL!)
   useEffect(() => {
     if (typeof window === 'undefined' || isEmbed) return;
-    const nextHash = mainView === 'gateway' ? '' : `#${mainView}`;
-    if (window.location.hash !== nextHash) {
-      window.history.replaceState(null, '', nextHash || window.location.pathname + window.location.search);
+    const nextPath = mainView === 'gateway' ? '/' : `/${mainView}`;
+    
+    // Clean up any legacy hash and push clean path
+    if (window.location.pathname !== nextPath || window.location.hash) {
+      window.history.pushState(null, '', nextPath);
     }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [mainView, isEmbed]);
+
+  // Handle browser Back / Forward buttons seamlessly
+  useEffect(() => {
+    if (typeof window === 'undefined' || isEmbed) return;
+    const handlePopState = () => {
+      setMainView(getViewFromUrl());
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [isEmbed]);
 
   // Close brand dropdown on outside click or Escape key
   useEffect(() => {
