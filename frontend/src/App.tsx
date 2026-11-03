@@ -208,7 +208,15 @@ export default function App() {
   const brandMenuRef = useRef<HTMLDivElement | null>(null);
   const brandHoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [toast, setToast] = useState<{message: string, type: 'success'|'error'} | null>(null);
-  const [lang, setLang] = useState<'en' | 'es'>('en');
+  const [lang, setLang] = useState<'en' | 'es'>(() => {
+    if (typeof window !== 'undefined') {
+      const urlLang = new URLSearchParams(window.location.search).get('lang');
+      if (urlLang === 'es' || urlLang === 'en') return urlLang;
+      const saved = localStorage.getItem('bliq_lang');
+      if (saved === 'es' || saved === 'en') return saved;
+    }
+    return 'en';
+  });
   const [isScrolled, setIsScrolled] = useState<boolean>(false);
   const [copied, setCopied] = useState<boolean>(false);
   const [platformNetwork, setPlatformNetwork] = useState<'mainnet' | 'testnet'>('testnet');
@@ -255,6 +263,12 @@ export default function App() {
   }, [brandMenuOpen]);
 
   // Dynamic navbar scroll listener
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('bliq_lang', lang);
+    }
+  }, [lang]);
+
   useEffect(() => {
     const handleScroll = () => {
       setIsScrolled(window.scrollY > 10);
@@ -361,8 +375,20 @@ export default function App() {
   const [balancesLoading, setBalancesLoading] = useState<boolean>(false);
   const [isSwitchingChain, setIsSwitchingChain] = useState<boolean>(false);
 
-  const [showWalletModal, setShowWalletModal] = useState(false);
-  const [walletModalTab, setWalletModalTab] = useState<'bch' | 'evm'>('bch');
+  const [showWalletModal, setShowWalletModal] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('wallet') === 'open' || params.get('modal') === 'wallet';
+    }
+    return false;
+  });
+  const [walletModalTab, setWalletModalTab] = useState<'bch' | 'evm'>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('tab') === 'evm') return 'evm';
+    }
+    return 'bch';
+  });
   const [showAccountModal, setShowAccountModal] = useState(false);
   const [, setSelectedWalletType] = useState<'paytaca' | 'bch_wc2' | 'walletconnect' | 'injected' | null>(null);
 
