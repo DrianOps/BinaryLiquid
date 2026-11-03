@@ -1760,7 +1760,7 @@ export default function App() {
                       : 'text-ink-3 hover:text-ink'
                   }`}
                 >
-                  <img src="/bch-logo.png" className="w-3.5 h-3.5 object-contain" alt="BCH" />
+                  <img src="/BCH.png" className="w-3.5 h-3.5 object-contain" alt="BCH" />
                   <span>{t.tabBch}</span>
                   {bchWallet && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />}
                 </button>

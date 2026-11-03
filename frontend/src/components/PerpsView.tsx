@@ -81,7 +81,7 @@ const MARKETS = [
     minMargin: 5,
     tickDecimals: 2,
     assetDecimals: 3,
-    icon: '/bch-logo.png',
+    icon: '/BCH.png',
     initialPrice: 275.40,
     mmr: 0.01 // Maintenance margin rate 1%
   },
@@ -95,7 +95,7 @@ const MARKETS = [
     minMargin: 10,
     tickDecimals: 1,
     assetDecimals: 4,
-    icon: '/tokens/btc.png',
+    icon: '/BTC.png',
     initialPrice: 68420.0,
     mmr: 0.01
   },
@@ -109,7 +109,7 @@ const MARKETS = [
     minMargin: 10,
     tickDecimals: 2,
     assetDecimals: 3,
-    icon: '/tokens/eth.png',
+    icon: '/ETH.png',
     initialPrice: 2540.0,
     mmr: 0.01
   },
@@ -123,7 +123,7 @@ const MARKETS = [
     minMargin: 5,
     tickDecimals: 2,
     assetDecimals: 2,
-    icon: '/tokens/sol.png',
+    icon: '/SOL.png',
     initialPrice: 178.50,
     mmr: 0.025
   }
