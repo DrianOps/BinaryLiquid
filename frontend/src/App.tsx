@@ -78,7 +78,32 @@ const translations = {
     navWallet: "Connect Wallet",
     connect: "Connect Wallet",
     openWallet: "Connecting...",
-    disconnect: "Disconnect"
+    disconnect: "Disconnect",
+    modalConnectTitle: "Connect Wallet",
+    modalConnectSubtitle: "Choose a network and wallet to connect",
+    tabBch: "Bitcoin Cash",
+    tabEvm: "EVM (Polygon)",
+    detected: "Detected",
+    extension: "Extension",
+    mobileQr: "Mobile / QR",
+    connected: "Connected",
+    notConnected: "Not connected",
+    needWallet: "Need a Bitcoin Cash wallet?",
+    getPaytaca: "Get Paytaca",
+    getCashonize: "Get Cashonize",
+    accountTitle: "Connected Wallets",
+    accountSubtitle: "100% Non-Custodial",
+    copyAddr: "Copy Address",
+    disconnectBch: "Disconnect BCH",
+    disconnectEvm: "Disconnect EVM",
+    disconnectAll: "Disconnect All Wallets",
+    connectBchPrompt: "+ Connect Bitcoin Cash Wallet",
+    connectEvmPrompt: "+ Connect EVM Wallet",
+    liveBalances: "Live On-Chain Balances",
+    refresh: "Refresh",
+    refreshing: "Refreshing...",
+    switchNetworkPrompt: "⚡ Switch wallet network to",
+    switchingNetwork: "Switching network in wallet..."
   },
   es: {
     navSwap: "Bridge Swap",
@@ -90,7 +115,32 @@ const translations = {
     navWallet: "Conectar Billetera",
     connect: "Conectar Billetera",
     openWallet: "Conectando...",
-    disconnect: "Desconectar"
+    disconnect: "Desconectar",
+    modalConnectTitle: "Conectar Billetera",
+    modalConnectSubtitle: "Elige una red y billetera para conectar",
+    tabBch: "Bitcoin Cash",
+    tabEvm: "EVM (Polygon)",
+    detected: "Detectada",
+    extension: "Extensión",
+    mobileQr: "Móvil / QR",
+    connected: "Conectado",
+    notConnected: "No conectado",
+    needWallet: "¿Necesitas billetera Bitcoin Cash?",
+    getPaytaca: "Descargar Paytaca",
+    getCashonize: "Abrir Cashonize",
+    accountTitle: "Billeteras Conectadas",
+    accountSubtitle: "100% No-Custodio",
+    copyAddr: "Copiar Dirección",
+    disconnectBch: "Desconectar BCH",
+    disconnectEvm: "Desconectar EVM",
+    disconnectAll: "Desconectar Todas las Billeteras",
+    connectBchPrompt: "+ Conectar Billetera Bitcoin Cash",
+    connectEvmPrompt: "+ Conectar Billetera EVM",
+    liveBalances: "Saldos On-Chain en Vivo",
+    refresh: "Refrescar",
+    refreshing: "Actualizando...",
+    switchNetworkPrompt: "⚡ Cambiar red de la billetera a",
+    switchingNetwork: "Cambiando red en billetera..."
   }
 };
 
@@ -312,6 +362,7 @@ export default function App() {
   const [isSwitchingChain, setIsSwitchingChain] = useState<boolean>(false);
 
   const [showWalletModal, setShowWalletModal] = useState(false);
+  const [walletModalTab, setWalletModalTab] = useState<'bch' | 'evm'>('bch');
   const [showAccountModal, setShowAccountModal] = useState(false);
   const [, setSelectedWalletType] = useState<'paytaca' | 'bch_wc2' | 'walletconnect' | 'injected' | null>(null);
 
@@ -1424,63 +1475,64 @@ export default function App() {
       {/* NON-CUSTODIAL DUAL-CHAIN ACCOUNT MODAL */}
       <AnimatePresence>
         {showAccountModal && userContext && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[130] flex items-center justify-center p-4 overflow-y-auto">
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[130] flex items-center justify-center p-4 overflow-y-auto">
             <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              initial={{ opacity: 0, scale: 0.96, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 15 }}
-              transition={{ type: "spring", stiffness: 350, damping: 25 }}
-              className="bg-white dark:bg-[#121620] rounded-[32px] p-6 sm:p-7 w-full max-w-md shadow-2xl border border-gray-100 dark:border-gray-800 relative text-left my-6"
+              exit={{ opacity: 0, scale: 0.96, y: 10 }}
+              transition={{ duration: 0.16, ease: 'easeOut' }}
+              className="bg-surface border border-line rounded-card p-5 sm:p-6 w-full max-w-sm sm:max-w-md shadow-soft relative text-left my-6"
             >
               <button 
                 onClick={() => setShowAccountModal(false)}
-                className="absolute top-5 right-5 text-gray-400 hover:text-gray-900 dark:hover:text-white bg-gray-100 dark:bg-gray-800 w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs cursor-pointer"
+                className="absolute top-4 right-4 w-7 h-7 rounded-full bg-surface-2 hover:bg-surface-3 text-ink-3 hover:text-ink flex items-center justify-center transition-colors cursor-pointer"
+                title="Cerrar"
               >
-                ✕
+                <X className="w-3.5 h-3.5" />
               </button>
 
-              <div className="flex items-center gap-3 mb-5">
-                <div className="w-10 h-10 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
-                  <Wallet className="w-5 h-5" />
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-9 h-9 rounded-control bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
+                  <Wallet className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-gray-900 dark:text-white text-base">Billeteras Conectadas</h3>
-                  <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                    100% No-Custodio • {platformNetwork === 'testnet' ? 'Testnet (Chipnet + Amoy)' : 'Mainnet'}
+                  <h3 className="font-bold text-ink text-base">{t.accountTitle}</h3>
+                  <span className="text-[11px] text-ink-3 flex items-center gap-1.5 mt-0.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span>{t.accountSubtitle} • {platformNetwork === 'testnet' ? 'Chipnet + Amoy' : 'Mainnet'}</span>
                   </span>
                 </div>
               </div>
 
               {/* SLOT 1: BITCOIN CASH WALLET */}
-              <div className="p-3.5 rounded-2xl bg-gray-50 dark:bg-[#171d2b] border border-gray-200/80 dark:border-gray-700/80 mb-3">
+              <div className="p-3 rounded-control bg-surface-2 border border-line mb-3">
                 <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-[10px] uppercase font-bold text-emerald-600 dark:text-emerald-400 tracking-wider">
-                    Bitcoin Cash ({platformNetwork === 'testnet' ? 'Chipnet CashTokens' : 'Mainnet CashTokens'})
+                  <span className="text-[10px] uppercase font-bold text-ink-3 tracking-wider">
+                    {t.tabBch} ({platformNetwork === 'testnet' ? 'Chipnet' : 'Mainnet'})
                   </span>
                   {bchWallet && (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                    <span className="ui-badge ui-badge-success text-[10px]">
                       {bchWallet.provider}
                     </span>
                   )}
                 </div>
                 {bchWallet ? (
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-mono text-xs text-gray-900 dark:text-gray-200 truncate font-semibold">
+                    <span className="font-mono text-xs text-ink truncate font-semibold">
                       {bchWallet.tokenAddress || bchWallet.address}
                     </span>
                     <div className="flex items-center gap-1 shrink-0">
                       <button
                         onClick={() => copyToClipboard(bchWallet.tokenAddress || bchWallet.address)}
-                        className="p-1.5 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 hover:text-gray-900 dark:hover:text-white transition-colors cursor-pointer"
-                        title="Copiar CashAddr"
+                        className="p-1.5 rounded-control hover:bg-surface-3 text-ink-3 hover:text-ink transition-colors cursor-pointer"
+                        title={t.copyAddr}
                       >
                         {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
                       </button>
                       <button
                         onClick={handleDisconnectBch}
-                        className="p-1.5 rounded-lg hover:bg-red-100 dark:hover:bg-red-950/50 text-red-500 transition-colors cursor-pointer"
-                        title="Desconectar BCH"
+                        className="p-1.5 rounded-control hover:bg-rose-500/10 text-rose-500 transition-colors cursor-pointer"
+                        title={t.disconnectBch}
                       >
                         <LogOut className="w-3.5 h-3.5" />
                       </button>
@@ -1488,44 +1540,44 @@ export default function App() {
                   </div>
                 ) : (
                   <button
-                    onClick={() => { setShowAccountModal(false); setShowWalletModal(true); }}
-                    className="w-full py-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-bold text-xs transition-all cursor-pointer"
+                    onClick={() => { setShowAccountModal(false); setWalletModalTab('bch'); setShowWalletModal(true); }}
+                    className="w-full py-2 rounded-control bg-surface hover:bg-surface-3 border border-line text-ink font-semibold text-xs transition-colors cursor-pointer"
                   >
-                    + Conectar Paytaca / Cashonize (BCH)
+                    {t.connectBchPrompt}
                   </button>
                 )}
               </div>
 
               {/* SLOT 2: EVM POLYGON WALLET */}
-              <div className="p-3.5 rounded-2xl bg-gray-50 dark:bg-[#171d2b] border border-gray-200/80 dark:border-gray-700/80 mb-4">
+              <div className="p-3 rounded-control bg-surface-2 border border-line mb-3">
                 <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-[10px] uppercase font-bold text-blue-600 dark:text-blue-400 tracking-wider">
-                    EVM ({platformNetwork === 'testnet' ? 'Polygon Amoy 80002' : 'Polygon PoS 137'})
+                  <span className="text-[10px] uppercase font-bold text-ink-3 tracking-wider">
+                    {t.tabEvm} ({platformNetwork === 'testnet' ? 'Amoy 80002' : 'Polygon 137'})
                   </span>
                   {evmWallet && (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400">
-                      {evmWallet.provider} • Chain {evmWallet.chainId}
+                    <span className="ui-badge text-[10px]">
+                      {evmWallet.provider}
                     </span>
                   )}
                 </div>
                 {evmWallet ? (
                   <div className="space-y-2">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="font-mono text-xs text-gray-900 dark:text-gray-200 truncate font-semibold">
+                      <span className="font-mono text-xs text-ink truncate font-semibold">
                         {evmWallet.address}
                       </span>
                       <div className="flex items-center gap-1 shrink-0">
                         <button
                           onClick={() => copyToClipboard(evmWallet.address)}
-                          className="p-1.5 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 hover:text-gray-900 dark:hover:text-white transition-colors cursor-pointer"
-                          title="Copiar dirección 0x"
+                          className="p-1.5 rounded-control hover:bg-surface-3 text-ink-3 hover:text-ink transition-colors cursor-pointer"
+                          title={t.copyAddr}
                         >
                           {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
                         </button>
                         <button
                           onClick={handleDisconnectEvm}
-                          className="p-1.5 rounded-lg hover:bg-red-100 dark:hover:bg-red-950/50 text-red-500 transition-colors cursor-pointer"
-                          title="Desconectar EVM"
+                          className="p-1.5 rounded-control hover:bg-rose-500/10 text-rose-500 transition-colors cursor-pointer"
+                          title={t.disconnectEvm}
                         >
                           <LogOut className="w-3.5 h-3.5" />
                         </button>
@@ -1548,84 +1600,80 @@ export default function App() {
                                 : 'Red cambiada a Polygon PoS (137)'
                             );
                           } catch (e: any) {
-                            showToast(e?.message || 'No se pudo cambiar la red automáticamente', 'error');
+                            showToast(e?.message || 'Error switching network', 'error');
                           } finally {
                             setIsSwitchingChain(false);
                           }
                         }}
-                        className="w-full py-1.5 px-2.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-600 dark:text-amber-400 font-bold text-[11px] transition-all cursor-pointer"
+                        className="w-full py-1.5 px-2.5 rounded-control bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 font-semibold text-[11px] transition-colors cursor-pointer"
                       >
                         {isSwitchingChain
-                          ? 'Cambiando red en billetera...'
-                          : platformNetwork === 'testnet'
-                          ? '⚡ Cambiar billetera a Polygon Amoy (80002)'
-                          : '⚡ Cambiar billetera a Polygon Mainnet (137)'}
+                          ? t.switchingNetwork
+                          : `${t.switchNetworkPrompt} ${platformNetwork === 'testnet' ? 'Polygon Amoy (80002)' : 'Polygon PoS (137)'}`}
                       </button>
                     )}
                   </div>
                 ) : (
                   <button
-                    onClick={() => { setShowAccountModal(false); setShowWalletModal(true); }}
-                    className="w-full py-2 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 font-bold text-xs transition-all cursor-pointer"
+                    onClick={() => { setShowAccountModal(false); setWalletModalTab('evm'); setShowWalletModal(true); }}
+                    className="w-full py-2 rounded-control bg-surface hover:bg-surface-3 border border-line text-ink font-semibold text-xs transition-colors cursor-pointer"
                   >
-                    + Conectar MetaMask / WalletConnect (EVM)
+                    {t.connectEvmPrompt}
                   </button>
                 )}
               </div>
 
               {/* REAL ON-CHAIN BALANCES PREVIEW */}
-              <div className="space-y-2 mb-5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">
-                    Saldos On-Chain en Vivo
-                  </span>
+              <div className="space-y-1.5 mb-4">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="ui-label">{t.liveBalances}</span>
                   <button
                     onClick={() => refreshWalletBalances()}
-                    className="text-[10px] font-bold text-primary hover:underline cursor-pointer"
+                    className="text-[11px] font-semibold text-primary hover:underline cursor-pointer"
                   >
-                    {balancesLoading ? 'Actualizando...' : '↻ Actualizar'}
+                    {balancesLoading ? t.refreshing : `↻ ${t.refresh}`}
                   </button>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="p-2.5 rounded-xl bg-gray-50 dark:bg-[#171d2b] flex items-center justify-between border border-gray-100 dark:border-gray-800">
+                <div className="grid grid-cols-2 gap-1.5">
+                  <div className="p-2 rounded-control bg-surface-2 border border-line flex items-center justify-between">
                     <div className="flex items-center gap-1.5">
-                      <img src="/PUSD.png" className="w-5 h-5 rounded-full object-contain" alt="PUSD" />
-                      <span className="text-xs font-bold text-gray-900 dark:text-white">PUSD</span>
+                      <img src="/PUSD.png" className="w-4 h-4 rounded-full object-contain" alt="PUSD" />
+                      <span className="text-xs font-semibold text-ink">PUSD</span>
                     </div>
-                    <span className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                    <span className="text-xs font-mono font-semibold text-emerald-600 dark:text-emerald-400">
                       {walletBalances.PUSD.toFixed(2)}
                     </span>
                   </div>
 
-                  <div className="p-2.5 rounded-xl bg-gray-50 dark:bg-[#171d2b] flex items-center justify-between border border-gray-100 dark:border-gray-800">
+                  <div className="p-2 rounded-control bg-surface-2 border border-line flex items-center justify-between">
                     <div className="flex items-center gap-1.5">
-                      <img src="/USDT.png" className="w-5 h-5 rounded-full object-contain" alt="USDT" />
-                      <span className="text-xs font-bold text-gray-900 dark:text-white">USDT</span>
+                      <img src="/USDT.png" className="w-4 h-4 rounded-full object-contain" alt="USDT" />
+                      <span className="text-xs font-semibold text-ink">USDT</span>
                     </div>
-                    <span className="text-xs font-mono font-bold text-teal-600 dark:text-teal-400">
+                    <span className="text-xs font-mono font-semibold text-ink">
                       {walletBalances.USDT.toFixed(2)}
                     </span>
                   </div>
 
-                  <div className="p-2.5 rounded-xl bg-gray-50 dark:bg-[#171d2b] flex items-center justify-between border border-gray-100 dark:border-gray-800">
+                  <div className="p-2 rounded-control bg-surface-2 border border-line flex items-center justify-between">
                     <div className="flex items-center gap-1.5">
-                      <img src="/BCH.png" className="w-5 h-5 rounded-full object-contain" alt="BCH" />
-                      <span className="text-xs font-bold text-gray-900 dark:text-white">
+                      <img src="/BCH.png" className="w-4 h-4 rounded-full object-contain" alt="BCH" />
+                      <span className="text-xs font-semibold text-ink">
                         {platformNetwork === 'testnet' ? 'tBCH' : 'BCH'}
                       </span>
                     </div>
-                    <span className="text-xs font-mono font-bold text-gray-900 dark:text-white">
+                    <span className="text-xs font-mono font-semibold text-ink">
                       {walletBalances.BCH.toFixed(4)}
                     </span>
                   </div>
 
-                  <div className="p-2.5 rounded-xl bg-gray-50 dark:bg-[#171d2b] flex items-center justify-between border border-gray-100 dark:border-gray-800">
+                  <div className="p-2 rounded-control bg-surface-2 border border-line flex items-center justify-between">
                     <div className="flex items-center gap-1.5">
-                      <img src="/POL.png" className="w-5 h-5 rounded-full object-contain" alt="POL" />
-                      <span className="text-xs font-bold text-gray-900 dark:text-white">POL</span>
+                      <img src="/POL.png" className="w-4 h-4 rounded-full object-contain" alt="POL" />
+                      <span className="text-xs font-semibold text-ink">POL</span>
                     </div>
-                    <span className="text-xs font-mono font-bold text-gray-900 dark:text-white">
+                    <span className="text-xs font-mono font-semibold text-ink">
                       {walletBalances.POL.toFixed(4)}
                     </span>
                   </div>
@@ -1634,10 +1682,10 @@ export default function App() {
 
               <button 
                 onClick={() => { handleDisconnect(); setShowAccountModal(false); }}
-                className="w-full py-3 rounded-2xl bg-red-50 dark:bg-red-950/40 hover:bg-red-100 dark:hover:bg-red-900/50 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer"
+                className="w-full py-2.5 rounded-control bg-surface-2 hover:bg-rose-500/10 border border-line hover:border-rose-500/30 text-rose-500 font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 <LogOut className="w-3.5 h-3.5" />
-                <span>Desconectar Todas las Billeteras</span>
+                <span>{t.disconnectAll}</span>
               </button>
             </motion.div>
           </div>
@@ -1645,163 +1693,243 @@ export default function App() {
       </AnimatePresence>
 
       {/* MULTI-CHAIN WALLET SELECTOR MODAL (BCH CashTokens + EVM Polygon) */}
-      {showWalletModal && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[120] flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white dark:bg-[#121722] rounded-3xl p-6 sm:p-7 w-full max-w-md shadow-2xl relative border border-gray-100 dark:border-gray-800 my-6">
-            <button onClick={() => setShowWalletModal(false)} className="absolute top-5 right-5 text-gray-400 hover:text-gray-900 dark:hover:text-white bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 px-3 py-1 rounded-full transition-colors font-bold cursor-pointer">
-              ✕
-            </button>
-            <h2 className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white mb-1 text-center">Conectar Billetera</h2>
-            <p className="text-xs text-gray-400 text-center mb-5">
-              Puedes conectar tu billetera <strong>BCH</strong> y tu billetera <strong>EVM</strong> al mismo tiempo (100% No-Custodio)
-            </p>
-            
-            <div className="space-y-4">
-              {/* SECTION 1: BITCOIN CASH (PUSD CashTokens) */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between px-1">
-                  <span className="text-[10px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-                    1. Red Bitcoin Cash ({platformNetwork === 'testnet' ? 'Chipnet Testnet' : 'Mainnet'})
-                  </span>
-                  {bchWallet && (
-                    <span className="text-[10px] font-mono font-bold text-emerald-500">
-                      ✓ {formatAddress(bchWallet.tokenAddress)}
-                    </span>
-                  )}
-                </div>
+      <AnimatePresence>
+        {showWalletModal && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[130] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 10 }}
+              transition={{ duration: 0.16, ease: 'easeOut' }}
+              className="bg-surface border border-line rounded-card p-5 sm:p-6 w-full max-w-sm sm:max-w-[400px] shadow-soft relative text-left my-6"
+            >
+              {/* Close Button */}
+              <button
+                type="button"
+                onClick={() => setShowWalletModal(false)}
+                className="absolute top-4 right-4 w-7 h-7 rounded-full bg-surface-2 hover:bg-surface-3 text-ink-3 hover:text-ink flex items-center justify-center transition-colors cursor-pointer"
+                title="Cerrar"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
 
-                {/* Option 1A: Paytaca via WizardConnect / Extension */}
-                <button 
-                  onClick={() => handleConnectWallet('paytaca')} 
-                  className="w-full bg-gray-50 dark:bg-[#171e2c] hover:bg-orange-50 dark:hover:bg-orange-950/20 border border-gray-200 dark:border-gray-700 hover:border-primary/50 p-3.5 rounded-2xl flex items-center gap-3.5 transition-all group cursor-pointer text-left"
+              {/* Header */}
+              <div className="mb-4">
+                <h3 className="text-base sm:text-lg font-bold text-ink">
+                  {t.modalConnectTitle}
+                </h3>
+                <p className="text-xs text-ink-3 mt-0.5">
+                  {t.modalConnectSubtitle}
+                </p>
+              </div>
+
+              {/* Segmented Network Switcher: [Bitcoin Cash] | [EVM (Polygon)] */}
+              <div className="grid grid-cols-2 p-1 bg-surface-2 rounded-panel border border-line text-xs font-semibold mb-3">
+                <button
+                  type="button"
+                  onClick={() => setWalletModalTab('bch')}
+                  className={`py-1.5 px-2 rounded-control transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                    walletModalTab === 'bch'
+                      ? 'bg-surface text-ink shadow-soft font-bold'
+                      : 'text-ink-3 hover:text-ink'
+                  }`}
                 >
-                  <div className="w-11 h-11 bg-white dark:bg-[#1f2737] rounded-xl shadow-2xs flex items-center justify-center group-hover:scale-105 transition-transform p-2 shrink-0">
-                    <img src="/wizardconnect-logo.png" className="w-7 h-7 object-contain" alt="Paytaca" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h4 className="font-black text-gray-900 dark:text-white text-sm flex items-center gap-1.5 flex-wrap">
-                      <span>Paytaca Wallet</span>
-                      <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-500">
-                        {hasPaytacaExtension() ? 'Extensión Detectada' : 'WizardConnect QR'}
-                      </span>
-                    </h4>
-                    <p className="text-[10px] font-bold text-gray-500 dark:text-gray-400 mt-0.5">
-                      BCH & PUSD CashTokens nativo (Móvil / Extensión)
-                    </p>
-                  </div>
+                  <img src="/bch-logo.png" className="w-3.5 h-3.5 object-contain" alt="BCH" />
+                  <span>{t.tabBch}</span>
+                  {bchWallet && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />}
                 </button>
 
-                {/* Option 1B: Cashonize / Paytaca via BCH WalletConnect V2 (`wc2-bch-bcr`) */}
-                <button 
-                  onClick={() => handleConnectWallet('bch_wc2')} 
-                  className="w-full bg-gray-50 dark:bg-[#171e2c] hover:bg-emerald-50 dark:hover:bg-emerald-950/20 border border-gray-200 dark:border-gray-700 hover:border-emerald-500/50 p-3.5 rounded-2xl flex items-center gap-3.5 transition-all group cursor-pointer text-left"
+                <button
+                  type="button"
+                  onClick={() => setWalletModalTab('evm')}
+                  className={`py-1.5 px-2 rounded-control transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                    walletModalTab === 'evm'
+                      ? 'bg-surface text-ink shadow-soft font-bold'
+                      : 'text-ink-3 hover:text-ink'
+                  }`}
                 >
-                  <div className="w-11 h-11 bg-white dark:bg-[#1f2737] rounded-xl shadow-2xs flex items-center justify-center group-hover:scale-105 transition-transform p-2 shrink-0">
-                    <img src="/BCH.png" className="w-7 h-7 object-contain" alt="Cashonize" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h4 className="font-black text-gray-900 dark:text-white text-sm flex items-center gap-1.5 flex-wrap">
-                      <span>Cashonize / BCH WC2</span>
-                      <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-500">
-                        Chipnet & Mainnet
-                      </span>
-                    </h4>
-                    <p className="text-[10px] font-bold text-gray-500 dark:text-gray-400 mt-0.5">
-                      Estándar wc2-bch-bcr • Cashonize Web, Paytaca WC2, Zapit
-                    </p>
-                  </div>
+                  <img src="/POL.png" className="w-3.5 h-3.5 object-contain" alt="POL" />
+                  <span>{t.tabEvm}</span>
+                  {evmWallet && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />}
                 </button>
               </div>
 
-              {/* SECTION 2: EVM POLYGON (USDT) */}
-              <div className="space-y-2 pt-2 border-t border-gray-100 dark:border-gray-800">
-                <div className="flex items-center justify-between px-1">
-                  <span className="text-[10px] font-black uppercase tracking-wider text-blue-600 dark:text-blue-400">
-                    2. Red EVM ({platformNetwork === 'testnet' ? 'Polygon Amoy 80002' : 'Polygon PoS 137'})
-                  </span>
-                  {evmWallet && (
-                    <span className="text-[10px] font-mono font-bold text-blue-500">
-                      ✓ {formatAddress(evmWallet.address)}
-                    </span>
-                  )}
-                </div>
-
-                {/* Option 2A: Discovered EIP-6963 Extensions or Generic Browser Wallet / MetaMask Mobile */}
-                {discoveredEvmWallets.length > 0 ? (
-                  discoveredEvmWallets.slice(0, 3).map(w => (
+              {/* Wallet Options List (Clean, frictionless rows, NO paragraphs) */}
+              <div className="space-y-2">
+                {walletModalTab === 'bch' ? (
+                  <>
+                    {/* Paytaca */}
                     <button
-                      key={w.info.rdns}
-                      onClick={() => handleConnectWallet('injected', w.info.rdns)}
-                      className="w-full bg-gray-50 dark:bg-[#171e2c] hover:bg-amber-50 dark:hover:bg-amber-950/20 border border-gray-200 dark:border-gray-700 hover:border-amber-500/50 p-3.5 rounded-2xl flex items-center gap-3.5 transition-all group cursor-pointer text-left"
+                      type="button"
+                      onClick={() => handleConnectWallet('paytaca')}
+                      className="w-full flex items-center justify-between p-3 rounded-control bg-surface-2 hover:bg-surface-3 border border-line text-ink transition-all group cursor-pointer"
                     >
-                      <div className="w-11 h-11 bg-white dark:bg-[#1f2737] rounded-xl shadow-2xs flex items-center justify-center group-hover:scale-105 transition-transform p-2 shrink-0">
-                        <img src={w.info.icon} className="w-7 h-7 object-contain rounded-md" alt={w.info.name} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h4 className="font-black text-gray-900 dark:text-white text-sm flex items-center gap-1.5">
-                          <span>{w.info.name}</span>
-                          <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-500">
-                            Detectada
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-9 h-9 rounded-control bg-surface border border-line flex items-center justify-center shrink-0 p-1.5 shadow-2xs">
+                          <img src="/wizardconnect-logo.png" className="w-6 h-6 object-contain" alt="Paytaca" />
+                        </div>
+                        <div className="text-left min-w-0">
+                          <div className="text-sm font-semibold text-ink flex items-center gap-1.5">
+                            <span>Paytaca Wallet</span>
+                            {bchWallet?.provider?.includes('Paytaca') && (
+                              <span className="text-[10px] text-emerald-500 font-bold">✓</span>
+                            )}
+                          </div>
+                          <span className="text-[11px] text-ink-3">
+                            {hasPaytacaExtension() ? (lang === 'es' ? 'Extensión lista' : 'Extension ready') : 'WizardConnect QR'}
                           </span>
-                        </h4>
-                        <p className="text-[10px] font-bold text-gray-500 dark:text-gray-400 mt-0.5">
-                          Conexión directa EIP-6963 • Auto-configura Polygon Amoy
-                        </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span className="ui-badge text-[10px]">
+                          {hasPaytacaExtension() ? t.detected : t.mobileQr}
+                        </span>
+                        <ChevronRight className="w-4 h-4 text-ink-3 group-hover:text-ink transition-transform group-hover:translate-x-0.5" />
                       </div>
                     </button>
-                  ))
-                ) : (
-                  <button
-                    onClick={() => handleConnectWallet('injected')}
-                    className="w-full bg-gray-50 dark:bg-[#171e2c] hover:bg-amber-50 dark:hover:bg-amber-950/20 border border-gray-200 dark:border-gray-700 hover:border-amber-500/50 p-3.5 rounded-2xl flex items-center gap-3.5 transition-all group cursor-pointer text-left"
-                  >
-                    <div className="w-11 h-11 bg-white dark:bg-[#1f2737] rounded-xl shadow-2xs flex items-center justify-center group-hover:scale-105 transition-transform p-2 shrink-0">
-                      <img src="/POL.png" className="w-7 h-7 object-contain" alt="MetaMask" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h4 className="font-black text-gray-900 dark:text-white text-sm flex items-center gap-1.5">
-                        <span>MetaMask / Browser Wallet</span>
-                        <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500">
-                          {isMobileBrowser() ? 'App Móvil' : 'Extensión Web3'}
-                        </span>
-                      </h4>
-                      <p className="text-[10px] font-bold text-gray-500 dark:text-gray-400 mt-0.5">
-                        MetaMask, Rabby, Brave, Trust • Polygon Amoy (USDT)
-                      </p>
-                    </div>
-                  </button>
-                )}
 
-                {/* Option 2B: Official WalletConnect V2 EVM */}
-                <button 
-                  onClick={() => handleConnectWallet('walletconnect')} 
-                  className="w-full bg-gray-50 dark:bg-[#171e2c] hover:bg-blue-50 dark:hover:bg-blue-950/20 border border-gray-200 dark:border-gray-700 hover:border-blue-400/50 p-3.5 rounded-2xl flex items-center gap-3.5 transition-all group cursor-pointer text-left"
-                >
-                  <div className="w-11 h-11 bg-white dark:bg-[#1f2737] rounded-xl shadow-2xs flex items-center justify-center group-hover:scale-105 transition-transform p-2 shrink-0">
-                    <img src="https://raw.githubusercontent.com/WalletConnect/walletconnect-assets/master/Icon/Blue%20(Default)/Icon.svg" className="w-6 h-6 object-contain" alt="WC" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h4 className="font-black text-gray-900 dark:text-white text-sm flex items-center gap-1.5">
-                      <span>WalletConnect V2 (EVM)</span>
-                      <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-500">QR / Móvil</span>
-                    </h4>
-                    <p className="text-[10px] font-bold text-gray-500 dark:text-gray-400 mt-0.5">
-                      MetaMask Mobile, Trust, Rainbow, OKX, Coinbase
-                    </p>
-                  </div>
-                </button>
+                    {/* Cashonize / BCH WC2 */}
+                    <button
+                      type="button"
+                      onClick={() => handleConnectWallet('bch_wc2')}
+                      className="w-full flex items-center justify-between p-3 rounded-control bg-surface-2 hover:bg-surface-3 border border-line text-ink transition-all group cursor-pointer"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-9 h-9 rounded-control bg-surface border border-line flex items-center justify-center shrink-0 p-1.5 shadow-2xs">
+                          <img src="/BCH.png" className="w-6 h-6 object-contain" alt="Cashonize" />
+                        </div>
+                        <div className="text-left min-w-0">
+                          <div className="text-sm font-semibold text-ink flex items-center gap-1.5">
+                            <span>Cashonize / WC2</span>
+                            {bchWallet?.source === 'wc2-bch' && (
+                              <span className="text-[10px] text-emerald-500 font-bold">✓</span>
+                            )}
+                          </div>
+                          <span className="text-[11px] text-ink-3">Cashonize Web, Zapit, WC2</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span className="ui-badge text-[10px]">Web / QR</span>
+                        <ChevronRight className="w-4 h-4 text-ink-3 group-hover:text-ink transition-transform group-hover:translate-x-0.5" />
+                      </div>
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    {/* Discovered EIP-6963 Wallets or MetaMask / Browser Wallet */}
+                    {discoveredEvmWallets.length > 0 ? (
+                      discoveredEvmWallets.slice(0, 3).map((w) => (
+                        <button
+                          key={w.info.rdns}
+                          type="button"
+                          onClick={() => handleConnectWallet('injected', w.info.rdns)}
+                          className="w-full flex items-center justify-between p-3 rounded-control bg-surface-2 hover:bg-surface-3 border border-line text-ink transition-all group cursor-pointer"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-9 h-9 rounded-control bg-surface border border-line flex items-center justify-center shrink-0 p-1.5 shadow-2xs">
+                              <img src={w.info.icon} className="w-6 h-6 object-contain rounded" alt={w.info.name} />
+                            </div>
+                            <div className="text-left min-w-0">
+                              <div className="text-sm font-semibold text-ink flex items-center gap-1.5">
+                                <span>{w.info.name}</span>
+                                {evmWallet?.address && (
+                                  <span className="text-[10px] text-emerald-500 font-bold">✓</span>
+                                )}
+                              </div>
+                              <span className="text-[11px] text-ink-3">{t.extension}</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <span className="ui-badge ui-badge-success text-[10px]">{t.detected}</span>
+                            <ChevronRight className="w-4 h-4 text-ink-3 group-hover:text-ink transition-transform group-hover:translate-x-0.5" />
+                          </div>
+                        </button>
+                      ))
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleConnectWallet('injected')}
+                        className="w-full flex items-center justify-between p-3 rounded-control bg-surface-2 hover:bg-surface-3 border border-line text-ink transition-all group cursor-pointer"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-9 h-9 rounded-control bg-surface border border-line flex items-center justify-center shrink-0 p-1.5 shadow-2xs">
+                            <img src="/POL.png" className="w-6 h-6 object-contain" alt="Browser Wallet" />
+                          </div>
+                          <div className="text-left min-w-0">
+                            <div className="text-sm font-semibold text-ink flex items-center gap-1.5">
+                              <span>Browser Wallet</span>
+                              {evmWallet && <span className="text-[10px] text-emerald-500 font-bold">✓</span>}
+                            </div>
+                            <span className="text-[11px] text-ink-3">MetaMask, Rabby, Brave</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className="ui-badge text-[10px]">{isMobileBrowser() ? 'Mobile' : t.extension}</span>
+                          <ChevronRight className="w-4 h-4 text-ink-3 group-hover:text-ink transition-transform group-hover:translate-x-0.5" />
+                        </div>
+                      </button>
+                    )}
+
+                    {/* Official WalletConnect V2 EVM */}
+                    <button
+                      type="button"
+                      onClick={() => handleConnectWallet('walletconnect')}
+                      className="w-full flex items-center justify-between p-3 rounded-control bg-surface-2 hover:bg-surface-3 border border-line text-ink transition-all group cursor-pointer"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-9 h-9 rounded-control bg-surface border border-line flex items-center justify-center shrink-0 p-1.5 shadow-2xs">
+                          <img
+                            src="https://raw.githubusercontent.com/WalletConnect/walletconnect-assets/master/Icon/Blue%20(Default)/Icon.svg"
+                            className="w-5 h-5 object-contain"
+                            alt="WalletConnect"
+                          />
+                        </div>
+                        <div className="text-left min-w-0">
+                          <div className="text-sm font-semibold text-ink flex items-center gap-1.5">
+                            <span>WalletConnect</span>
+                            {evmWallet?.source === 'wc2-evm' && (
+                              <span className="text-[10px] text-emerald-500 font-bold">✓</span>
+                            )}
+                          </div>
+                          <span className="text-[11px] text-ink-3">Trust, Rainbow, OKX, Mobile</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span className="ui-badge text-[10px]">{t.mobileQr}</span>
+                        <ChevronRight className="w-4 h-4 text-ink-3 group-hover:text-ink transition-transform group-hover:translate-x-0.5" />
+                      </div>
+                    </button>
+                  </>
+                )}
               </div>
-            </div>
-            
-            <p className="text-center text-xs text-gray-400 dark:text-gray-500 font-bold mt-5">
-              ¿Necesitas billetera BCH Testnet?{' '}
-              <a href="https://cashonize.com" target="_blank" rel="noreferrer" className="text-emerald-500 hover:underline">Cashonize</a>
-              {' • '}
-              <a href="https://paytaca.com" target="_blank" rel="noreferrer" className="text-primary hover:underline">Paytaca</a>
-            </p>
+
+              {/* Minimalist 1-Line Footer */}
+              <div className="pt-3 mt-3 border-t border-line flex items-center justify-between text-[11px] text-ink-3">
+                <span>{t.needWallet}</span>
+                <div className="flex items-center gap-2">
+                  <a
+                    href="https://paytaca.com"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="hover:text-ink font-semibold text-primary transition-colors"
+                  >
+                    Paytaca
+                  </a>
+                  <span>·</span>
+                  <a
+                    href="https://cashonize.com"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="hover:text-ink font-semibold transition-colors"
+                  >
+                    Cashonize
+                  </a>
+                </div>
+              </div>
+            </motion.div>
           </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
 
       {/* TOAST ALERTS */}
       {toast && (
