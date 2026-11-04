@@ -13,7 +13,10 @@ import {
 import {
   cashAddressToLockingBytecode,
   lockingBytecodeToCashAddress,
-  stringify
+  stringify,
+  hash256,
+  binToHex,
+  hexToBin
 } from '@bitauth/libauth';
 import { config } from '../config.js';
 import { db } from './db.js';
@@ -998,7 +1001,7 @@ class BchService {
     }
 
     const wcTxRaw = txBuilder.generateWcTransactionObject({
-      broadcast: true,
+      broadcast: false,
       userPrompt
     });
     const wcTransaction = JSON.parse(stringify(wcTxRaw));
@@ -1023,8 +1026,26 @@ class BchService {
       throw new Error(`Proveedor Electrum no disponible para ${isChipnet ? 'Chipnet' : 'Mainnet'}`);
     }
     const cleanHex = String(txHex || '').trim().replace(/^0x/i, '');
-    const txId = await provider.sendRawTransaction(cleanHex);
-    return txId;
+    try {
+      const txId = await provider.sendRawTransaction(cleanHex);
+      return txId;
+    } catch (err) {
+      const msg = String(err.message || '').toLowerCase();
+      if (
+        msg.includes('already in mempool') ||
+        msg.includes('txn-already-known') ||
+        msg.includes('already known') ||
+        msg.includes('missing inputs')
+      ) {
+        try {
+          const bin = hexToBin(cleanHex);
+          const hash = hash256(bin);
+          const reversed = new Uint8Array(hash).reverse();
+          return binToHex(reversed);
+        } catch {}
+      }
+      throw err;
+    }
   }
 
   /**

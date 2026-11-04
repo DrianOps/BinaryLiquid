@@ -886,9 +886,22 @@ export async function executeBchSwapDeposit(params: {
     onStatus?.('📱 Revisa Paytaca en tu teléfono: autoriza la transacción con 1 toque...');
     const sessionPaths = typeof wizardManager.getSessionPaths === 'function' ? wizardManager.getSessionPaths() : [];
     const defaultPathName = sessionPaths.find((p: any) => p.name === 'receive')?.name || sessionPaths[0]?.name || 'receive';
-    const inputPaths: [number, string, number][] = (buildData.wcTransaction.inputs || []).map((_: any, idx: number) => [idx, defaultPathName, 0]);
+
+    // CRITICAL: Extract inputs correctly from buildData.wcTransaction.transaction.inputs
+    const rawInputs =
+      buildData.wcTransaction?.transaction?.inputs ||
+      buildData.wcTransaction?.inputs ||
+      [];
+    const inputPaths: [number, string, number][] = rawInputs.map((_: any, idx: number) => [idx, defaultPathName, 0]);
+
+    // Keep broadcast false so Paytaca signs cleanly and returns the hex for dApp broadcast
+    const wcTxToSend = {
+      ...buildData.wcTransaction,
+      broadcast: false
+    };
+
     const response: any = await wizardManager.signTransaction({
-      transaction: buildData.wcTransaction,
+      transaction: wcTxToSend,
       inputPaths
     });
 
