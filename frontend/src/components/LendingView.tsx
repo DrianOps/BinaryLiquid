@@ -911,13 +911,13 @@ export default function LendingView({
           <div className="flex items-center gap-2 mb-1">
             <h1 className="ui-title">{t.heroTitle}</h1>
             <span className={isTestnet ? 'ui-badge-warn' : 'ui-badge-danger'}>
-              {isTestnet ? 'Testnet' : 'Sin Liquidez'}
+              {isTestnet ? 'Testnet' : (isEs ? 'Sin Liquidez' : 'No Liquidity')}
             </span>
           </div>
           <p className="ui-subtitle">
             {isTestnet
-              ? 'Bloquea colateral BCH en tu Covenant personal y toma préstamos en PUSD o USDT.'
-              : 'Mainnet sin liquidez activa. Cambia a Testnet para operar.'}
+              ? (isEs ? 'Bloquea colateral BCH en tu Covenant personal y toma préstamos en PUSD o USDT.' : 'Lock BCH collateral in your personal Covenant and borrow PUSD or USDT.')
+              : (isEs ? 'Mainnet sin liquidez activa. Cambia a Testnet para operar.' : 'Mainnet has no active liquidity. Switch to Testnet to operate.')}
           </p>
         </div>
 
@@ -929,10 +929,10 @@ export default function LendingView({
               onRefreshBalances?.();
             }}
             className="ui-btn-sm ui-btn-secondary"
-            title="Actualizar datos en cadena"
+            title={isEs ? 'Actualizar datos en cadena' : 'Refresh on-chain data'}
           >
             <RefreshCw className="w-3.5 h-3.5" />
-            <span>Actualizar</span>
+            <span>{isEs ? 'Actualizar' : 'Refresh'}</span>
           </button>
         </div>
       </div>

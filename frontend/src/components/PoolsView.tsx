@@ -134,7 +134,7 @@ const poolTexts = {
     subtitleTestnet:
       'Provide real on-chain liquidity into BinaryLiquidVault.cash (BCH Chipnet) and BinaryLiquidVault.sol (Polygon Amoy). Earn 0.20% fees from every PUSD ⟷ USDT cross-chain swap.',
     subtitleMainnet:
-      'Mainnet vaults currently have no active liquidity (Sin Liquidez). Switch to Testnet to test live non-custodial liquidity provision on PUSD ⟷ USDT.',
+      'Mainnet vaults currently have no active liquidity. Switch to Testnet to test live non-custodial liquidity provision on PUSD ⟷ USDT.',
 
     statTvlLabel: 'Total Protocol TVL',
     statTvlSubTestnet: 'Verified On-Chain Smart Contracts',
@@ -164,7 +164,7 @@ const poolTexts = {
     verifyTitle: 'Mark custom pair as verified',
     viewExplorer: 'Inspect Smart Contract on Explorer',
     statusActive: 'Active',
-    statusNoLiquidity: 'Sin Liquidez',
+    statusNoLiquidity: 'No Liquidity',
     statusFunding: 'Bootstrapping',
     unlockGoal: 'Unlock Goal',
     unlockRemainingPrefix: 'Remaining:',
