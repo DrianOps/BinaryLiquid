@@ -175,7 +175,13 @@ export default function BridgeSwap({
   const [tokenModalTarget, setTokenModalTarget] = useState<'sell' | 'buy' | null>(null);
 
   // Amounts & Destination
-  const [amount, setAmount] = useState<string>('');
+  const [amount, setAmount] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('amount') || '';
+    }
+    return '';
+  });
   const [recipientAddress, setRecipientAddress] = useState<string>('');
   const [targetRate, setTargetRate] = useState<string>('1.00');
 
