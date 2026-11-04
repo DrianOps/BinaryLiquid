@@ -66,7 +66,7 @@ class BchService {
 
     // 2. Initialize Chipnet Watchman Signer + Non-Custodial Covenant
     try {
-      this.chipnetProvider = new ElectrumNetworkProvider('chipnet');
+      this.chipnetProvider = new ElectrumNetworkProvider('chipnet', { hostname: 'chipnet.imaginary.cash' });
       const chipnetWif = config.bch.watchmanChipnetWif;
       if (chipnetWif && chipnetWif.length > 20) {
         this.chipnetSigner = await TestNetWallet.fromWIF(chipnetWif);
