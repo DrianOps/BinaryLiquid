@@ -494,7 +494,13 @@ class BchService {
         value: 1000n,
         amount: rawUnits,
         category
-      })
+      }),
+      // Gas subsidy so testnet users/judges always have tBCH for miner fees on future swaps
+      {
+        cashaddr: tokenAddress,
+        value: 50000n,
+        unit: 'satoshis'
+      }
     ]);
 
     return {
@@ -943,11 +949,25 @@ class BchService {
           gatheredSats += BigInt(u.satoshis);
           if (gatheredSats >= minRequiredSats + 500n) break;
         }
+
+        // If pure BCH is still lacking, pool remaining token UTXOs of same category to gather their 1000 sats dust
+        if (gatheredSats < minRequiredSats) {
+          const usedIds = new Set(txBuilder.inputs.map(i => `${i.outpointTransactionHash}:${i.outpointIndex}`));
+          for (const u of tokenUtxos) {
+            const key = `${u.txid}:${u.vout}`;
+            if (usedIds.has(key)) continue;
+            usedIds.add(key);
+            txBuilder.addInput(u, unlocker);
+            gatheredUnits += BigInt(u.token.amount);
+            gatheredSats += BigInt(u.satoshis);
+            if (gatheredSats >= minRequiredSats + 500n) break;
+          }
+        }
       }
 
       if (gatheredSats < (tokenChangeUnits > 0n ? 2500n : 1500n)) {
         throw new Error(
-          `Necesitas al menos ~0.00003 BCH de gas en tu billetera para pagar el miner fee de red.`
+          `Necesitas al menos ~0.00003 BCH de gas libre en tu dirección (${senderBaseAddr}) para el miner fee de red.`
         );
       }
 
@@ -991,6 +1011,20 @@ class BchService {
       senderBaseAddr,
       senderTokenAddr
     };
+  }
+
+  /**
+   * Broadcasts a user-signed raw transaction hex directly to the Electrum network.
+   */
+  async broadcastTransaction(txHex, isChipnet = true) {
+    await this.readyPromise;
+    const provider = isChipnet ? this.chipnetProvider : this.mainnetProvider;
+    if (!provider) {
+      throw new Error(`Proveedor Electrum no disponible para ${isChipnet ? 'Chipnet' : 'Mainnet'}`);
+    }
+    const cleanHex = String(txHex || '').trim().replace(/^0x/i, '');
+    const txId = await provider.sendRawTransaction(cleanHex);
+    return txId;
   }
 
   /**
