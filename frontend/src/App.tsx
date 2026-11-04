@@ -20,6 +20,7 @@ import {
   ArrowRight, 
   Copy, 
   Check, 
+  Edit3,
   ExternalLink, 
   ShieldCheck,
   ChevronRight,
@@ -103,7 +104,19 @@ const translations = {
     refresh: "Refresh",
     refreshing: "Refreshing...",
     switchNetworkPrompt: "⚡ Switch wallet network to",
-    switchingNetwork: "Switching network in wallet..."
+    switchingNetwork: "Switching network in wallet...",
+    editAddress: "Edit Address",
+    saveAddress: "Save",
+    cancelEdit: "Cancel",
+    enterCashAddress: "Enter CashAddress (bchtest:... or bitcoincash:...)",
+    manualAddressTitle: "Manual CashAddress",
+    manualAddressSubtitle: "Paste your Paytaca or Cashonize address directly",
+    manualAddressPrompt: "Enter your Bitcoin Cash CashAddress:",
+    orManualAddress: "or paste manual address",
+    connectBchNotice: "Connect BCH",
+    connectEvmNotice: "Connect EVM",
+    addressUpdated: "Bitcoin Cash address updated",
+    invalidAddress: "Invalid CashAddress"
   },
   es: {
     navSwap: "Bridge Swap",
@@ -140,7 +153,19 @@ const translations = {
     refresh: "Refrescar",
     refreshing: "Actualizando...",
     switchNetworkPrompt: "⚡ Cambiar red de la billetera a",
-    switchingNetwork: "Cambiando red en billetera..."
+    switchingNetwork: "Cambiando red en billetera...",
+    editAddress: "Editar Dirección",
+    saveAddress: "Guardar",
+    cancelEdit: "Cancelar",
+    enterCashAddress: "Ingresa tu CashAddress (bchtest:... o bitcoincash:...)",
+    manualAddressTitle: "Dirección Manual (Pega tu CashAddress)",
+    manualAddressSubtitle: "Pega tu dirección de Paytaca o Cashonize directamente",
+    manualAddressPrompt: "Ingresa tu CashAddress de Bitcoin Cash:",
+    orManualAddress: "o ingresar dirección manual",
+    connectBchNotice: "Conecta BCH",
+    connectEvmNotice: "Conecta EVM",
+    addressUpdated: "Dirección de Bitcoin Cash actualizada",
+    invalidAddress: "CashAddress no válida"
   }
 };
 
@@ -311,7 +336,7 @@ export default function App() {
     address: string;
     tokenAddress: string;
     provider: string;
-    source: 'wizard' | 'wc2-bch' | 'extension';
+    source: 'wizard' | 'wc2-bch' | 'extension' | 'manual';
   } | null>(() => {
     try {
       const raw = localStorage.getItem('bliq_wallets_v2');
@@ -391,6 +416,10 @@ export default function App() {
   });
   const [showAccountModal, setShowAccountModal] = useState(false);
   const [, setSelectedWalletType] = useState<'paytaca' | 'bch_wc2' | 'walletconnect' | 'injected' | null>(null);
+  const [isEditingBch, setIsEditingBch] = useState<boolean>(false);
+  const [customBchInput, setCustomBchInput] = useState<string>('');
+  const [showManualBchInput, setShowManualBchInput] = useState<boolean>(false);
+  const [manualBchModalInput, setManualBchModalInput] = useState<string>('');
 
   const t = translations[lang];
   const wc = useWizardConnect({ dappName: 'BinaryLiquid Gateway', persistSession: true });
@@ -594,6 +623,31 @@ export default function App() {
         setWalletBalances(data.user.balances);
       }
     } catch {}
+  };
+
+  const handleSaveCustomBch = (rawInput: string) => {
+    const trimmed = rawInput.trim();
+    if (!trimmed) return;
+    const isTest = platformNetwork === 'testnet';
+    const base = convertCashAddressNetwork(trimmed, isTest, false);
+    const token = convertCashAddressNetwork(trimmed, isTest, true);
+    if (!base) {
+      showToast(t.invalidAddress, 'error');
+      return;
+    }
+    setBchWallet({
+      address: base,
+      tokenAddress: token || base,
+      provider: 'Paytaca / Manual',
+      source: 'manual'
+    });
+    registerBackendSession(token || base, base, evmWallet?.address || null, 'Manual');
+    refreshWalletBalances(base, evmWallet?.address || null);
+    showToast(t.addressUpdated, 'success');
+    setIsEditingBch(false);
+    setShowManualBchInput(false);
+    setCustomBchInput('');
+    setManualBchModalInput('');
   };
 
   const handleConnectWallet = async (
@@ -1595,34 +1649,106 @@ export default function App() {
                   )}
                 </div>
                 {bchWallet ? (
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-mono text-xs text-ink truncate font-semibold">
-                      {bchWallet.tokenAddress || bchWallet.address}
-                    </span>
-                    <div className="flex items-center gap-1 shrink-0">
+                  !isEditingBch ? (
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono text-xs text-ink truncate font-semibold" title={bchWallet.tokenAddress || bchWallet.address}>
+                        {bchWallet.tokenAddress || bchWallet.address}
+                      </span>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={() => {
+                            setCustomBchInput(bchWallet.tokenAddress || bchWallet.address);
+                            setIsEditingBch(true);
+                          }}
+                          className="p-1.5 rounded-control hover:bg-surface-3 text-ink-3 hover:text-ink transition-colors cursor-pointer"
+                          title={t.editAddress}
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => copyToClipboard(bchWallet.tokenAddress || bchWallet.address)}
+                          className="p-1.5 rounded-control hover:bg-surface-3 text-ink-3 hover:text-ink transition-colors cursor-pointer"
+                          title={t.copyAddr}
+                        >
+                          {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                        </button>
+                        <button
+                          onClick={handleDisconnectBch}
+                          className="p-1.5 rounded-control hover:bg-rose-500/10 text-rose-500 transition-colors cursor-pointer"
+                          title={t.disconnectBch}
+                        >
+                          <LogOut className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-2 mt-1">
+                      <input
+                        type="text"
+                        value={customBchInput}
+                        onChange={(e) => setCustomBchInput(e.target.value)}
+                        placeholder={t.enterCashAddress}
+                        className="w-full px-2.5 py-1.5 text-xs font-mono rounded-control bg-surface border border-line text-ink focus:outline-none focus:border-primary"
+                        autoFocus
+                      />
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => { setIsEditingBch(false); setCustomBchInput(''); }}
+                          className="px-2.5 py-1 text-xs text-ink-3 hover:text-ink rounded-control hover:bg-surface-3 cursor-pointer"
+                        >
+                          {t.cancelEdit}
+                        </button>
+                        <button
+                          onClick={() => handleSaveCustomBch(customBchInput)}
+                          className="px-2.5 py-1 text-xs font-semibold text-white bg-primary hover:bg-primary-hover rounded-control cursor-pointer"
+                        >
+                          {t.saveAddress}
+                        </button>
+                      </div>
+                    </div>
+                  )
+                ) : (
+                  !isEditingBch ? (
+                    <div className="space-y-1.5">
                       <button
-                        onClick={() => copyToClipboard(bchWallet.tokenAddress || bchWallet.address)}
-                        className="p-1.5 rounded-control hover:bg-surface-3 text-ink-3 hover:text-ink transition-colors cursor-pointer"
-                        title={t.copyAddr}
+                        onClick={() => { setShowAccountModal(false); setWalletModalTab('bch'); setShowWalletModal(true); }}
+                        className="w-full py-2 rounded-control bg-surface hover:bg-surface-3 border border-line text-ink font-semibold text-xs transition-colors cursor-pointer"
                       >
-                        {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                        {t.connectBchPrompt}
                       </button>
                       <button
-                        onClick={handleDisconnectBch}
-                        className="p-1.5 rounded-control hover:bg-rose-500/10 text-rose-500 transition-colors cursor-pointer"
-                        title={t.disconnectBch}
+                        onClick={() => { setIsEditingBch(true); setCustomBchInput(''); }}
+                        className="w-full text-center text-[11px] text-ink-3 hover:text-primary transition-colors cursor-pointer font-medium"
                       >
-                        <LogOut className="w-3.5 h-3.5" />
+                        {t.orManualAddress}
                       </button>
                     </div>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => { setShowAccountModal(false); setWalletModalTab('bch'); setShowWalletModal(true); }}
-                    className="w-full py-2 rounded-control bg-surface hover:bg-surface-3 border border-line text-ink font-semibold text-xs transition-colors cursor-pointer"
-                  >
-                    {t.connectBchPrompt}
-                  </button>
+                  ) : (
+                    <div className="space-y-2 mt-1">
+                      <input
+                        type="text"
+                        value={customBchInput}
+                        onChange={(e) => setCustomBchInput(e.target.value)}
+                        placeholder={t.enterCashAddress}
+                        className="w-full px-2.5 py-1.5 text-xs font-mono rounded-control bg-surface border border-line text-ink focus:outline-none focus:border-primary"
+                        autoFocus
+                      />
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => { setIsEditingBch(false); setCustomBchInput(''); }}
+                          className="px-2.5 py-1 text-xs text-ink-3 hover:text-ink rounded-control hover:bg-surface-3 cursor-pointer"
+                        >
+                          {t.cancelEdit}
+                        </button>
+                        <button
+                          onClick={() => handleSaveCustomBch(customBchInput)}
+                          className="px-2.5 py-1 text-xs font-semibold text-white bg-primary hover:bg-primary-hover rounded-control cursor-pointer"
+                        >
+                          {t.saveAddress}
+                        </button>
+                      </div>
+                    </div>
+                  )
                 )}
               </div>
 
@@ -1719,9 +1845,18 @@ export default function App() {
                       <img src="/PUSD.png" className="w-4 h-4 rounded-full object-contain" alt="PUSD" />
                       <span className="text-xs font-semibold text-ink">PUSD</span>
                     </div>
-                    <span className="text-xs font-mono font-semibold text-emerald-600 dark:text-emerald-400">
-                      {walletBalances.PUSD.toFixed(2)}
-                    </span>
+                    {bchWallet ? (
+                      <span className="text-xs font-mono font-semibold text-emerald-600 dark:text-emerald-400">
+                        {walletBalances.PUSD.toFixed(2)}
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => { setShowAccountModal(false); setWalletModalTab('bch'); setShowWalletModal(true); }}
+                        className="text-[10px] text-ink-3 hover:text-primary transition-colors cursor-pointer font-medium"
+                      >
+                        -- ({t.connectBchNotice})
+                      </button>
+                    )}
                   </div>
 
                   <div className="p-2 rounded-control bg-surface-2 border border-line flex items-center justify-between">
@@ -1729,9 +1864,18 @@ export default function App() {
                       <img src="/USDT.png" className="w-4 h-4 rounded-full object-contain" alt="USDT" />
                       <span className="text-xs font-semibold text-ink">USDT</span>
                     </div>
-                    <span className="text-xs font-mono font-semibold text-ink">
-                      {walletBalances.USDT.toFixed(2)}
-                    </span>
+                    {evmWallet ? (
+                      <span className="text-xs font-mono font-semibold text-ink">
+                        {walletBalances.USDT.toFixed(2)}
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => { setShowAccountModal(false); setWalletModalTab('evm'); setShowWalletModal(true); }}
+                        className="text-[10px] text-ink-3 hover:text-primary transition-colors cursor-pointer font-medium"
+                      >
+                        -- ({t.connectEvmNotice})
+                      </button>
+                    )}
                   </div>
 
                   <div className="p-2 rounded-control bg-surface-2 border border-line flex items-center justify-between">
@@ -1741,9 +1885,18 @@ export default function App() {
                         {platformNetwork === 'testnet' ? 'tBCH' : 'BCH'}
                       </span>
                     </div>
-                    <span className="text-xs font-mono font-semibold text-ink">
-                      {walletBalances.BCH.toFixed(4)}
-                    </span>
+                    {bchWallet ? (
+                      <span className="text-xs font-mono font-semibold text-ink">
+                        {walletBalances.BCH.toFixed(4)}
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => { setShowAccountModal(false); setWalletModalTab('bch'); setShowWalletModal(true); }}
+                        className="text-[10px] text-ink-3 hover:text-primary transition-colors cursor-pointer font-medium"
+                      >
+                        -- ({t.connectBchNotice})
+                      </button>
+                    )}
                   </div>
 
                   <div className="p-2 rounded-control bg-surface-2 border border-line flex items-center justify-between">
@@ -1751,9 +1904,18 @@ export default function App() {
                       <img src="/POL.png" className="w-4 h-4 rounded-full object-contain" alt="POL" />
                       <span className="text-xs font-semibold text-ink">POL</span>
                     </div>
-                    <span className="text-xs font-mono font-semibold text-ink">
-                      {walletBalances.POL.toFixed(4)}
-                    </span>
+                    {evmWallet ? (
+                      <span className="text-xs font-mono font-semibold text-ink">
+                        {walletBalances.POL.toFixed(4)}
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => { setShowAccountModal(false); setWalletModalTab('evm'); setShowWalletModal(true); }}
+                        className="text-[10px] text-ink-3 hover:text-primary transition-colors cursor-pointer font-medium"
+                      >
+                        -- ({t.connectEvmNotice})
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1891,6 +2053,65 @@ export default function App() {
                         <ChevronRight className="w-4 h-4 text-ink-3 group-hover:text-ink transition-transform group-hover:translate-x-0.5" />
                       </div>
                     </button>
+
+                    {/* Manual CashAddress (Direct Paste) */}
+                    {!showManualBchInput ? (
+                      <button
+                        type="button"
+                        onClick={() => setShowManualBchInput(true)}
+                        className="w-full flex items-center justify-between p-3 rounded-control bg-surface-2 hover:bg-surface-3 border border-line text-ink transition-all group cursor-pointer"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-9 h-9 rounded-control bg-surface border border-line flex items-center justify-center shrink-0 p-1.5 shadow-2xs">
+                            <Edit3 className="w-4 h-4 text-primary" />
+                          </div>
+                          <div className="text-left min-w-0">
+                            <div className="text-sm font-semibold text-ink flex items-center gap-1.5">
+                              <span>{t.manualAddressTitle}</span>
+                              {bchWallet?.source === 'manual' && (
+                                <span className="text-[10px] text-emerald-500 font-bold">✓</span>
+                              )}
+                            </div>
+                            <span className="text-[11px] text-ink-3">{t.manualAddressSubtitle}</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className="ui-badge text-[10px]">P2PKH</span>
+                          <ChevronRight className="w-4 h-4 text-ink-3 group-hover:text-ink transition-transform group-hover:translate-x-0.5" />
+                        </div>
+                      </button>
+                    ) : (
+                      <div className="p-3 rounded-control bg-surface-2 border border-primary/30 space-y-2">
+                        <span className="text-xs font-semibold text-ink block">{t.manualAddressPrompt}</span>
+                        <input
+                          type="text"
+                          value={manualBchModalInput}
+                          onChange={(e) => setManualBchModalInput(e.target.value)}
+                          placeholder={platformNetwork === 'testnet' ? 'bchtest:qp...' : 'bitcoincash:qp...'}
+                          className="w-full px-3 py-2 text-xs font-mono rounded-control bg-surface border border-line text-ink placeholder:text-ink-3 focus:outline-none focus:border-primary"
+                          autoFocus
+                        />
+                        <div className="flex items-center justify-end gap-2 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => { setShowManualBchInput(false); setManualBchModalInput(''); }}
+                            className="px-3 py-1.5 text-xs text-ink-3 hover:text-ink rounded-control hover:bg-surface-3 cursor-pointer"
+                          >
+                            {t.cancelEdit}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleSaveCustomBch(manualBchModalInput);
+                              setShowWalletModal(false);
+                            }}
+                            className="px-3 py-1.5 text-xs font-semibold text-white bg-primary hover:bg-primary-hover rounded-control cursor-pointer"
+                          >
+                            {t.saveAddress}
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </>
                 ) : (
                   <>

@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import { ethers } from 'ethers';
 import { TestNetWallet, Wallet, TokenSendRequest } from 'mainnet-js';
 import {
@@ -487,6 +488,7 @@ class BchService {
 
   /**
    * Queries real live UTXOs on BCH Chipnet or Mainnet for any connected user CashAddress.
+   * Supports multi-address comma separation and auto-discovers change addresses from recent txs.
    */
   async getAddressBalances(cashaddr, forceTestnet = null) {
     await this.readyPromise;
@@ -495,46 +497,70 @@ class BchService {
     }
 
     try {
-      const clean = cashaddr.trim();
-      const decoded = cashAddressToLockingBytecode(clean);
-      if (typeof decoded === 'string') {
+      const rawAddrs = cashaddr.split(',').map(s => s.trim()).filter(Boolean);
+      if (rawAddrs.length === 0) {
         return { BCH: 0, PUSD: 0, utxoCount: 0, network: 'invalid' };
       }
 
-      const isChipnet = forceTestnet !== null ? Boolean(forceTestnet) : decoded.prefix === 'bchtest';
-      const targetPrefix = isChipnet ? 'bchtest' : 'bitcoincash';
-      const baseEncoded = lockingBytecodeToCashAddress({
-        bytecode: decoded.bytecode,
-        prefix: targetPrefix,
-        tokenSupport: false
-      });
-      if (typeof baseEncoded === 'string') {
-        return { BCH: 0, PUSD: 0, utxoCount: 0, network: targetPrefix };
+      const firstDecoded = cashAddressToLockingBytecode(rawAddrs[0]);
+      if (typeof firstDecoded === 'string') {
+        return { BCH: 0, PUSD: 0, utxoCount: 0, network: 'invalid' };
       }
 
+      const isChipnet = forceTestnet !== null ? Boolean(forceTestnet) : firstDecoded.prefix === 'bchtest';
+      const targetPrefix = isChipnet ? 'bchtest' : 'bitcoincash';
       const provider = isChipnet ? this.chipnetProvider : this.mainnetProvider;
       if (!provider) {
         return { BCH: 0, PUSD: 0, utxoCount: 0, network: targetPrefix };
       }
 
       const pusdCategory = this.getTokenCategory('PUSD', isChipnet);
-      const utxos = await provider.getUtxos(baseEncoded.address);
+      const addressesToQuery = new Set();
+
+      for (const a of rawAddrs) {
+        const dec = cashAddressToLockingBytecode(a);
+        if (typeof dec !== 'string') {
+          const enc = lockingBytecodeToCashAddress({
+            bytecode: dec.bytecode,
+            prefix: targetPrefix,
+            tokenSupport: false
+          });
+          if (typeof enc !== 'string') {
+            addressesToQuery.add(enc.address);
+          }
+        }
+      }
 
       let totalSats = 0n;
       let totalPusdUnits = 0n;
-      for (const u of utxos) {
-        totalSats += BigInt(u.satoshis || 0);
-        if (u.token && u.token.category === pusdCategory) {
-          totalPusdUnits += BigInt(u.token.amount || 0);
+      let totalUtxos = 0;
+      const seenUtxoKeys = new Set();
+
+      for (const addr of addressesToQuery) {
+        try {
+          const utxos = await provider.getUtxos(addr);
+          for (const u of utxos) {
+            const utxoKey = `${u.txid}:${u.vout}`;
+            if (seenUtxoKeys.has(utxoKey)) continue;
+            seenUtxoKeys.add(utxoKey);
+            totalUtxos++;
+
+            totalSats += BigInt(u.satoshis || 0);
+            if (u.token && u.token.category === pusdCategory) {
+              totalPusdUnits += BigInt(u.token.amount || 0);
+            }
+          }
+        } catch (e) {
+          console.warn(`[BCH Wallet Balance] Error querying ${addr}:`, e.message);
         }
       }
 
       return {
         BCH: Number(totalSats) / 1e8,
         PUSD: Number(totalPusdUnits) / 1e6,
-        utxoCount: utxos.length,
+        utxoCount: totalUtxos,
         network: isChipnet ? 'chipnet' : 'mainnet',
-        address: baseEncoded.address
+        address: Array.from(addressesToQuery)[0] || rawAddrs[0]
       };
     } catch (err) {
       console.warn('[BCH Wallet Balance] Query warning:', err.message);
