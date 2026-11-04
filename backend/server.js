@@ -450,8 +450,9 @@ app.post('/api/swap/:id/verify-tx', async (req, res) => {
       }
 
       if (!finalTxHash) {
-        return res.status(400).json({
+        return res.json({
           success: false,
+          pending: true,
           error: isBch
             ? `Aún no se detectan CashTokens ${swap.fromToken} en el Smart Contract Covenant (${swap.depositAddress}). Envía los fondos o pega el TXID.`
             : `Para depósitos en el Smart Contract EVM (${swap.depositAddress}), usa el botón "Depositar con Web3" o pega el Hash de Transacción (0x...).`
@@ -463,7 +464,7 @@ app.post('/api/swap/:id/verify-tx', async (req, res) => {
     const cleanHash = finalTxHash.toLowerCase();
     const existingTx = db.findSwapByDepositTxHash(cleanHash);
     if (existingTx && existingTx.id !== swap.id && existingTx.status === 'COMPLETED') {
-      return res.status(400).json({
+      return res.json({
         success: false,
         error: 'Security Alert: This transaction hash has already been redeemed in a previous swap (Replay Attack blocked).'
       });
@@ -481,7 +482,7 @@ app.post('/api/swap/:id/verify-tx', async (req, res) => {
         swap: result.swap
       });
     } else {
-      res.status(400).json({
+      res.json({
         success: false,
         error: result.reason || result.error || 'Failed to process Watchman Vault settlement',
         swap: db.getSwap(swap.id)

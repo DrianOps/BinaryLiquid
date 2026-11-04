@@ -342,36 +342,8 @@ export default function BridgeSwap({
       return;
     }
 
-    let pollCount = 0;
     const interval = setInterval(async () => {
       try {
-        pollCount++;
-        // Proactively probe verify-tx endpoint every 2nd tick
-        if (pollCount % 2 === 0) {
-          try {
-            const vRes = await fetch(`${backendUrl}/api/swap/${activeSwap.id}/verify-tx`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ txHash: '' })
-            });
-            const vData = await vRes.json();
-            if (vData.success && vData.swap) {
-              setActiveSwap(vData.swap);
-              if (vData.swap.status === 'COMPLETED') {
-                setCardState('success');
-                onRefreshBalances?.();
-                showToast(
-                  lang === 'es'
-                    ? `¡${vData.swap.toAmount} ${vData.swap.toToken} recibidos en tu billetera!`
-                    : `${vData.swap.toAmount} ${vData.swap.toToken} received in your wallet!`,
-                  'success'
-                );
-                return;
-              }
-            }
-          } catch {}
-        }
-
         const res = await fetch(`${backendUrl}/api/swap/${activeSwap.id}`);
         const data = await res.json();
         if (data.success && data.swap) {
