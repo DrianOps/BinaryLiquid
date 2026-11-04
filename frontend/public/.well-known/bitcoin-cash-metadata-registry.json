@@ -18,7 +18,7 @@
         "token": {
           "category": "6b6cf8de5963d67594a4565d49a7bcf3e668a18a7328828de16bd393ac00dcad",
           "symbol": "PUSD",
-          "decimals": 6
+          "decimals": 0
         },
         "uris": {
           "icon": "https://bsprotocol.xyz/PUSD.png",

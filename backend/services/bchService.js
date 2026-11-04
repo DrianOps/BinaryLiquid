@@ -371,7 +371,7 @@ class BchService {
     }
 
     const category = this.getTokenCategory(tokenSym, isChipnet);
-    const decimals = config.bch.tokens[tokenSym]?.decimals || 6;
+    const decimals = isChipnet ? 0 : (config.bch.tokens[tokenSym]?.decimals || 6);
     const payoutUnits = BigInt(Math.round(Number(amount) * (10 ** decimals)));
 
     if (payoutUnits <= 0n) {
@@ -484,7 +484,7 @@ class BchService {
     }
 
     const cappedAmount = Math.min(Math.max(Number(amount) || 50, 1), 500);
-    const rawUnits = BigInt(Math.round(cappedAmount * 1e6));
+    const rawUnits = BigInt(Math.round(cappedAmount)); // Chipnet: 1 unit = 1 PUSD for solid integer display in Paytaca / Cashonize
     const category = this.getTokenCategory('PUSD', true);
     const { tokenAddress } = this.toTokenAwareAddress(recipientAddress);
 
@@ -579,9 +579,21 @@ class BchService {
         }
       }
 
+      // On Chipnet, normalize so both legacy 1e6 units and clean integer units display as solid tokens:
+      let pusdBalance = 0;
+      if (isChipnet) {
+        if (totalPusdUnits >= 1_000_000n) {
+          pusdBalance = Number(totalPusdUnits) / 1e6;
+        } else {
+          pusdBalance = Number(totalPusdUnits);
+        }
+      } else {
+        pusdBalance = Number(totalPusdUnits) / 1e6;
+      }
+
       return {
         BCH: Number(totalSats) / 1e8,
-        PUSD: Number(totalPusdUnits) / 1e6,
+        PUSD: pusdBalance,
         utxoCount: totalUtxos,
         network: isChipnet ? 'chipnet' : 'mainnet',
         address: Array.from(addressesToQuery)[0] || rawAddrs[0]
@@ -893,7 +905,7 @@ class BchService {
       });
     } else {
       const category = this.getTokenCategory(sym, isChipnet);
-      const decimals = config.bch.tokens[sym]?.decimals || 6;
+      const decimals = isChipnet ? 0 : (config.bch.tokens[sym]?.decimals || 6);
       const requiredUnits = BigInt(Math.round(Number(amount) * (10 ** decimals)));
       const { tokenAddress: depositTokenAddr } = this.toTokenAwareAddress(depositAddress);
 
