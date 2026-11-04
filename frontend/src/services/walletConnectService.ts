@@ -193,6 +193,12 @@ export async function restoreEvmWalletConnectSession(
   callbacks?: EvmWalletEventCallbacks
 ): Promise<{ address: string; chainId: number; providerName: string } | null> {
   try {
+    // Only initialize WalletConnect provider if an active session exists in localStorage
+    const hasWcSession =
+      typeof window !== 'undefined' &&
+      Object.keys(localStorage).some(k => k.startsWith('wc@2:') && k.includes('session'));
+    if (!hasWcSession) return null;
+
     const provider = await getWalletConnectProvider();
     if (provider.session && provider.accounts && provider.accounts.length > 0) {
       bindEvmProviderEvents(provider, callbacks);
@@ -500,6 +506,12 @@ export async function restoreBchWalletConnectSession(
   onSessionDeleted?: () => void
 ): Promise<BchWcSessionResult | null> {
   try {
+    // Only initialize BCH SignClient if an active session exists in localStorage
+    const hasBchSession =
+      typeof window !== 'undefined' &&
+      Object.keys(localStorage).some(k => k.startsWith('wc@2:') && k.includes('session'));
+    if (!hasBchSession) return null;
+
     const client = await getBchSignClient(onSessionDeleted);
     const sessions = client.session.getAll();
     const bchSess = sessions.find(s => Boolean(s.namespaces?.bch?.accounts?.length));
