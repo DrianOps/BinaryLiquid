@@ -3,7 +3,9 @@ import SignClient from '@walletconnect/sign-client';
 import type { SessionTypes } from '@walletconnect/types';
 import { convertCashAddressNetwork, generateQrDataUrl } from '../utils/bchAddress';
 
-export const WALLETCONNECT_PROJECT_ID = '4f9a67dcbecde36938bbeb6d312a5bad';
+export const WALLETCONNECT_PROJECT_ID =
+  ((import.meta as any).env?.VITE_WALLETCONNECT_PROJECT_ID as string) ||
+  '5f82a5af5c6aa90535d813b07f3216cc';
 
 export const AMOY_CHAIN_CONFIG = {
   chainIdHex: '0x13882', // 80002
