@@ -16,7 +16,8 @@ import {
   ArrowRight,
   CheckCircle2,
   ClipboardPaste,
-  Smartphone
+  Smartphone,
+  ArrowLeftRight
 } from 'lucide-react';
 import TokenSelectModal, { SUPPORTED_TOKENS, TokenInfo } from './TokenSelectModal';
 import { convertCashAddressNetwork, formatAddress, generateQrDataUrl, formatCryptoBalance } from '../utils/bchAddress';
@@ -96,7 +97,17 @@ const UI_TEXT = {
     openOrders: 'Órdenes abiertas',
     cancel: 'Cancelar',
     selectPayToken: 'Pagar con',
-    selectReceiveToken: 'Recibir en'
+    selectReceiveToken: 'Recibir en',
+    confirmInWallet: 'Confirma en tu billetera',
+    confirmInWalletSubBch: 'Revisa tu billetera BCH (Paytaca) para autorizar el intercambio.',
+    confirmInWalletSubEvm: 'Revisa tu billetera Web3 (MetaMask/WalletConnect) para autorizar el depósito.',
+    settlingTitle: 'Liquidando en cadena...',
+    settlingSubBch: 'Firma recibida. Verificando contrato inteligente y liberando fondos...',
+    settlingSubEvm: 'Depósito verificado. Despachando fondos en contrato destino...',
+    signatureRequiredBadge: 'Firma requerida',
+    settlingBadge: 'Liquidando en cadena',
+    nonCustodialBadge: '100% No custodial • Atómico',
+    switchToQrAction: '¿Prefieres pagar escaneando código QR?'
   },
   en: {
     swap: 'Swap',
@@ -142,7 +153,17 @@ const UI_TEXT = {
     openOrders: 'Open orders',
     cancel: 'Cancel',
     selectPayToken: 'Pay with',
-    selectReceiveToken: 'Receive token'
+    selectReceiveToken: 'Receive token',
+    confirmInWallet: 'Confirm in your wallet',
+    confirmInWalletSubBch: 'Check your BCH wallet (Paytaca) to authorize the swap.',
+    confirmInWalletSubEvm: 'Check your Web3 wallet (MetaMask/WalletConnect) to authorize deposit.',
+    settlingTitle: 'Settling on-chain...',
+    settlingSubBch: 'Signature received. Verifying smart contract and releasing funds...',
+    settlingSubEvm: 'Deposit verified. Dispatching funds on target contract...',
+    signatureRequiredBadge: 'Signature required',
+    settlingBadge: 'Settling on-chain',
+    nonCustodialBadge: '100% Non-custodial • Atomic',
+    switchToQrAction: 'Prefer to pay by scanning QR code?'
   }
 };
 
@@ -204,7 +225,8 @@ export default function BridgeSwap({
   const [claimingFaucet, setClaimingFaucet] = useState<boolean>(false);
 
   // Execution Lifecycle
-  const [cardState, setCardState] = useState<'form' | 'deposit' | 'success'>('form');
+  const [cardState, setCardState] = useState<'form' | 'processing' | 'deposit' | 'success'>('form');
+  const [processingStage, setProcessingStage] = useState<'authorizing' | 'settling'>('authorizing');
   const [executing, setExecuting] = useState<boolean>(false);
   const [signingStep, setSigningStep] = useState<string>('');
   const [activeSwap, setActiveSwap] = useState<any>(null);
@@ -489,6 +511,8 @@ export default function BridgeSwap({
     }
 
     setExecuting(true);
+    setCardState('processing');
+    setProcessingStage('authorizing');
     setSigningStep(t.signing);
 
     try {
@@ -536,6 +560,7 @@ export default function BridgeSwap({
           onStatus: msg => setSigningStep(msg)
         });
 
+        setProcessingStage('settling');
         setSigningStep(t.settling);
         const verifyRes = await fetch(`${backendUrl}/api/swap/${createdSwap.id}/verify-tx`, {
           method: 'POST',
@@ -568,6 +593,7 @@ export default function BridgeSwap({
             onStatus: msg => setSigningStep(msg)
           });
 
+          setProcessingStage('settling');
           setSigningStep(t.settling);
           const verifyRes = await fetch(`${backendUrl}/api/swap/${createdSwap.id}/verify-tx`, {
             method: 'POST',
@@ -604,6 +630,7 @@ export default function BridgeSwap({
       setCardState('deposit');
     } catch (err: any) {
       showToast(err.message || (lang === 'es' ? 'Error al ejecutar swap' : 'Error executing swap'), 'error');
+      setCardState('form');
     } finally {
       setExecuting(false);
       setSigningStep('');
@@ -614,7 +641,9 @@ export default function BridgeSwap({
   const handleTriggerRemoteSign = async () => {
     if (!activeSwap?.id || !hasActiveBchSigningCapability(wizardConnectManager)) return;
     setExecuting(true);
-    setSigningStep(lang === 'es' ? '📱 Revisa Paytaca para autorizar...' : '📱 Check Paytaca to authorize...');
+    setCardState('processing');
+    setProcessingStage('authorizing');
+    setSigningStep(t.signing);
     try {
       const { txHash } = await executeBchSwapDeposit({
         backendUrl,
@@ -624,6 +653,7 @@ export default function BridgeSwap({
         wizardManager: wizardConnectManager,
         onStatus: msg => setSigningStep(msg)
       });
+      setProcessingStage('settling');
       setSigningStep(t.settling);
       const verifyRes = await fetch(`${backendUrl}/api/swap/${activeSwap.id}/verify-tx`, {
         method: 'POST',
@@ -641,6 +671,7 @@ export default function BridgeSwap({
       showToast(t.completed, 'success');
     } catch (err: any) {
       showToast(err.message || 'Error autorizando en Paytaca', 'error');
+      setCardState('deposit');
     } finally {
       setExecuting(false);
       setSigningStep('');
@@ -695,6 +726,8 @@ export default function BridgeSwap({
     }
 
     setExecuting(true);
+    setCardState('processing');
+    setProcessingStage('authorizing');
     setSigningStep(t.signing);
     try {
       const createRes = await fetch(`${backendUrl}/api/limit-orders/create`, {
@@ -755,6 +788,7 @@ export default function BridgeSwap({
       }
 
       setAmount('');
+      setCardState('form');
       fetchLimitOrders();
       onRefreshBalances?.();
       showToast(
@@ -763,6 +797,7 @@ export default function BridgeSwap({
       );
     } catch (err: any) {
       showToast(err.message || (lang === 'es' ? 'Error en orden límite' : 'Limit order error'), 'error');
+      setCardState('form');
     } finally {
       setExecuting(false);
       setSigningStep('');
@@ -1333,7 +1368,172 @@ export default function BridgeSwap({
         )}
 
         {/* ================================================================ */}
-        {/* VIEW 2: MINIMALIST COVENANT PAYMENT FALLBACK (BCH Watch-Only QR) */}
+        {/* VIEW 2: FLUID 1-CLICK PROCESSING & SIGNING LIFECYCLE              */}
+        {/* ================================================================ */}
+        {cardState === 'processing' && (
+          <div className="p-1 sm:p-2 space-y-4 animate-in fade-in zoom-in-95 duration-200">
+            {/* Header: Discreet Back / Cancel Action + Live Status Badge */}
+            <div className="flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => {
+                  setCardState('form');
+                  setExecuting(false);
+                }}
+                className="flex items-center gap-1.5 text-xs font-semibold text-ink-3 hover:text-ink transition cursor-pointer"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>{t.back}</span>
+              </button>
+
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-surface-2 border border-line">
+                {processingStage === 'authorizing' ? (
+                  <>
+                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                    <span className="text-amber-600 dark:text-amber-400 font-medium">
+                      {t.signatureRequiredBadge}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <Loader2 className="w-3 h-3 animate-spin text-primary" />
+                    <span className="text-primary font-medium">
+                      {t.settlingBadge}
+                    </span>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Token Exchange Hero Pair */}
+            <div className="p-4 sm:p-5 rounded-panel bg-surface-2 border border-line relative overflow-hidden">
+              <div className="flex items-center justify-between gap-3 relative z-10">
+                {/* Sell Token (From) */}
+                <div className="flex-1 min-w-0 space-y-1">
+                  <div className="flex items-center gap-2">
+                    <img
+                      src={sellToken.icon}
+                      alt={sellToken.symbol}
+                      className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-contain bg-surface border border-line shadow-soft shrink-0"
+                    />
+                    <div className="min-w-0">
+                      <div className="text-base sm:text-lg font-bold text-ink tabular-nums truncate">
+                        {amount || '0'}
+                      </div>
+                      <div className="text-xs font-semibold text-ink-2">
+                        {sellToken.symbol}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-[11px] text-ink-3 truncate">
+                    {sellToken.isBch ? (isTestnet ? 'BCH Chipnet' : 'Bitcoin Cash') : (isTestnet ? 'Polygon Amoy' : 'Polygon')}
+                  </div>
+                </div>
+
+                {/* Center Circular Exchange Orb */}
+                <div className="shrink-0 flex items-center justify-center">
+                  <div
+                    className={`w-11 h-11 rounded-full bg-surface border shadow-soft flex items-center justify-center transition-all duration-300 ${
+                      processingStage === 'settling'
+                        ? 'border-primary ring-2 ring-primary/20 scale-105'
+                        : 'border-line'
+                    }`}
+                  >
+                    <ArrowLeftRight
+                      className={`w-4 h-4 transition-transform duration-500 ${
+                        processingStage === 'settling'
+                          ? 'text-primary animate-spin'
+                          : 'text-ink-2'
+                      }`}
+                    />
+                  </div>
+                </div>
+
+                {/* Buy Token (To) */}
+                <div className="flex-1 min-w-0 space-y-1 text-right">
+                  <div className="flex items-center justify-end gap-2">
+                    <div className="min-w-0">
+                      <div className="text-base sm:text-lg font-bold text-ink tabular-nums truncate">
+                        {activeSwap?.toAmount || receiveDisplay || (quote?.netPayout ? Number(quote.netPayout).toFixed(2) : '0')}
+                      </div>
+                      <div className="text-xs font-semibold text-ink-2">
+                        {buyToken.symbol}
+                      </div>
+                    </div>
+                    <img
+                      src={buyToken.icon}
+                      alt={buyToken.symbol}
+                      className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-contain bg-surface border border-line shadow-soft shrink-0"
+                    />
+                  </div>
+                  <div className="text-[11px] text-ink-3 truncate">
+                    {buyToken.isBch ? (isTestnet ? 'BCH Chipnet' : 'Bitcoin Cash') : (isTestnet ? 'Polygon Amoy' : 'Polygon')}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Stage Title, Explanation & Animated Progress Bar */}
+            <div className="text-center space-y-2 pt-1">
+              <h3 className="text-base font-semibold text-ink">
+                {processingStage === 'authorizing'
+                  ? t.confirmInWallet
+                  : t.settlingTitle}
+              </h3>
+              <p className="text-xs text-ink-3 max-w-xs mx-auto leading-relaxed">
+                {processingStage === 'authorizing'
+                  ? sellToken.isBch
+                    ? t.confirmInWalletSubBch
+                    : t.confirmInWalletSubEvm
+                  : sellToken.isBch
+                  ? t.settlingSubBch
+                  : t.settlingSubEvm}
+              </p>
+
+              {/* Minimal Progress Bar */}
+              <div className="w-full max-w-xs mx-auto h-1.5 bg-surface-2 rounded-full overflow-hidden mt-3">
+                <div
+                  className={`h-full bg-primary transition-all duration-700 ease-out rounded-full ${
+                    processingStage === 'authorizing'
+                      ? 'w-1/2 animate-pulse'
+                      : 'w-full'
+                  }`}
+                />
+              </div>
+            </div>
+
+            {/* Recipient Preview & Non-Custodial Protocol Badge */}
+            <div className="p-3 rounded-control bg-surface-2 border border-line space-y-2 text-xs">
+              <div className="flex items-center justify-between text-ink-2">
+                <span className="text-ink-3">{t.sentTo}</span>
+                <span className="font-mono text-ink tabular-nums">
+                  {formatAddress(normalizedRecipient || recipientAddress)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between pt-1 border-t border-line/60 text-[11px] text-ink-3">
+                <span>{lang === 'es' ? 'Protocolo:' : 'Protocol:'}</span>
+                <span className="font-medium text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                  <Lock className="w-3 h-3" />
+                  {t.nonCustodialBadge}
+                </span>
+              </div>
+            </div>
+
+            {/* Optional Switch to QR Code View for BCH */}
+            {sellToken.isBch && (
+              <button
+                type="button"
+                onClick={() => setCardState('deposit')}
+                className="w-full text-center text-[11px] text-ink-3 hover:text-ink transition cursor-pointer pt-0.5"
+              >
+                {t.switchToQrAction}
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* ================================================================ */}
+        {/* VIEW 3: MINIMALIST COVENANT PAYMENT FALLBACK (BCH Watch-Only QR) */}
         {/* ================================================================ */}
         {cardState === 'deposit' && activeSwap && (
           <div className="p-2 space-y-4">
