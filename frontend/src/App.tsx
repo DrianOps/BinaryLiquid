@@ -339,6 +339,18 @@ export default function App() {
     source: 'wizard' | 'wc2-bch' | 'extension' | 'manual';
   } | null>(() => {
     try {
+      if (typeof window !== 'undefined') {
+        const params = new URLSearchParams(window.location.search);
+        const queryBch = params.get('bch');
+        if (queryBch) {
+          return {
+            address: convertCashAddressNetwork(queryBch, true, false),
+            tokenAddress: convertCashAddressNetwork(queryBch, true, true),
+            provider: 'Paytaca / Manual',
+            source: 'manual'
+          };
+        }
+      }
       const raw = localStorage.getItem('bliq_wallets_v2');
       if (raw) {
         const parsed = JSON.parse(raw);
@@ -367,6 +379,18 @@ export default function App() {
     source: 'injected' | 'wc2-evm';
   } | null>(() => {
     try {
+      if (typeof window !== 'undefined') {
+        const params = new URLSearchParams(window.location.search);
+        const queryEvm = params.get('evm');
+        if (queryEvm) {
+          return {
+            address: queryEvm,
+            chainId: 80002,
+            provider: 'MetaMask',
+            source: 'injected'
+          };
+        }
+      }
       const raw = localStorage.getItem('bliq_wallets_v2');
       if (raw) {
         const parsed = JSON.parse(raw);
@@ -414,7 +438,13 @@ export default function App() {
     }
     return 'bch';
   });
-  const [showAccountModal, setShowAccountModal] = useState(false);
+  const [showAccountModal, setShowAccountModal] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('modal') === 'account';
+    }
+    return false;
+  });
   const [, setSelectedWalletType] = useState<'paytaca' | 'bch_wc2' | 'walletconnect' | 'injected' | null>(null);
   const [isEditingBch, setIsEditingBch] = useState<boolean>(false);
   const [customBchInput, setCustomBchInput] = useState<string>('');
