@@ -347,11 +347,45 @@ app.post('/api/swap/create', async (req, res) => {
   }
 });
 
-// Get Swap by ID
-app.get('/api/swap/:id', (req, res) => {
-  const swap = db.getSwap(req.params.id);
-  if (!swap) return res.status(404).json({ error: 'Swap not found' });
-  res.json({ success: true, swap });
+// Get Swap by ID (with real-time on-chain deposit detection)
+app.get('/api/swap/:id', async (req, res) => {
+  try {
+    let swap = db.getSwap(req.params.id);
+    if (!swap) return res.status(404).json({ error: 'Swap not found' });
+
+    // Active on-chain inspection for pending BCH deposits
+    if (swap.status === 'PENDING_DEPOSIT' && !swap.depositTxHash) {
+      const isBch = String(swap.fromChain || '').toLowerCase().includes('bch') ||
+                    String(swap.fromChain || '').toLowerCase().includes('chipnet');
+      if (isBch && swap.depositAddress) {
+        const covenantCheck = await bchService.verifyDeposit(
+          null,
+          swap.fromAmount,
+          swap.fromToken,
+          swap.depositAddress
+        );
+        if (covenantCheck.verified && covenantCheck.txHash) {
+          db.updateSwap(swap.id, {
+            depositTxHash: covenantCheck.txHash,
+            status: 'DEPOSIT_DETECTED',
+            error: null
+          });
+          // Immediately trigger Watchman execution and payout
+          const relayResult = await relayerEngine.executeRelay(swap.id);
+          if (relayResult.success) {
+            swap = relayResult.swap;
+          } else {
+            swap = db.getSwap(swap.id);
+          }
+        }
+      }
+    }
+
+    res.json({ success: true, swap });
+  } catch (err) {
+    const swap = db.getSwap(req.params.id);
+    res.json({ success: true, swap: swap || null });
+  }
 });
 
 // Build Unsigned `wc2-bch-bcr` CashTokens Transaction for 1-Click BCH Wallet Signing

@@ -342,8 +342,36 @@ export default function BridgeSwap({
       return;
     }
 
+    let pollCount = 0;
     const interval = setInterval(async () => {
       try {
+        pollCount++;
+        // Proactively probe verify-tx endpoint every 2nd tick
+        if (pollCount % 2 === 0) {
+          try {
+            const vRes = await fetch(`${backendUrl}/api/swap/${activeSwap.id}/verify-tx`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ txHash: '' })
+            });
+            const vData = await vRes.json();
+            if (vData.success && vData.swap) {
+              setActiveSwap(vData.swap);
+              if (vData.swap.status === 'COMPLETED') {
+                setCardState('success');
+                onRefreshBalances?.();
+                showToast(
+                  lang === 'es'
+                    ? `¡${vData.swap.toAmount} ${vData.swap.toToken} recibidos en tu billetera!`
+                    : `${vData.swap.toAmount} ${vData.swap.toToken} received in your wallet!`,
+                  'success'
+                );
+                return;
+              }
+            }
+          } catch {}
+        }
+
         const res = await fetch(`${backendUrl}/api/swap/${activeSwap.id}`);
         const data = await res.json();
         if (data.success && data.swap) {
@@ -353,8 +381,8 @@ export default function BridgeSwap({
             onRefreshBalances?.();
             showToast(
               lang === 'es'
-                ? `¡${data.swap.toAmount} ${data.swap.toToken} enviados a destino!`
-                : `${data.swap.toAmount} ${data.swap.toToken} sent to destination!`,
+                ? `¡${data.swap.toAmount} ${data.swap.toToken} recibidos en tu billetera!`
+                : `${data.swap.toAmount} ${data.swap.toToken} received in your wallet!`,
               'success'
             );
           }
@@ -362,7 +390,7 @@ export default function BridgeSwap({
       } catch {
         // silent retry
       }
-    }, 2500);
+    }, 2000);
 
     return () => clearInterval(interval);
   }, [cardState, activeSwap?.id, activeSwap?.status, backendUrl, onRefreshBalances, showToast, lang]);

@@ -252,7 +252,21 @@ class BchService {
     // A) Inspect live UTXOs at the Non-Custodial Covenant deposit address
     if (depositAddress && provider) {
       try {
-        const utxos = await provider.getUtxos(depositAddress);
+        let utxos = await provider.getUtxos(depositAddress);
+        if ((!utxos || utxos.length === 0) && (depositAddress.startsWith('bchtest:') || depositAddress.startsWith('bitcoincash:'))) {
+          try {
+            const dec = cashAddressToLockingBytecode(depositAddress);
+            if (typeof dec !== 'string') {
+              const altPrefix = isChipnet ? 'bchtest' : 'bitcoincash';
+              const alt = lockingBytecodeToCashAddress({ bytecode: dec.bytecode, prefix: altPrefix, tokenSupport: false });
+              if (typeof alt !== 'string' && alt.address !== depositAddress) {
+                const altUtxos = await provider.getUtxos(alt.address);
+                if (altUtxos && altUtxos.length > 0) utxos = altUtxos;
+              }
+            }
+          } catch (_) {}
+        }
+
         if (utxos && utxos.length > 0) {
           if (isNativeBch) {
             const totalSats = utxos.reduce((sum, u) => sum + u.satoshis, 0n);
@@ -269,8 +283,18 @@ class BchService {
             const matching = utxos.filter(u => u.token?.category === expectedCat && u.token.amount > 0n);
             if (matching.length > 0) {
               const totalUnits = matching.reduce((sum, u) => sum + u.token.amount, 0n);
-              const detectedAmount = Number(totalUnits) / (10 ** decimals);
-              if (detectedAmount >= expectedAmount * 0.99) {
+              const numUnits = Number(totalUnits);
+              const decimalFactor = 10 ** decimals;
+              const amountWithDecimals = numUnits / decimalFactor;
+
+              // Dual-precision support:
+              // 1. Wallets that format with token decimals (numUnits / 10^decimals)
+              // 2. Wallets that treat 1 raw unit = 1 token (e.g. Paytaca on Chipnet sending 1n for 1 PUSD)
+              const matchesWithDecimals = amountWithDecimals >= expectedAmount * 0.99;
+              const matchesRawUnits = numUnits >= expectedAmount * 0.99;
+
+              if (matchesWithDecimals || matchesRawUnits) {
+                const detectedAmount = matchesWithDecimals ? amountWithDecimals : numUnits;
                 return {
                   verified: true,
                   onChain: true,
