@@ -100,6 +100,13 @@ export function convertCashAddressNetwork(
   tokenAware = false
 ): string {
   if (!address || typeof address !== 'string') return '';
+  if (address.includes(',')) {
+    return address
+      .split(',')
+      .map(a => convertCashAddressNetwork(a.trim(), isTestnet, tokenAware))
+      .filter(Boolean)
+      .join(',');
+  }
   let clean = address.trim();
 
   // Strip CAIP-10 prefix if present (e.g., "bch:bchtest:qp..." -> "bchtest:qp...")
@@ -146,9 +153,15 @@ export function convertCashAddressNetwork(
 
 /**
  * Validates whether a string is a valid Bitcoin Cash CashAddress.
+ * Supports comma-separated multi-addresses for HD aggregation.
  */
 export function isValidCashAddress(address: string, requireTestnet?: boolean): boolean {
   if (!address || typeof address !== 'string') return false;
+  if (address.includes(',')) {
+    const parts = address.split(',').map(s => s.trim()).filter(Boolean);
+    if (parts.length === 0) return false;
+    return parts.every(p => isValidCashAddress(p, requireTestnet));
+  }
   const clean = address.trim();
   const decoded = cashAddressToLockingBytecode(clean);
   if (typeof decoded === 'string') return false;
@@ -175,9 +188,17 @@ export function generateQrDataUrl(value: string, cellSize = 6, margin = 2): stri
 
 /**
  * Cleanly formats any BCH or EVM address for compact UI pills.
+ * Handles comma-separated multi-addresses cleanly (e.g. "bchtest:qp... (+1)").
  */
 export function formatAddress(address: string): string {
   if (!address) return '';
+  if (address.includes(',')) {
+    const parts = address.split(',').map(s => s.trim()).filter(Boolean);
+    if (parts.length > 1) {
+      return `${formatAddress(parts[0])} (+${parts.length - 1})`;
+    }
+    address = parts[0] || '';
+  }
   if (address.startsWith('bitcoincash:')) {
     const clean = address.replace('bitcoincash:', '');
     return `${clean.slice(0, 6)}...${clean.slice(-4)}`;
@@ -195,4 +216,40 @@ export function formatAddress(address: string): string {
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
   }
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
+
+/**
+ * Formats cryptocurrency and token balances cleanly and dynamically.
+ * Prevents misleading rounding (e.g., 0.997 PUSD rounding up to 1.00 PUSD).
+ */
+export function formatCryptoBalance(
+  val: number | string | null | undefined,
+  isNativeCrypto = false
+): string {
+  if (val === null || val === undefined || val === '') return '0.00';
+  const num = typeof val === 'number' ? val : Number(val);
+  if (isNaN(num) || num === 0) return '0.00';
+
+  if (isNativeCrypto) {
+    if (num < 0.0001) {
+      return num.toFixed(6).replace(/\.?0+$/, '');
+    }
+    return num.toFixed(4).replace(/\.?0+$/, '');
+  }
+
+  // Stablecoins (PUSD, USDT, USDC):
+  if (num > 0 && num < 0.01) {
+    return num.toFixed(6).replace(/0+$/, '').replace(/\.$/, '');
+  }
+
+  const rounded2 = Number(num.toFixed(2));
+  const diff = Math.abs(num - rounded2);
+  if (diff > 0.0001) {
+    return num.toFixed(4).replace(/0+$/, '').replace(/\.$/, '');
+  }
+
+  return num.toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
 }

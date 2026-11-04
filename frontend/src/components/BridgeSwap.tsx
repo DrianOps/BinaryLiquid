@@ -18,7 +18,7 @@ import {
   ClipboardPaste
 } from 'lucide-react';
 import TokenSelectModal, { SUPPORTED_TOKENS, TokenInfo } from './TokenSelectModal';
-import { convertCashAddressNetwork, formatAddress, generateQrDataUrl } from '../utils/bchAddress';
+import { convertCashAddressNetwork, formatAddress, generateQrDataUrl, formatCryptoBalance } from '../utils/bchAddress';
 import {
   executeWeb3VaultDeposit,
   executeBchSwapDeposit,
@@ -1012,7 +1012,9 @@ export default function BridgeSwap({
                     <span>
                       {t.balance}:{' '}
                       <strong className="text-ink font-semibold tabular-nums">
-                        {sellBalance !== null ? sellBalance.toFixed(2) : '0.00'}
+                        {sellBalance !== null
+                          ? formatCryptoBalance(sellBalance, sellToken.isBch && sellToken.symbol === 'BCH')
+                          : '0.00'}
                       </strong>
                     </span>
                     {sellBalance !== null && sellBalance > 0 && (

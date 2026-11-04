@@ -18,6 +18,7 @@ import {
   Maximize2
 } from 'lucide-react';
 import { createChart, ColorType, IChartApi, ISeriesApi, IPriceLine } from 'lightweight-charts';
+import { formatCryptoBalance } from '../utils/bchAddress';
 
 export interface PerpsViewProps {
   backendUrl?: string;
@@ -948,7 +949,7 @@ export default function PerpsView({
               <div className="flex items-center justify-between text-xs">
                 <span className="ui-label">{lang === 'es' ? 'Margen Colateral (PUSD)' : 'Collateral Margin (PUSD)'}</span>
                 <span className="ui-label font-mono">
-                  {lang === 'es' ? 'Disp:' : 'Bal:'} {(walletBalances?.PUSD || 0).toFixed(2)} PUSD
+                  {lang === 'es' ? 'Disp:' : 'Bal:'} {formatCryptoBalance(walletBalances?.PUSD || 0)} PUSD
                 </span>
               </div>
 

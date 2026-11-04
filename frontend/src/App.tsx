@@ -49,7 +49,8 @@ import {
   deriveCashAddressFromXpub,
   pubkeyToCashAddress,
   convertCashAddressNetwork,
-  formatAddress
+  formatAddress,
+  formatCryptoBalance
 } from './utils/bchAddress';
 import {
   connectWalletConnect,
@@ -337,17 +338,23 @@ export default function App() {
     tokenAddress: string;
     provider: string;
     source: 'wizard' | 'wc2-bch' | 'extension' | 'manual';
+    queryAddress?: string;
   } | null>(() => {
     try {
       if (typeof window !== 'undefined') {
         const params = new URLSearchParams(window.location.search);
         const queryBch = params.get('bch');
         if (queryBch) {
+          const base = convertCashAddressNetwork(queryBch, true, false);
+          const token = convertCashAddressNetwork(queryBch, true, true);
+          const primaryBase = base.split(',')[0].trim();
+          const primaryToken = token.split(',')[0].trim();
           return {
-            address: convertCashAddressNetwork(queryBch, true, false),
-            tokenAddress: convertCashAddressNetwork(queryBch, true, true),
+            address: primaryBase,
+            tokenAddress: primaryToken,
             provider: 'Paytaca / Manual',
-            source: 'manual'
+            source: 'manual',
+            queryAddress: base
           };
         }
       }
@@ -500,7 +507,7 @@ export default function App() {
     overrideBch?: string | null,
     overrideEvm?: string | null
   ) => {
-    const targetBch = overrideBch !== undefined ? overrideBch : bchWallet?.address || null;
+    const targetBch = overrideBch !== undefined ? overrideBch : bchWallet?.queryAddress || bchWallet?.address || null;
     const targetEvm = overrideEvm !== undefined ? overrideEvm : evmWallet?.address || null;
     const primary = targetBch || targetEvm;
     if (!primary) return;
@@ -665,13 +672,16 @@ export default function App() {
       showToast(t.invalidAddress, 'error');
       return;
     }
+    const primaryBase = base.split(',')[0].trim();
+    const primaryToken = token ? token.split(',')[0].trim() : primaryBase;
     setBchWallet({
-      address: base,
-      tokenAddress: token || base,
+      address: primaryBase,
+      tokenAddress: primaryToken,
       provider: 'Paytaca / Manual',
-      source: 'manual'
+      source: 'manual',
+      queryAddress: base
     });
-    registerBackendSession(token || base, base, evmWallet?.address || null, 'Manual');
+    registerBackendSession(primaryToken, base, evmWallet?.address || null, 'Manual');
     refreshWalletBalances(base, evmWallet?.address || null);
     showToast(t.addressUpdated, 'success');
     setIsEditingBch(false);
@@ -823,12 +833,28 @@ export default function App() {
     if (wc.state === 'connected' && wc.manager) {
       let baseAddr = '';
       let tokenAddr = '';
+      const allDerived: string[] = [];
       try {
         // DappPubkeyStateManager.getPubkey expects numbers: (childIndex = 0, index = 0)
         const pubkey = wc.manager.getPubkey(0, 0 as any);
         if (pubkey) {
           baseAddr = pubkeyToCashAddress(pubkey, isTest, false);
           tokenAddr = pubkeyToCashAddress(pubkey, isTest, true);
+        }
+
+        // Multi-address HD aggregation: check Receive (0) and Change (1) for indices 0..5
+        for (const child of [0, 1]) {
+          for (let i = 0; i < 5; i++) {
+            try {
+              const pk = wc.manager.getPubkey(child, i as any);
+              if (pk) {
+                const bAddr = pubkeyToCashAddress(pk, isTest, false);
+                if (bAddr && !allDerived.includes(bAddr)) {
+                  allDerived.push(bAddr);
+                }
+              }
+            } catch {}
+          }
         }
       } catch {}
 
@@ -847,13 +873,16 @@ export default function App() {
 
       if (baseAddr) {
         const wName = wc.walletName || 'Paytaca';
+        const queryAddresses = allDerived.length > 0 ? allDerived.join(',') : baseAddr;
         setBchWallet({
           address: baseAddr,
           tokenAddress: tokenAddr || baseAddr,
           provider: wName,
-          source: 'wizard'
+          source: 'wizard',
+          queryAddress: queryAddresses
         });
-        registerBackendSession(tokenAddr || baseAddr, baseAddr, evmWallet?.address || null, wName);
+        registerBackendSession(tokenAddr || baseAddr, queryAddresses, evmWallet?.address || null, wName);
+        refreshWalletBalances(queryAddresses, evmWallet?.address || null);
         showToast(
           lang === 'es'
             ? `Conectado con ${wName}: ${formatAddress(tokenAddr || baseAddr)}`
@@ -1877,7 +1906,7 @@ export default function App() {
                     </div>
                     {bchWallet ? (
                       <span className="text-xs font-mono font-semibold text-emerald-600 dark:text-emerald-400">
-                        {walletBalances.PUSD.toFixed(2)}
+                        {formatCryptoBalance(walletBalances.PUSD, false)}
                       </span>
                     ) : (
                       <button
@@ -1896,7 +1925,7 @@ export default function App() {
                     </div>
                     {evmWallet ? (
                       <span className="text-xs font-mono font-semibold text-ink">
-                        {walletBalances.USDT.toFixed(2)}
+                        {formatCryptoBalance(walletBalances.USDT, false)}
                       </span>
                     ) : (
                       <button
@@ -1917,7 +1946,7 @@ export default function App() {
                     </div>
                     {bchWallet ? (
                       <span className="text-xs font-mono font-semibold text-ink">
-                        {walletBalances.BCH.toFixed(4)}
+                        {formatCryptoBalance(walletBalances.BCH, true)}
                       </span>
                     ) : (
                       <button
@@ -1936,7 +1965,7 @@ export default function App() {
                     </div>
                     {evmWallet ? (
                       <span className="text-xs font-mono font-semibold text-ink">
-                        {walletBalances.POL.toFixed(4)}
+                        {formatCryptoBalance(walletBalances.POL, true)}
                       </span>
                     ) : (
                       <button
