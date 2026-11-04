@@ -15,25 +15,89 @@ interface LandingPageProps {
   onLaunchApp: () => void;
   onOpenDocs: () => void;
   onOpenWhitepaper?: () => void;
+  lang?: 'en' | 'es';
 }
 
-const FEATURES = [
-  {
-    icon: ShieldCheck,
-    title: 'Non-custodial',
-    text: 'Funds settle through smart contracts and CashScript covenants.'
+const LANDING_TEXTS = {
+  en: {
+    badge: 'Live on Testnet · PUSD ⟷ USDT',
+    title1: 'Stablecoins between',
+    title2: 'Bitcoin Cash and EVM',
+    subtitle: 'Swap PUSD on Bitcoin Cash for USDT on Polygon, 100% non-custodial.',
+    launchBtn: 'Launch app',
+    docsBtn: 'Read docs',
+    demoBadge: 'Live Non-Custodial Demo',
+    trySwap: 'Try real swap',
+    youPay: 'You pay',
+    youReceive: 'You receive',
+    swapFor: (sell: string, buy: string) => `Swap ${sell} for ${buy}`,
+    signing: 'Signing Transaction...',
+    locking: 'Locking in CashScript Covenant (P2SH32)...',
+    assurance: '100% Non-custodial · Settled via smart contracts & CashScript covenants',
+    confirmed: 'Swap Confirmed On-Chain',
+    receivedFrom: (amt: string, sym: string) => `Received from ${amt} ${sym}`,
+    settlementTimeLabel: 'Settlement time:',
+    settlementTimeVal: '~2.8 seconds',
+    securityLabel: 'Security:',
+    securityVal: 'Covenant CashScript P2SH32',
+    features: [
+      {
+        icon: ShieldCheck,
+        title: 'Non-custodial',
+        text: 'Funds settle through smart contracts and CashScript covenants.'
+      },
+      {
+        icon: Zap,
+        title: 'Fast settlement',
+        text: 'Deposits are detected on-chain and paid out in ~3 seconds.'
+      },
+      {
+        icon: Wallet,
+        title: 'Your wallets',
+        text: 'Paytaca, Cashonize, MetaMask and WalletConnect.'
+      }
+    ]
   },
-  {
-    icon: Zap,
-    title: 'Fast settlement',
-    text: 'Deposits are detected on-chain and paid out in ~3 seconds.'
-  },
-  {
-    icon: Wallet,
-    title: 'Your wallets',
-    text: 'Paytaca, Cashonize, MetaMask and WalletConnect.'
+  es: {
+    badge: 'En vivo en Testnet · PUSD ⟷ USDT',
+    title1: 'Stablecoins entre',
+    title2: 'Bitcoin Cash y EVM',
+    subtitle: 'Intercambia PUSD en Bitcoin Cash por USDT en Polygon, 100% sin custodia.',
+    launchBtn: 'Abrir aplicación',
+    docsBtn: 'Ver documentación',
+    demoBadge: 'Demo en Vivo Sin Custodia',
+    trySwap: 'Probar swap real',
+    youPay: 'Pagas',
+    youReceive: 'Recibes',
+    swapFor: (sell: string, buy: string) => `Intercambiar ${sell} por ${buy}`,
+    signing: 'Firmando Transacción...',
+    locking: 'Bloqueando en Covenant CashScript (P2SH32)...',
+    assurance: '100% Sin custodia · Liquidado vía smart contracts y covenants CashScript',
+    confirmed: 'Swap Confirmado On-Chain',
+    receivedFrom: (amt: string, sym: string) => `Recibido desde ${amt} ${sym}`,
+    settlementTimeLabel: 'Tiempo de liquidación:',
+    settlementTimeVal: '~2.8 segundos',
+    securityLabel: 'Seguridad:',
+    securityVal: 'Covenant CashScript P2SH32',
+    features: [
+      {
+        icon: ShieldCheck,
+        title: 'Sin custodia',
+        text: 'Los fondos se liquidan a través de smart contracts y covenants de CashScript.'
+      },
+      {
+        icon: Zap,
+        title: 'Liquidación rápida',
+        text: 'Los depósitos se detectan en cadena y se pagan en ~3 segundos.'
+      },
+      {
+        icon: Wallet,
+        title: 'Tus billeteras',
+        text: 'Paytaca, Cashonize, MetaMask y WalletConnect.'
+      }
+    ]
   }
-];
+};
 
 const DEMO_PAIRS = [
   {
@@ -64,11 +128,12 @@ const DEMO_PAIRS = [
   }
 ];
 
-function AnimatedSwapPreview({ onLaunchApp }: { onLaunchApp: () => void }) {
+function AnimatedSwapPreview({ onLaunchApp, lang = 'en' }: { onLaunchApp: () => void; lang?: 'en' | 'es' }) {
   const [pairIdx, setPairIdx] = useState(0);
   const [stage, setStage] = useState<'typing' | 'pressing' | 'locking' | 'success'>('typing');
   const [displayAmount, setDisplayAmount] = useState('');
 
+  const t = LANDING_TEXTS[lang === 'es' ? 'es' : 'en'];
   const currentPair = DEMO_PAIRS[pairIdx];
 
   useEffect(() => {
@@ -138,10 +203,10 @@ function AnimatedSwapPreview({ onLaunchApp }: { onLaunchApp: () => void }) {
       <div className="flex items-center justify-between px-1 text-[11px] text-ink-3">
         <div className="flex items-center gap-1.5 font-semibold">
           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-          <span className="text-ink-2">Live Non-Custodial Demo</span>
+          <span className="text-ink-2">{t.demoBadge}</span>
         </div>
         <span className="group-hover:text-primary transition-colors font-medium flex items-center gap-1">
-          <span>Try real swap</span>
+          <span>{t.trySwap}</span>
           <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
         </span>
       </div>
@@ -149,7 +214,7 @@ function AnimatedSwapPreview({ onLaunchApp }: { onLaunchApp: () => void }) {
       {/* Pay Panel */}
       <div className="ui-panel p-4 flex items-center justify-between relative overflow-hidden">
         <div>
-          <div className="ui-label">You pay</div>
+          <div className="ui-label">{t.youPay}</div>
           <div className="text-2xl sm:text-3xl font-semibold tabular-nums mt-1 text-ink flex items-center">
             <span>{displayAmount || '0'}</span>
             {stage === 'typing' && (
@@ -174,7 +239,7 @@ function AnimatedSwapPreview({ onLaunchApp }: { onLaunchApp: () => void }) {
       {/* Receive Panel */}
       <div className="ui-panel p-4 flex items-center justify-between">
         <div>
-          <div className="ui-label">You receive</div>
+          <div className="ui-label">{t.youReceive}</div>
           <div className="text-2xl sm:text-3xl font-semibold tabular-nums mt-1 text-ink">
             {displayAmount ? currentPair.buyAmount : '0.00'}
           </div>
@@ -199,7 +264,7 @@ function AnimatedSwapPreview({ onLaunchApp }: { onLaunchApp: () => void }) {
             type="button"
             className="w-full ui-btn-primary ui-btn-md font-bold text-xs flex items-center justify-center gap-1.5"
           >
-            <span>Swap {currentPair.sellToken} for {currentPair.buyToken}</span>
+            <span>{t.swapFor(currentPair.sellToken, currentPair.buyToken)}</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
         )}
@@ -212,7 +277,7 @@ function AnimatedSwapPreview({ onLaunchApp }: { onLaunchApp: () => void }) {
             type="button"
             className="w-full ui-btn-primary ui-btn-md font-bold text-xs bg-orange-600 text-black shadow-inner flex items-center justify-center gap-1.5"
           >
-            <span>Signing Transaction...</span>
+            <span>{t.signing}</span>
           </motion.button>
         )}
 
@@ -223,7 +288,7 @@ function AnimatedSwapPreview({ onLaunchApp }: { onLaunchApp: () => void }) {
             className="w-full py-2.5 px-4 rounded-xl bg-primary/10 border border-primary/20 text-ink flex items-center justify-center gap-2 text-xs font-semibold"
           >
             <Loader2 className="w-4 h-4 text-primary animate-spin" />
-            <span>Locking in CashScript Covenant (P2SH32)...</span>
+            <span>{t.locking}</span>
           </motion.div>
         )}
       </div>
@@ -231,7 +296,7 @@ function AnimatedSwapPreview({ onLaunchApp }: { onLaunchApp: () => void }) {
       {/* Non-custodial assurance banner */}
       <div className="text-center pt-1">
         <span className="text-[10px] text-ink-3">
-          100% Non-custodial · Settled via smart contracts & CashScript covenants
+          {t.assurance}
         </span>
       </div>
 
@@ -248,7 +313,7 @@ function AnimatedSwapPreview({ onLaunchApp }: { onLaunchApp: () => void }) {
             {/* Top Status Pill in Bitcoin Orange */}
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 border border-primary/30 text-primary text-[11px] font-bold uppercase tracking-wider">
               <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-              <span>Swap Confirmado On-Chain</span>
+              <span>{t.confirmed}</span>
             </div>
 
             {/* Center: Big Animated Check & Amounts in Bitcoin Orange */}
@@ -267,7 +332,7 @@ function AnimatedSwapPreview({ onLaunchApp }: { onLaunchApp: () => void }) {
                   +{currentPair.buyAmount} {currentPair.buyToken}
                 </div>
                 <div className="text-xs text-ink-3 mt-1">
-                  Recibido desde {currentPair.sellAmount} {currentPair.sellToken}
+                  {t.receivedFrom(currentPair.sellAmount, currentPair.sellToken)}
                 </div>
               </div>
 
@@ -282,12 +347,12 @@ function AnimatedSwapPreview({ onLaunchApp }: { onLaunchApp: () => void }) {
             {/* Bottom info & specs */}
             <div className="w-full space-y-1.5 pt-3 border-t border-line text-[11px]">
               <div className="flex items-center justify-between text-ink-3">
-                <span>Tiempo de liquidación:</span>
-                <span className="font-bold text-primary font-mono">~2.8 segundos</span>
+                <span>{t.settlementTimeLabel}</span>
+                <span className="font-bold text-primary font-mono">{t.settlementTimeVal}</span>
               </div>
               <div className="flex items-center justify-between text-ink-3">
-                <span>Seguridad:</span>
-                <span className="font-semibold text-ink-2">Covenant CashScript P2SH32</span>
+                <span>{t.securityLabel}</span>
+                <span className="font-semibold text-ink-2">{t.securityVal}</span>
               </div>
             </div>
           </motion.div>
@@ -297,43 +362,45 @@ function AnimatedSwapPreview({ onLaunchApp }: { onLaunchApp: () => void }) {
   );
 }
 
-export default function LandingPage({ onLaunchApp, onOpenDocs, onOpenWhitepaper }: LandingPageProps) {
+export default function LandingPage({ onLaunchApp, onOpenDocs, onOpenWhitepaper, lang = 'en' }: LandingPageProps) {
+  const t = LANDING_TEXTS[lang === 'es' ? 'es' : 'en'];
+
   return (
     <div className="w-full flex flex-col flex-1 text-ink pb-28 md:pb-12 overflow-x-hidden">
       {/* HERO */}
       <section className="px-4 sm:px-6 pt-10 sm:pt-20 pb-10 sm:pb-14 max-w-3xl mx-auto w-full text-center">
-        <span className="ui-badge-warn mb-5">Live on Testnet · PUSD ⟷ USDT</span>
+        <span className="ui-badge-warn mb-5">{t.badge}</span>
 
         <h1 className="text-4xl sm:text-6xl font-semibold tracking-tight leading-[1.08] text-ink">
-          Stablecoins between
+          {t.title1}
           <br />
-          Bitcoin Cash and EVM
+          {t.title2}
         </h1>
 
         <p className="mt-4 text-base sm:text-lg text-ink-2 max-w-xl mx-auto">
-          Swap PUSD on Bitcoin Cash for USDT on Polygon, 100% non-custodial.
+          {t.subtitle}
         </p>
 
         <div className="mt-8 flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3">
           <button type="button" onClick={onLaunchApp} className="ui-btn-primary ui-btn-lg px-6">
-            <span>Launch app</span>
+            <span>{t.launchBtn}</span>
             <ArrowRight className="w-4 h-4" />
           </button>
           <button type="button" onClick={onOpenDocs} className="ui-btn-secondary ui-btn-lg px-6">
-            Read docs
+            {t.docsBtn}
           </button>
         </div>
       </section>
 
       {/* ANIMATED PREVIEW CARD */}
       <section className="px-4 sm:px-6 max-w-md mx-auto w-full">
-        <AnimatedSwapPreview onLaunchApp={onLaunchApp} />
+        <AnimatedSwapPreview onLaunchApp={onLaunchApp} lang={lang} />
       </section>
 
       {/* FEATURES */}
       <section className="px-4 sm:px-6 py-16 sm:py-20 max-w-5xl mx-auto w-full">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 sm:gap-10">
-          {FEATURES.map(({ icon: Icon, title, text }) => (
+          {t.features.map(({ icon: Icon, title, text }) => (
             <div key={title}>
               <div className="w-9 h-9 rounded-control bg-surface-2 text-ink flex items-center justify-center mb-4">
                 <Icon className="w-4 h-4" />

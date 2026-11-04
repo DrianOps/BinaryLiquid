@@ -576,7 +576,7 @@ export default function DocsView({
                           className="ui-btn-secondary ui-btn-sm shrink-0 flex items-center gap-1 self-start sm:self-center"
                         >
                           {copiedKey === 'bch-cov' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                          <span>{copiedKey === 'bch-cov' ? 'Copiado' : 'Copiar'}</span>
+                          <span>{copiedKey === 'bch-cov' ? (isEs ? 'Copiado' : 'Copied') : (isEs ? 'Copiar' : 'Copy')}</span>
                         </button>
                       </div>
 
@@ -592,7 +592,7 @@ export default function DocsView({
                           className="ui-btn-secondary ui-btn-sm shrink-0 flex items-center gap-1 self-start sm:self-center"
                         >
                           {copiedKey === 'pusd-cat' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                          <span>{copiedKey === 'pusd-cat' ? 'Copiado' : 'Copiar'}</span>
+                          <span>{copiedKey === 'pusd-cat' ? (isEs ? 'Copiado' : 'Copied') : (isEs ? 'Copiar' : 'Copy')}</span>
                         </button>
                       </div>
 
@@ -608,7 +608,7 @@ export default function DocsView({
                           className="ui-btn-secondary ui-btn-sm shrink-0 flex items-center gap-1 self-start sm:self-center"
                         >
                           {copiedKey === 'evm-vault' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                          <span>{copiedKey === 'evm-vault' ? 'Copiado' : 'Copiar'}</span>
+                          <span>{copiedKey === 'evm-vault' ? (isEs ? 'Copiado' : 'Copied') : (isEs ? 'Copiar' : 'Copy')}</span>
                         </button>
                       </div>
                     </div>
@@ -626,7 +626,7 @@ export default function DocsView({
                           className="ui-btn-secondary ui-btn-sm shrink-0 flex items-center gap-1 self-start sm:self-center"
                         >
                           {copiedKey === 'pos-usdt' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                          <span>{copiedKey === 'pos-usdt' ? 'Copiado' : 'Copiar'}</span>
+                          <span>{copiedKey === 'pos-usdt' ? (isEs ? 'Copiado' : 'Copied') : (isEs ? 'Copiar' : 'Copy')}</span>
                         </button>
                       </div>
 
@@ -642,7 +642,7 @@ export default function DocsView({
                           className="ui-btn-secondary ui-btn-sm shrink-0 flex items-center gap-1 self-start sm:self-center"
                         >
                           {copiedKey === 'pos-usdc' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                          <span>{copiedKey === 'pos-usdc' ? 'Copiado' : 'Copiar'}</span>
+                          <span>{copiedKey === 'pos-usdc' ? (isEs ? 'Copiado' : 'Copied') : (isEs ? 'Copiar' : 'Copy')}</span>
                         </button>
                       </div>
                     </div>

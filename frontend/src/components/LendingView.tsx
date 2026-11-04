@@ -305,6 +305,7 @@ export default function LendingView({
 }: LendingViewProps) {
   const t = lendTexts[lang] || lendTexts.es;
   const isTestnet = platformNetwork === 'testnet';
+  const isEs = lang === 'es';
 
   const [activeTab, setActiveTab] = useState<'vault' | 'supply' | 'markets'>('vault');
   const [vaultSubTab, setVaultSubTab] = useState<
@@ -471,20 +472,24 @@ export default function LendingView({
       });
       const data = await res.json();
       if (data.success) {
-        showToast(data.message || 'Colateral BCH verificado en cadena', 'success');
+        showToast(data.message || (isEs ? 'Colateral BCH verificado en cadena' : 'BCH collateral verified on-chain'), 'success');
         confetti({ particleCount: 55, spread: 65, origin: { y: 0.6 } });
         setCollateralTxId('');
         setDepositCollateralAmount('');
         if (data.txHash && data.explorerUrl) {
-          setLastTxResult({ txHash: data.txHash, explorerUrl: data.explorerUrl, label: 'Depósito Colateral BCH' });
+          setLastTxResult({
+            txHash: data.txHash,
+            explorerUrl: data.explorerUrl,
+            label: isEs ? 'Depósito Colateral BCH' : 'BCH Collateral Deposit'
+          });
         }
         await fetchData();
         onRefreshBalances?.();
       } else {
-        showToast(data.error || 'No se detectó nuevo depósito en tu Bóveda', 'error');
+        showToast(data.error || (isEs ? 'No se detectó nuevo depósito en tu Bóveda' : 'No new deposit detected in your Vault'), 'error');
       }
     } catch (err: any) {
-      showToast(err.message || 'Error de conexión', 'error');
+      showToast(err.message || (isEs ? 'Error de conexión' : 'Connection error'), 'error');
     } finally {
       setIsSubmitting(false);
       setStatusMessage('');
@@ -505,7 +510,7 @@ export default function LendingView({
     }
     const amt = parseFloat(withdrawCollateralAmount);
     if (isNaN(amt) || amt <= 0) {
-      showToast('Ingresa un monto válido de BCH para desbloquear', 'error');
+      showToast(isEs ? 'Ingresa un monto válido de BCH para desbloquear' : 'Enter valid BCH amount to unlock', 'error');
       return;
     }
 
@@ -525,19 +530,26 @@ export default function LendingView({
       });
       const data = await res.json();
       if (data.success) {
-        showToast(data.message || `¡${amt} BCH desbloqueados a tu billetera!`, 'success');
+        showToast(
+          data.message || (isEs ? `¡${amt} BCH desbloqueados a tu billetera!` : `${amt} BCH unlocked to your wallet!`),
+          'success'
+        );
         confetti({ particleCount: 45, spread: 55, origin: { y: 0.6 } });
         setWithdrawCollateralAmount('');
         if (data.txHash && data.explorerUrl) {
-          setLastTxResult({ txHash: data.txHash, explorerUrl: data.explorerUrl, label: 'Retiro Colateral BCH' });
+          setLastTxResult({
+            txHash: data.txHash,
+            explorerUrl: data.explorerUrl,
+            label: isEs ? 'Retiro Colateral BCH' : 'BCH Collateral Withdrawal'
+          });
         }
         await fetchData();
         onRefreshBalances?.();
       } else {
-        showToast(data.error || 'Error liberando colateral', 'error');
+        showToast(data.error || (isEs ? 'Error liberando colateral' : 'Error unlocking collateral'), 'error');
       }
     } catch (err: any) {
-      showToast(err.message || 'Error de conexión', 'error');
+      showToast(err.message || (isEs ? 'Error de conexión' : 'Connection error'), 'error');
     } finally {
       setIsSubmitting(false);
       setStatusMessage('');
@@ -563,7 +575,7 @@ export default function LendingView({
 
     const amt = parseFloat(borrowAmount);
     if (isNaN(amt) || amt <= 0) {
-      showToast(`Ingresa un monto válido en ${borrowToken}`, 'error');
+      showToast(isEs ? `Ingresa un monto válido en ${borrowToken}` : `Enter a valid ${borrowToken} amount`, 'error');
       return;
     }
 
@@ -584,19 +596,26 @@ export default function LendingView({
       });
       const data = await res.json();
       if (data.success) {
-        showToast(data.message || `¡Préstamo de ${amt} ${borrowToken} enviado a tu wallet!`, 'success');
+        showToast(
+          data.message || (isEs ? `¡Préstamo de ${amt} ${borrowToken} enviado a tu wallet!` : `Loan of ${amt} ${borrowToken} sent to your wallet!`),
+          'success'
+        );
         confetti({ particleCount: 65, spread: 70, origin: { y: 0.6 } });
         setBorrowAmount('');
         if (data.txHash && data.explorerUrl) {
-          setLastTxResult({ txHash: data.txHash, explorerUrl: data.explorerUrl, label: `Préstamo ${borrowToken}` });
+          setLastTxResult({
+            txHash: data.txHash,
+            explorerUrl: data.explorerUrl,
+            label: isEs ? `Préstamo ${borrowToken}` : `${borrowToken} Loan`
+          });
         }
         await fetchData();
         onRefreshBalances?.();
       } else {
-        showToast(data.error || 'Error aprobando préstamo', 'error');
+        showToast(data.error || (isEs ? 'Error aprobando préstamo' : 'Error approving loan'), 'error');
       }
     } catch (err: any) {
-      showToast(err.message || 'Error de conexión', 'error');
+      showToast(err.message || (isEs ? 'Error de conexión' : 'Connection error'), 'error');
     } finally {
       setIsSubmitting(false);
       setStatusMessage('');
@@ -615,12 +634,12 @@ export default function LendingView({
     const pendingDebt = repayToken === 'PUSD' ? vault.totalPusdDebt : vault.totalUsdtDebt;
     const rawInput = parseFloat(repayAmount);
     if (isNaN(rawInput) || rawInput <= 0) {
-      showToast(`Ingresa un monto válido de ${repayToken}`, 'error');
+      showToast(isEs ? `Ingresa un monto válido de ${repayToken}` : `Enter a valid ${repayToken} amount`, 'error');
       return;
     }
     const amt = Math.min(rawInput, pendingDebt);
     if (amt <= 0) {
-      showToast(`No tienes deuda activa en ${repayToken}`, 'error');
+      showToast(isEs ? `No tienes deuda activa en ${repayToken}` : `You have no active ${repayToken} debt`, 'error');
       return;
     }
 
@@ -645,7 +664,12 @@ export default function LendingView({
         finalTxHash = web3Res.txHash;
       } else {
         if (!finalTxHash || finalTxHash.length < 64) {
-          showToast('Envía primero los PUSD al Covenant y pega el TXID de 64 caracteres', 'error');
+          showToast(
+            isEs
+              ? 'Envía primero los PUSD al Covenant y pega el TXID de 64 caracteres'
+              : 'Please send PUSD to Covenant first and paste the 64-character TXID',
+            'error'
+          );
           setIsSubmitting(false);
           return;
         }
@@ -667,20 +691,27 @@ export default function LendingView({
       });
       const data = await res.json();
       if (data.success) {
-        showToast(data.message || `¡Pago de ${amt} ${repayToken} verificado!`, 'success');
+        showToast(
+          data.message || (isEs ? `¡Pago de ${amt} ${repayToken} verificado!` : `Repayment of ${amt} ${repayToken} verified!`),
+          'success'
+        );
         confetti({ particleCount: 50, spread: 60, origin: { y: 0.6 } });
         setRepayAmount('');
         setRepayPusdTxId('');
         if (data.txHash && data.explorerUrl) {
-          setLastTxResult({ txHash: data.txHash, explorerUrl: data.explorerUrl, label: `Pago Deuda ${repayToken}` });
+          setLastTxResult({
+            txHash: data.txHash,
+            explorerUrl: data.explorerUrl,
+            label: isEs ? `Pago Deuda ${repayToken}` : `${repayToken} Debt Repayment`
+          });
         }
         await fetchData();
         onRefreshBalances?.();
       } else {
-        showToast(data.error || 'Error verificando pago', 'error');
+        showToast(data.error || (isEs ? 'Error verificando pago' : 'Error verifying repayment'), 'error');
       }
     } catch (err: any) {
-      showToast(err.message || 'Error en firma o verificación', 'error');
+      showToast(err.message || (isEs ? 'Error en firma o verificación' : 'Signing or verification error'), 'error');
     } finally {
       setIsSubmitting(false);
       setStatusMessage('');
@@ -698,7 +729,7 @@ export default function LendingView({
 
     const amt = parseFloat(supplyAmount);
     if (isNaN(amt) || amt <= 0) {
-      showToast(`Ingresa un monto válido en ${supplyToken}`, 'error');
+      showToast(isEs ? `Ingresa un monto válido en ${supplyToken}` : `Enter a valid ${supplyToken} amount`, 'error');
       return;
     }
 
@@ -728,11 +759,16 @@ export default function LendingView({
           return;
         }
         if (!finalTxHash || finalTxHash.length < 64) {
-          showToast('Envía los PUSD al Covenant BinaryLiquidVault.cash y pega el TXID de 64 caracteres', 'error');
+          showToast(
+            isEs
+              ? 'Envía los PUSD al Covenant BinaryLiquidVault.cash y pega el TXID de 64 caracteres'
+              : 'Please send PUSD to BinaryLiquidVault.cash Covenant and paste the 64-char TXID',
+            'error'
+          );
           setIsSubmitting(false);
           return;
         }
-        setStatusMessage('Verificando depósito de PUSD en BCH Chipnet...');
+        setStatusMessage(isEs ? 'Verificando depósito de PUSD en BCH Chipnet...' : 'Verifying PUSD deposit on BCH Chipnet...');
       }
 
       const res = await fetch(`${backendUrl}/api/lend/supply`, {
@@ -750,20 +786,27 @@ export default function LendingView({
       });
       const data = await res.json();
       if (data.success) {
-        showToast(data.message || `¡${amt} ${supplyToken} depositados para APY!`, 'success');
+        showToast(
+          data.message || (isEs ? `¡${amt} ${supplyToken} depositados para APY!` : `${amt} ${supplyToken} deposited for APY!`),
+          'success'
+        );
         confetti({ particleCount: 55, spread: 60, origin: { y: 0.6 } });
         setSupplyAmount('');
         setSupplyPusdTxId('');
         if (data.txHash && data.explorerUrl) {
-          setLastTxResult({ txHash: data.txHash, explorerUrl: data.explorerUrl, label: `Suministro APY ${supplyToken}` });
+          setLastTxResult({
+            txHash: data.txHash,
+            explorerUrl: data.explorerUrl,
+            label: isEs ? `Suministro APY ${supplyToken}` : `${supplyToken} APY Supply`
+          });
         }
         await fetchData();
         onRefreshBalances?.();
       } else {
-        showToast(data.error || 'Error verificando suministro', 'error');
+        showToast(data.error || (isEs ? 'Error verificando suministro' : 'Error verifying supply'), 'error');
       }
     } catch (err: any) {
-      showToast(err.message || 'Error en depósito', 'error');
+      showToast(err.message || (isEs ? 'Error en depósito' : 'Deposit error'), 'error');
     } finally {
       setIsSubmitting(false);
       setStatusMessage('');
@@ -789,12 +832,12 @@ export default function LendingView({
 
     const amt = parseFloat(withdrawSupplyAmount);
     if (isNaN(amt) || amt <= 0) {
-      showToast(`Ingresa un monto válido de ${supplyToken} para retirar`, 'error');
+      showToast(isEs ? `Ingresa un monto válido de ${supplyToken} para retirar` : `Enter a valid ${supplyToken} amount to withdraw`, 'error');
       return;
     }
 
     setIsSubmitting(true);
-    setStatusMessage(`Liberando ${amt} ${supplyToken} desde el Smart Contract...`);
+    setStatusMessage(isEs ? `Liberando ${amt} ${supplyToken} desde el Smart Contract...` : `Releasing ${amt} ${supplyToken} from Smart Contract...`);
     try {
       const res = await fetch(`${backendUrl}/api/lend/withdraw-supply`, {
         method: 'POST',
@@ -810,19 +853,26 @@ export default function LendingView({
       });
       const data = await res.json();
       if (data.success) {
-        showToast(data.message || `¡${amt} ${supplyToken} retirados a tu wallet!`, 'success');
+        showToast(
+          data.message || (isEs ? `¡${amt} ${supplyToken} retirados a tu wallet!` : `${amt} ${supplyToken} withdrawn to your wallet!`),
+          'success'
+        );
         confetti({ particleCount: 45, spread: 55, origin: { y: 0.6 } });
         setWithdrawSupplyAmount('');
         if (data.txHash && data.explorerUrl) {
-          setLastTxResult({ txHash: data.txHash, explorerUrl: data.explorerUrl, label: `Retiro APY ${supplyToken}` });
+          setLastTxResult({
+            txHash: data.txHash,
+            explorerUrl: data.explorerUrl,
+            label: isEs ? `Retiro APY ${supplyToken}` : `${supplyToken} APY Withdrawal`
+          });
         }
         await fetchData();
         onRefreshBalances?.();
       } else {
-        showToast(data.error || 'Error retirando fondos', 'error');
+        showToast(data.error || (isEs ? 'Error retirando fondos' : 'Error withdrawing funds'), 'error');
       }
     } catch (err: any) {
-      showToast(err.message || 'Error de conexión', 'error');
+      showToast(err.message || (isEs ? 'Error de conexión' : 'Connection error'), 'error');
     } finally {
       setIsSubmitting(false);
       setStatusMessage('');

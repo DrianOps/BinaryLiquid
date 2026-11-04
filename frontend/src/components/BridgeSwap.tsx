@@ -444,11 +444,14 @@ export default function BridgeSwap({
       const data = await res.json();
       if (!data.success) throw new Error(data.error || 'Faucet error');
 
-      showToast('50 PUSD enviados en BCH Chipnet', 'success');
+      showToast(
+        lang === 'es' ? '50 PUSD enviados en BCH Chipnet' : '50 PUSD sent on BCH Chipnet',
+        'success'
+      );
       setFaucetOpen(false);
       setTimeout(() => onRefreshBalances?.(), 2000);
     } catch (err: any) {
-      showToast(err.message || 'Error en Faucet', 'error');
+      showToast(err.message || (lang === 'es' ? 'Error en Faucet' : 'Faucet error'), 'error');
     } finally {
       setClaimingFaucet(false);
     }
@@ -584,7 +587,7 @@ export default function BridgeSwap({
       setTxHashInput('');
       setCardState('deposit');
     } catch (err: any) {
-      showToast(err.message || 'Error al ejecutar swap', 'error');
+      showToast(err.message || (lang === 'es' ? 'Error al ejecutar swap' : 'Error executing swap'), 'error');
     } finally {
       setExecuting(false);
       setSigningStep('');
@@ -705,7 +708,7 @@ export default function BridgeSwap({
         'success'
       );
     } catch (err: any) {
-      showToast(err.message || 'Error en orden límite', 'error');
+      showToast(err.message || (lang === 'es' ? 'Error en orden límite' : 'Limit order error'), 'error');
     } finally {
       setExecuting(false);
       setSigningStep('');
@@ -1297,7 +1300,7 @@ export default function BridgeSwap({
                 className="h-10 rounded-control bg-surface-2 hover:bg-surface-3 text-xs font-semibold text-ink flex items-center justify-center gap-1.5 transition cursor-pointer"
               >
                 {copiedContract ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                <span>{copiedContract ? 'Copiado' : t.copyAddress}</span>
+                <span>{copiedContract ? (lang === 'es' ? 'Copiado' : 'Copied') : t.copyAddress}</span>
               </button>
 
               <a
@@ -1385,7 +1388,7 @@ export default function BridgeSwap({
                       title="Copiar TxID"
                     >
                       {copiedContract ? <Check className="w-3 h-3 text-primary" /> : <Copy className="w-3 h-3" />}
-                      <span>{copiedContract ? 'Copiado' : 'Copiar'}</span>
+                      <span>{copiedContract ? (lang === 'es' ? 'Copiado' : 'Copied') : (lang === 'es' ? 'Copiar' : 'Copy')}</span>
                     </button>
                     {activeSwap.payoutExplorerUrl && (
                       <a
@@ -1393,9 +1396,9 @@ export default function BridgeSwap({
                         target="_blank"
                         rel="noreferrer"
                         className="text-primary hover:underline font-semibold flex items-center gap-1"
-                        title="Ver en explorador blockchain"
+                        title={lang === 'es' ? 'Ver en explorador blockchain' : 'View on blockchain explorer'}
                       >
-                        <span>Explorador</span>
+                        <span>{lang === 'es' ? 'Explorador' : 'Explorer'}</span>
                         <ExternalLink className="w-3 h-3" />
                       </a>
                     )}

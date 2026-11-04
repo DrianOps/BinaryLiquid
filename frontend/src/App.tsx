@@ -476,14 +476,18 @@ export default function App() {
     onAccountsChanged: (accounts: string[]) => {
       if (!accounts || accounts.length === 0) {
         setEvmWallet(null);
-        showToast('Billetera EVM desconectada');
+        showToast(lang === 'es' ? 'Billetera EVM desconectada' : 'EVM wallet disconnected');
       } else {
         setEvmWallet(prev =>
           prev
             ? { ...prev, address: accounts[0] }
             : { address: accounts[0], chainId: 80002, provider: 'Web3 Wallet', source: 'injected' }
         );
-        showToast(`Cuenta EVM actualizada: ${formatAddress(accounts[0])}`);
+        showToast(
+          lang === 'es'
+            ? `Cuenta EVM actualizada: ${formatAddress(accounts[0])}`
+            : `EVM account updated: ${formatAddress(accounts[0])}`
+        );
       }
     },
     onChainChanged: (chainId: number) => {
@@ -491,7 +495,7 @@ export default function App() {
     },
     onDisconnect: () => {
       setEvmWallet(null);
-      showToast('Sesión EVM finalizada');
+      showToast(lang === 'es' ? 'Sesión EVM finalizada' : 'EVM session ended');
     }
   };
 
@@ -546,13 +550,13 @@ export default function App() {
     try { wc.disconnect(); } catch {}
     try { await disconnectBchWalletConnect(); } catch {}
     setBchWallet(null);
-    showToast('Billetera Bitcoin Cash desconectada');
+    showToast(lang === 'es' ? 'Billetera Bitcoin Cash desconectada' : 'Bitcoin Cash wallet disconnected');
   };
 
   const handleDisconnectEvm = async () => {
     try { await disconnectWalletConnect(); } catch {}
     setEvmWallet(null);
-    showToast('Billetera EVM desconectada');
+    showToast(lang === 'es' ? 'Billetera EVM desconectada' : 'EVM wallet disconnected');
   };
 
   const handleDisconnect = async () => {
@@ -564,7 +568,7 @@ export default function App() {
     setUserContext(null);
     localStorage.removeItem('bliq_user');
     localStorage.removeItem('bliq_wallets_v2');
-    showToast('Billeteras desconectadas');
+    showToast(lang === 'es' ? 'Billeteras desconectadas' : 'All wallets disconnected');
   };
 
   const registerBackendSession = async (
@@ -616,7 +620,11 @@ export default function App() {
             source: 'extension'
           });
           await registerBackendSession(extRes.tokenAddress, extRes.address, evmWallet?.address || null, extRes.walletName);
-          showToast(`Conectado con ${extRes.walletName}: ${formatAddress(extRes.tokenAddress)}`);
+          showToast(
+            lang === 'es'
+              ? `Conectado con ${extRes.walletName}: ${formatAddress(extRes.tokenAddress)}`
+              : `Connected with ${extRes.walletName}: ${formatAddress(extRes.tokenAddress)}`
+          );
           setSelectedWalletType(null);
           return;
         }
@@ -641,12 +649,19 @@ export default function App() {
           source: 'wc2-bch'
         });
         await registerBackendSession(approved.tokenAddress, approved.address, evmWallet?.address || null, approved.walletName);
-        showToast(`Conectado con ${approved.walletName}: ${formatAddress(approved.tokenAddress)}`);
+        showToast(
+          lang === 'es'
+            ? `Conectado con ${approved.walletName}: ${formatAddress(approved.tokenAddress)}`
+            : `Connected with ${approved.walletName}: ${formatAddress(approved.tokenAddress)}`
+        );
       } catch (err: any) {
         setBchWcPairing(null);
         const msg = err?.message || '';
         if (!msg.includes('rejected') && !msg.includes('cancelled') && !msg.includes('expired')) {
-          showToast(msg || 'Conexión BCH WalletConnect cancelada', 'error');
+          showToast(
+            msg || (lang === 'es' ? 'Conexión BCH WalletConnect cancelada' : 'BCH WalletConnect pairing cancelled'),
+            'error'
+          );
         }
       } finally {
         setSelectedWalletType(null);
@@ -662,7 +677,11 @@ export default function App() {
           source: 'wc2-evm'
         });
         await registerBackendSession(address, bchWallet?.address || null, address, providerName);
-        showToast(`Conectado vía ${providerName}: ${formatAddress(address)}`);
+        showToast(
+          lang === 'es'
+            ? `Conectado vía ${providerName}: ${formatAddress(address)}`
+            : `Connected via ${providerName}: ${formatAddress(address)}`
+        );
       } catch (err: any) {
         const msg = err?.message || '';
         if (
@@ -671,7 +690,10 @@ export default function App() {
           !msg.includes('Modal closed') &&
           !msg.includes('reset')
         ) {
-          showToast(msg || 'Conexión WalletConnect cancelada', 'error');
+          showToast(
+            msg || (lang === 'es' ? 'Conexión WalletConnect cancelada' : 'WalletConnect pairing cancelled'),
+            'error'
+          );
         }
       } finally {
         setSelectedWalletType(null);
@@ -692,11 +714,18 @@ export default function App() {
           source: 'injected'
         });
         await registerBackendSession(address, bchWallet?.address || null, address, providerName);
-        showToast(`Conectado con ${providerName}: ${formatAddress(address)}`);
+        showToast(
+          lang === 'es'
+            ? `Conectado con ${providerName}: ${formatAddress(address)}`
+            : `Connected with ${providerName}: ${formatAddress(address)}`
+        );
       } catch (err: any) {
         const msg = err?.message || '';
         if (!msg.includes('User rejected') && !msg.includes('4001')) {
-          showToast(msg || 'Error conectando billetera de navegador', 'error');
+          showToast(
+            msg || (lang === 'es' ? 'Error conectando billetera de navegador' : 'Error connecting browser wallet'),
+            'error'
+          );
         }
       } finally {
         setSelectedWalletType(null);
@@ -741,7 +770,11 @@ export default function App() {
           source: 'wizard'
         });
         registerBackendSession(tokenAddr || baseAddr, baseAddr, evmWallet?.address || null, wName);
-        showToast(`Conectado con ${wName}: ${formatAddress(tokenAddr || baseAddr)}`);
+        showToast(
+          lang === 'es'
+            ? `Conectado con ${wName}: ${formatAddress(tokenAddr || baseAddr)}`
+            : `Connected with ${wName}: ${formatAddress(tokenAddr || baseAddr)}`
+        );
         setSelectedWalletType(null);
       }
     } else if (wc.state === 'disconnected') {
@@ -1018,10 +1051,14 @@ export default function App() {
             onClick={() => {
               const next = platformNetwork === 'mainnet' ? 'testnet' : 'mainnet';
               setPlatformNetwork(next);
-              showToast(next === 'mainnet' ? 'Red activa: Bitcoin Cash Mainnet (Producción)' : 'Red activa: BCH Chipnet (Testnet)');
+              showToast(
+                next === 'mainnet'
+                  ? (lang === 'es' ? 'Red activa: Bitcoin Cash Mainnet (Producción)' : 'Active network: Bitcoin Cash Mainnet (Production)')
+                  : (lang === 'es' ? 'Red activa: BCH Chipnet (Testnet)' : 'Active network: BCH Chipnet (Testnet)')
+              );
             }}
             className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-medium border border-line bg-surface hover:bg-surface-2 text-ink-2 transition-all cursor-pointer shadow-2xs"
-            title="Click para alternar red (Mainnet / Testnet)"
+            title={lang === 'es' ? 'Click para alternar red (Mainnet / Testnet)' : 'Click to toggle network (Mainnet / Testnet)'}
           >
             <span className={`w-2 h-2 rounded-full ${platformNetwork === 'mainnet' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'}`} />
             <span className="capitalize font-semibold text-[11px] sm:text-xs">
@@ -1122,12 +1159,14 @@ export default function App() {
 
                 {/* Network Switcher (Clean Segment) */}
                 <div className="space-y-1.5">
-                  <div className="text-[10px] uppercase font-bold tracking-wider text-ink-3 px-1">Red de la plataforma</div>
+                  <div className="text-[10px] uppercase font-bold tracking-wider text-ink-3 px-1">
+                    {lang === 'es' ? 'Red de la plataforma' : 'Platform Network'}
+                  </div>
                   <div className="grid grid-cols-2 p-0.5 bg-surface-2 rounded-xl border border-line text-xs">
                     <button
                       onClick={() => {
                         setPlatformNetwork('mainnet');
-                        showToast('Red activa: Bitcoin Cash Mainnet (Producción)');
+                        showToast(lang === 'es' ? 'Red activa: Bitcoin Cash Mainnet (Producción)' : 'Active network: Bitcoin Cash Mainnet (Production)');
                       }}
                       className={`py-1.5 rounded-lg font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
                         platformNetwork === 'mainnet'
@@ -1141,7 +1180,7 @@ export default function App() {
                     <button
                       onClick={() => {
                         setPlatformNetwork('testnet');
-                        showToast('Red activa: BCH Chipnet (Testnet)');
+                        showToast(lang === 'es' ? 'Red activa: BCH Chipnet (Testnet)' : 'Active network: BCH Chipnet (Testnet)');
                       }}
                       className={`py-1.5 rounded-lg font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
                         platformNetwork === 'testnet'
@@ -1157,7 +1196,9 @@ export default function App() {
 
                 {/* Primary Navigation Links (Minimalist single-line rows, NO subtitle clutter) */}
                 <div className="space-y-1 pt-2">
-                  <div className="text-[10px] uppercase font-bold tracking-wider text-ink-3 px-1 mb-1">Navegación</div>
+                  <div className="text-[10px] uppercase font-bold tracking-wider text-ink-3 px-1 mb-1">
+                    {lang === 'es' ? 'Navegación' : 'Navigation'}
+                  </div>
                   {[
                     { id: 'bridge', label: 'Bridge Swap', icon: Zap },
                     { id: 'perps', label: 'Perps (Futuros)', icon: TrendingUp },
@@ -1289,7 +1330,7 @@ export default function App() {
             }`}
           >
             <Menu className="w-4 h-4" />
-            <span className="text-[10px]">Menú</span>
+            <span className="text-[10px]">{lang === 'es' ? 'Menú' : 'Menu'}</span>
           </button>
 
         </div>
@@ -1308,10 +1349,12 @@ export default function App() {
 
             <h2 className="text-xl font-black text-gray-900 dark:text-white mb-1.5 mt-2 flex items-center justify-center gap-2.5">
               <img src="/wizardconnect-logo.png" className="w-8 h-8 object-contain" alt="Paytaca" />
-              <span>Conectar Paytaca</span>
+              <span>{lang === 'es' ? 'Conectar Paytaca' : 'Connect Paytaca'}</span>
             </h2>
             <p className="text-xs text-gray-500 dark:text-gray-400 font-medium mb-5">
-              Abre tu billetera <strong>Paytaca</strong>, toca el ícono de escanear QR y aprueba la sesión WizardConnect (100% No-Custodio).
+              {lang === 'es'
+                ? 'Abre tu billetera Paytaca, toca el ícono de escanear QR y aprueba la sesión WizardConnect (100% No-Custodio).'
+                : 'Open your Paytaca wallet, tap the QR scan icon and approve the WizardConnect session (100% Non-Custodial).'}
             </p>
 
             <div className="p-3 bg-white rounded-2xl border border-gray-200 shadow-inner flex items-center justify-center mb-5">
@@ -1324,7 +1367,9 @@ export default function App() {
               onClick={() => copyToClipboard(wc.uri || '')}
               className="w-full bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 font-bold text-xs py-3 rounded-xl transition-all cursor-pointer"
             >
-              {copied ? '✓ ¡URI WizardConnect copiado!' : 'Copiar URI de Conexión (wiz://...)'}
+              {copied
+                ? (lang === 'es' ? '✓ ¡URI WizardConnect copiado!' : '✓ WizardConnect URI copied!')
+                : (lang === 'es' ? 'Copiar URI de Conexión (wiz://...)' : 'Copy Connection URI (wiz://...)')}
             </button>
           </div>
         </div>
@@ -1345,7 +1390,9 @@ export default function App() {
               BCH WalletConnect V2
             </h2>
             <p className="text-xs text-gray-500 dark:text-gray-400 font-medium mb-4">
-              Escanea con <strong>Cashonize / Paytaca</strong> o copia el URI <code className="font-mono">wc:...</code> y pégalo en la pestaña WalletConnect de tu billetera ({platformNetwork === 'testnet' ? 'Chipnet Testnet' : 'BCH Mainnet'}).
+              {lang === 'es'
+                ? `Escanea con Cashonize / Paytaca o copia el URI wc:... y pégalo en la pestaña WalletConnect de tu billetera (${platformNetwork === 'testnet' ? 'Chipnet Testnet' : 'BCH Mainnet'}).`
+                : `Scan with Cashonize / Paytaca or copy the wc:... URI and paste it into the WalletConnect tab of your wallet (${platformNetwork === 'testnet' ? 'Chipnet Testnet' : 'BCH Mainnet'}).`}
             </p>
 
             {bchWcPairing.qrDataUrl && (
@@ -1360,7 +1407,11 @@ export default function App() {
                 className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs py-3 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5"
               >
                 {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                <span>{copied ? '¡URI wc: Copiado al Portapapeles!' : 'Copiar URI WalletConnect (Cashonize / Paytaca)'}</span>
+                <span>
+                  {copied
+                    ? (lang === 'es' ? '¡URI wc: Copiado al Portapapeles!' : 'wc: URI copied to clipboard!')
+                    : (lang === 'es' ? 'Copiar URI WalletConnect (Cashonize / Paytaca)' : 'Copy WalletConnect URI (Cashonize / Paytaca)')}
+                </span>
               </button>
               <a
                 href="https://cashonize.com"
@@ -1368,7 +1419,7 @@ export default function App() {
                 rel="noreferrer"
                 className="w-full bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 font-bold text-xs py-2.5 rounded-xl transition-all flex items-center justify-center gap-1.5"
               >
-                <span>Abrir Cashonize Web Wallet</span>
+                <span>{lang === 'es' ? 'Abrir Cashonize Web Wallet' : 'Open Cashonize Web Wallet'}</span>
                 <ExternalLink className="w-3.5 h-3.5" />
               </a>
             </div>
@@ -1397,6 +1448,7 @@ export default function App() {
           onLaunchApp={() => setMainView('bridge')}
           onOpenDocs={() => setMainView('docs')}
           onOpenWhitepaper={() => setMainView('whitepaper')}
+          lang={lang}
         />
       )}
 
@@ -1622,11 +1674,11 @@ export default function App() {
                             setEvmWallet(prev => (prev ? { ...prev, chainId: nextId } : null));
                             showToast(
                               platformNetwork === 'testnet'
-                                ? 'Red cambiada a Polygon Amoy Testnet (80002)'
-                                : 'Red cambiada a Polygon PoS (137)'
+                                ? (lang === 'es' ? 'Red cambiada a Polygon Amoy Testnet (80002)' : 'Network switched to Polygon Amoy Testnet (80002)')
+                                : (lang === 'es' ? 'Red cambiada a Polygon PoS (137)' : 'Network switched to Polygon PoS (137)')
                             );
                           } catch (e: any) {
-                            showToast(e?.message || 'Error switching network', 'error');
+                            showToast(e?.message || (lang === 'es' ? 'Error al cambiar de red' : 'Error switching network'), 'error');
                           } finally {
                             setIsSwitchingChain(false);
                           }
