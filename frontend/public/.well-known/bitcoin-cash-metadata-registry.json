@@ -1,0 +1,45 @@
+{
+  "$schema": "https://cashtokens.org/bcmr-v2.schema.json",
+  "version": {
+    "major": 1,
+    "minor": 0,
+    "patch": 0
+  },
+  "latestRevision": "2026-11-04T18:00:00.000Z",
+  "registryIdentity": {
+    "name": "BinaryLiquid Ecosystem Token Registry",
+    "description": "Official BCMR Metadata Registry for BinaryLiquid Cross-Chain Liquidity Protocol tokens"
+  },
+  "identities": {
+    "6b6cf8de5963d67594a4565d49a7bcf3e668a18a7328828de16bd393ac00dcad": {
+      "2026-11-04T18:00:00.000Z": {
+        "name": "ParyonUSD",
+        "description": "Decentralized USD Stablecoin for Bitcoin Cash (Chipnet)",
+        "token": {
+          "category": "6b6cf8de5963d67594a4565d49a7bcf3e668a18a7328828de16bd393ac00dcad",
+          "symbol": "PUSD",
+          "decimals": 6
+        },
+        "uris": {
+          "icon": "https://bsprotocol.xyz/PUSD.png",
+          "web": "https://bsprotocol.xyz"
+        }
+      }
+    },
+    "5932b2fd4915d6a75d3ec53282cd49118149a2176ee67ed68b1111ff0786f7fc": {
+      "2026-11-04T18:00:00.000Z": {
+        "name": "Paytaca LIFT",
+        "description": "Utility and rewards token for the Paytaca ecosystem",
+        "token": {
+          "category": "5932b2fd4915d6a75d3ec53282cd49118149a2176ee67ed68b1111ff0786f7fc",
+          "symbol": "LIFT",
+          "decimals": 2
+        },
+        "uris": {
+          "icon": "https://bsprotocol.xyz/LIFT.png",
+          "web": "https://bsprotocol.xyz"
+        }
+      }
+    }
+  }
+}
