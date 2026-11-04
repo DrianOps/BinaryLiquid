@@ -174,8 +174,8 @@ const poolTexts = {
     lpFee: 'LP Fee Tier',
     reservePrefix: 'Vault Reserve',
     btnProvideLiquidity: 'Provide Liquidity & Earn Yield',
-    btnSwitchToTestnet: 'Sin Liquidez on Mainnet • Switch to Testnet',
-    btnNoLiquidityDisabled: 'Sin Liquidez Available',
+    btnSwitchToTestnet: 'No Liquidity on Mainnet • Switch to Testnet',
+    btnNoLiquidityDisabled: 'No Liquidity Available',
 
     positionsTitle: 'My Non-Custodial LP Positions',
     refresh: 'Refresh',
@@ -909,13 +909,13 @@ export default function PoolsView({
           <div className="flex items-center gap-2 mb-1">
             <h1 className="ui-title">{t.title}</h1>
             <span className={isTestnet ? 'ui-badge-warn' : 'ui-badge-danger'}>
-              {isTestnet ? 'Testnet' : 'Sin Liquidez'}
+              {isTestnet ? 'Testnet' : (isEs ? 'Sin Liquidez' : 'No Liquidity')}
             </span>
           </div>
           <p className="ui-subtitle">
             {isTestnet
-              ? 'Provee liquidez en BinaryLiquidVault y gana 0.20% de comisiones por swap.'
-              : 'Mainnet sin liquidez activa. Cambia a Testnet para operar.'}
+              ? (isEs ? 'Provee liquidez en BinaryLiquidVault y gana 0.20% de comisiones por swap.' : 'Provide liquidity in BinaryLiquidVault and earn 0.20% swap fees.')
+              : (isEs ? 'Mainnet sin liquidez activa. Cambia a Testnet para operar.' : 'Mainnet has no active liquidity. Switch to Testnet to trade.')}
           </p>
         </div>
 
@@ -926,7 +926,7 @@ export default function PoolsView({
               onClick={() => onToggleNetwork('testnet')}
               className="ui-btn-sm ui-btn-primary"
             >
-              Cambiar a Testnet
+              {isEs ? 'Cambiar a Testnet' : 'Switch to Testnet'}
             </button>
           )}
           <button
@@ -940,7 +940,7 @@ export default function PoolsView({
             title={t.refreshTooltip}
           >
             <RefreshCw className="w-3.5 h-3.5" />
-            <span>Actualizar</span>
+            <span>{t.refresh}</span>
           </button>
         </div>
       </div>
@@ -955,7 +955,7 @@ export default function PoolsView({
             </div>
             <div className="text-[11px] text-ink-3 mt-1 flex items-center gap-1.5">
               <span className={`w-1.5 h-1.5 rounded-full ${isTestnet ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-              <span>{isTestnet ? 'Bóvedas activas' : 'Sin liquidez'}</span>
+              <span>{isTestnet ? (isEs ? 'Bóvedas activas' : 'Active vaults') : (isEs ? 'Sin liquidez' : 'No liquidity')}</span>
             </div>
           </div>
 
@@ -964,7 +964,7 @@ export default function PoolsView({
             <div className="ui-stat">
               ${(protocolStats?.totalVolumeUsd ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
-            <div className="text-[11px] text-ink-3 mt-1">En cadena</div>
+            <div className="text-[11px] text-ink-3 mt-1">{isEs ? 'En cadena' : 'On-chain'}</div>
           </div>
 
           <div className="pt-2 md:pt-0 md:px-3">
@@ -972,7 +972,7 @@ export default function PoolsView({
             <div className="ui-stat text-emerald-600 dark:text-emerald-400">
               ${(protocolStats?.totalCumulativeFeesUsd ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
             </div>
-            <div className="text-[11px] text-ink-3 mt-1">0.20% a LPs</div>
+            <div className="text-[11px] text-ink-3 mt-1">{isEs ? '0.20% a LPs' : '0.20% to LPs'}</div>
           </div>
 
           <div className="pt-2 md:pt-0 md:px-3">
@@ -984,7 +984,7 @@ export default function PoolsView({
               <span>{protocolStats?.noLiquidityPoolsCount ?? 0}</span>
               <span className="text-xs text-rose-500 font-semibold">{t.statNoLiq}</span>
             </div>
-            <div className="text-[11px] text-ink-3 mt-1">PUSD / USDT en Testnet</div>
+            <div className="text-[11px] text-ink-3 mt-1">{isEs ? 'PUSD / USDT en Testnet' : 'PUSD / USDT on Testnet'}</div>
           </div>
         </div>
       </div>
@@ -1095,7 +1095,7 @@ export default function PoolsView({
                   {/* SMART CONTRACT EXPLORER LINKS */}
                   {isPoolActive && (pool.contractExplorerA || pool.contractExplorerB) && (
                     <div className="mt-2.5 flex items-center justify-between text-[11px] text-ink-3">
-                      <span>Contratos:</span>
+                      <span>{isEs ? 'Contratos:' : 'Contracts:'}</span>
                       <div className="flex items-center gap-3">
                         {pool.contractExplorerA && (
                           <a
