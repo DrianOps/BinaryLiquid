@@ -738,15 +738,36 @@ export default function BridgeSwap({
   const receiveDisplay = useMemo(() => {
     const parsed = parseFloat(amount);
     if (!amount || isNaN(parsed) || parsed <= 0 || !isPairLiquid) return '';
+
+    let rawVal: number;
     if (activeTab === 'limit') {
       const r = parseFloat(targetRate) || 1;
-      return (parsed * r * 0.997).toFixed(2);
+      rawVal = parsed * r * 0.997;
+    } else if (quote?.netPayout !== undefined) {
+      rawVal = Number(quote.netPayout);
+    } else {
+      const rate = sellToken.isBch && !buyToken.isBch ? 470 : !sellToken.isBch && buyToken.isBch ? 1 / 470 : 1;
+      rawVal = parsed * rate * 0.997;
     }
-    if (quote?.netPayout !== undefined) {
-      return Number(quote.netPayout).toFixed(2);
+
+    if (isNaN(rawVal) || rawVal <= 0) return '';
+
+    // If buy token is volatile crypto (BCH, BTC, ETH, SOL), display up to 6 decimals
+    if (['BCH', 'BTC', 'ETH', 'SOL'].includes(buyToken.symbol.toUpperCase())) {
+      return rawVal.toFixed(6).replace(/\.?0+$/, '');
     }
-    return '';
-  }, [amount, isPairLiquid, activeTab, targetRate, quote]);
+
+    // For stablecoins (USDT, PUSD, USDC, MUSD):
+    // For amounts < 10 or whenever fractional fee digits exist (e.g. 0.997, 1.994, 4.985):
+    // Show exact decimals up to 4 decimal places, stripping unnecessary trailing zeroes
+    const rounded2 = Number(rawVal.toFixed(2));
+    const diff = Math.abs(rawVal - rounded2);
+    if (rawVal < 10 || diff > 0.0001) {
+      return rawVal.toFixed(4).replace(/0+$/, '').replace(/\.$/, '');
+    }
+
+    return rawVal.toFixed(2);
+  }, [amount, isPairLiquid, activeTab, targetRate, quote, buyToken.symbol, sellToken.isBch, buyToken.isBch]);
 
   const ctaConfig = useMemo(() => {
     if (!isPairLiquid) {
@@ -1073,7 +1094,7 @@ export default function BridgeSwap({
 
               <div className="flex items-center justify-between gap-3">
                 <div className="w-full min-w-0 text-3xl font-semibold tracking-tight tabular-nums truncate">
-                  {loadingQuote ? (
+                  {loadingQuote && !receiveDisplay ? (
                     <span className="inline-block w-24 h-8 rounded-lg bg-surface-3 animate-pulse align-middle" />
                   ) : receiveDisplay ? (
                     <span className="text-ink">{receiveDisplay}</span>
@@ -1101,7 +1122,11 @@ export default function BridgeSwap({
 
               <div className="flex items-center justify-between mt-1.5 text-[11px] text-ink-3">
                 <span className="tabular-nums">
-                  {receiveDisplay ? `~$${receiveDisplay}` : '$0.00'}
+                  {quote?.netPayoutUsd !== undefined
+                    ? `~$${Number(quote.netPayoutUsd).toFixed(2)}`
+                    : receiveDisplay
+                    ? `~$${receiveDisplay}`
+                    : '$0.00'}
                 </span>
                 <span>{buyToken.isBch ? (isTestnet ? 'BCH Chipnet' : 'Bitcoin Cash') : isTestnet ? 'Polygon Amoy' : 'Polygon'}</span>
               </div>
