@@ -421,6 +421,24 @@ app.post('/api/swap/:id/build-bch-tx', async (req, res) => {
   }
 });
 
+// Broadcast a user-signed BCH transaction (from WizardConnect, WalletConnect, or Paytaca Extension)
+app.post('/api/bch/broadcast', async (req, res) => {
+  try {
+    const { txHex, isChipnet } = req.body;
+    console.log('[BCH Broadcast Request] txHex length:', txHex ? txHex.length : 0, 'isChipnet:', isChipnet);
+    if (!txHex || typeof txHex !== 'string') {
+      return res.status(400).json({ success: false, error: 'Se requiere el hexadecimal de la transacción firmada.' });
+    }
+    const testnet = isChipnet !== false;
+    const txId = await bchService.broadcastTransaction(txHex.trim(), testnet);
+    console.log('[BCH Broadcast Success] txId:', txId);
+    res.json({ success: true, txId, txHash: txId });
+  } catch (err) {
+    console.error('[BCH Broadcast Error]:', err);
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
 // Verify Smart Contract Deposit & Trigger Immediate Watchman + Vault Execution
 app.post('/api/swap/:id/verify-tx', async (req, res) => {
   try {

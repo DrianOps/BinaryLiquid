@@ -905,7 +905,21 @@ export async function executeBchSwapDeposit(params: {
       inputPaths
     });
 
-    const signedHex = response?.signedTransaction || (typeof response === 'string' ? response : null);
+    let signedHex = '';
+    if (typeof response === 'string') {
+      signedHex = response;
+    } else if (typeof response?.signedTransaction === 'string') {
+      signedHex = response.signedTransaction;
+    } else if (typeof response?.signedTransaction?.hex === 'string') {
+      signedHex = response.signedTransaction.hex;
+    } else if (typeof response?.signedTransactionHash === 'string') {
+      signedHex = response.signedTransactionHash;
+    } else if (typeof response?.txid === 'string') {
+      signedHex = response.txid;
+    } else if (typeof response?.hash === 'string') {
+      signedHex = response.hash;
+    }
+
     if (!signedHex) {
       throw new Error(response?.error || 'Firma cancelada en Paytaca.');
     }

@@ -587,9 +587,13 @@ export default function BridgeSwap({
           return;
         } catch (bchSignErr: any) {
           const msg = String(bchSignErr?.message || '').toLowerCase();
-          if (msg.includes('reject') || msg.includes('cancel') || msg.includes('denied')) {
+          const isUserCancel =
+            (msg.includes('cancel') || msg.includes('denied') || msg.includes('user rejected')) &&
+            !msg.includes('network') && !msg.includes('rules') && !msg.includes('script') && !msg.includes('stack');
+          if (isUserCancel) {
             throw new Error(lang === 'es' ? 'Firma cancelada en tu billetera BCH' : 'Signature cancelled');
           }
+          showToast(bchSignErr?.message || (lang === 'es' ? 'Error al procesar firma' : 'Error processing signature'), 'error');
           // Fallback cleanly to Covenant URI/QR with live UTXO auto-detection
         }
       }

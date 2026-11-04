@@ -1026,6 +1026,12 @@ class BchService {
       throw new Error(`Proveedor Electrum no disponible para ${isChipnet ? 'Chipnet' : 'Mainnet'}`);
     }
     const cleanHex = String(txHex || '').trim().replace(/^0x/i, '');
+
+    // If it's already a 64-character transaction hash (txid), it was already broadcasted by the wallet
+    if (cleanHex.length === 64) {
+      return cleanHex;
+    }
+
     try {
       const txId = await provider.sendRawTransaction(cleanHex);
       return txId;
