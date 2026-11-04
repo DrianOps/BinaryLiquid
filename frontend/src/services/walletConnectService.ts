@@ -842,7 +842,10 @@ export async function executeWeb3LpDeposit(params: {
 // ============================================================================
 // 8. 1-CLICK NON-CUSTODIAL BCH COVENANT DEPOSIT (`wc2-bch-bcr` & Paytaca Ext)
 // ============================================================================
-export function hasActiveBchSigningCapability(): boolean {
+export function hasActiveBchSigningCapability(wizardManager?: any): boolean {
+  if (wizardManager && typeof wizardManager.signTransaction === 'function') {
+    return true;
+  }
   if (bchSignClient && activeBchSession && activeBchSession.namespaces?.bch?.accounts?.length) {
     return true;
   }
@@ -860,9 +863,10 @@ export async function executeBchSwapDeposit(params: {
   buildEndpoint: string;
   senderAddress: string;
   isTestnet: boolean;
+  wizardManager?: any;
   onStatus?: (msg: string) => void;
 }): Promise<{ txHash: string }> {
-  const { backendUrl, buildEndpoint, senderAddress, isTestnet, onStatus } = params;
+  const { backendUrl, buildEndpoint, senderAddress, isTestnet, wizardManager, onStatus } = params;
 
   onStatus?.('Preparando transacción CashTokens No-Custodia...');
   const buildRes = await fetch(`${backendUrl}${buildEndpoint}`, {
@@ -877,7 +881,37 @@ export async function executeBchSwapDeposit(params: {
 
   const desiredChain = isTestnet ? 'bch:bchtest' : 'bch:bitcoincash';
 
-  // Priority 1: Active WalletConnect V2 BCH session (`wc2-bch-bcr`: Cashonize / Paytaca Mobile / Zapit)
+  // Priority 1: Active WizardConnect Nostr Tunnel (Paytaca Mobile / Desktop)
+  if (wizardManager && typeof wizardManager.signTransaction === 'function') {
+    onStatus?.('📱 Revisa Paytaca en tu teléfono: autoriza la transacción con 1 toque...');
+    const sessionPaths = typeof wizardManager.getSessionPaths === 'function' ? wizardManager.getSessionPaths() : [];
+    const defaultPathName = sessionPaths.find((p: any) => p.name === 'receive')?.name || sessionPaths[0]?.name || 'receive';
+    const inputPaths: [number, string, number][] = (buildData.wcTransaction.inputs || []).map((_: any, idx: number) => [idx, defaultPathName, 0]);
+    const response: any = await wizardManager.signTransaction({
+      transaction: buildData.wcTransaction,
+      inputPaths
+    });
+
+    const signedHex = response?.signedTransaction || (typeof response === 'string' ? response : null);
+    if (!signedHex) {
+      throw new Error(response?.error || 'Firma cancelada en Paytaca.');
+    }
+
+    onStatus?.('Transmitiendo a Bitcoin Cash...');
+    const broadcastRes = await fetch(`${backendUrl}/api/bch/broadcast`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ txHex: signedHex, isChipnet: isTestnet })
+    });
+    const broadcastData = await broadcastRes.json();
+    if (!broadcastData.success || !broadcastData.txHash) {
+      throw new Error(broadcastData.error || 'Error transmitiendo la transacción firmada a la red.');
+    }
+
+    return { txHash: broadcastData.txHash };
+  }
+
+  // Priority 2: Active WalletConnect V2 BCH session (`wc2-bch-bcr`: Cashonize / Paytaca Mobile / Zapit)
   if (bchSignClient && activeBchSession) {
     const allowedChains = activeBchSession.namespaces?.bch?.chains || [];
     const chainIdToUse = allowedChains.includes(desiredChain)
@@ -907,7 +941,7 @@ export async function executeBchSwapDeposit(params: {
     return { txHash };
   }
 
-  // Priority 2: Paytaca Browser Extension (`window.paytaca.signTransaction`)
+  // Priority 3: Paytaca Browser Extension (`window.paytaca.signTransaction`)
   if (typeof window !== 'undefined') {
     const ext = (window as any).paytaca || (window as any).bitcoinCash;
     if (ext && typeof ext.signTransaction === 'function') {
@@ -926,5 +960,5 @@ export async function executeBchSwapDeposit(params: {
     }
   }
 
-  throw new Error('La sesión BCH actual es de solo lectura (usa WalletConnect V2 o QR para firmar).');
+  throw new Error('No hay canal de firma activo (WizardConnect o Extensión).');
 }

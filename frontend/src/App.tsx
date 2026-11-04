@@ -930,6 +930,8 @@ export default function App() {
             lang={lang}
             platformNetwork={platformNetwork}
             onToggleNetwork={setPlatformNetwork}
+            wizardConnectManager={wc.manager}
+            wizardConnectState={wc.state}
           />
         </div>
       </div>
@@ -1582,6 +1584,8 @@ export default function App() {
             lang={lang}
             platformNetwork={platformNetwork}
             onToggleNetwork={setPlatformNetwork}
+            wizardConnectManager={wc.manager}
+            wizardConnectState={wc.state}
           />
         </main>
       )}

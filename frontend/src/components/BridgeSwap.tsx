@@ -15,7 +15,8 @@ import {
   ArrowLeft,
   ArrowRight,
   CheckCircle2,
-  ClipboardPaste
+  ClipboardPaste,
+  Smartphone
 } from 'lucide-react';
 import TokenSelectModal, { SUPPORTED_TOKENS, TokenInfo } from './TokenSelectModal';
 import { convertCashAddressNetwork, formatAddress, generateQrDataUrl, formatCryptoBalance } from '../utils/bchAddress';
@@ -46,6 +47,8 @@ interface BridgeSwapProps {
   lang: 'en' | 'es';
   platformNetwork?: 'mainnet' | 'testnet';
   onToggleNetwork?: (net: 'mainnet' | 'testnet') => void;
+  wizardConnectManager?: any;
+  wizardConnectState?: string;
 }
 
 const UI_TEXT = {
@@ -163,7 +166,9 @@ export default function BridgeSwap({
   backendUrl,
   lang,
   platformNetwork = 'testnet',
-  onToggleNetwork
+  onToggleNetwork,
+  wizardConnectManager,
+  wizardConnectState
 }: BridgeSwapProps) {
   const t = UI_TEXT[lang] || UI_TEXT.es;
   const isTestnet = platformNetwork === 'testnet';
@@ -551,14 +556,15 @@ export default function BridgeSwap({
       }
 
       // 2B. Paying BCH CashToken (`PUSD` -> `USDT`):
-      // Try 1-Click WalletConnect V2 (`bch_signTransaction`) or Paytaca Extension first!
-      if (hasActiveBchSigningCapability()) {
+      // Try 1-Click WizardConnect (Paytaca) / WalletConnect V2 / Extension first!
+      if (hasActiveBchSigningCapability(wizardConnectManager)) {
         try {
           const { txHash } = await executeBchSwapDeposit({
             backendUrl,
             buildEndpoint: `/api/swap/${createdSwap.id}/build-bch-tx`,
             senderAddress: payingWalletAddress,
             isTestnet,
+            wizardManager: wizardConnectManager,
             onStatus: msg => setSigningStep(msg)
           });
 
@@ -588,12 +594,49 @@ export default function BridgeSwap({
         }
       }
 
-      // Read-only BCH session (e.g. WizardConnect xpub): show sleek Covenant payment sheet with auto-polling
+      // Read-only BCH session or manual mode: show sleek Covenant payment sheet with auto-polling
       setManualTxOpen(false);
       setTxHashInput('');
       setCardState('deposit');
     } catch (err: any) {
       showToast(err.message || (lang === 'es' ? 'Error al ejecutar swap' : 'Error executing swap'), 'error');
+    } finally {
+      setExecuting(false);
+      setSigningStep('');
+    }
+  };
+
+  // Re-trigger 1-Click Remote Sign from the Deposit Screen
+  const handleTriggerRemoteSign = async () => {
+    if (!activeSwap?.id || !hasActiveBchSigningCapability(wizardConnectManager)) return;
+    setExecuting(true);
+    setSigningStep(lang === 'es' ? '📱 Revisa Paytaca para autorizar...' : '📱 Check Paytaca to authorize...');
+    try {
+      const { txHash } = await executeBchSwapDeposit({
+        backendUrl,
+        buildEndpoint: `/api/swap/${activeSwap.id}/build-bch-tx`,
+        senderAddress: payingWalletAddress || bchAddress,
+        isTestnet,
+        wizardManager: wizardConnectManager,
+        onStatus: msg => setSigningStep(msg)
+      });
+      setSigningStep(t.settling);
+      const verifyRes = await fetch(`${backendUrl}/api/swap/${activeSwap.id}/verify-tx`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ txHash })
+      });
+      const verifyData = await verifyRes.json();
+      if (!verifyData.success) {
+        throw new Error(verifyData.error || 'Error liquidando en contrato');
+      }
+      setActiveSwap(verifyData.swap);
+      setCardState('success');
+      setAmount('');
+      onRefreshBalances?.();
+      showToast(t.completed, 'success');
+    } catch (err: any) {
+      showToast(err.message || 'Error autorizando en Paytaca', 'error');
     } finally {
       setExecuting(false);
       setSigningStep('');
@@ -690,12 +733,13 @@ export default function BridgeSwap({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ txHash })
         });
-      } else if (hasActiveBchSigningCapability()) {
+      } else if (hasActiveBchSigningCapability(wizardConnectManager)) {
         const { txHash } = await executeBchSwapDeposit({
           backendUrl,
           buildEndpoint: `/api/limit-orders/${order.id}/build-bch-tx`,
           senderAddress: payingWalletAddress,
           isTestnet,
+          wizardManager: wizardConnectManager,
           onStatus: msg => setSigningStep(msg)
         });
 
@@ -1324,6 +1368,28 @@ export default function BridgeSwap({
               </div>
               <p className="text-[11px] text-ink-3 mt-2.5">{t.autoDetectHint}</p>
             </div>
+
+            {/* 1-Click Remote Sign Action via WizardConnect / Nostr Tunnel */}
+            {hasActiveBchSigningCapability(wizardConnectManager) && (
+              <button
+                type="button"
+                disabled={executing}
+                onClick={handleTriggerRemoteSign}
+                className="w-full h-11 rounded-control bg-primary text-black font-semibold text-xs flex items-center justify-center gap-2 hover:brightness-105 active:scale-[0.99] transition shadow-xs cursor-pointer disabled:opacity-60"
+              >
+                {executing ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>{signingStep || (lang === 'es' ? 'Autorizando en Paytaca...' : 'Authorizing in Paytaca...')}</span>
+                  </>
+                ) : (
+                  <>
+                    <Smartphone className="w-4 h-4" />
+                    <span>{lang === 'es' ? '📱 Autorizar en Paytaca (1-Click Remoto)' : '📱 Authorize in Paytaca (1-Click)'}</span>
+                  </>
+                )}
+              </button>
+            )}
 
             {/* Copy / Deep-Link Actions */}
             <div className="grid grid-cols-2 gap-2">

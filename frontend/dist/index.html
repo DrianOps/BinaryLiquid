@@ -64,37 +64,135 @@
         justify-content: center;
         height: 100vh;
         width: 100vw;
+        position: relative;
+        overflow: hidden;
       }
-      .initial-loader img {
+      .heartbeat-wrapper {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 140px;
+        height: 140px;
+      }
+      .heartbeat-glow {
+        position: absolute;
+        width: 120px;
+        height: 120px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(247, 147, 26, 0.45) 0%, rgba(247, 147, 26, 0.12) 50%, rgba(247, 147, 26, 0) 75%);
+        animation: heart-glow 1.35s infinite ease-in-out;
+        pointer-events: none;
+      }
+      .heartbeat-ring {
+        position: absolute;
         width: 100px;
         height: 100px;
-        animation: spin-pulse 2s infinite ease-in-out;
+        border-radius: 50%;
+        border: 2px solid rgba(247, 147, 26, 0.4);
+        animation: heart-ring 1.35s infinite cubic-bezier(0.215, 0.61, 0.355, 1);
+        pointer-events: none;
       }
-      .initial-loader p {
-        margin-top: 20px;
-        font-family: sans-serif;
-        font-weight: bold;
-        color: #f7931a;
-        letter-spacing: 2px;
+      .initial-loader img {
+        width: 96px;
+        height: 96px;
+        -o-object-fit: contain;
+           object-fit: contain;
+        position: relative;
+        z-index: 2;
+        animation: heartbeat 1.35s infinite ease-in-out;
+        will-change: transform, filter;
       }
-      @keyframes spin-pulse {
-        0% { transform: scale(0.9) rotate(0deg); opacity: 0.8; }
-        50% { transform: scale(1.1) rotate(180deg); opacity: 1; }
-        100% { transform: scale(0.9) rotate(360deg); opacity: 0.8; }
+
+      /* Authentic Cardiac Heartbeat (Lub-Dub Rhythmic Pulse) */
+      @keyframes heartbeat {
+        0% {
+          transform: scale(1);
+          filter: drop-shadow(0 0 0px rgba(247, 147, 26, 0));
+        }
+        14% {
+          transform: scale(1.16);
+          filter: drop-shadow(0 0 16px rgba(247, 147, 26, 0.65));
+        }
+        28% {
+          transform: scale(1.03);
+          filter: drop-shadow(0 0 6px rgba(247, 147, 26, 0.25));
+        }
+        42% {
+          transform: scale(1.28);
+          filter: drop-shadow(0 0 32px rgba(247, 147, 26, 0.9));
+        }
+        70% {
+          transform: scale(1);
+          filter: drop-shadow(0 0 2px rgba(247, 147, 26, 0.1));
+        }
+        100% {
+          transform: scale(1);
+          filter: drop-shadow(0 0 0px rgba(247, 147, 26, 0));
+        }
+      }
+
+      @keyframes heart-glow {
+        0% {
+          transform: scale(0.9);
+          opacity: 0.2;
+        }
+        14% {
+          transform: scale(1.18);
+          opacity: 0.7;
+        }
+        28% {
+          transform: scale(1.02);
+          opacity: 0.3;
+        }
+        42% {
+          transform: scale(1.36);
+          opacity: 0.95;
+        }
+        70% {
+          transform: scale(1);
+          opacity: 0.25;
+        }
+        100% {
+          transform: scale(0.9);
+          opacity: 0.2;
+        }
+      }
+
+      @keyframes heart-ring {
+        0% {
+          transform: scale(0.8);
+          opacity: 0.8;
+        }
+        42% {
+          transform: scale(1.5);
+          opacity: 0.15;
+        }
+        70% {
+          transform: scale(1.75);
+          opacity: 0;
+        }
+        100% {
+          transform: scale(0.8);
+          opacity: 0;
+        }
       }
     </style>
-    <script type="module" crossorigin src="/assets/index-BPYVNCEY.js"></script>
-    <link rel="modulepreload" crossorigin href="/assets/vendor-bh9uHqy5.js">
-    <link rel="modulepreload" crossorigin href="/assets/wizard-DMnFQKI3.js">
-    <link rel="stylesheet" crossorigin href="/assets/index-Qvoq6BQc.css">
+    <script type="module" crossorigin src="/assets/index-CFwpff5R.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/vendor-Taz0LCA9.js">
+    <link rel="modulepreload" crossorigin href="/assets/wizard-CHPXmEG3.js">
+    <link rel="stylesheet" crossorigin href="/assets/index-Dc1Ai_v8.css">
   </head>
 
   <body class="antialiased font-sans">
     <div id="root">
-    <div class="initial-loader">
-      <img src="/logo.png" alt="BinaryLiquid Loading" />
-      <p>LOADING...</p>
+      <div class="initial-loader">
+        <div class="heartbeat-wrapper">
+          <div class="heartbeat-glow"></div>
+          <div class="heartbeat-ring"></div>
+          <img src="/logo.png" alt="BinaryLiquid Loading" />
+        </div>
+      </div>
     </div>
-  </div>
   </body>
 </html>
