@@ -421,6 +421,48 @@ app.post('/api/swap/:id/build-bch-tx', async (req, res) => {
   }
 });
 
+// Build Genuine Unsigned BCH Mainnet Treasury / Protocol Support Transaction for WizardConnect
+app.post('/api/bch/mainnet/build-treasury-tx', async (req, res) => {
+  try {
+    const senderAddress = (req.body?.senderAddress || '').trim();
+    const amountBch = parseFloat(req.body?.amountBch || req.body?.amount || '0.0001');
+
+    if (!senderAddress) {
+      return res.status(400).json({
+        success: false,
+        error: 'Se requiere la dirección CashAddr de Bitcoin Cash Mainnet conectada.'
+      });
+    }
+
+    if (isNaN(amountBch) || amountBch <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Monto de BCH inválido (mínimo 0.00005 BCH).'
+      });
+    }
+
+    const targetAddress = bchService.getVaultAddress(false, false) || config.bch.watchmanMainnetAddress || 'bitcoincash:pvqse7cr2ptah2e34sl53r5utqwxl28fk84grvf5ufzd6n5tclme25u8ar7st';
+    const built = await bchService.buildUnsignedSwapWcTransaction({
+      senderAddress,
+      depositAddress: targetAddress,
+      tokenSymbol: 'BCH',
+      amount: amountBch,
+      isChipnet: false,
+      userPrompt: `BinaryLiquid Protocol Mainnet: ${amountBch} BCH`
+    });
+
+    res.json({
+      success: true,
+      targetAddress,
+      amountBch,
+      ...built
+    });
+  } catch (err) {
+    console.error('[BCH Mainnet Treasury Tx Error]:', err.message);
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
 // Broadcast a user-signed BCH transaction (from WizardConnect, WalletConnect, or Paytaca Extension)
 app.post('/api/bch/broadcast', async (req, res) => {
   try {

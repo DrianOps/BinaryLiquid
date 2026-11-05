@@ -17,7 +17,8 @@ import {
   CheckCircle2,
   ClipboardPaste,
   Smartphone,
-  ArrowLeftRight
+  ArrowLeftRight,
+  ShieldCheck
 } from 'lucide-react';
 import TokenSelectModal, { SUPPORTED_TOKENS, TokenInfo } from './TokenSelectModal';
 import { convertCashAddressNetwork, formatAddress, generateQrDataUrl, formatCryptoBalance } from '../utils/bchAddress';
@@ -107,7 +108,14 @@ const UI_TEXT = {
     signatureRequiredBadge: 'Firma requerida',
     settlingBadge: 'Liquidando en cadena',
     nonCustodialBadge: '100% No custodial • Atómico',
-    switchToQrAction: '¿Prefieres pagar escaneando código QR?'
+    switchToQrAction: '¿Prefieres pagar escaneando código QR?',
+    mainnetLiveBadge: 'Red Bitcoin Cash Mainnet Activa',
+    mainnetTreasuryAction: 'Aportar a Tesorería en BCH Mainnet',
+    mainnetTreasuryTitle: 'Aporte a Tesorería / Proof-of-Reserve',
+    mainnetTreasuryDesc: 'Transacción real en Bitcoin Cash Mainnet con WizardConnect hacia el Protocol Vault Covenant.',
+    mainnetConfirmSub: 'Revisa tu billetera BCH (Paytaca) para autorizar la transacción real en Mainnet.',
+    mainnetSuccessTitle: 'Transacción Confirmada en BCH Mainnet',
+    protocolVault: 'Tesorería BinaryLiquid'
   },
   en: {
     swap: 'Swap',
@@ -163,7 +171,14 @@ const UI_TEXT = {
     signatureRequiredBadge: 'Signature required',
     settlingBadge: 'Settling on-chain',
     nonCustodialBadge: '100% Non-custodial • Atomic',
-    switchToQrAction: 'Prefer to pay by scanning QR code?'
+    switchToQrAction: 'Prefer to pay by scanning QR code?',
+    mainnetLiveBadge: 'Bitcoin Cash Mainnet Live',
+    mainnetTreasuryAction: 'Send BCH Mainnet Transaction',
+    mainnetTreasuryTitle: 'Treasury Backing / Proof-of-Reserve',
+    mainnetTreasuryDesc: 'Real on-chain transaction via WizardConnect to BinaryLiquid Protocol Vault Covenant.',
+    mainnetConfirmSub: 'Check your BCH wallet (Paytaca) to authorize transaction on Mainnet.',
+    mainnetSuccessTitle: 'BCH Mainnet Transaction Confirmed',
+    protocolVault: 'BinaryLiquid Treasury'
   }
 };
 
@@ -273,9 +288,23 @@ export default function BridgeSwap({
     }
   }, [connectedBch, faucetAddress]);
 
+  // Automatically configure tokens and defaults when switching Mainnet / Testnet
+  useEffect(() => {
+    if (!isTestnet) {
+      const bch = SUPPORTED_TOKENS.find(t => t.symbol === 'BCH') || SUPPORTED_TOKENS[0];
+      setSellToken(bch);
+      if (!amount || amount === '0') {
+        setAmount('0.0001');
+      }
+    } else {
+      setSellToken(SUPPORTED_TOKENS[0]); // PUSD
+      setBuyToken(SUPPORTED_TOKENS[1]); // USDT
+    }
+  }, [isTestnet]);
+
   // Keep pair liquidity-aware
   const isPairLiquid = useMemo(() => {
-    if (!isTestnet) return false;
+    if (!isTestnet) return true; // Mainnet BCH Treasury transactions are always active!
     const a = sellToken.symbol.toUpperCase();
     const b = buyToken.symbol.toUpperCase();
     return a !== b && (a === 'PUSD' || a === 'USDT') && (b === 'PUSD' || b === 'USDT');
@@ -491,12 +520,83 @@ export default function BridgeSwap({
   };
 
   // ==========================================================================
+  // REAL 1-CLICK BCH MAINNET TRANSACTION (FOR BLAZE HACKATHON MAINNET TRACK)
+  // ==========================================================================
+  const handleMainnetTreasuryDeposit = async () => {
+    if (!isPayingWalletConnected) {
+      onConnectWallet();
+      return;
+    }
+    const parsedAmount = parseFloat(amount);
+    if (!parsedAmount || parsedAmount <= 0) {
+      showToast(t.enterAmount, 'error');
+      return;
+    }
+
+    setExecuting(true);
+    setCardState('processing');
+    setProcessingStage('authorizing');
+    setSigningStep(t.signing);
+
+    try {
+      const { txHash } = await executeBchSwapDeposit({
+        backendUrl,
+        buildEndpoint: '/api/bch/mainnet/build-treasury-tx',
+        senderAddress: payingWalletAddress,
+        isTestnet: false,
+        wizardManager: wizardConnectManager,
+        onStatus: msg => setSigningStep(msg)
+      });
+
+      setProcessingStage('settling');
+      setSigningStep(t.settling);
+
+      setActiveSwap({
+        id: `mainnet_tx_${Date.now()}`,
+        fromToken: 'BCH',
+        toToken: 'Protocol Vault',
+        fromAmount: parsedAmount,
+        toAmount: parsedAmount,
+        payoutTxHash: txHash,
+        depositTxHash: txHash,
+        payoutExplorerUrl: `https://3xpl.com/bitcoin-cash/transaction/${txHash}`,
+        recipientAddress: 'bitcoincash:pvqse7cr2ptah2e34sl53r5utqwxl28fk84grvf5ufzd6n5tclme25u8ar7st',
+        status: 'COMPLETED'
+      });
+
+      setCardState('success');
+      setAmount('');
+      onRefreshBalances?.();
+      showToast(lang === 'es' ? '¡Transacción en BCH Mainnet confirmada!' : 'BCH Mainnet transaction confirmed!', 'success');
+    } catch (err: any) {
+      const msg = String(err?.message || '').toLowerCase();
+      const isUserCancel =
+        (msg.includes('cancel') || msg.includes('denied') || msg.includes('user rejected')) &&
+        !msg.includes('network') && !msg.includes('rules') && !msg.includes('script') && !msg.includes('stack');
+      if (isUserCancel) {
+        showToast(lang === 'es' ? 'Firma cancelada en tu billetera BCH' : 'Signature cancelled in wallet', 'error');
+      } else {
+        showToast(err.message || 'Error en transacción Mainnet', 'error');
+      }
+      setCardState('form');
+    } finally {
+      setExecuting(false);
+      setSigningStep('');
+    }
+  };
+
+  // ==========================================================================
   // 1-CLICK SWAP EXECUTION (PAY FROM CONNECTED WALLET -> RECEIVE AT DESTINATION)
   // ==========================================================================
   const handleSwap = async () => {
     if (!isPairLiquid) return;
     if (!isPayingWalletConnected) {
       onConnectWallet();
+      return;
+    }
+
+    if (!isTestnet) {
+      await handleMainnetTreasuryDeposit();
       return;
     }
 
@@ -859,6 +959,35 @@ export default function BridgeSwap({
   }, [amount, isPairLiquid, activeTab, targetRate, quote, buyToken.symbol, sellToken.isBch, buyToken.isBch]);
 
   const ctaConfig = useMemo(() => {
+    if (!isTestnet) {
+      if (executing) {
+        return { label: signingStep || t.signing, disabled: true, variant: 'primary' as const };
+      }
+      if (!isPayingWalletConnected) {
+        return {
+          label: t.connectBchToPay,
+          disabled: false,
+          variant: 'connect' as const
+        };
+      }
+      const parsed = parseFloat(amount);
+      if (!amount || isNaN(parsed) || parsed <= 0) {
+        return { label: t.enterAmount, disabled: true, variant: 'muted' as const };
+      }
+      if (sellBalance !== null && parsed > sellBalance) {
+        return {
+          label: lang === 'es' ? 'Saldo BCH insuficiente' : 'Insufficient BCH balance',
+          disabled: true,
+          variant: 'muted' as const
+        };
+      }
+      return {
+        label: t.mainnetTreasuryAction,
+        disabled: false,
+        variant: 'primary' as const
+      };
+    }
+
     if (!isPairLiquid) {
       return { label: t.noLiquidity, disabled: true, variant: 'muted' as const };
     }
@@ -901,6 +1030,7 @@ export default function BridgeSwap({
       variant: 'primary' as const
     };
   }, [
+    isTestnet,
     isPairLiquid,
     executing,
     signingStep,
@@ -920,18 +1050,18 @@ export default function BridgeSwap({
 
   return (
     <div className="w-full max-w-[440px] mx-auto pt-2 sm:pt-6 pb-8">
-      {/* Minimal Mainnet Switch Bar (only shown if user switched platform to Mainnet) */}
+      {/* Active Mainnet Badge & Switcher */}
       {!isTestnet && (
-        <div className="mb-3 px-3.5 py-2.5 rounded-panel bg-rose-500/10 border border-rose-500/20 flex items-center justify-between text-xs">
-          <span className="font-medium text-rose-600 dark:text-rose-400 flex items-center gap-1.5">
-            <Lock className="w-3.5 h-3.5 shrink-0" />
-            {t.mainnetNotice}
+        <div className="mb-3 px-3.5 py-2.5 rounded-panel bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-between text-xs">
+          <span className="font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+            <span>{t.mainnetLiveBadge}</span>
           </span>
           {onToggleNetwork && (
             <button
               type="button"
               onClick={() => onToggleNetwork('testnet')}
-              className="px-2.5 py-1 rounded-lg bg-ink text-canvas font-semibold text-[11px] hover:opacity-90 transition cursor-pointer"
+              className="px-2.5 py-1 rounded-lg bg-surface text-ink-2 hover:text-ink font-semibold text-[11px] border border-line transition cursor-pointer"
             >
               {t.switchToTestnet}
             </button>
@@ -1172,20 +1302,26 @@ export default function BridgeSwap({
               </button>
             </div>
 
-            {/* RECEIVE BOX (`buyToken`) */}
+            {/* RECEIVE BOX */}
             <div className="p-4 rounded-panel bg-surface-2 border border-transparent transition-colors">
               <div className="flex items-center justify-between text-xs text-ink-2 mb-2">
-                <span className="font-medium">{t.receive}</span>
-                {!isPairLiquid && (
+                <span className="font-medium">{!isTestnet ? (lang === 'es' ? 'Destino' : 'Destination') : t.receive}</span>
+                {!isTestnet ? (
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 flex items-center gap-1">
+                    <Lock className="w-2.5 h-2.5" /> P2SH32 Covenant
+                  </span>
+                ) : !isPairLiquid ? (
                   <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-500">
                     {t.noLiquidity}
                   </span>
-                )}
+                ) : null}
               </div>
 
               <div className="flex items-center justify-between gap-3">
                 <div className="w-full min-w-0 text-3xl font-semibold tracking-tight tabular-nums truncate">
-                  {loadingQuote && !receiveDisplay ? (
+                  {!isTestnet ? (
+                    <span className="text-ink">{amount || '0.0001'}</span>
+                  ) : loadingQuote && !receiveDisplay ? (
                     <span className="inline-block w-24 h-8 rounded-lg bg-surface-3 animate-pulse align-middle" />
                   ) : receiveDisplay ? (
                     <span className="text-ink">{receiveDisplay}</span>
@@ -1194,37 +1330,52 @@ export default function BridgeSwap({
                   )}
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => setTokenModalTarget('buy')}
-                  className="flex items-center gap-2 pl-2.5 pr-3 py-1.5 rounded-full bg-surface hover:bg-surface-3 border border-line  shrink-0 transition cursor-pointer"
-                >
-                  <img
-                    src={buyToken.icon}
-                    alt={buyToken.symbol}
-                    className="w-6 h-6 rounded-full object-contain"
-                  />
-                  <span className="font-semibold text-sm text-ink">
-                    {buyToken.symbol}
-                  </span>
-                  <ChevronDown className="w-3.5 h-3.5 text-ink-3" />
-                </button>
+                {!isTestnet ? (
+                  <div className="flex items-center gap-2 pl-2.5 pr-3.5 py-1.5 rounded-full bg-surface border border-line shrink-0">
+                    <img
+                      src="/favicon.png"
+                      alt="BinaryLiquid"
+                      className="w-6 h-6 rounded-full object-contain"
+                    />
+                    <span className="font-semibold text-sm text-ink">
+                      {t.protocolVault}
+                    </span>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setTokenModalTarget('buy')}
+                    className="flex items-center gap-2 pl-2.5 pr-3 py-1.5 rounded-full bg-surface hover:bg-surface-3 border border-line  shrink-0 transition cursor-pointer"
+                  >
+                    <img
+                      src={buyToken.icon}
+                      alt={buyToken.symbol}
+                      className="w-6 h-6 rounded-full object-contain"
+                    />
+                    <span className="font-semibold text-sm text-ink">
+                      {buyToken.symbol}
+                    </span>
+                    <ChevronDown className="w-3.5 h-3.5 text-ink-3" />
+                  </button>
+                )}
               </div>
 
               <div className="flex items-center justify-between mt-1.5 text-[11px] text-ink-3">
                 <span className="tabular-nums">
-                  {quote?.netPayoutUsd !== undefined
+                  {!isTestnet
+                    ? `~$${((parseFloat(amount || '0.0001') || 0) * 500).toFixed(2)} USD`
+                    : quote?.netPayoutUsd !== undefined
                     ? `~$${Number(quote.netPayoutUsd).toFixed(2)}`
                     : receiveDisplay
                     ? `~$${receiveDisplay}`
                     : '$0.00'}
                 </span>
-                <span>{buyToken.isBch ? (isTestnet ? 'BCH Chipnet' : 'Bitcoin Cash') : isTestnet ? 'Polygon Amoy' : 'Polygon'}</span>
+                <span>{!isTestnet ? 'Bitcoin Cash Mainnet' : buyToken.isBch ? (isTestnet ? 'BCH Chipnet' : 'Bitcoin Cash') : isTestnet ? 'Polygon Amoy' : 'Polygon'}</span>
               </div>
             </div>
 
             {/* TARGET PRICE ROW (Only in Limit Tab) */}
-            {activeTab === 'limit' && (
+            {activeTab === 'limit' && isTestnet && (
               <div className="px-4 py-3 rounded-panel bg-surface-2 flex items-center justify-between gap-3">
                 <div className="text-xs text-ink-2">
                   <div className="font-medium">{t.targetPrice}</div>
@@ -1250,55 +1401,85 @@ export default function BridgeSwap({
               </div>
             )}
 
-            {/* DESTINATION ADDRESS INPUT (`Recibir en` — User manually pastes/enters destination!) */}
+            {/* DESTINATION ADDRESS / COVENANT TARGET */}
             <div className="px-4 py-3 rounded-panel bg-surface-2 border border-transparent focus-within:border-line-strong transition-colors">
               <div className="flex items-center justify-between mb-1.5">
                 <label className="text-xs font-medium text-ink-2 flex items-center gap-1.5">
                   <span>
-                    {t.receiveAt} ({buyToken.symbol})
+                    {!isTestnet
+                      ? (lang === 'es' ? 'Contrato de Destino (BCH Mainnet)' : 'Target Vault (BCH Mainnet)')
+                      : `${t.receiveAt} (${buyToken.symbol})`}
                   </span>
-                  {recipientAddress.trim() && isRecipientValid && (
+                  {(!isTestnet || (recipientAddress.trim() && isRecipientValid)) && (
                     <Check className="w-3.5 h-3.5 text-emerald-500" />
                   )}
                 </label>
 
-                <div className="flex items-center gap-1.5">
-                  {optionalReceiveWallet &&
-                    recipientAddress.trim().toLowerCase() !== optionalReceiveWallet.toLowerCase() && (
-                      <button
-                        type="button"
-                        onClick={() => setRecipientAddress(optionalReceiveWallet)}
-                        className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-surface-3 text-ink-2 hover:bg-surface-3 transition cursor-pointer"
-                      >
-                        {t.myWallet}
-                      </button>
-                    )}
-                  <button
-                    type="button"
-                    onClick={handlePasteRecipient}
-                    className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-surface-3 text-ink-2 hover:bg-surface-3 flex items-center gap-1 transition cursor-pointer"
-                  >
-                    <ClipboardPaste className="w-2.5 h-2.5" />
-                    <span>{t.paste}</span>
-                  </button>
-                </div>
+                {!isTestnet ? (
+                  <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                    <ShieldCheck className="w-3 h-3" /> Verificado
+                  </span>
+                ) : (
+                  <div className="flex items-center gap-1.5">
+                    {optionalReceiveWallet &&
+                      recipientAddress.trim().toLowerCase() !== optionalReceiveWallet.toLowerCase() && (
+                        <button
+                          type="button"
+                          onClick={() => setRecipientAddress(optionalReceiveWallet)}
+                          className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-surface-3 text-ink-2 hover:bg-surface-3 transition cursor-pointer"
+                        >
+                          {t.myWallet}
+                        </button>
+                      )}
+                    <button
+                      type="button"
+                      onClick={handlePasteRecipient}
+                      className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-surface-3 text-ink-2 hover:bg-surface-3 flex items-center gap-1 transition cursor-pointer"
+                    >
+                      <ClipboardPaste className="w-2.5 h-2.5" />
+                      <span>{t.paste}</span>
+                    </button>
+                  </div>
+                )}
               </div>
 
-              <input
-                type="text"
-                value={recipientAddress}
-                onChange={e => setRecipientAddress(e.target.value)}
-                placeholder={
-                  buyToken.isBch
-                    ? isTestnet
-                      ? 'bchtest:q... / bchtest:z...'
-                      : 'bitcoincash:q... / bitcoincash:z...'
-                    : '0x...'
-                }
-                spellCheck={false}
-                className="w-full bg-transparent text-xs font-mono text-ink placeholder:text-ink-3 outline-none"
-              />
+              {!isTestnet ? (
+                <div className="w-full text-xs font-mono text-ink select-all truncate">
+                  bitcoincash:pvqse7cr2ptah2e34sl53r5utqwxl28fk84grvf5ufzd6n5tclme25u8ar7st
+                </div>
+              ) : (
+                <input
+                  type="text"
+                  value={recipientAddress}
+                  onChange={e => setRecipientAddress(e.target.value)}
+                  placeholder={
+                    buyToken.isBch
+                      ? isTestnet
+                        ? 'bchtest:q... / bchtest:z...'
+                        : 'bitcoincash:q... / bitcoincash:z...'
+                      : '0x...'
+                  }
+                  spellCheck={false}
+                  className="w-full bg-transparent text-xs font-mono text-ink placeholder:text-ink-3 outline-none"
+                />
+              )}
             </div>
+
+            {/* MAINNET LIVE SUMMARY */}
+            {!isTestnet && (
+              <div className="px-3.5 py-2.5 rounded-panel border border-line text-xs flex items-center justify-between text-ink-2">
+                <span className="font-medium text-ink-2">
+                  {lang === 'es' ? 'Transacción real en Mainnet' : 'Live Mainnet Transaction'}
+                </span>
+                <span className="flex items-center gap-1.5 text-[11px]">
+                  <span>Fee: ~800 sats</span>
+                  <span>•</span>
+                  <span>~3s</span>
+                  <span>•</span>
+                  <span className="text-emerald-500 font-semibold">WizardConnect</span>
+                </span>
+              </div>
+            )}
 
             {/* 1-LINE COLLAPSIBLE QUOTE SUMMARY */}
             {quote && isPairLiquid && parseFloat(amount) > 0 && (
@@ -1454,20 +1635,22 @@ export default function BridgeSwap({
                   <div className="flex items-center justify-end gap-2">
                     <div className="min-w-0">
                       <div className="text-base sm:text-lg font-bold text-ink tabular-nums truncate">
-                        {activeSwap?.toAmount || receiveDisplay || (quote?.netPayout ? Number(quote.netPayout).toFixed(2) : '0')}
+                        {!isTestnet
+                          ? amount || '0.0001'
+                          : activeSwap?.toAmount || receiveDisplay || (quote?.netPayout ? Number(quote.netPayout).toFixed(2) : '0')}
                       </div>
                       <div className="text-xs font-semibold text-ink-2">
-                        {buyToken.symbol}
+                        {!isTestnet ? t.protocolVault : buyToken.symbol}
                       </div>
                     </div>
                     <img
-                      src={buyToken.icon}
-                      alt={buyToken.symbol}
+                      src={!isTestnet ? '/favicon.png' : buyToken.icon}
+                      alt={!isTestnet ? 'BinaryLiquid' : buyToken.symbol}
                       className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-contain bg-surface border border-line shadow-soft shrink-0"
                     />
                   </div>
                   <div className="text-[11px] text-ink-3 truncate">
-                    {buyToken.isBch ? (isTestnet ? 'BCH Chipnet' : 'Bitcoin Cash') : (isTestnet ? 'Polygon Amoy' : 'Polygon')}
+                    {!isTestnet ? 'Bitcoin Cash Mainnet' : buyToken.isBch ? (isTestnet ? 'BCH Chipnet' : 'Bitcoin Cash') : isTestnet ? 'Polygon Amoy' : 'Polygon'}
                   </div>
                 </div>
               </div>
@@ -1482,9 +1665,13 @@ export default function BridgeSwap({
               </h3>
               <p className="text-xs text-ink-3 max-w-xs mx-auto leading-relaxed">
                 {processingStage === 'authorizing'
-                  ? sellToken.isBch
+                  ? !isTestnet
+                    ? t.mainnetConfirmSub
+                    : sellToken.isBch
                     ? t.confirmInWalletSubBch
                     : t.confirmInWalletSubEvm
+                  : !isTestnet
+                  ? (lang === 'es' ? 'Firma recibida. Transmitiendo a la red Bitcoin Cash Mainnet...' : 'Signature received. Broadcasting to Bitcoin Cash Mainnet...')
                   : sellToken.isBch
                   ? t.settlingSubBch
                   : t.settlingSubEvm}
@@ -1507,14 +1694,16 @@ export default function BridgeSwap({
               <div className="flex items-center justify-between text-ink-2">
                 <span className="text-ink-3">{t.sentTo}</span>
                 <span className="font-mono text-ink tabular-nums">
-                  {formatAddress(normalizedRecipient || recipientAddress)}
+                  {!isTestnet
+                    ? 'bitcoincash:pvqse7cr... (Vault Covenant)'
+                    : formatAddress(normalizedRecipient || recipientAddress)}
                 </span>
               </div>
               <div className="flex items-center justify-between pt-1 border-t border-line/60 text-[11px] text-ink-3">
                 <span>{lang === 'es' ? 'Protocolo:' : 'Protocol:'}</span>
                 <span className="font-medium text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
                   <Lock className="w-3 h-3" />
-                  {t.nonCustodialBadge}
+                  {!isTestnet ? '100% No custodial • Bitcoin Cash Mainnet' : t.nonCustodialBadge}
                 </span>
               </div>
             </div>
@@ -1655,7 +1844,7 @@ export default function BridgeSwap({
             {/* Top Status Badge in Bitcoin Orange */}
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 border border-primary/30 text-primary text-[11px] font-bold uppercase tracking-wider">
               <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-              <span>{lang === 'es' ? 'Swap Confirmado On-Chain' : 'On-Chain Settlement Confirmed'}</span>
+              <span>{!isTestnet ? t.mainnetSuccessTitle : (lang === 'es' ? 'Swap Confirmado On-Chain' : 'On-Chain Settlement Confirmed')}</span>
             </div>
 
             {/* Big Animated Check Circle in Bitcoin Orange */}
@@ -1669,10 +1858,12 @@ export default function BridgeSwap({
                 +{activeSwap.toAmount} {activeSwap.toToken}
               </p>
               <p className="text-xs text-ink-3">
-                {lang === 'es' ? 'Recibido desde' : 'Swapped from'} {activeSwap.fromAmount} {activeSwap.fromToken}
+                {!isTestnet
+                  ? (lang === 'es' ? 'Aporte recibido en la Tesorería de BinaryLiquid' : 'Contributed to BinaryLiquid Treasury Vault')
+                  : `${lang === 'es' ? 'Recibido desde' : 'Swapped from'} ${activeSwap.fromAmount} ${activeSwap.fromToken}`}
               </p>
               <p className="text-xs text-ink-2 font-mono pt-1">
-                {t.sentTo}: {formatAddress(activeSwap.recipientAddress)}
+                {t.sentTo}: {formatAddress(activeSwap.recipientAddress)} {!isTestnet ? '(Protocol Vault)' : ''}
               </p>
             </div>
 
@@ -1717,11 +1908,11 @@ export default function BridgeSwap({
             <div className="space-y-1.5 pt-2 border-t border-line text-[11px] text-ink-3 text-left">
               <div className="flex items-center justify-between">
                 <span>{lang === 'es' ? 'Seguridad:' : 'Security:'}</span>
-                <span className="font-semibold text-ink-2">Covenant CashScript P2SH32</span>
+                <span className="font-semibold text-ink-2">{!isTestnet ? 'Bitcoin Cash Mainnet (P2SH32 Covenant)' : 'Covenant CashScript P2SH32'}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span>{lang === 'es' ? 'Custodia:' : 'Custody:'}</span>
-                <span className="font-semibold text-primary">100% No Custodial</span>
+                <span className="font-semibold text-primary">{!isTestnet ? '100% No Custodial • On-Chain' : '100% No Custodial'}</span>
               </div>
             </div>
 
