@@ -110,7 +110,7 @@ const UI_TEXT = {
     nonCustodialBadge: '100% No custodial • Atómico',
     switchToQrAction: '¿Prefieres pagar escaneando código QR?',
     mainnetLiveBadge: 'Red Bitcoin Cash Mainnet Activa',
-    mainnetTreasuryAction: 'Aportar a Tesorería en BCH Mainnet',
+    mainnetTreasuryAction: 'Firmar y Enviar 0.0001 BCH en Mainnet',
     mainnetTreasuryTitle: 'Aporte a Tesorería / Proof-of-Reserve',
     mainnetTreasuryDesc: 'Transacción real en Bitcoin Cash Mainnet con WizardConnect hacia el Protocol Vault Covenant.',
     mainnetConfirmSub: 'Revisa tu billetera BCH (Paytaca) para autorizar la transacción real en Mainnet.',
@@ -173,7 +173,7 @@ const UI_TEXT = {
     nonCustodialBadge: '100% Non-custodial • Atomic',
     switchToQrAction: 'Prefer to pay by scanning QR code?',
     mainnetLiveBadge: 'Bitcoin Cash Mainnet Live',
-    mainnetTreasuryAction: 'Send BCH Mainnet Transaction',
+    mainnetTreasuryAction: 'Sign & Broadcast 0.0001 BCH on Mainnet',
     mainnetTreasuryTitle: 'Treasury Backing / Proof-of-Reserve',
     mainnetTreasuryDesc: 'Real on-chain transaction via WizardConnect to BinaryLiquid Protocol Vault Covenant.',
     mainnetConfirmSub: 'Check your BCH wallet (Paytaca) to authorize transaction on Mainnet.',
@@ -1290,62 +1290,47 @@ export default function BridgeSwap({
               </div>
             </div>
 
-            {/* FLIP BUTTON */}
-            <div className="relative h-2 flex items-center justify-center z-10">
-              <button
-                type="button"
-                onClick={handleFlipTokens}
-                aria-label="Invertir par"
-                className="w-9 h-9 rounded-control bg-surface hover:bg-surface-3 border-4 border-surface shadow-soft flex items-center justify-center text-ink-2 hover:rotate-180 transition-all duration-200 cursor-pointer"
-              >
-                <ArrowDownUp className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            {/* RECEIVE BOX */}
-            <div className="p-4 rounded-panel bg-surface-2 border border-transparent transition-colors">
-              <div className="flex items-center justify-between text-xs text-ink-2 mb-2">
-                <span className="font-medium">{!isTestnet ? (lang === 'es' ? 'Destino' : 'Destination') : t.receive}</span>
-                {!isTestnet ? (
-                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 flex items-center gap-1">
-                    <Lock className="w-2.5 h-2.5" /> P2SH32 Covenant
-                  </span>
-                ) : !isPairLiquid ? (
-                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-500">
-                    {t.noLiquidity}
-                  </span>
-                ) : null}
+            {/* FLIP BUTTON (Only in Testnet) */}
+            {isTestnet && (
+              <div className="relative h-2 flex items-center justify-center z-10">
+                <button
+                  type="button"
+                  onClick={handleFlipTokens}
+                  aria-label="Invertir par"
+                  className="w-9 h-9 rounded-control bg-surface hover:bg-surface-3 border-4 border-surface shadow-soft flex items-center justify-center text-ink-2 hover:rotate-180 transition-all duration-200 cursor-pointer"
+                >
+                  <ArrowDownUp className="w-3.5 h-3.5" />
+                </button>
               </div>
+            )}
 
-              <div className="flex items-center justify-between gap-3">
-                <div className="w-full min-w-0 text-3xl font-semibold tracking-tight tabular-nums truncate">
-                  {!isTestnet ? (
-                    <span className="text-ink">{amount || '0.0001'}</span>
-                  ) : loadingQuote && !receiveDisplay ? (
-                    <span className="inline-block w-24 h-8 rounded-lg bg-surface-3 animate-pulse align-middle" />
-                  ) : receiveDisplay ? (
-                    <span className="text-ink">{receiveDisplay}</span>
-                  ) : (
-                    <span className="text-ink-3/60">0</span>
-                  )}
+            {/* RECEIVE BOX (Only in Testnet) */}
+            {isTestnet && (
+              <div className="p-4 rounded-panel bg-surface-2 border border-transparent transition-colors">
+                <div className="flex items-center justify-between text-xs text-ink-2 mb-2">
+                  <span className="font-medium">{t.receive}</span>
+                  {!isPairLiquid ? (
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-500">
+                      {t.noLiquidity}
+                    </span>
+                  ) : null}
                 </div>
 
-                {!isTestnet ? (
-                  <div className="flex items-center gap-2 pl-2.5 pr-3.5 py-1.5 rounded-full bg-surface border border-line shrink-0">
-                    <img
-                      src="/favicon.png"
-                      alt="BinaryLiquid"
-                      className="w-6 h-6 rounded-full object-contain"
-                    />
-                    <span className="font-semibold text-sm text-ink">
-                      {t.protocolVault}
-                    </span>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="w-full min-w-0 text-3xl font-semibold tracking-tight tabular-nums truncate">
+                    {loadingQuote && !receiveDisplay ? (
+                      <span className="inline-block w-24 h-8 rounded-lg bg-surface-3 animate-pulse align-middle" />
+                    ) : receiveDisplay ? (
+                      <span className="text-ink">{receiveDisplay}</span>
+                    ) : (
+                      <span className="text-ink-3/60">0</span>
+                    )}
                   </div>
-                ) : (
+
                   <button
                     type="button"
                     onClick={() => setTokenModalTarget('buy')}
-                    className="flex items-center gap-2 pl-2.5 pr-3 py-1.5 rounded-full bg-surface hover:bg-surface-3 border border-line  shrink-0 transition cursor-pointer"
+                    className="flex items-center gap-2 pl-2.5 pr-3 py-1.5 rounded-full bg-surface hover:bg-surface-3 border border-line shrink-0 transition cursor-pointer"
                   >
                     <img
                       src={buyToken.icon}
@@ -1357,22 +1342,20 @@ export default function BridgeSwap({
                     </span>
                     <ChevronDown className="w-3.5 h-3.5 text-ink-3" />
                   </button>
-                )}
-              </div>
+                </div>
 
-              <div className="flex items-center justify-between mt-1.5 text-[11px] text-ink-3">
-                <span className="tabular-nums">
-                  {!isTestnet
-                    ? `~$${((parseFloat(amount || '0.0001') || 0) * 500).toFixed(2)} USD`
-                    : quote?.netPayoutUsd !== undefined
-                    ? `~$${Number(quote.netPayoutUsd).toFixed(2)}`
-                    : receiveDisplay
-                    ? `~$${receiveDisplay}`
-                    : '$0.00'}
-                </span>
-                <span>{!isTestnet ? 'Bitcoin Cash Mainnet' : buyToken.isBch ? (isTestnet ? 'BCH Chipnet' : 'Bitcoin Cash') : isTestnet ? 'Polygon Amoy' : 'Polygon'}</span>
+                <div className="flex items-center justify-between mt-1.5 text-[11px] text-ink-3">
+                  <span className="tabular-nums">
+                    {quote?.netPayoutUsd !== undefined
+                      ? `~$${Number(quote.netPayoutUsd).toFixed(2)}`
+                      : receiveDisplay
+                      ? `~$${receiveDisplay}`
+                      : '$0.00'}
+                  </span>
+                  <span>{buyToken.isBch ? (isTestnet ? 'BCH Chipnet' : 'Bitcoin Cash') : isTestnet ? 'Polygon Amoy' : 'Polygon'}</span>
+                </div>
               </div>
-            </div>
+            )}
 
             {/* TARGET PRICE ROW (Only in Limit Tab) */}
             {activeTab === 'limit' && isTestnet && (
@@ -1401,25 +1384,17 @@ export default function BridgeSwap({
               </div>
             )}
 
-            {/* DESTINATION ADDRESS / COVENANT TARGET */}
-            <div className="px-4 py-3 rounded-panel bg-surface-2 border border-transparent focus-within:border-line-strong transition-colors">
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="text-xs font-medium text-ink-2 flex items-center gap-1.5">
-                  <span>
-                    {!isTestnet
-                      ? (lang === 'es' ? 'Contrato de Destino (BCH Mainnet)' : 'Target Vault (BCH Mainnet)')
-                      : `${t.receiveAt} (${buyToken.symbol})`}
-                  </span>
-                  {(!isTestnet || (recipientAddress.trim() && isRecipientValid)) && (
-                    <Check className="w-3.5 h-3.5 text-emerald-500" />
-                  )}
-                </label>
+            {/* DESTINATION ADDRESS (Only in Testnet) */}
+            {isTestnet && (
+              <div className="px-4 py-3 rounded-panel bg-surface-2 border border-transparent focus-within:border-line-strong transition-colors">
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-medium text-ink-2 flex items-center gap-1.5">
+                    <span>{`${t.receiveAt} (${buyToken.symbol})`}</span>
+                    {recipientAddress.trim() && isRecipientValid && (
+                      <Check className="w-3.5 h-3.5 text-emerald-500" />
+                    )}
+                  </label>
 
-                {!isTestnet ? (
-                  <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                    <ShieldCheck className="w-3 h-3" /> Verificado
-                  </span>
-                ) : (
                   <div className="flex items-center gap-1.5">
                     {optionalReceiveWallet &&
                       recipientAddress.trim().toLowerCase() !== optionalReceiveWallet.toLowerCase() && (
@@ -1440,49 +1415,72 @@ export default function BridgeSwap({
                       <span>{t.paste}</span>
                     </button>
                   </div>
-                )}
-              </div>
-
-              {!isTestnet ? (
-                <div className="w-full text-xs font-mono text-ink select-all truncate">
-                  bitcoincash:pvqse7cr2ptah2e34sl53r5utqwxl28fk84grvf5ufzd6n5tclme25u8ar7st
                 </div>
-              ) : (
+
                 <input
                   type="text"
                   value={recipientAddress}
                   onChange={e => setRecipientAddress(e.target.value)}
                   placeholder={
                     buyToken.isBch
-                      ? isTestnet
-                        ? 'bchtest:q... / bchtest:z...'
-                        : 'bitcoincash:q... / bitcoincash:z...'
+                      ? 'bchtest:q... / bchtest:z...'
                       : '0x...'
                   }
                   spellCheck={false}
                   className="w-full bg-transparent text-xs font-mono text-ink placeholder:text-ink-3 outline-none"
                 />
-              )}
-            </div>
+              </div>
+            )}
 
-            {/* MAINNET LIVE SUMMARY */}
+            {/* DEDICATED MAINNET PROTOCOL VAULT CARD (When on Mainnet) */}
             {!isTestnet && (
-              <div className="px-3.5 py-2.5 rounded-panel border border-line text-xs flex items-center justify-between text-ink-2">
-                <span className="font-medium text-ink-2">
-                  {lang === 'es' ? 'Transacción real en Mainnet' : 'Live Mainnet Transaction'}
-                </span>
-                <span className="flex items-center gap-1.5 text-[11px]">
-                  <span>Fee: ~800 sats</span>
-                  <span>•</span>
-                  <span>~3s</span>
-                  <span>•</span>
-                  <span className="text-emerald-500 font-semibold">WizardConnect</span>
-                </span>
+              <div className="p-4 rounded-panel bg-surface-2 border border-line/70 space-y-3">
+                <div className="flex items-center justify-between text-xs text-ink-2">
+                  <span className="font-semibold flex items-center gap-1.5 text-ink">
+                    <Lock className="w-3.5 h-3.5 text-emerald-500" />
+                    {lang === 'es' ? 'Covenant Destino (BCH Mainnet)' : 'Destination Covenant (BCH Mainnet)'}
+                  </span>
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                    <ShieldCheck className="w-3 h-3" /> Verificado P2SH-32
+                  </span>
+                </div>
+
+                <div className="p-2.5 rounded-lg bg-surface border border-line text-xs font-mono text-ink-2 break-all select-all flex items-center justify-between gap-2">
+                  <span className="text-[11px] leading-tight">bitcoincash:pvqse7cr2ptah2e34sl53r5utqwxl28fk84grvf5ufzd6n5tclme25u8ar7st</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (navigator.clipboard) {
+                        navigator.clipboard.writeText('bitcoincash:pvqse7cr2ptah2e34sl53r5utqwxl28fk84grvf5ufzd6n5tclme25u8ar7st');
+                        showToast(lang === 'es' ? 'Dirección de Covenant copiada' : 'Covenant address copied', 'success');
+                      }
+                    }}
+                    className="p-1 rounded hover:bg-surface-3 text-ink-3 hover:text-ink shrink-0 cursor-pointer"
+                    title="Copiar dirección"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                <div className="text-[11px] text-ink-3 leading-relaxed">
+                  {lang === 'es'
+                    ? '🛡️ Transacción real en Bitcoin Cash Mainnet con WizardConnect hacia el Protocol Vault Covenant para verificar la integración en vivo para DoraHacks BCH BLAZE.'
+                    : '🛡️ Genuine on-chain transaction on Bitcoin Cash Mainnet via WizardConnect to Protocol Vault Covenant for DoraHacks BCH BLAZE verification.'}
+                </div>
+
+                <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-700 dark:text-amber-300 flex items-start gap-2">
+                  <Sparkles className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-500" />
+                  <span>
+                    {lang === 'es'
+                      ? '¿Deseas probar el Swap Atómico cruzado PUSD (Paryon) ⟷ USDT? Activa la red "Chipnet" en la barra superior para usar el Faucet y los pools con liquidez automática.'
+                      : 'Want to test the atomic PUSD (Paryon) ⟷ USDT Cross-Chain Swap? Switch to "Chipnet" in the top bar to use the Faucet and automated liquidity pools.'}
+                  </span>
+                </div>
               </div>
             )}
 
             {/* 1-LINE COLLAPSIBLE QUOTE SUMMARY */}
-            {quote && isPairLiquid && parseFloat(amount) > 0 && (
+            {isTestnet && quote && isPairLiquid && parseFloat(amount) > 0 && (
               <div className="px-3.5 py-2.5 rounded-panel border border-line text-xs">
                 <button
                   type="button"
