@@ -245,7 +245,19 @@ export default function App() {
   });
   const [isScrolled, setIsScrolled] = useState<boolean>(false);
   const [copied, setCopied] = useState<boolean>(false);
-  const [platformNetwork, setPlatformNetwork] = useState<'mainnet' | 'testnet'>('testnet');
+  const [platformNetwork, setPlatformNetwork] = useState<'mainnet' | 'testnet'>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('bliq_network');
+      if (saved === 'mainnet' || saved === 'testnet') return saved;
+    }
+    return 'testnet';
+  });
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('bliq_network', platformNetwork);
+    }
+  }, [platformNetwork]);
 
   // Clean HTML5 History URL synchronization (No '#' hashes in URL!)
   useEffect(() => {
