@@ -414,7 +414,13 @@ export default function LandingPage({ onLaunchApp, onOpenDocs, onOpenWhitepaper,
 
       {/* FOOTER */}
       <footer className="w-full max-w-5xl mx-auto px-4 sm:px-6 py-8 ui-divider flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-ink-3">
-        <span>© 2026 BinaryLiquid</span>
+        <div className="flex items-center gap-2">
+          <span>© 2026 BinaryLiquid</span>
+          <span>•</span>
+          <a href="https://t.me/drianops" target="_blank" rel="noreferrer" className="hover:text-primary transition-colors font-medium text-ink-2">
+            Dev: @drianops
+          </a>
+        </div>
         <div className="flex flex-wrap items-center gap-5">
           {onOpenWhitepaper && (
             <button
@@ -431,8 +437,11 @@ export default function LandingPage({ onLaunchApp, onOpenDocs, onOpenWhitepaper,
           <a href="https://paryonusd.com" target="_blank" rel="noreferrer" className="hover:text-ink transition-colors">
             ParyonUSD
           </a>
+          <a href="https://t.me/drianops" target="_blank" rel="noreferrer" className="hover:text-primary transition-colors font-semibold text-primary">
+            Telegram (@drianops)
+          </a>
           <a href="https://t.me/bchblaze" target="_blank" rel="noreferrer" className="hover:text-ink transition-colors">
-            Telegram
+            BCH Blaze TG
           </a>
         </div>
       </footer>
