@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>BinaryLiquid — Animated Explainer Studio</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+        body {
+            background-color: #05070B;
+            color: #FFFFFF;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            min-height: 100vh;
+            padding: 12px;
+            overflow-x: hidden;
+        }
+
+        .player-wrapper {
+            width: 100%;
+            max-width: 1280px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin: auto 0;
+        }
+
+        /* YouTube-style 16:9 responsive stage */
+        #stage-container {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            box-shadow: 0 16px 50px rgba(0,0,0,0.8), 0 0 35px rgba(16, 185, 129, 0.15);
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: #080B11;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        /* Progress Bar (YouTube Style) */
+        #progress-bar-container {
+            width: 100%;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            overflow: hidden;
+            cursor: pointer;
+            margin-top: 4px;
+        }
+        #progress-bar {
+            height: 100%;
+            width: 0%;
+            background: #10B981;
+            transition: width 0.1s linear;
+        }
+
+        /* Video Info Header below video */
+        .video-info {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .video-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #FFFFFF;
+            line-height: 1.3;
+        }
+        .video-meta {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 8px;
+            font-size: 13px;
+            color: #94A3B8;
+        }
+        .channel-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+            color: #FFFFFF;
+        }
+        .channel-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #10B981;
+            box-shadow: 0 0 8px #10B981;
+        }
+
+        /* Controls Toolbar */
+        .controls-toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            background: rgba(15, 23, 42, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            padding: 10px 14px;
+        }
+
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            background: #10B981;
+            color: #05070B;
+            border: none;
+            padding: 8px 16px;
+            font-weight: 700;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+            user-select: none;
+        }
+        button:hover { background: #059669; }
+        button:active { transform: scale(0.97); }
+
+        .btn-outline {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: #FFFFFF;
+        }
+        .btn-outline:hover { background: rgba(255, 255, 255, 0.12); }
+
+        .lang-switch {
+            display: flex;
+            gap: 4px;
+            background: rgba(0, 0, 0, 0.4);
+            padding: 3px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .btn-lang {
+            background: transparent;
+            color: #94A3B8;
+            padding: 5px 12px;
+            font-size: 13px;
+            border-radius: 6px;
+        }
+        .btn-lang.active {
+            background: #F7931A;
+            color: #05070B;
+            font-weight: 700;
+        }
+
+        /* Scene indicator pills for mobile scrolling */
+        .scene-pills {
+            display: flex;
+            gap: 6px;
+            overflow-x: auto;
+            padding: 4px 0;
+            scrollbar-width: none;
+        }
+        .scene-pills::-webkit-scrollbar { display: none; }
+        .scene-pill {
+            flex-shrink: 0;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #94A3B8;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 6px 12px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .scene-pill.active {
+            background: rgba(16, 185, 129, 0.2);
+            border-color: #10B981;
+            color: #10B981;
+        }
+
+        /* Mobile specific adjustments */
+        @media (max-width: 768px) {
+            body { padding: 6px; }
+            .video-title { font-size: 15px; }
+            .controls-toolbar { padding: 8px 10px; }
+            button { padding: 7px 12px; font-size: 13px; }
+            .btn-lang { padding: 5px 8px; font-size: 12px; }
+            #stage-container { border-radius: 8px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="player-wrapper">
+        <!-- Responsive 16:9 Stage -->
+        <div id="stage-container">
+            <canvas id="stage" width="1920" height="1080"></canvas>
+        </div>
+
+        <!-- YouTube Style Progress Bar -->
+        <div id="progress-bar-container">
+            <div id="progress-bar"></div>
+        </div>
+
+        <!-- Video Info Header -->
+        <div class="video-info">
+            <div class="video-title" id="video-title">Escena 1: La Crisis de Puentes y el Aislamiento de BCH</div>
+            <div class="video-meta">
+                <div class="channel-badge">
+                    <span class="channel-dot"></span>
+                    <span>BinaryLiquid Protocol • BCH BLAZE 2026</span>
+                </div>
+                <div id="time-display">0:00 / 0:51</div>
+            </div>
+        </div>
+
+        <!-- Toolbar with YouTube feel -->
+        <div class="controls-toolbar">
+            <div class="control-group">
+                <button id="btn-play">▶ Reproducir</button>
+                <button id="btn-prev" class="btn-outline">◀</button>
+                <button id="btn-next" class="btn-outline">▶</button>
+            </div>
+
+            <div class="control-group">
+                <div class="lang-switch">
+                    <button id="btn-lang-es" class="btn-lang active">🇪🇸 ES</button>
+                    <button id="btn-lang-en" class="btn-lang">🇺🇸 EN</button>
+                </div>
+                <button id="btn-fullscreen" class="btn-outline" title="Pantalla Completa">⛶</button>
+            </div>
+        </div>
+
+        <!-- Chapter Pill Badges (Scrollable on Mobile) -->
+        <div class="scene-pills" id="scene-pills">
+            <!-- Rendered dynamically by studio.js -->
+        </div>
+    </div>
+
+    <script src="studio.js"></script>
+</body>
+</html>
