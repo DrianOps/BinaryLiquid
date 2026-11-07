@@ -1465,6 +1465,9 @@ function updateUI() {
     const title = currentLang === 'es' ? scene.titleEs : scene.titleEn;
     const label = currentLang === 'es' ? 'Escena' : 'Scene';
     
+    // Dynamic Browser Tab Title
+    document.title = `BinaryLiquid | ${label} ${currentSceneIndex + 1}: ${title}`;
+
     const titleEl = document.getElementById('video-title');
     if (titleEl) titleEl.textContent = `${label} ${currentSceneIndex + 1}: ${title}`;
 
