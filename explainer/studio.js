@@ -1478,39 +1478,64 @@ function updateUI() {
     renderScenePills();
 }
 
-function playScene(index) {
+function loadScene(index, shouldPlay = false) {
     currentSceneIndex = index;
     sceneTime = 0;
-    updateUI();
 
     if (currentAudio) {
         currentAudio.pause();
+        currentAudio.currentTime = 0;
         currentAudio = null;
     }
 
     const scene = SCENES[index];
     const audioPath = currentLang === 'es' ? scene.audioEs : scene.audioEn;
     currentAudio = new Audio(audioPath);
-    currentAudio.play().catch(e => console.log('Audio autoplay prevented:', e));
 
-    currentAudio.onended = () => {
+    currentAudio.addEventListener('timeupdate', () => {
+        if (isPlaying && currentAudio) {
+            sceneTime = currentAudio.currentTime;
+        }
+    });
+
+    currentAudio.addEventListener('ended', () => {
         if (currentSceneIndex < SCENES.length - 1) {
-            playScene(currentSceneIndex + 1);
+            loadScene(currentSceneIndex + 1, true);
         } else {
             isPlaying = false;
             updateUI();
         }
-    };
+    });
+
+    if (shouldPlay) {
+        isPlaying = true;
+        currentAudio.play().catch(e => console.log('Audio autoplay prevented:', e));
+    } else {
+        isPlaying = false;
+    }
+
+    updateUI();
+}
+
+function playScene(index) {
+    loadScene(index, true);
 }
 
 function setLanguage(lang) {
     currentLang = lang;
     document.getElementById('btn-lang-es').classList.toggle('active', lang === 'es');
     document.getElementById('btn-lang-en').classList.toggle('active', lang === 'en');
-    updateUI();
-
-    if (isPlaying) {
-        playScene(currentSceneIndex);
+    
+    const wasPlaying = isPlaying;
+    if (currentAudio) {
+        currentAudio.pause();
+        currentAudio = null;
+    }
+    sceneTime = 0;
+    if (wasPlaying) {
+        loadScene(currentSceneIndex, true);
+    } else {
+        updateUI();
     }
 }
 
@@ -1520,17 +1545,31 @@ function loop(timestamp) {
     lastTimestamp = timestamp;
 
     const curDur = currentLang === 'es' ? SCENES[currentSceneIndex].durationEs : SCENES[currentSceneIndex].durationEn;
+    
     if (isPlaying) {
-        sceneTime += delta;
-        // Update progress bar
-        const pct = Math.min(100, (sceneTime / curDur) * 100);
-        const pb = document.getElementById('progress-bar');
-        if (pb) pb.style.width = pct + '%';
-        const td = document.getElementById('time-display');
-        if (td) td.textContent = `${formatTime(sceneTime)} / ${formatTime(curDur)}`;
-    } else {
-        sceneTime += delta * 0.5;
+        if (currentAudio && !currentAudio.paused) {
+            sceneTime = currentAudio.currentTime;
+        } else {
+            sceneTime += delta;
+        }
+        if (sceneTime >= curDur) {
+            if (currentSceneIndex < SCENES.length - 1) {
+                loadScene(currentSceneIndex + 1, true);
+            } else {
+                isPlaying = false;
+                sceneTime = curDur;
+                updateUI();
+            }
+        }
     }
+    // Note: When isPlaying is false, sceneTime remains completely frozen!
+
+    // Update progress bar & time display
+    const pct = Math.min(100, Math.max(0, (sceneTime / curDur) * 100));
+    const pb = document.getElementById('progress-bar');
+    if (pb) pb.style.width = pct + '%';
+    const td = document.getElementById('time-display');
+    if (td) td.textContent = `${formatTime(sceneTime)} / ${formatTime(curDur)}`;
 
     drawCurrentScene(sceneTime);
     animationFrameId = requestAnimationFrame(loop);
@@ -1539,8 +1578,27 @@ function loop(timestamp) {
 // Controls Listeners
 document.getElementById('btn-play').addEventListener('click', () => {
     if (!isPlaying) {
+        if (!currentAudio) {
+            const scene = SCENES[currentSceneIndex];
+            const audioPath = currentLang === 'es' ? scene.audioEs : scene.audioEn;
+            currentAudio = new Audio(audioPath);
+            currentAudio.currentTime = sceneTime;
+            currentAudio.addEventListener('timeupdate', () => {
+                if (isPlaying && currentAudio) {
+                    sceneTime = currentAudio.currentTime;
+                }
+            });
+            currentAudio.addEventListener('ended', () => {
+                if (currentSceneIndex < SCENES.length - 1) {
+                    loadScene(currentSceneIndex + 1, true);
+                } else {
+                    isPlaying = false;
+                    updateUI();
+                }
+            });
+        }
         isPlaying = true;
-        playScene(currentSceneIndex);
+        currentAudio.play().catch(e => console.log('Playback error:', e));
     } else {
         isPlaying = false;
         if (currentAudio) currentAudio.pause();
@@ -1549,11 +1607,11 @@ document.getElementById('btn-play').addEventListener('click', () => {
 });
 
 document.getElementById('btn-prev').addEventListener('click', () => {
-    if (currentSceneIndex > 0) playScene(currentSceneIndex - 1);
+    if (currentSceneIndex > 0) loadScene(currentSceneIndex - 1, isPlaying);
 });
 
 document.getElementById('btn-next').addEventListener('click', () => {
-    if (currentSceneIndex < SCENES.length - 1) playScene(currentSceneIndex + 1);
+    if (currentSceneIndex < SCENES.length - 1) loadScene(currentSceneIndex + 1, isPlaying);
 });
 
 document.getElementById('btn-lang-es').addEventListener('click', () => setLanguage('es'));
@@ -1617,5 +1675,6 @@ if (pbc) {
         const curDur = currentLang === 'es' ? SCENES[currentSceneIndex].durationEs : SCENES[currentSceneIndex].durationEn;
         sceneTime = pct * curDur;
         if (currentAudio) currentAudio.currentTime = sceneTime;
+        drawCurrentScene(sceneTime);
     });
 }
