@@ -11,6 +11,7 @@ import { evmService } from './services/evmService.js';
 import { relayerEngine } from './services/relayerEngine.js';
 import { poolService } from './services/poolService.js';
 import { lendingService } from './services/lendingService.js';
+import { perpsService } from './services/perpsService.js';
 import { watchmanSentinel } from './services/watchmanClient.js';
 
 const app = express();
@@ -1177,6 +1178,173 @@ app.post('/api/lend/withdraw-supply', async (req, res) => {
 });
 
 // ==============================================================================
+// BINARYPERPS: NON-CUSTODIAL ON-CHAIN PERPETUAL FUTURES ENGINE API
+// ==============================================================================
+app.get('/api/perps/overview', async (req, res) => {
+  try {
+    const network = String(req.query.network || 'testnet').toLowerCase();
+    const overview = await perpsService.getMarketsOverview({ network });
+    res.json({ success: true, ...overview });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.get('/api/perps/positions', async (req, res) => {
+  try {
+    const userAddress = String(req.query.userAddress || '');
+    const bchAddress = String(req.query.bchAddress || '');
+    const evmAddress = String(req.query.evmAddress || '');
+    const network = String(req.query.network || 'testnet').toLowerCase();
+    const data = await perpsService.getUserPositions({
+      userAddress,
+      bchAddress,
+      evmAddress,
+      network
+    });
+    res.json({ success: true, ...data });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/perps/build-bch-tx', async (req, res) => {
+  try {
+    const senderAddress = req.body?.senderAddress || req.query?.senderAddress;
+    const token = String(req.body?.token || req.query?.token || 'PUSD').toUpperCase();
+    const amount = parseFloat(req.body?.amount ?? req.query?.amount);
+    const symbol = String(req.body?.symbol || req.query?.symbol || 'BCH-PERP');
+    const side = String(req.body?.side || req.query?.side || 'LONG').toUpperCase();
+    const leverage = Number(req.body?.leverage || req.query?.leverage || 10);
+    const network = String(req.body?.network || req.query?.network || 'testnet').toLowerCase();
+
+    if (!senderAddress) {
+      return res.status(400).json({ success: false, error: 'Se requiere senderAddress (billetera BCH).' });
+    }
+    if (isNaN(amount) || amount <= 0) {
+      return res.status(400).json({ success: false, error: 'Monto de margen inválido.' });
+    }
+
+    const isChipnet = network === 'testnet';
+    const depositAddress =
+      token === 'BCH'
+        ? isChipnet
+          ? config.bch.chipnetVaultAddress
+          : config.bch.mainnetVaultAddress
+        : isChipnet
+          ? config.bch.chipnetVaultTokenAddress
+          : config.bch.mainnetVaultTokenAddress;
+
+    const userPrompt = `BinaryLiquid Perps: Margen ${amount} ${token} para ${side} ${symbol} (${leverage}x)`;
+
+    const built = await bchService.buildUnsignedSwapWcTransaction({
+      senderAddress,
+      depositAddress,
+      tokenSymbol: token,
+      amount,
+      isChipnet,
+      userPrompt
+    });
+
+    res.json({
+      success: true,
+      token,
+      depositAddress,
+      ...built
+    });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/perps/open', async (req, res) => {
+  try {
+    const {
+      userAddress,
+      bchAddress,
+      evmAddress,
+      symbol,
+      side,
+      orderType,
+      limitPrice,
+      leverage,
+      collateralToken,
+      marginAmount,
+      takeProfit,
+      stopLoss,
+      txHash,
+      network
+    } = req.body;
+
+    const opened = await perpsService.openPosition({
+      userAddress,
+      bchAddress,
+      evmAddress,
+      symbol,
+      side,
+      orderType,
+      limitPrice,
+      leverage,
+      collateralToken,
+      marginAmount,
+      takeProfit,
+      stopLoss,
+      txHash,
+      network
+    });
+
+    res.json({
+      success: true,
+      message: `¡Posición ${opened.position.side.toUpperCase()} ${opened.position.leverage}x en ${opened.position.market} abierta y verificada on-chain!`,
+      ...opened
+    });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/perps/update-tpsl', async (req, res) => {
+  try {
+    const { positionId, userAddress, bchAddress, evmAddress, takeProfit, stopLoss } = req.body;
+    const updated = await perpsService.updatePositionTpSl({
+      positionId,
+      userAddress,
+      bchAddress,
+      evmAddress,
+      takeProfit,
+      stopLoss
+    });
+    res.json({
+      success: true,
+      message: 'Take Profit / Stop Loss actualizados exitosamente.',
+      position: updated
+    });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/perps/close', async (req, res) => {
+  try {
+    const { positionId, userAddress, bchAddress, evmAddress, closeReason } = req.body;
+    const closed = await perpsService.closePosition({
+      positionId,
+      userAddress,
+      bchAddress,
+      evmAddress,
+      closeReason
+    });
+    res.json({
+      success: true,
+      message: `Posición ${closed.closedPosition.market} liquidada on-chain. Reembolso: ${closed.closedPosition.payoutAmount} ${closed.closedPosition.collateralToken}`,
+      ...closed
+    });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+// ==============================================================================
 // COINGECKO DEX API STANDARD COMPLIANCE
 // ==============================================================================
 app.get('/api/coingecko/pairs', async (req, res) => {
@@ -1517,6 +1685,7 @@ const server = app.listen(PORT, config.host, () => {
   relayerEngine.start(4000);
   poolService.initDatabaseTables().catch(e => console.warn('[Pool Service] Table init note:', e.message));
   lendingService.initDatabaseTables().catch(e => console.warn('[Lending Service] Table init note:', e.message));
+  perpsService.initDatabaseTables().catch(e => console.warn('[Perps Service] Table init note:', e.message));
 });
 
 // Graceful shutdown

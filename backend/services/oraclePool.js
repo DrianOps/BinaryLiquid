@@ -20,6 +20,7 @@ class OraclePoolManager {
         MUSD: 1.0,
         USDC: 1.0,
         USDT: 1.0,
+        BTC: 68420.0,
         BCH: 283.5,
         ETH: 2345.0,
         SOL: 101.5,
@@ -34,6 +35,7 @@ class OraclePoolManager {
 
     // Symbol mappings for tier-1 oracle providers
     this.binanceSymbols = {
+      BTC: 'BTCUSDT',
       BCH: 'BCHUSDT',
       ETH: 'ETHUSDT',
       SOL: 'SOLUSDT',
@@ -42,6 +44,7 @@ class OraclePoolManager {
     };
 
     this.coinGeckoIds = {
+      BTC: 'bitcoin',
       BCH: 'bitcoin-cash',
       ETH: 'ethereum',
       SOL: 'solana',
@@ -50,12 +53,14 @@ class OraclePoolManager {
     };
 
     this.coinbaseSymbols = {
+      BTC: 'BTC-USD',
       BCH: 'BCH-USD',
       ETH: 'ETH-USD',
       SOL: 'SOL-USD'
     };
 
     this.krakenPairs = {
+      BTC: 'XBTUSD',
       BCH: 'BCHUSD',
       ETH: 'ETHUSD',
       SOL: 'SOLUSD'
