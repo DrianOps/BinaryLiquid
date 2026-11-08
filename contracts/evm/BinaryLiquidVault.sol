@@ -140,8 +140,7 @@ contract BinaryLiquidVault {
         uint256 fee = (amount * PROTOCOL_FEE_BPS) / BPS_DENOMINATOR;
         uint256 netAmount = amount - fee;
 
-        bool success = IERC20(token).transferFrom(msg.sender, address(this), amount);
-        require(success, "BinaryLiquid: transferFrom failed");
+        _safeTransferFrom(token, msg.sender, address(this), amount);
 
         depositId = keccak256(
             abi.encodePacked(
@@ -198,8 +197,7 @@ contract BinaryLiquidVault {
         uint256 fee = (amount * PROTOCOL_FEE_BPS) / BPS_DENOMINATOR;
         uint256 netAmount = amount - fee;
 
-        bool success = IERC20(token).transferFrom(msg.sender, address(this), amount);
-        require(success, "BinaryLiquid: transferFrom failed");
+        _safeTransferFrom(token, msg.sender, address(this), amount);
 
         string memory compositeDestination = string(abi.encodePacked(destinationChain, ":", destinationRecipient));
 
@@ -285,8 +283,7 @@ contract BinaryLiquidVault {
 
         executedPayouts[bchTxHash] = true;
 
-        bool sent = IERC20(token).transfer(recipient, amount);
-        require(sent, "BinaryLiquid: Payout transfer failed");
+        _safeTransfer(token, recipient, amount);
 
         emit BridgePayoutReleased(bchTxHash, recipient, token, amount, block.timestamp);
     }
@@ -303,8 +300,7 @@ contract BinaryLiquidVault {
         require(msg.sender == dep.sender, "BinaryLiquid: Only depositor");
 
         dep.refunded = true;
-        bool ok = IERC20(dep.token).transfer(dep.sender, dep.amount);
-        require(ok, "BinaryLiquid: Refund failed");
+        _safeTransfer(dep.token, dep.sender, dep.amount);
 
         emit BridgeDepositRefunded(depositId, dep.sender, dep.token, dep.amount, block.timestamp);
     }
@@ -326,6 +322,26 @@ contract BinaryLiquidVault {
         emit EmergencyPauseToggled(_paused);
     }
 
+    function _safeTransfer(address token, address to, uint256 value) internal {
+        (bool success, bytes memory data) = token.call(
+            abi.encodeWithSelector(IERC20.transfer.selector, to, value)
+        );
+        require(
+            success && (data.length == 0 || abi.decode(data, (bool))),
+            "BinaryLiquid: SafeERC20 transfer failed"
+        );
+    }
+
+    function _safeTransferFrom(address token, address from, address to, uint256 value) internal {
+        (bool success, bytes memory data) = token.call(
+            abi.encodeWithSelector(IERC20.transferFrom.selector, from, to, value)
+        );
+        require(
+            success && (data.length == 0 || abi.decode(data, (bool))),
+            "BinaryLiquid: SafeERC20 transferFrom failed"
+        );
+    }
+
     function recoverSigner(bytes32 _ethSignedMessageHash, bytes memory _sig) internal pure returns (address) {
         require(_sig.length == 65, "BinaryLiquid: Invalid sig length");
         bytes32 r;
@@ -337,6 +353,14 @@ contract BinaryLiquidVault {
             v := byte(0, mload(add(_sig, 96)))
         }
         if (v < 27) v += 27;
-        return ecrecover(_ethSignedMessageHash, v, r, s);
+        require(v == 27 || v == 28, "BinaryLiquid: Invalid signature v");
+        // EIP-2: Reject malleable upper-half secp256k1 s values
+        require(
+            uint256(s) <= 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0,
+            "BinaryLiquid: Malleable signature s"
+        );
+        address signer = ecrecover(_ethSignedMessageHash, v, r, s);
+        require(signer != address(0), "BinaryLiquid: Invalid ecrecover signer");
+        return signer;
     }
 }

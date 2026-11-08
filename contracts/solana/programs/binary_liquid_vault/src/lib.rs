@@ -321,10 +321,20 @@ fn verify_ed25519_watchman_attestation(
 
     // Ed25519 instruction layout: 16-byte header + 64-byte sig + 32-byte pubkey + 32-byte digest = 144 bytes
     let data = &ed25519_ix.data;
-    require!(data.len() >= 144, VaultError::InvalidEd25519Signature);
+    require!(data.len() == 144, VaultError::InvalidEd25519Signature);
 
-    let num_signatures = data[0];
-    require!(num_signatures == 1, VaultError::InvalidEd25519Signature);
+    // Enforce canonical 16-byte Ed25519SignatureOffsets header:
+    // [num_sigs=1, pad=0, sig_offset=16(LE), sig_ix=0xFFFF, pk_offset=80(LE), pk_ix=0xFFFF, msg_offset=112(LE), msg_size=32(LE), msg_ix=0xFFFF]
+    let expected_header: [u8; 16] = [
+        1, 0,
+        16, 0, 0xFF, 0xFF,
+        80, 0, 0xFF, 0xFF,
+        112, 0, 32, 0, 0xFF, 0xFF,
+    ];
+    require!(
+        data[0..16] == expected_header,
+        VaultError::InvalidEd25519Signature
+    );
 
     let ix_sig = &data[16..80];
     let ix_pubkey = &data[80..112];
