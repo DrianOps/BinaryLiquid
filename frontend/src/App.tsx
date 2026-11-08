@@ -33,7 +33,8 @@ import {
   Server,
   Cpu,
   Database,
-  Code2
+  Code2,
+  PieChart
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import BridgeSwap from './components/BridgeSwap';
@@ -44,6 +45,7 @@ import LendingView from './components/LendingView';
 import DocsView from './components/DocsView';
 import WhitepaperView from './components/WhitepaperView';
 import PerpsView from './components/PerpsView';
+import PortfolioView from './components/PortfolioView';
 import { useWizardConnect, AlphanumericQRCode } from '@wizardconnect/react';
 import {
   deriveCashAddressFromXpub,
@@ -76,6 +78,7 @@ const translations = {
     navGateway: "Gateway",
     navPools: "Pools",
     navLend: "Lend",
+    navPortfolio: "Portfolio",
     navDocs: "Docs",
     navWallet: "Connect Wallet",
     connect: "Connect Wallet",
@@ -125,6 +128,7 @@ const translations = {
     navGateway: "Gateway",
     navPools: "Pools",
     navLend: "Lend",
+    navPortfolio: "Portafolio",
     navDocs: "Docs",
     navWallet: "Conectar Billetera",
     connect: "Conectar Billetera",
@@ -195,7 +199,7 @@ const PLATFORM_NETWORKS = {
   }
 };
 
-const VALID_VIEWS = ['bridge', 'perps', 'pools', 'lend', 'docs', 'sdk', 'whitepaper'] as const;
+const VALID_VIEWS = ['bridge', 'perps', 'pools', 'lend', 'portfolio', 'docs', 'sdk', 'whitepaper'] as const;
 type MainView = typeof VALID_VIEWS[number] | 'gateway';
 
 function getViewFromUrl(): MainView {
@@ -1173,6 +1177,17 @@ export default function App() {
             </button>
 
             <button 
+              onClick={() => setMainView('portfolio')} 
+              className={`px-3.5 py-1.5 rounded-full transition-all cursor-pointer ${
+                mainView === 'portfolio' 
+                  ? 'bg-surface text-ink shadow-xs font-bold' 
+                  : 'text-ink-3 hover:text-ink font-medium'
+              }`}
+            >
+              <span>{t.navPortfolio}</span>
+            </button>
+
+            <button 
               onClick={() => setMainView('docs')} 
               className={`px-3.5 py-1.5 rounded-full transition-all cursor-pointer ${
                 mainView === 'docs' 
@@ -1346,6 +1361,7 @@ export default function App() {
                     { id: 'perps', label: 'Perps (Futuros)', icon: TrendingUp },
                     { id: 'pools', label: 'Pools', icon: Droplets },
                     { id: 'lend', label: 'Lend', icon: Lock },
+                    { id: 'portfolio', label: lang === 'es' ? 'Portafolio' : 'Portfolio', icon: PieChart },
                     { id: 'gateway', label: 'Gateway', icon: Sparkles },
                     { id: 'whitepaper', label: 'Whitepaper', icon: BookOpen },
                     { id: 'docs', label: 'Docs', icon: FileText },
@@ -1678,6 +1694,26 @@ export default function App() {
             onRefreshBalances={() => refreshWalletBalances()}
             isWalletConnected={Boolean(userContext?.address || bchWallet || evmWallet)}
             onConnectWallet={() => setShowWalletModal(true)}
+            showToast={showToast}
+            lang={lang}
+          />
+        </main>
+      )}
+
+      {/* PORTFOLIO VIEW (Live On-Chain Net Worth, Tokens, Pools, Lend, Perps, Activity) */}
+      {mainView === 'portfolio' && (
+        <main className="flex-1 flex flex-col items-center justify-start p-3 sm:p-6 w-full max-w-7xl mx-auto pb-28 md:pb-12 text-left">
+          <PortfolioView
+            backendUrl=""
+            userAddress={userContext?.address || ''}
+            bchAddress={bchWallet?.tokenAddress || bchWallet?.address || ''}
+            evmAddress={evmWallet?.address || ''}
+            walletBalances={walletBalances}
+            platformNetwork={platformNetwork}
+            onToggleNetwork={setPlatformNetwork}
+            onRefreshBalances={() => refreshWalletBalances()}
+            onConnectWallet={() => setShowWalletModal(true)}
+            onNavigate={(view) => setMainView(view)}
             showToast={showToast}
             lang={lang}
           />
