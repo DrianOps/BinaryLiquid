@@ -995,6 +995,60 @@ app.get('/api/lend/vault/:userAddress', async (req, res) => {
   }
 });
 
+app.post('/api/lend/build-bch-tx', async (req, res) => {
+  try {
+    const senderAddress = req.body?.senderAddress || req.query?.senderAddress;
+    const action = String(req.body?.action || req.query?.action || 'DEPOSIT_COLLATERAL').toUpperCase();
+    const token = String(req.body?.token || req.query?.token || (action === 'DEPOSIT_COLLATERAL' ? 'BCH' : 'PUSD')).toUpperCase();
+    const amount = parseFloat(req.body?.amount ?? req.query?.amount);
+    const network = String(req.body?.network || req.query?.network || 'testnet').toLowerCase();
+
+    if (!senderAddress) {
+      return res.status(400).json({ success: false, error: 'Se requiere senderAddress (billetera BCH).' });
+    }
+    if (isNaN(amount) || amount <= 0) {
+      return res.status(400).json({ success: false, error: 'Monto inválido para la transacción BCH.' });
+    }
+
+    const isChipnet = network === 'testnet';
+    let depositAddress = '';
+    let userPrompt = '';
+
+    if (action === 'DEPOSIT_COLLATERAL' || token === 'BCH') {
+      const colInfo = await bchService.getUserCollateralCovenant(senderAddress, isChipnet);
+      depositAddress = colInfo.vaultAddress;
+      userPrompt = `BinaryLiquid Lending Vault: Bloquear ${amount} BCH en tu Covenant Personal`;
+    } else {
+      depositAddress = isChipnet
+        ? config.bch.chipnetVaultTokenAddress
+        : config.bch.mainnetVaultTokenAddress;
+      userPrompt =
+        action === 'REPAY'
+          ? `BinaryLiquid Lending: Pagar ${amount} PUSD de Deuda`
+          : `BinaryLiquid Lending Yield: Suministrar ${amount} PUSD (5.8% APY)`;
+    }
+
+    const built = await bchService.buildUnsignedSwapWcTransaction({
+      senderAddress,
+      depositAddress,
+      tokenSymbol: token,
+      amount,
+      isChipnet,
+      userPrompt
+    });
+
+    res.json({
+      success: true,
+      action,
+      token,
+      depositAddress,
+      ...built
+    });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
 app.post('/api/lend/deposit-collateral', async (req, res) => {
   try {
     const { userAddress, bchAddress, evmAddress, amountBch, txHash, network } = req.body;

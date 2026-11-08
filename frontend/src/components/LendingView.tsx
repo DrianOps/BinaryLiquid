@@ -22,6 +22,8 @@ import {
 import confetti from 'canvas-confetti';
 import {
   executeWeb3LpDeposit,
+  executeBchSwapDeposit,
+  hasActiveBchSigningCapability,
   DEPLOYED_TESTNET_CONTRACTS
 } from '../services/walletConnectService';
 import {
@@ -34,6 +36,9 @@ interface LendingViewProps {
   userAddress: string;
   bchAddress?: string;
   evmAddress?: string;
+  walletBalances?: Record<string, number>;
+  wizardConnectManager?: any;
+  wizardConnectState?: string;
   platformNetwork?: 'mainnet' | 'testnet';
   onToggleNetwork?: (net: 'mainnet' | 'testnet') => void;
   onRefreshBalances?: () => void;
@@ -294,6 +299,9 @@ export default function LendingView({
   userAddress,
   bchAddress = '',
   evmAddress = '',
+  walletBalances: parentBalances,
+  wizardConnectManager,
+  wizardConnectState,
   platformNetwork = 'testnet',
   onToggleNetwork,
   onRefreshBalances,
@@ -314,10 +322,12 @@ export default function LendingView({
   const [supplyMode, setSupplyMode] = useState<'deposit' | 'withdraw'>('deposit');
 
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [faucetClaiming, setFaucetClaiming] = useState<boolean>(false);
   const [statusMessage, setStatusMessage] = useState<string>('');
   const [lastTxResult, setLastTxResult] = useState<{ txHash: string; explorerUrl: string; label: string } | null>(null);
   const [overview, setOverview] = useState<any>(null);
   const [userVaultData, setUserVaultData] = useState<any>(null);
+  const [walletBalances, setWalletBalances] = useState<Record<string, number>>(() => parentBalances || {});
   const [copiedKey, setCopiedKey] = useState<string>('');
 
   // Form inputs
@@ -354,6 +364,16 @@ export default function LendingView({
 
   const effectiveAddress = connectedBch || connectedEvm || (isWalletConnected ? userAddress : '');
 
+  const hasOneClickBchSign =
+    Boolean(connectedBch) &&
+    (wizardConnectState === 'connected' || hasActiveBchSigningCapability(wizardConnectManager));
+
+  useEffect(() => {
+    if (parentBalances && Object.keys(parentBalances).length > 0) {
+      setWalletBalances(prev => ({ ...prev, ...parentBalances }));
+    }
+  }, [parentBalances]);
+
   const copyToClipboard = (value: string, key: string) => {
     if (!value) return;
     if (navigator.clipboard && window.isSecureContext) {
@@ -361,6 +381,29 @@ export default function LendingView({
     }
     setCopiedKey(key);
     setTimeout(() => setCopiedKey(''), 2000);
+  };
+
+  const fetchWalletBalances = async () => {
+    if (!effectiveAddress) {
+      setWalletBalances({});
+      return;
+    }
+    try {
+      const qs = new URLSearchParams({
+        network: platformNetwork,
+        ...(connectedBch ? { bchAddress: connectedBch } : {}),
+        ...(connectedEvm ? { evmAddress: connectedEvm } : {})
+      });
+      const res = await fetch(
+        `${backendUrl}/api/wallet/balances/${encodeURIComponent(effectiveAddress)}?${qs.toString()}`
+      );
+      const data = await res.json();
+      if (data.success && data.balances) {
+        setWalletBalances(data.balances);
+      }
+    } catch (err) {
+      console.warn('Failed to load wallet balances in LendingView:', err);
+    }
   };
 
   const fetchData = async () => {
@@ -390,9 +433,51 @@ export default function LendingView({
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 9000);
+    fetchWalletBalances();
+    const interval = setInterval(() => {
+      fetchData();
+      fetchWalletBalances();
+    }, 9000);
     return () => clearInterval(interval);
   }, [backendUrl, effectiveAddress, connectedBch, connectedEvm, platformNetwork]);
+
+  const handleClaimTestnetFaucet = async (tokenSym: 'PUSD' | 'USDT') => {
+    const recipient = tokenSym === 'USDT' ? connectedEvm : connectedBch;
+    if (!recipient) {
+      onConnectWallet();
+      return;
+    }
+    setFaucetClaiming(true);
+    try {
+      const claimAmt = tokenSym === 'USDT' ? 100 : 25;
+      const res = await fetch(`${backendUrl}/api/faucet/testnet`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token: tokenSym,
+          amount: claimAmt,
+          recipient
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(
+          isEs
+            ? `💧 ¡Faucet envió ${claimAmt} ${tokenSym} on-chain a tu billetera!`
+            : `💧 Faucet sent ${claimAmt} ${tokenSym} on-chain to your wallet!`,
+          'success'
+        );
+        onRefreshBalances?.();
+        setTimeout(() => fetchWalletBalances(), 2000);
+      } else {
+        showToast(data.error || 'Error solicitando tokens del Faucet', 'error');
+      }
+    } catch (err: any) {
+      showToast(err.message || (isEs ? 'Error de red' : 'Network error'), 'error');
+    } finally {
+      setFaucetClaiming(false);
+    }
+  };
 
   const bchPrice = overview?.bchPrice || userVaultData?.bchPrice || 289.0;
   const markets = overview?.markets || {};
@@ -443,7 +528,7 @@ export default function LendingView({
   };
 
   // =========================================================================
-  // 1. VERIFY & SYNC BCH COLLATERAL COVENANT
+  // 1. LOCK / VERIFY & SYNC BCH COLLATERAL COVENANT (1-Click WC or Auto-Detect)
   // =========================================================================
   const handleVerifyCollateral = async () => {
     if (!isTestnet) {
@@ -458,6 +543,29 @@ export default function LendingView({
     setIsSubmitting(true);
     setStatusMessage(t.btnVerifyingCollateral);
     try {
+      let confirmedTxHash = collateralTxId.trim();
+      const inputAmtBch = parseFloat(depositCollateralAmount) || 0;
+
+      // If user entered an amount and has 1-click BCH signing connected, sign & broadcast directly!
+      if (!confirmedTxHash && hasOneClickBchSign && inputAmtBch > 0) {
+        const signed = await executeBchSwapDeposit({
+          backendUrl,
+          buildEndpoint: '/api/lend/build-bch-tx',
+          senderAddress: connectedBch,
+          isTestnet,
+          wizardManager: wizardConnectManager,
+          bodyPayload: {
+            action: 'DEPOSIT_COLLATERAL',
+            token: 'BCH',
+            amount: inputAmtBch,
+            network: platformNetwork
+          },
+          onStatus: msg => setStatusMessage(msg)
+        });
+        confirmedTxHash = signed.txHash;
+      }
+
+      setStatusMessage(t.btnVerifyingCollateral);
       const res = await fetch(`${backendUrl}/api/lend/deposit-collateral`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -465,8 +573,8 @@ export default function LendingView({
           userAddress: effectiveAddress,
           bchAddress: connectedBch,
           evmAddress: connectedEvm,
-          amountBch: parseFloat(depositCollateralAmount) || 0,
-          txHash: collateralTxId.trim() || undefined,
+          amountBch: inputAmtBch,
+          txHash: confirmedTxHash || undefined,
           network: platformNetwork
         })
       });
@@ -483,7 +591,7 @@ export default function LendingView({
             label: isEs ? 'Depósito Colateral BCH' : 'BCH Collateral Deposit'
           });
         }
-        await fetchData();
+        await Promise.all([fetchData(), fetchWalletBalances()]);
         onRefreshBalances?.();
       } else {
         showToast(data.error || (isEs ? 'No se detectó nuevo depósito en tu Bóveda' : 'No new deposit detected in your Vault'), 'error');
@@ -543,7 +651,7 @@ export default function LendingView({
             label: isEs ? 'Retiro Colateral BCH' : 'BCH Collateral Withdrawal'
           });
         }
-        await fetchData();
+        await Promise.all([fetchData(), fetchWalletBalances()]);
         onRefreshBalances?.();
       } else {
         showToast(data.error || (isEs ? 'Error liberando colateral' : 'Error unlocking collateral'), 'error');
@@ -609,7 +717,7 @@ export default function LendingView({
             label: isEs ? `Préstamo ${borrowToken}` : `${borrowToken} Loan`
           });
         }
-        await fetchData();
+        await Promise.all([fetchData(), fetchWalletBalances()]);
         onRefreshBalances?.();
       } else {
         showToast(data.error || (isEs ? 'Error aprobando préstamo' : 'Error approving loan'), 'error');
@@ -623,7 +731,7 @@ export default function LendingView({
   };
 
   // =========================================================================
-  // 4. REPAY DEBT ON-CHAIN (1-Click Web3 USDT or PUSD Covenant TXID)
+  // 4. REPAY DEBT ON-CHAIN (1-Click Web3 USDT or 1-Click WC / Auto-Detect PUSD)
   // =========================================================================
   const handleRepay = async () => {
     if (!isTestnet) {
@@ -663,15 +771,31 @@ export default function LendingView({
         });
         finalTxHash = web3Res.txHash;
       } else {
-        if (!finalTxHash || finalTxHash.length < 64) {
-          showToast(
-            isEs
-              ? 'Envía primero los PUSD al Covenant y pega el TXID de 64 caracteres'
-              : 'Please send PUSD to Covenant first and paste the 64-character TXID',
-            'error'
-          );
+        if (!connectedBch) {
+          onConnectWallet();
           setIsSubmitting(false);
           return;
+        }
+        if (!finalTxHash) {
+          if (hasOneClickBchSign) {
+            const signed = await executeBchSwapDeposit({
+              backendUrl,
+              buildEndpoint: '/api/lend/build-bch-tx',
+              senderAddress: connectedBch,
+              isTestnet,
+              wizardManager: wizardConnectManager,
+              bodyPayload: {
+                action: 'REPAY',
+                token: 'PUSD',
+                amount: amt,
+                network: platformNetwork
+              },
+              onStatus: msg => setStatusMessage(msg)
+            });
+            finalTxHash = signed.txHash;
+          } else {
+            finalTxHash = 'AUTO_DETECT';
+          }
         }
         setStatusMessage(t.btnRepaying);
       }
@@ -705,7 +829,7 @@ export default function LendingView({
             label: isEs ? `Pago Deuda ${repayToken}` : `${repayToken} Debt Repayment`
           });
         }
-        await fetchData();
+        await Promise.all([fetchData(), fetchWalletBalances()]);
         onRefreshBalances?.();
       } else {
         showToast(data.error || (isEs ? 'Error verificando pago' : 'Error verifying repayment'), 'error');
@@ -719,7 +843,7 @@ export default function LendingView({
   };
 
   // =========================================================================
-  // 5. SUPPLY STABLECOINS FOR PASSIVE APY
+  // 5. SUPPLY STABLECOINS FOR PASSIVE APY (1-Click Web3 USDT or 1-Click WC / Auto-Detect PUSD)
   // =========================================================================
   const handleSupply = async () => {
     if (!isTestnet) {
@@ -758,15 +882,26 @@ export default function LendingView({
           setIsSubmitting(false);
           return;
         }
-        if (!finalTxHash || finalTxHash.length < 64) {
-          showToast(
-            isEs
-              ? 'Envía los PUSD al Covenant BinaryLiquidVault.cash y pega el TXID de 64 caracteres'
-              : 'Please send PUSD to BinaryLiquidVault.cash Covenant and paste the 64-char TXID',
-            'error'
-          );
-          setIsSubmitting(false);
-          return;
+        if (!finalTxHash) {
+          if (hasOneClickBchSign) {
+            const signed = await executeBchSwapDeposit({
+              backendUrl,
+              buildEndpoint: '/api/lend/build-bch-tx',
+              senderAddress: connectedBch,
+              isTestnet,
+              wizardManager: wizardConnectManager,
+              bodyPayload: {
+                action: 'SUPPLY',
+                token: 'PUSD',
+                amount: amt,
+                network: platformNetwork
+              },
+              onStatus: msg => setStatusMessage(msg)
+            });
+            finalTxHash = signed.txHash;
+          } else {
+            finalTxHash = 'AUTO_DETECT';
+          }
         }
         setStatusMessage(isEs ? 'Verificando depósito de PUSD en BCH Chipnet...' : 'Verifying PUSD deposit on BCH Chipnet...');
       }
@@ -800,7 +935,7 @@ export default function LendingView({
             label: isEs ? `Suministro APY ${supplyToken}` : `${supplyToken} APY Supply`
           });
         }
-        await fetchData();
+        await Promise.all([fetchData(), fetchWalletBalances()]);
         onRefreshBalances?.();
       } else {
         showToast(data.error || (isEs ? 'Error verificando suministro' : 'Error verifying supply'), 'error');
@@ -1217,13 +1352,22 @@ export default function LendingView({
                       )}
                     </div>
 
-                    {/* CAPACITY SIMULATOR */}
+                    {/* COLLATERAL AMOUNT + CAPACITY CALCULATOR */}
                     <div className="p-4 rounded-2xl bg-surface-2 border border-line space-y-2.5">
-                      <div className="flex justify-between items-center text-xs text-ink-3">
-                        <span>Simulador de capacidad (tBCH)</span>
-                        <span className="font-mono">
-                          {t.bchPriceLabel} <strong>${bchPrice.toFixed(2)} USD</strong>
+                      <div className="flex flex-wrap justify-between items-center gap-2 text-xs text-ink-3">
+                        <span className="font-semibold text-ink-2">
+                          {isEs ? 'Monto de Colateral tBCH a Bloquear' : 'Amount of tBCH Collateral to Lock'}
                         </span>
+                        <div className="flex items-center gap-2 font-mono">
+                          <span>
+                            {isEs ? 'En tu Wallet:' : 'In Wallet:'}{' '}
+                            <strong className="text-ink">{(walletBalances.BCH || 0).toFixed(4)} tBCH</strong>
+                          </span>
+                          <span className="text-ink-3">•</span>
+                          <span>
+                            {t.bchPriceLabel} <strong>${bchPrice.toFixed(2)} USD</strong>
+                          </span>
+                        </div>
                       </div>
                       <div className="flex items-center gap-3">
                         <input
@@ -1239,6 +1383,23 @@ export default function LendingView({
                           <span className="font-bold text-xs text-ink">tBCH</span>
                         </div>
                       </div>
+                      {(walletBalances.BCH || 0) > 0.0005 && (
+                        <div className="flex items-center gap-1.5 pt-1">
+                          {[0.25, 0.5, 0.75, 1].map(pct => (
+                            <button
+                              key={pct}
+                              type="button"
+                              onClick={() => {
+                                const avail = Math.max(0, (walletBalances.BCH || 0) - 0.0002);
+                                setDepositCollateralAmount((avail * pct).toFixed(4));
+                              }}
+                              className="px-2 py-0.5 rounded-lg bg-surface border border-line hover:border-primary text-[10px] font-bold text-ink-2 hover:text-primary transition-colors cursor-pointer"
+                            >
+                              {pct === 1 ? 'MAX' : `${pct * 100}%`}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                       <div className="flex items-center justify-between text-xs pt-2 border-t border-line">
                         <span className="text-ink-3">{t.newBorrowCapacity}</span>
                         <strong className="font-mono font-bold text-emerald-500">
@@ -1246,6 +1407,16 @@ export default function LendingView({
                         </strong>
                       </div>
                     </div>
+
+                    {hasOneClickBchSign && (
+                      <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between gap-2 text-xs text-emerald-600 dark:text-emerald-400">
+                        <span className="font-semibold">
+                          ⚡ {isEs
+                            ? 'Firma 1-Clic Activa (Paytaca / Cashonize): Puedes bloquear tBCH directamente o escanear el QR.'
+                            : '1-Click Signing Active (Paytaca / Cashonize): Lock tBCH directly with 1 click or scan QR.'}
+                        </span>
+                      </div>
+                    )}
 
                     {/* OPTIONAL TXID INPUT */}
                     <div>
@@ -1274,7 +1445,13 @@ export default function LendingView({
                       ) : (
                         <>
                           <Lock className="w-4 h-4" />
-                          <span>{t.btnVerifyCollateral}</span>
+                          <span>
+                            {hasOneClickBchSign && !collateralTxId.trim() && parseFloat(depositCollateralAmount) > 0
+                              ? isEs
+                                ? `⚡ Bloquear ${depositCollateralAmount} tBCH con 1 Clic y Verificar`
+                                : `⚡ 1-Click Lock ${depositCollateralAmount} tBCH & Verify`
+                              : t.btnVerifyCollateral}
+                          </span>
                         </>
                       )}
                     </button>
@@ -1504,13 +1681,20 @@ export default function LendingView({
                   </button>
                 </div>
 
-                <div className="p-4 rounded-2xl bg-surface-2 border border-line">
-                  <div className="flex justify-between items-center text-xs text-ink-3 mb-2">
+                <div className="p-4 rounded-2xl bg-surface-2 border border-line space-y-2">
+                  <div className="flex flex-wrap justify-between items-center gap-2 text-xs text-ink-3">
                     <span>{t.repayAmountLabel}</span>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono">
+                    <div className="flex flex-wrap items-center gap-2 font-mono">
+                      <span>
+                        {isEs ? 'En tu Wallet:' : 'In Wallet:'}{' '}
+                        <strong className="text-ink">
+                          {(walletBalances[repayToken] || 0).toFixed(2)} {repayToken}
+                        </strong>
+                      </span>
+                      <span>•</span>
+                      <span>
                         {t.pendingDebtLabel}{' '}
-                        <strong>
+                        <strong className="text-emerald-500">
                           {(repayToken === 'PUSD' ? vault.totalPusdDebt : vault.totalUsdtDebt || 0).toFixed(4)}{' '}
                           {repayToken}
                         </strong>
@@ -1543,10 +1727,36 @@ export default function LendingView({
                       {repayToken}
                     </span>
                   </div>
+
+                  {isTestnet && (
+                    <div className="flex items-center justify-end pt-1">
+                      <button
+                        type="button"
+                        onClick={() => handleClaimTestnetFaucet(repayToken)}
+                        disabled={faucetClaiming}
+                        className="text-[11px] font-bold text-primary hover:underline cursor-pointer disabled:opacity-50"
+                      >
+                        {faucetClaiming
+                          ? isEs
+                            ? `Enviando ${repayToken} de prueba...`
+                            : `Sending test ${repayToken}...`
+                          : isEs
+                            ? `💧 ¿Falta ${repayToken}? Reclamar ${repayToken === 'USDT' ? '100 USDT' : '25 PUSD'} Gratis (Faucet On-Chain)`
+                            : `💧 Need ${repayToken}? Claim Free ${repayToken === 'USDT' ? '100 USDT' : '25 PUSD'} (On-Chain Faucet)`}
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {repayToken === 'PUSD' && isTestnet && (
                   <div className="p-3.5 rounded-2xl bg-emerald-500/5 border border-emerald-500/20 space-y-2.5">
+                    {hasOneClickBchSign && (
+                      <div className="p-2 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                        ⚡ {isEs
+                          ? 'Firma 1-Clic Activa (Paytaca / Cashonize): Puedes pagar PUSD directamente con el botón inferior sin copiar direcciones.'
+                          : '1-Click Signing Active (Paytaca / Cashonize): Pay PUSD directly with the button below without copying addresses.'}
+                      </div>
+                    )}
                     <p className="text-[11px] text-ink-2 font-medium">{t.pusdSendStep}</p>
                     <div className="flex items-center justify-between gap-2 bg-surface p-2 rounded-xl border border-line">
                       <span className="font-mono text-[11px] text-ink truncate">
@@ -1584,7 +1794,15 @@ export default function LendingView({
                   ) : (
                     <>
                       <ArrowUpRight className="w-4 h-4" />
-                      <span>{repayToken === 'USDT' ? t.btnRepayUsdt : t.btnRepayPusd}</span>
+                      <span>
+                        {repayToken === 'USDT'
+                          ? t.btnRepayUsdt
+                          : hasOneClickBchSign && !repayPusdTxId.trim()
+                            ? isEs
+                              ? `⚡ Pagar ${repayAmount || '0'} PUSD con 1 Clic y Verificar`
+                              : `⚡ 1-Click Repay ${repayAmount || '0'} PUSD & Verify`
+                            : t.btnRepayPusd}
+                      </span>
                     </>
                   )}
                 </button>
@@ -1662,8 +1880,38 @@ export default function LendingView({
             )}
           </div>
 
-          {/* RIGHT: RECENT ON-CHAIN VAULT ACTIVITY */}
+          {/* RIGHT: ARCHITECTURE + RECENT ON-CHAIN VAULT ACTIVITY */}
           <div className="lg:col-span-5 space-y-4">
+            {/* HOW NON-CUSTODIAL COVENANT LENDING WORKS */}
+            <div className="p-5 rounded-card bg-surface border border-line shadow-soft space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <h4 className="font-semibold text-sm text-ink">{t.howItWorksTitle}</h4>
+                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500">
+                  CashScript P2SH32
+                </span>
+              </div>
+              <div className="space-y-2.5 text-xs">
+                <div className="p-2.5 rounded-xl bg-surface-2 border border-line">
+                  <span className="font-semibold text-ink block">{t.step1Title}</span>
+                  <span className="text-ink-2 text-[11px]">{t.step1Desc}</span>
+                </div>
+                <div className="p-2.5 rounded-xl bg-surface-2 border border-line">
+                  <span className="font-semibold text-ink block">{t.step2Title}</span>
+                  <span className="text-ink-2 text-[11px]">{t.step2Desc}</span>
+                </div>
+                <div className="p-2.5 rounded-xl bg-surface-2 border border-line">
+                  <span className="font-semibold text-ink block">{t.step3Title}</span>
+                  <span className="text-ink-2 text-[11px]">{t.step3Desc}</span>
+                </div>
+              </div>
+              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/25 text-[11px] text-ink-2">
+                <span className="font-bold text-amber-600 dark:text-amber-400 block mb-0.5">
+                  {t.sponsorBadge}
+                </span>
+                <span>{t.sponsorDesc}</span>
+              </div>
+            </div>
+
             {/* RECENT ON-CHAIN VAULT TRANSACTIONS */}
             <div className="p-5 rounded-card bg-surface border border-line shadow-soft">
               <h4 className="font-semibold text-sm text-ink mb-3">{t.recentTxTitle}</h4>
@@ -1797,8 +2045,27 @@ export default function LendingView({
 
             {supplyMode === 'deposit' ? (
               <>
-                <div className="p-4 rounded-2xl bg-surface-2 border border-line">
-                  <span className="text-xs text-ink-3 block mb-2">{t.supplyAmountLabel}</span>
+                <div className="p-4 rounded-2xl bg-surface-2 border border-line space-y-2">
+                  <div className="flex flex-wrap justify-between items-center gap-2 text-xs text-ink-3">
+                    <span>{t.supplyAmountLabel}</span>
+                    <div className="flex items-center gap-2 font-mono">
+                      <span>
+                        {isEs ? 'En tu Wallet:' : 'In Wallet:'}{' '}
+                        <strong className="text-ink">
+                          {(walletBalances[supplyToken] || 0).toFixed(2)} {supplyToken}
+                        </strong>
+                      </span>
+                      {(walletBalances[supplyToken] || 0) > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setSupplyAmount(String(walletBalances[supplyToken]))}
+                          className="text-[10px] font-bold text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded cursor-pointer"
+                        >
+                          MAX
+                        </button>
+                      )}
+                    </div>
+                  </div>
                   <div className="flex items-center gap-3">
                     <input
                       type="number"
@@ -1812,10 +2079,35 @@ export default function LendingView({
                       {supplyToken}
                     </span>
                   </div>
+                  {isTestnet && (
+                    <div className="flex items-center justify-end pt-1">
+                      <button
+                        type="button"
+                        onClick={() => handleClaimTestnetFaucet(supplyToken)}
+                        disabled={faucetClaiming}
+                        className="text-[11px] font-bold text-primary hover:underline cursor-pointer disabled:opacity-50"
+                      >
+                        {faucetClaiming
+                          ? isEs
+                            ? `Enviando ${supplyToken} de prueba...`
+                            : `Sending test ${supplyToken}...`
+                          : isEs
+                            ? `💧 ¿Falta ${supplyToken}? Reclamar ${supplyToken === 'USDT' ? '100 USDT' : '25 PUSD'} Gratis (Faucet On-Chain)`
+                            : `💧 Need ${supplyToken}? Claim Free ${supplyToken === 'USDT' ? '100 USDT' : '25 PUSD'} (On-Chain Faucet)`}
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {supplyToken === 'PUSD' && isTestnet && (
                   <div className="p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/20 space-y-3">
+                    {hasOneClickBchSign && (
+                      <div className="p-2 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                        ⚡ {isEs
+                          ? 'Firma 1-Clic Activa (Paytaca / Cashonize): Puedes depositar PUSD para ganar 5.8% APY directamente con el botón inferior.'
+                          : '1-Click Signing Active (Paytaca / Cashonize): Deposit PUSD to earn 5.8% APY directly with the button below.'}
+                      </div>
+                    )}
                     <p className="text-xs text-ink-2 font-medium">{t.pusdSendStep}</p>
                     {pusdVaultQr && (
                       <div className="w-28 h-28 mx-auto bg-white p-2 rounded-xl shadow-xs">
@@ -1858,7 +2150,15 @@ export default function LendingView({
                   ) : (
                     <>
                       <Plus className="w-4 h-4" />
-                      <span>{supplyToken === 'USDT' ? t.btnSupplyUsdt : t.btnSupplyPusd}</span>
+                      <span>
+                        {supplyToken === 'USDT'
+                          ? t.btnSupplyUsdt
+                          : hasOneClickBchSign && !supplyPusdTxId.trim()
+                            ? isEs
+                              ? `⚡ Depositar ${supplyAmount || '0'} PUSD con 1 Clic (5.8% APY)`
+                              : `⚡ 1-Click Supply ${supplyAmount || '0'} PUSD (5.8% APY)`
+                            : t.btnSupplyPusd}
+                      </span>
                     </>
                   )}
                 </button>

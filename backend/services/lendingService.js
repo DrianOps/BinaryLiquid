@@ -919,22 +919,20 @@ class LendingService {
 
   /**
    * Helper: Verifies an incoming PUSD or USDT transfer to the Non-Custodial Protocol Vaults
+   * Supports dual-precision Chipnet CashToken UTXOs (1:1 integer units vs 1e6 scaled) and AUTO_DETECT.
    */
   async verifyStablecoinTransferToVault(sym, expectedAmount, txHash) {
-    if (!txHash || txHash.trim().length < 20) {
-      throw new Error(
-        sym === 'USDT'
-          ? 'Se requiere la firma Web3 de transferencia de USDT hacia BinaryLiquidVault.sol (Polygon Amoy).'
-          : 'Envía los PUSD al Covenant BinaryLiquidVault.cash y pega el TXID (64 caracteres hex) para verificar en cadena.'
-      );
-    }
-
-    const cleanTxHash = txHash.trim();
-    if (this.isTxHashAlreadyUsed(cleanTxHash)) {
-      throw new Error('Este Hash de Transacción ya fue utilizado previamente (protección Anti-Replay activa).');
-    }
+    const cleanTxHash = String(txHash || '').trim();
 
     if (sym === 'USDT') {
+      if (!cleanTxHash || cleanTxHash.length < 20) {
+        throw new Error(
+          'Se requiere la firma Web3 de transferencia de USDT hacia BinaryLiquidVault.sol (Polygon Amoy).'
+        );
+      }
+      if (this.isTxHashAlreadyUsed(cleanTxHash)) {
+        throw new Error('Este Hash de Transacción ya fue utilizado previamente (protección Anti-Replay activa).');
+      }
       const vaultAddr = config.evm.amoyVaultAddress;
       const ver = await evmService.verifyDeposit(
         cleanTxHash,
@@ -953,25 +951,66 @@ class LendingService {
       };
     }
 
-    const cleanHex = cleanTxHash.replace(/^0x/i, '').toLowerCase();
-    if (!/^[0-9a-f]{64}$/.test(cleanHex)) {
-      throw new Error('El TXID de Bitcoin Cash Chipnet debe tener exactamente 64 caracteres hexadecimales.');
-    }
-
     await bchService.readyPromise;
     const provider = bchService.chipnetProvider;
     const vaultTokenAddr = config.bch.chipnetVaultTokenAddress;
     const pusdCat = config.bch.tokens.PUSD.chipnetCategory;
 
+    let cleanHex = cleanTxHash.replace(/^0x/i, '').toLowerCase();
+    const isAutoDetect = !cleanHex || cleanHex === 'auto_detect';
+
+    if (!isAutoDetect) {
+      if (!/^[0-9a-f]{64}$/.test(cleanHex)) {
+        throw new Error('El TXID de Bitcoin Cash Chipnet debe tener exactamente 64 caracteres hexadecimales.');
+      }
+      if (this.isTxHashAlreadyUsed(cleanHex)) {
+        throw new Error('Este Hash de Transacción ya fue utilizado previamente (protección Anti-Replay activa).');
+      }
+    }
+
     let matchedAmount = 0;
     if (provider) {
       const utxos = await provider.getUtxos(vaultTokenAddr);
+      if (isAutoDetect) {
+        const candidates = (utxos || []).filter(
+          u =>
+            u.txid &&
+            !this.isTxHashAlreadyUsed(u.txid) &&
+            u.token?.category === pusdCat &&
+            u.token.amount > 0n
+        );
+        for (const u of candidates) {
+          const units = BigInt(u.token.amount || 0);
+          const scaledAmt = Number(units) / 1e6;
+          const intAmt = Number(units);
+          if (scaledAmt >= expectedAmount * 0.99 || intAmt >= expectedAmount * 0.99) {
+            cleanHex = u.txid.toLowerCase();
+            break;
+          }
+        }
+        if (!cleanHex || cleanHex === 'auto_detect') {
+          throw new Error(
+            'No se detectó ningún nuevo UTXO de PUSD en el Covenant BinaryLiquidVault.cash. Firma con 1 clic en Paytaca o pega el TXID de tu envío.'
+          );
+        }
+      }
+
       const matching = (utxos || []).filter(
         u => u.txid?.toLowerCase() === cleanHex && u.token?.category === pusdCat && u.token.amount > 0n
       );
       if (matching.length > 0) {
-        const units = matching.reduce((s, u) => s + u.token.amount, 0n);
-        matchedAmount = Number(units) / 1e6;
+        const units = matching.reduce((s, u) => s + BigInt(u.token.amount || 0), 0n);
+        const scaledAmount = Number(units) / 1e6;
+        const rawIntegerAmount = Number(units);
+        if (Math.abs(scaledAmount - expectedAmount) <= expectedAmount * 0.05) {
+          matchedAmount = scaledAmount;
+        } else if (Math.abs(rawIntegerAmount - expectedAmount) <= expectedAmount * 0.05) {
+          matchedAmount = rawIntegerAmount;
+        } else if (units < 100000n) {
+          matchedAmount = rawIntegerAmount;
+        } else {
+          matchedAmount = scaledAmount;
+        }
       } else {
         try {
           const rawHex = await provider.getRawTransaction(cleanHex);
