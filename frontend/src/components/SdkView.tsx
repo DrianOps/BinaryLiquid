@@ -41,11 +41,11 @@ const texts = {
     codeTitle: "Create Swaps with Code (JavaScript / Python / cURL)",
     copyExample: "Copy Example",
     codeSnippet: `// 1. Fetch real-time market quote
-const quote = await fetch('https://bsprotocol.xyz/api/quote?fromToken=PUSD&toToken=USDT&amount=50')
+const quote = await fetch('https://bliquid.xyz/api/quote?fromToken=PUSD&toToken=USDT&amount=50')
   .then(r => r.json());
 
 // 2. Instantiate isolated Non-Custodial CashScript Covenant / Smart Contract Vault
-const order = await fetch('https://bsprotocol.xyz/api/swap/create', {
+const order = await fetch('https://bliquid.xyz/api/swap/create', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
@@ -89,11 +89,11 @@ console.log('Contract Spec:', order.instructions.contractType);`
     codeTitle: "Crear Swaps con Código (JavaScript / Python / cURL)",
     copyExample: "Copiar Ejemplo",
     codeSnippet: `// 1. Consultar cotización en tiempo real
-const quote = await fetch('https://bsprotocol.xyz/api/quote?fromToken=PUSD&toToken=USDT&amount=50')
+const quote = await fetch('https://bliquid.xyz/api/quote?fromToken=PUSD&toToken=USDT&amount=50')
   .then(r => r.json());
 
 // 2. Instanciar Covenant CashScript P2SH32 / Smart Contract Vault No-Custodio
-const order = await fetch('https://bsprotocol.xyz/api/swap/create', {
+const order = await fetch('https://bliquid.xyz/api/swap/create', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
@@ -122,7 +122,7 @@ export const SdkView: React.FC<SdkViewProps> = ({ lang = 'en' }) => {
 
   const t = texts[lang] || texts.en;
 
-  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://bsprotocol.xyz';
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://bliquid.xyz';
   const embedUrl = `${origin}/embed?from=${embedFrom}&to=${embedTo}&theme=${embedTheme}`;
 
   const iframeSnippet = `<!-- BinaryLiquid Cross-Chain Stablecoin Bridge Widget -->

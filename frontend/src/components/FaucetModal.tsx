@@ -14,7 +14,7 @@ export default function FaucetModal({ onClose, userContext, fetchBalances, showT
 
   useEffect(() => {
     // Get unique verification code
-    fetch(`https://bsprotocol.xyz/api/faucet/tg_code/${userContext.id}`)
+    fetch(`/api/faucet/tg_code/${userContext.id}`)
       .then(r => r.json())
       .then(d => {
          if (d.code) setTgCode(d.code);
@@ -27,7 +27,7 @@ export default function FaucetModal({ onClose, userContext, fetchBalances, showT
     
     // Poll for verification
     const int = setInterval(() => {
-      fetch(`https://bsprotocol.xyz/api/faucet/tg_status/${tgCode}`)
+      fetch(`/api/faucet/tg_status/${tgCode}`)
         .then(r => r.json())
         .then(d => {
            if (d.verified) setIsVerified(true);
@@ -41,7 +41,7 @@ export default function FaucetModal({ onClose, userContext, fetchBalances, showT
     setLoading(true);
     
     try {
-      const res = await fetch('https://bsprotocol.xyz/api/faucet/spin_tg', {
+      const res = await fetch('/api/faucet/spin_tg', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: userContext.id, code: tgCode })

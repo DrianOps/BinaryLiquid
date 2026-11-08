@@ -8,7 +8,7 @@ export default function PresaleView({ userContext, showToast, fetchBalances }: a
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    fetch('https://bsprotocol.xyz/api/presale/info')
+    fetch('/api/presale/info')
       .then(r => r.json())
       .then(d => setInfo(d))
       .catch(e => console.error(e));
@@ -27,7 +27,7 @@ export default function PresaleView({ userContext, showToast, fetchBalances }: a
     
     setLoading(true);
     try {
-      const res = await fetch('https://bsprotocol.xyz/api/presale/buy', {
+      const res = await fetch('/api/presale/buy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: userContext.id, txid: txid.trim() })

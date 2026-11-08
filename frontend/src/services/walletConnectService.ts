@@ -36,8 +36,8 @@ export const DEPLOYED_TESTNET_CONTRACTS = {
 const WC_METADATA = {
   name: 'BinaryLiquid Protocol',
   description: '100% Non-Custodial Cross-Chain Gateway connecting Bitcoin Cash CashTokens & Polygon',
-  url: typeof window !== 'undefined' ? window.location.origin : 'https://bsprotocol.xyz',
-  icons: ['https://bsprotocol.xyz/logo.png']
+  url: typeof window !== 'undefined' ? window.location.origin : 'https://bliquid.xyz',
+  icons: [typeof window !== 'undefined' ? `${window.location.origin}/logo.png` : 'https://bliquid.xyz/logo.png']
 };
 
 // ============================================================================
@@ -91,7 +91,7 @@ export function hasInjectedEvmWallet(): boolean {
 }
 
 export function getMetaMaskDeepLink(): string {
-  if (typeof window === 'undefined') return 'https://metamask.app.link/dapp/bsprotocol.xyz';
+  if (typeof window === 'undefined') return 'https://metamask.app.link/dapp/bliquid.xyz';
   const cleanUrl = window.location.href.replace(/^https?:\/\//, '');
   return `https://metamask.app.link/dapp/${cleanUrl}`;
 }

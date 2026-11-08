@@ -25,7 +25,7 @@ export default function StakingView({ userContext, balances, fetchBalances, wc, 
     
     try {
        const signature = await wc.signMessage(msg);
-       const res = await fetch(`https://bsprotocol.xyz/api/wallet/${type}`, {
+       const res = await fetch(`/api/wallet/${type}`, {
          method: 'POST',
          headers: { 'Content-Type': 'application/json' },
          body: JSON.stringify({ userId: userContext.id, amount, signature })
