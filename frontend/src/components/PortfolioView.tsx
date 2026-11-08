@@ -347,9 +347,6 @@ export default function PortfolioView({
       {/* 1. TOP HEADER & IDENTITY BAR */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2 border-b border-line">
         <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-primary to-amber-400 flex items-center justify-center text-black font-extrabold shadow-sm">
-            <Wallet className="w-5 h-5" />
-          </div>
           <div>
             <div className="flex items-center gap-2">
               <span className="font-mono text-sm sm:text-base font-bold text-ink">
