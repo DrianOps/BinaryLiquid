@@ -2,6 +2,7 @@ import { config } from '../config.js';
 import { db } from './db.js';
 import { bchService } from './bchService.js';
 import { evmService } from './evmService.js';
+import { solanaService } from './solanaService.js';
 import { oraclePool } from './oraclePool.js';
 import { poolService } from './poolService.js';
 import { watchmanSentinel } from './watchmanClient.js';
@@ -114,7 +115,37 @@ class RelayerEngine {
           const expectedOutput = Number(order.expectedOutput);
 
           let payoutResult;
-          if (isBchOrigin) {
+          const isSolanaDest = solanaService.isSolanaChain(order.toChain);
+          const isBchDest =
+            String(order.toChain || '').toLowerCase().includes('bch') ||
+            String(order.toChain || '').toLowerCase().includes('chipnet');
+
+          if (isSolanaDest) {
+            const tokenCfg = solanaService.getTokenConfig(order.toToken, order.toChain);
+            const auth = await watchmanSentinel.auditAndAuthorize({
+              destinationType: 'SOLANA',
+              originTxHash: order.depositTxHash,
+              fromToken: order.fromToken,
+              toToken: order.toToken,
+              recipient: order.recipientAddress,
+              tokenAddress: tokenCfg.mint,
+              tokenDecimals: tokenCfg.decimals,
+              amount: expectedOutput,
+              rate: currentRate,
+              vaultContractAddress: solanaService.programId
+            });
+            if (!auth.approved) throw new Error(auth.reason);
+
+            payoutResult = await solanaService.releaseFromVault({
+              bchTxHashBytes32: auth.bchTxHashBytes32,
+              recipientAddress: order.recipientAddress,
+              amount: expectedOutput,
+              tokenSymbol: order.toToken,
+              chain: order.toChain,
+              nonce: auth.nonce,
+              watchmanSignature: auth.proof
+            });
+          } else if (!isBchDest) {
             const isAmoy = evmService.isAmoyChain(order.toChain);
             const chainId = isAmoy ? config.evm.amoyChainId : config.evm.chainId;
             const vaultAddress = evmService.getVaultAddress(order.toChain);
@@ -200,16 +231,30 @@ class RelayerEngine {
         depositContract: swap.depositAddress
       });
 
-      const isBchOrigin = swap.fromChain.includes('bch') || swap.fromChain.includes('chipnet');
+      const fromChainLower = String(swap.fromChain || '').toLowerCase();
+      const toChainLower = String(swap.toChain || '').toLowerCase();
+      const isBchOrigin = fromChainLower.includes('bch') || fromChainLower.includes('chipnet');
+      const isSolanaOrigin = solanaService.isSolanaChain(swap.fromChain);
+      const isBchDestination = toChainLower.includes('bch') || toChainLower.includes('chipnet');
+      const isSolanaDestination = solanaService.isSolanaChain(swap.toChain);
+
       let verifyResult;
 
-      // 1. Verify deposit inside Non-Custodial Smart Contract / Covenant
+      // 1. Verify deposit inside Non-Custodial Smart Contract / Covenant / Anchor PDA
       if (isBchOrigin) {
         verifyResult = await bchService.verifyDeposit(
           swap.depositTxHash,
           swap.fromAmount,
           swap.fromToken,
           swap.depositAddress
+        );
+      } else if (isSolanaOrigin) {
+        verifyResult = await solanaService.verifyDeposit(
+          swap.depositTxHash,
+          swap.fromAmount,
+          swap.fromToken,
+          swap.depositAddress,
+          swap.fromChain
         );
       } else {
         verifyResult = await evmService.verifyDeposit(
@@ -251,8 +296,39 @@ class RelayerEngine {
       let payoutResult;
       let watchmanAttestation = null;
 
-      if (isBchOrigin) {
-        // User locked CashTokens in BCH Covenant -> Watchman signs ECDSA proof -> BinaryLiquidVault.sol releases ERC-20
+      if (isSolanaDestination) {
+        // Inbound to Solana SVM (from BCH CashTokens OR from EVM Polygon/ETH) -> Ed25519 Attestation
+        const tokenCfg = solanaService.getTokenConfig(swap.toToken, swap.toChain);
+        const auth = await watchmanSentinel.auditAndAuthorize({
+          destinationType: 'SOLANA',
+          originTxHash: canonicalOriginHash,
+          fromToken: swap.fromToken,
+          toToken: swap.toToken,
+          recipient: swap.recipientAddress,
+          tokenAddress: tokenCfg.mint,
+          tokenDecimals: tokenCfg.decimals,
+          amount: swap.toAmount,
+          rate: swap.oracleRate || 1.0,
+          vaultContractAddress: solanaService.programId
+        });
+
+        if (!auth.approved) {
+          watchmanOriginRef = null;
+          throw new Error(`Watchman Sentinel rejected swap: ${auth.reason}`);
+        }
+        watchmanAttestation = auth.proof;
+
+        payoutResult = await solanaService.releaseFromVault({
+          bchTxHashBytes32: auth.bchTxHashBytes32,
+          recipientAddress: swap.recipientAddress,
+          amount: swap.toAmount,
+          tokenSymbol: swap.toToken,
+          chain: swap.toChain,
+          nonce: auth.nonce,
+          watchmanSignature: auth.proof
+        });
+      } else if (!isBchDestination) {
+        // Inbound to EVM (from BCH CashTokens OR from Solana SVM) -> ECDSA EIP-191 Attestation
         const isAmoy = evmService.isAmoyChain(swap.toChain);
         const chainId = isAmoy ? config.evm.amoyChainId : config.evm.chainId;
         const vaultAddress = evmService.getVaultAddress(swap.toChain);
@@ -287,13 +363,8 @@ class RelayerEngine {
           nonce: auth.nonce,
           watchmanSignature: auth.proof
         });
-
-        // Consolidate per-swap Escrow Covenant CashTokens back into main BinaryLiquidVault.cash asynchronously
-        if (payoutResult.success) {
-          bchService.sweepEscrowToVault(swap).catch(() => {});
-        }
       } else {
-        // User deposited ERC-20 into BinaryLiquidVault.sol -> Watchman authorizes Schnorr Covenant Continuation on BCH!
+        // Inbound to Bitcoin Cash L1 (from EVM OR from Solana SVM) -> Schnorr Covenant Continuation
         const auth = await watchmanSentinel.auditAndAuthorize({
           destinationType: 'BCH',
           originTxHash: canonicalOriginHash,
@@ -315,9 +386,14 @@ class RelayerEngine {
           swap.toAmount,
           swap.toToken
         );
+      }
 
-        // If user called BinaryLiquidVault.deposit(), mark depositId settled asynchronously
-        if (verifyResult.depositId) {
+      if (payoutResult.success) {
+        if (isBchOrigin) {
+          bchService.sweepEscrowToVault(swap).catch(() => {});
+        } else if (isSolanaOrigin && verifyResult.depositId) {
+          solanaService.markDepositSettled(verifyResult.depositId, payoutResult.txHash, swap.fromChain).catch(() => {});
+        } else if (verifyResult.depositId) {
           evmService.markDepositSettled(verifyResult.depositId, payoutResult.txHash, swap.fromChain).catch(() => {});
         }
       }

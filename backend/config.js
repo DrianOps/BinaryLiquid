@@ -102,9 +102,36 @@ export const config = {
     }
   },
 
-  // Solana (Phase 2)
+  // Solana SVM (Mainnet-Beta & Devnet Non-Custodial Anchor PDA Vaults)
   solana: {
-    coldTreasuryAddress: process.env.SOLANA_COLD_TREASURY_ADDRESS || '7QRhmj6TeGXbPKDD4otBJ23kTv6F2wydkuvtRQ6RRWfT'
+    cluster: process.env.SOLANA_CLUSTER || 'mainnet-beta',
+    rpcUrl: process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com',
+    devnetRpcUrl: process.env.SOLANA_DEVNET_RPC_URL || 'https://api.devnet.solana.com',
+    explorerUrl: process.env.SOLANA_EXPLORER_URL || 'https://solscan.io',
+    programId: process.env.SOLANA_PROGRAM_ID || 'BLiqVau1tSo1anaCrossChainBridge111111111111',
+    vaultAddress: process.env.SOLANA_VAULT_PDA_ADDRESS || '7QRhmj6TeGXbPKDD4otBJ23kTv6F2wydkuvtRQ6RRWfT',
+    devnetVaultAddress: process.env.SOLANA_DEVNET_VAULT_PDA_ADDRESS || '7QRhmj6TeGXbPKDD4otBJ23kTv6F2wydkuvtRQ6RRWfT',
+    coldTreasuryAddress: process.env.SOLANA_COLD_TREASURY_ADDRESS || '7QRhmj6TeGXbPKDD4otBJ23kTv6F2wydkuvtRQ6RRWfT',
+    tokens: {
+      USDC: {
+        name: 'USD Coin (Solana SPL)',
+        symbol: 'USDC',
+        mint: process.env.SOLANA_USDC_MINT || 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+        decimals: 6
+      },
+      USDT: {
+        name: 'Tether USD (Solana SPL)',
+        symbol: 'USDT',
+        mint: process.env.SOLANA_USDT_MINT || 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB',
+        decimals: 6
+      },
+      SOL: {
+        name: 'Wrapped SOL (SPL)',
+        symbol: 'SOL',
+        mint: process.env.SOLANA_WSOL_MINT || 'So11111111111111111111111111111111111111112',
+        decimals: 9
+      }
+    }
   },
 
   // Strict on-chain mode: false forces genuine Smart Contract & Covenant execution

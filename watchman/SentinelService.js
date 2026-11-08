@@ -5,6 +5,7 @@
  * proofs to authorize Smart Contract Vault & CashScript Covenant releases without touching custody.
  */
 
+import crypto from 'crypto';
 import { ethers } from 'ethers';
 import { OracleAuditor } from './oracleAuditor.js';
 import { CircuitBreaker } from './circuitBreaker.js';
@@ -24,13 +25,24 @@ export class SentinelService {
     this.signerAddress = this.wallet.address;
     this.bchPubKeyHex = options.bchPubKeyHex || '0332d7133520cebac59c3d16b05421cfcc713cf837a8066475cccebccb677d7243';
 
+    // Deterministic Ed25519 keypair for Solana SVM Anchor Vault (`binary_liquid_vault`)
+    const edSeed = crypto.createHash('sha256').update(this.wallet.privateKey).digest();
+    const pkcs8Header = Buffer.from('302e020100300506032b657004220420', 'hex');
+    this.ed25519PrivateKey = crypto.createPrivateKey({
+      key: Buffer.concat([pkcs8Header, edSeed]),
+      format: 'der',
+      type: 'pkcs8'
+    });
+    const edPubDer = crypto.createPublicKey(this.ed25519PrivateKey).export({ type: 'spki', format: 'der' });
+    this.solanaPubKeyHex = edPubDer.subarray(-32).toString('hex');
+
     this.oracleAuditor = new OracleAuditor(1.5, options.rateResolver || null);
     this.circuitBreaker = new CircuitBreaker();
 
     this.processedTransactions = new Set();
     this.auditLog = [];
 
-    console.log(`[THE WATCHMAN] 👁️ Sentinel online (Zero-Custody). EVM Signer: ${this.signerAddress}`);
+    console.log(`[THE WATCHMAN] 👁️ Sentinel online (Zero-Custody). EVM Signer: ${this.signerAddress} | Solana Ed25519: ${this.solanaPubKeyHex.slice(0, 16)}...`);
   }
 
   /**
@@ -146,7 +158,51 @@ export class SentinelService {
       }
     }
 
-    // 4B. Destination is BCH CashScript Covenant -> Authorize Schnorr Covenant Continuation
+    // 4B. Destination is Solana SVM Anchor Vault -> Generate Ed25519 Signature
+    if (destinationType === 'SOLANA') {
+      try {
+        const cleanRecipient = (recipient || '').trim();
+        const cleanMint = (tokenAddress || 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v').trim();
+        const programId = (vaultContractAddress || 'BLiqVau1tSo1anaCrossChainBridge111111111111').trim();
+        const parsedAmount = ethers.parseUnits(Number(amount).toFixed(tokenDecimals), tokenDecimals);
+
+        const solanaDigest = crypto
+          .createHash('sha256')
+          .update(`SOLANA_VAULT_RELEASE:${bchTxHashBytes32}:${cleanRecipient}:${cleanMint}:${parsedAmount.toString()}:${nonce}:${programId}`)
+          .digest();
+
+        const edSigBuffer = crypto.sign(null, solanaDigest, this.ed25519PrivateKey);
+        const edSigHex = `0x${edSigBuffer.toString('hex')}`;
+
+        this.processedTransactions.add(replayKey);
+        this.logAudit({
+          timestamp: new Date().toISOString(),
+          direction: `${fromToken} ➔ ${toToken} (Solana SVM Vault)`,
+          originTxHash,
+          recipient: cleanRecipient,
+          amount: Number(amount),
+          nonce,
+          attestation: `ED25519:${edSigHex.substring(0, 18)}...`
+        });
+
+        console.log(`[THE WATCHMAN] ✍️ Ed25519 Solana Vault Release Attested for ${cleanRecipient} (${amount} ${toToken})`);
+
+        return {
+          approved: true,
+          destinationType: 'SOLANA',
+          bchTxHashBytes32,
+          proof: edSigHex,
+          nonce,
+          parsedAmount,
+          solanaWatchmanPubKey: this.solanaPubKeyHex
+        };
+      } catch (err) {
+        console.error('[THE WATCHMAN] ❌ Solana Ed25519 signing error:', err.message);
+        return { approved: false, reason: `Watchman Ed25519 signing error: ${err.message}` };
+      }
+    }
+
+    // 4C. Destination is BCH CashScript Covenant -> Authorize Schnorr Covenant Continuation
     const attestationDigest = ethers.keccak256(
       ethers.toUtf8Bytes(`BCH_COVENANT_RELEASE:${originTxHash}:${recipient}:${amount}:${nonce}`)
     );
@@ -193,9 +249,10 @@ export class SentinelService {
   getStatus() {
     return {
       status: 'ONLINE',
-      mode: '100% NON-CUSTODIAL SENTINEL (ECDSA + SCHNORR COVENANT)',
+      mode: '100% NON-CUSTODIAL TRIANGULAR SENTINEL (ECDSA + SCHNORR + ED25519)',
       evmSignerAddress: this.signerAddress,
       bchSignerPubKey: this.bchPubKeyHex,
+      solanaEd25519PubKey: this.solanaPubKeyHex,
       circuitBreaker: this.circuitBreaker.getStatus(),
       processedCount: this.processedTransactions.size,
       recentAudits: this.auditLog.slice(0, 15)

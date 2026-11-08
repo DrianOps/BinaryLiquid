@@ -4,13 +4,16 @@ pragma solidity ^0.8.20;
 /**
  * @title BinaryLiquidVault
  * @author BinaryLiquid Protocol / DrianOps
- * @notice 100% Non-Custodial Cross-Chain Liquidity Vault for Bitcoin Cash (CashTokens) <-> EVM (Polygon PoS / Amoy).
+ * @notice 100% Non-Custodial Triangular Cross-Chain Liquidity Vault connecting:
+ *         - EVM Networks (Polygon PoS, Ethereum, Arbitrum, Base, Optimism, BNB Chain)
+ *         - Bitcoin Cash CashTokens (PUSD, MUSD, LIFT via P2SH-32 Covenants)
+ *         - Solana SVM (USDC, USDT, SOL via Anchor PDA Vaults)
  *
  * SECURITY INVARIANTS:
  * 1. Zero-Custody: Liquidity lives strictly inside this contract. Owner has NO arbitrary withdraw function.
- * 2. Cryptographic Attestation: "The Watchman" Sentinel only signs EIP-191 ECDSA attestations for verified BCH deposits.
+ * 2. Cryptographic Attestation: "The Watchman" Sentinel only signs EIP-191 ECDSA attestations for verified BCH or Solana deposits.
  * 3. On-Chain Circuit Breaker: Enforces `maxSinglePayout` cap per settlement directly in EVM bytecode.
- * 4. Anti-Replay Registry: Each BCH TxID can be settled at most once (`executedPayouts[bchTxHash]`).
+ * 4. Anti-Replay Registry: Each origin TxID (BCH or Solana) can be settled at most once (`executedPayouts[originTxHash]`).
  * 5. Autonomous Timelock Refund: Unsettled deposits can be reclaimed 100% unilaterally by the user after 24 hours.
  */
 
@@ -170,6 +173,66 @@ contract BinaryLiquidVault {
             amount,
             netAmount,
             bchRecipient,
+            block.timestamp
+        );
+    }
+
+    /**
+     * @notice Deposit EVM tokens to bridge to any target chain (Solana SVM or Bitcoin Cash L1)
+     * @param token ERC-20 token address (USDC, USDT)
+     * @param amount Gross deposit amount
+     * @param destinationChain Target network identifier ("solana-mainnet" or "bch-mainnet")
+     * @param destinationRecipient Base58 Solana address or CashAddr BCH address
+     */
+    function depositToChain(
+        address token,
+        uint256 amount,
+        string calldata destinationChain,
+        string calldata destinationRecipient
+    ) external whenNotPaused nonReentrant returns (bytes32 depositId) {
+        require(supportedTokens[token], "BinaryLiquid: Unsupported token");
+        require(amount > 0, "BinaryLiquid: Zero amount");
+        require(bytes(destinationChain).length >= 3, "BinaryLiquid: Invalid destination chain");
+        require(bytes(destinationRecipient).length >= 20, "BinaryLiquid: Invalid destination recipient");
+
+        uint256 fee = (amount * PROTOCOL_FEE_BPS) / BPS_DENOMINATOR;
+        uint256 netAmount = amount - fee;
+
+        bool success = IERC20(token).transferFrom(msg.sender, address(this), amount);
+        require(success, "BinaryLiquid: transferFrom failed");
+
+        string memory compositeDestination = string(abi.encodePacked(destinationChain, ":", destinationRecipient));
+
+        depositId = keccak256(
+            abi.encodePacked(
+                msg.sender,
+                token,
+                amount,
+                compositeDestination,
+                block.timestamp,
+                block.number,
+                block.chainid
+            )
+        );
+
+        deposits[depositId] = Deposit({
+            sender: msg.sender,
+            token: token,
+            amount: amount,
+            netAmount: netAmount,
+            bchRecipient: compositeDestination,
+            timestamp: block.timestamp,
+            refunded: false,
+            completed: false
+        });
+
+        emit BridgeDepositInitiated(
+            depositId,
+            msg.sender,
+            token,
+            amount,
+            netAmount,
+            compositeDestination,
             block.timestamp
         );
     }
