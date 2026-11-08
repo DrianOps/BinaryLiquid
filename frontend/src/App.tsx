@@ -464,7 +464,7 @@ export default function App() {
     }
     return false;
   });
-  const [, setSelectedWalletType] = useState<'paytaca' | 'bch_wc2' | 'walletconnect' | 'injected' | null>(null);
+  const [selectedWalletType, setSelectedWalletType] = useState<'paytaca' | 'bch_wc2' | 'walletconnect' | 'injected' | null>(null);
   const [isEditingBch, setIsEditingBch] = useState<boolean>(false);
   const [customBchInput, setCustomBchInput] = useState<string>('');
   const [showManualBchInput, setShowManualBchInput] = useState<boolean>(false);
@@ -715,6 +715,9 @@ export default function App() {
     const isTest = platformNetwork === 'testnet';
 
     if (type === 'paytaca') {
+      // Disconnect any active BCH WalletConnect V2 (Cashonize) session before switching to Paytaca
+      try { await disconnectBchWalletConnect(); } catch {}
+
       // 1. Try direct Paytaca Browser Extension if installed, otherwise launch WizardConnect QR
       if (hasPaytacaExtension()) {
         const extRes = await connectPaytacaExtension(isTest);
@@ -741,6 +744,8 @@ export default function App() {
       wc.connect();
     } else if (type === 'bch_wc2') {
       // Official Bitcoin Cash WalletConnect V2 (`wc2-bch-bcr` for Cashonize / Paytaca WC2 / Zapit)
+      // Disconnect any active Paytaca WizardConnect session first so it never conflicts or keeps saying Paytaca
+      try { wc.disconnect(); } catch {}
       try {
         const pairing = await startBchWalletConnectPairing(isTest, () => {
           setBchWallet(prev => (prev?.source === 'wc2-bch' ? null : prev));
@@ -748,13 +753,16 @@ export default function App() {
         setBchWcPairing({ uri: pairing.uri, qrDataUrl: pairing.qrDataUrl });
         const approved = await pairing.waitForApproval();
         setBchWcPairing(null);
+        try { wc.disconnect(); } catch {}
         setBchWallet({
           address: approved.address,
           tokenAddress: approved.tokenAddress,
           provider: approved.walletName,
-          source: 'wc2-bch'
+          source: 'wc2-bch',
+          queryAddress: approved.address
         });
         await registerBackendSession(approved.tokenAddress, approved.address, evmWallet?.address || null, approved.walletName);
+        refreshWalletBalances(approved.address, evmWallet?.address || null);
         showToast(
           lang === 'es'
             ? `Conectado con ${approved.walletName}: ${formatAddress(approved.tokenAddress)}`
@@ -843,6 +851,12 @@ export default function App() {
   useEffect(() => {
     const isTest = platformNetwork === 'testnet';
     if (wc.state === 'connected' && wc.manager) {
+      // If user explicitly switched to Cashonize / WC2 (`source === 'wc2-bch'`), do not let a stale persisted WizardConnect session overwrite it
+      if (bchWallet?.source === 'wc2-bch' && selectedWalletType !== 'paytaca') {
+        try { wc.disconnect(); } catch {}
+        return;
+      }
+
       let baseAddr = '';
       let tokenAddr = '';
       const allDerived: string[] = [];
@@ -932,6 +946,9 @@ export default function App() {
             userContext={userContext}
             userAddress={userContext?.address || ''}
             bchAddress={bchWallet?.tokenAddress || bchWallet?.address || ''}
+            bchQueryAddress={bchWallet?.queryAddress || bchWallet?.address || ''}
+            bchWalletName={bchWallet?.provider || ''}
+            bchWalletSource={bchWallet?.source}
             evmAddress={evmWallet?.address || ''}
             walletBalances={walletBalances}
             onRefreshBalances={() => refreshWalletBalances()}
@@ -954,11 +971,12 @@ export default function App() {
     <div className="min-h-screen w-full bg-warm-mesh dark:bg-[#080B11] flex flex-col font-sans transition-colors duration-200 text-gray-900 dark:text-gray-100 selection:bg-orange-500 selection:text-white">
       
       {/* NAVBAR WITH SCROLL-REACTIVE BORDER & ELEVATION */}
-      <nav className={`h-16 sticky top-0 z-40 print:hidden transition-all duration-300 flex items-center justify-between px-3 sm:px-8 ${
+      <nav className={`h-16 sticky top-0 z-40 print:hidden transition-all duration-300 flex items-center px-3 sm:px-8 ${
         isScrolled
           ? 'bg-canvas/90 backdrop-blur-md border-b border-line shadow-xs'
           : 'bg-transparent border-b border-transparent shadow-none'
       }`}>
+        <div className="w-full max-w-7xl mx-auto flex items-center justify-between relative">
         <div className="flex items-center gap-3 sm:gap-8">
           
           {/* BRAND DROPDOWN (BinaryLiquid ▾ -> Gateway, Whitepaper, SDK & API, Docs) */}
@@ -1112,8 +1130,8 @@ export default function App() {
             </AnimatePresence>
           </div>
           
-          {/* CENTER TABS (Desktop / Tablet — Core DeFi & Docs) */}
-          <div className="hidden md:flex items-center p-1 bg-surface-2 rounded-full border border-line text-xs font-semibold">
+          {/* CENTER TABS (Desktop / Tablet — Centered directly over Swap Card on all screen sizes) */}
+          <div className="hidden md:flex items-center p-1 bg-surface-2 rounded-full border border-line text-xs font-semibold md:absolute md:left-1/2 md:-translate-x-1/2">
             <button 
               onClick={() => setMainView('bridge')} 
               className={`px-3.5 py-1.5 rounded-full transition-all cursor-pointer ${
@@ -1244,6 +1262,7 @@ export default function App() {
           >
             <Menu className="w-4 h-4" />
           </button>
+        </div>
         </div>
       </nav>
 
@@ -1581,11 +1600,14 @@ export default function App() {
 
       {/* BRIDGE SWAP VIEW */}
       {mainView === 'bridge' && (
-        <main className="flex-1 flex flex-col items-center justify-start p-4 sm:p-6 w-full max-w-7xl mx-auto pb-28 md:pb-12">
+        <main className="flex-1 flex flex-col items-center justify-start md:justify-center p-4 sm:p-6 w-full max-w-7xl mx-auto pb-28 md:pb-12">
           <BridgeSwap
             userContext={userContext}
             userAddress={userContext?.address || ''}
             bchAddress={bchWallet?.tokenAddress || bchWallet?.address || ''}
+            bchQueryAddress={bchWallet?.queryAddress || bchWallet?.address || ''}
+            bchWalletName={bchWallet?.provider || ''}
+            bchWalletSource={bchWallet?.source}
             evmAddress={evmWallet?.address || ''}
             walletBalances={walletBalances}
             onRefreshBalances={() => refreshWalletBalances()}

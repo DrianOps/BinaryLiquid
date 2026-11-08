@@ -32,6 +32,7 @@ class BchService {
     this.vaultArtifact = null;
     this.escrowArtifact = null;
     this.collateralVaultArtifact = null;
+    this.recentlyBroadcastTxs = new Map();
     this.isReady = false;
     this.readyPromise = this.init();
   }
@@ -251,75 +252,94 @@ class BchService {
     const isNativeBch = tokenSymbol.toUpperCase() === 'BCH';
     const expectedCat = isNativeBch ? null : this.getTokenCategory(tokenSymbol, isChipnet);
     const decimals = config.bch.tokens[tokenSymbol.toUpperCase()]?.decimals || 6;
+    const cleanHash = txHash && txHash.trim().length === 64 ? txHash.trim().toLowerCase() : null;
 
-    // A) Inspect live UTXOs at the Non-Custodial Covenant deposit address
-    if (depositAddress && provider) {
-      try {
-        let utxos = await provider.getUtxos(depositAddress);
-        if ((!utxos || utxos.length === 0) && (depositAddress.startsWith('bchtest:') || depositAddress.startsWith('bitcoincash:'))) {
-          try {
-            const dec = cashAddressToLockingBytecode(depositAddress);
-            if (typeof dec !== 'string') {
-              const altPrefix = isChipnet ? 'bchtest' : 'bitcoincash';
-              const alt = lockingBytecodeToCashAddress({ bytecode: dec.bytecode, prefix: altPrefix, tokenSupport: false });
-              if (typeof alt !== 'string' && alt.address !== depositAddress) {
-                const altUtxos = await provider.getUtxos(alt.address);
-                if (altUtxos && altUtxos.length > 0) utxos = altUtxos;
+    // Retry up to 4 times (1.2s apart) when a signed txHash is provided so Electrum mempool indexing lag never causes false negatives
+    const maxAttempts = cleanHash ? 4 : 1;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      // A) Inspect live UTXOs at the Non-Custodial Covenant deposit address
+      if (depositAddress && provider) {
+        try {
+          let utxos = await provider.getUtxos(depositAddress);
+          if ((!utxos || utxos.length === 0) && (depositAddress.startsWith('bchtest:') || depositAddress.startsWith('bitcoincash:'))) {
+            try {
+              const dec = cashAddressToLockingBytecode(depositAddress);
+              if (typeof dec !== 'string') {
+                const altPrefix = isChipnet ? 'bchtest' : 'bitcoincash';
+                const alt = lockingBytecodeToCashAddress({ bytecode: dec.bytecode, prefix: altPrefix, tokenSupport: false });
+                if (typeof alt !== 'string' && alt.address !== depositAddress) {
+                  const altUtxos = await provider.getUtxos(alt.address);
+                  if (altUtxos && altUtxos.length > 0) utxos = altUtxos;
+                }
               }
-            }
-          } catch (_) {}
-        }
+            } catch (_) {}
+          }
 
-        if (utxos && utxos.length > 0) {
-          if (isNativeBch) {
-            const totalSats = utxos.reduce((sum, u) => sum + u.satoshis, 0n);
-            if (totalSats > 0n) {
-              return {
-                verified: true,
-                onChain: true,
-                nonCustodial: true,
-                amount: Number(totalSats) / 1e8,
-                txHash: txHash || utxos[0].txid
-              };
-            }
-          } else {
-            const matching = utxos.filter(u => u.token?.category === expectedCat && u.token.amount > 0n);
-            if (matching.length > 0) {
-              const totalUnits = matching.reduce((sum, u) => sum + u.token.amount, 0n);
-              const numUnits = Number(totalUnits);
-              const decimalFactor = 10 ** decimals;
-              const amountWithDecimals = numUnits / decimalFactor;
-
-              // Dual-precision support:
-              // 1. Wallets that format with token decimals (numUnits / 10^decimals)
-              // 2. Wallets that treat 1 raw unit = 1 token (e.g. Paytaca on Chipnet sending 1n for 1 PUSD)
-              const matchesWithDecimals = amountWithDecimals >= expectedAmount * 0.99;
-              const matchesRawUnits = numUnits >= expectedAmount * 0.99;
-
-              if (matchesWithDecimals || matchesRawUnits) {
-                const detectedAmount = matchesWithDecimals ? amountWithDecimals : numUnits;
+          if (utxos && utxos.length > 0) {
+            if (isNativeBch) {
+              const totalSats = utxos.reduce((sum, u) => sum + u.satoshis, 0n);
+              if (totalSats > 0n) {
                 return {
                   verified: true,
                   onChain: true,
                   nonCustodial: true,
-                  amount: detectedAmount,
-                  txHash: txHash || matching[0].txid
+                  amount: Number(totalSats) / 1e8,
+                  txHash: cleanHash || utxos[0].txid
                 };
+              }
+            } else {
+              const matching = utxos.filter(u => u.token?.category === expectedCat && u.token.amount > 0n);
+              if (matching.length > 0) {
+                const totalUnits = matching.reduce((sum, u) => sum + u.token.amount, 0n);
+                const numUnits = Number(totalUnits);
+                const decimalFactor = 10 ** decimals;
+                const amountWithDecimals = numUnits / decimalFactor;
+
+                // Dual-precision support:
+                // 1. Wallets that format with token decimals (numUnits / 10^decimals)
+                // 2. Wallets that treat 1 raw unit = 1 token (e.g. Paytaca / Cashonize on Chipnet sending 1n for 1 PUSD)
+                const matchesWithDecimals = amountWithDecimals >= expectedAmount * 0.99;
+                const matchesRawUnits = numUnits >= expectedAmount * 0.99;
+
+                if (matchesWithDecimals || matchesRawUnits) {
+                  const detectedAmount = matchesWithDecimals ? amountWithDecimals : numUnits;
+                  return {
+                    verified: true,
+                    onChain: true,
+                    nonCustodial: true,
+                    amount: detectedAmount,
+                    txHash: cleanHash || matching[0].txid
+                  };
+                }
               }
             }
           }
+        } catch (err) {
+          console.warn(`[BCH ${isChipnet ? 'Chipnet' : 'Mainnet'}] Covenant UTXO check warning (attempt ${attempt}):`, err.message);
         }
-      } catch (err) {
-        console.warn(`[BCH ${isChipnet ? 'Chipnet' : 'Mainnet'}] Covenant UTXO check warning:`, err.message);
       }
-    }
 
-    // B) Verify raw transaction on Electrum network if txHash was provided
-    if (txHash && txHash.trim().length === 64 && provider) {
-      const cleanHash = txHash.trim().toLowerCase();
-      try {
-        const rawTxHex = await provider.getRawTransaction(cleanHash);
-        if (rawTxHex && rawTxHex.length > 40) {
+      // B) Verify raw transaction on Electrum network if txHash was provided
+      if (cleanHash && provider) {
+        try {
+          const rawTxHex = await provider.getRawTransaction(cleanHash);
+          if (rawTxHex && rawTxHex.length > 40) {
+            return {
+              verified: true,
+              onChain: true,
+              nonCustodial: true,
+              amount: expectedAmount,
+              txHash: cleanHash
+            };
+          }
+        } catch (err) {
+          console.warn(`[BCH ${isChipnet ? 'Chipnet' : 'Mainnet'}] Raw TX lookup warning (attempt ${attempt}):`, err.message);
+        }
+
+        // C) Check if our own broadcastTransaction endpoint just broadcasted this exact signed TX to Electrum
+        const recentBroadcast = this.recentlyBroadcastTxs.get(cleanHash);
+        if (recentBroadcast && Date.now() - recentBroadcast.timestamp < 10 * 60 * 1000) {
           return {
             verified: true,
             onChain: true,
@@ -328,13 +348,15 @@ class BchService {
             txHash: cleanHash
           };
         }
-      } catch (err) {
-        console.warn(`[BCH ${isChipnet ? 'Chipnet' : 'Mainnet'}] Raw TX lookup warning:`, err.message);
+      }
+
+      if (attempt < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 1200));
       }
     }
 
     if (config.simulateIfNoFunds) {
-      return { verified: true, simulated: true, amount: expectedAmount, txHash: txHash || 'simulated_fallback' };
+      return { verified: true, simulated: true, amount: expectedAmount, txHash: cleanHash || 'simulated_fallback' };
     }
 
     return {
@@ -837,7 +859,8 @@ class BchService {
       throw new Error('Se requiere la dirección del Smart Contract Covenant de destino.');
     }
 
-    const decodedSender = cashAddressToLockingBytecode(senderAddress.trim());
+    const primarySender = senderAddress.split(',')[0].trim();
+    const decodedSender = cashAddressToLockingBytecode(primarySender);
     if (typeof decodedSender === 'string') {
       throw new Error(`Dirección BCH pagadora inválida: ${decodedSender}`);
     }
@@ -866,13 +889,53 @@ class BchService {
 
     const sym = (tokenSymbol || 'PUSD').toUpperCase();
     const isNativeBch = sym === 'BCH';
-    const utxos = await provider.getUtxos(senderBaseAddr);
+
+    // Support both single CashAddress (Cashonize / WC2) and comma-separated HD derived addresses (Paytaca)
+    const rawSenderList = senderAddress.split(',').map(s => s.trim()).filter(Boolean);
+    const candidateBaseAddrs = [];
+    for (const rawAddr of rawSenderList) {
+      const dec = cashAddressToLockingBytecode(rawAddr);
+      if (typeof dec !== 'string') {
+        const enc = lockingBytecodeToCashAddress({
+          bytecode: dec.bytecode,
+          prefix,
+          tokenSupport: false
+        });
+        if (typeof enc !== 'string' && !candidateBaseAddrs.includes(enc.address)) {
+          candidateBaseAddrs.push(enc.address);
+        }
+      }
+    }
+    if (!candidateBaseAddrs.includes(senderBaseAddr)) {
+      candidateBaseAddrs.unshift(senderBaseAddr);
+    }
+
+    const utxos = [];
+    const seenUtxoKeys = new Set();
+    for (const addr of candidateBaseAddrs) {
+      try {
+        const addrUtxos = await provider.getUtxos(addr);
+        for (const u of addrUtxos || []) {
+          const k = `${u.txid}:${u.vout}`;
+          if (seenUtxoKeys.has(k)) continue;
+          seenUtxoKeys.add(k);
+          u._ownerBaseAddr = addr;
+          utxos.push(u);
+        }
+      } catch (_) {}
+    }
+
     if (!utxos || utxos.length === 0) {
       throw new Error(`No se detectaron UTXOs disponibles en ${senderBaseAddr}.`);
     }
 
     const txBuilder = new TransactionBuilder({ provider });
-    const unlocker = placeholderP2PKHUnlocker(senderBaseAddr);
+    const inputOwners = [];
+    const addTrackedInput = u => {
+      const ownerAddr = u._ownerBaseAddr || senderBaseAddr;
+      txBuilder.addInput(u, placeholderP2PKHUnlocker(ownerAddr));
+      inputOwners.push(ownerAddr);
+    };
 
     if (isNativeBch) {
       const requiredSats = BigInt(Math.round(Number(amount) * 1e8));
@@ -882,7 +945,7 @@ class BchService {
 
       let gatheredSats = 0n;
       for (const u of pureUtxos) {
-        txBuilder.addInput(u, unlocker);
+        addTrackedInput(u);
         gatheredSats += BigInt(u.satoshis);
         if (gatheredSats >= requiredSats + 1500n) break;
       }
@@ -936,7 +999,7 @@ class BchService {
       let gatheredUnits = 0n;
       let gatheredSats = 0n;
       for (const u of tokenUtxos) {
-        txBuilder.addInput(u, unlocker);
+        addTrackedInput(u);
         gatheredUnits += BigInt(u.token.amount);
         gatheredSats += BigInt(u.satoshis);
         if (gatheredUnits >= requiredUnits) break;
@@ -949,8 +1012,8 @@ class BchService {
         );
       }
 
-      const tokenChangeUnits = gatheredUnits - requiredUnits;
-      const minRequiredSats = tokenChangeUnits > 0n ? 3200n : 2200n;
+      const initialTokenChange = gatheredUnits - requiredUnits;
+      const minRequiredSats = initialTokenChange > 0n ? 3200n : 2200n;
 
       // Ensure enough satoshis for dust output (1000 sats) + token change dust (1000 sats) + miner fee (~800 sats)
       if (gatheredSats < minRequiredSats) {
@@ -959,7 +1022,7 @@ class BchService {
           .sort((a, b) => (BigInt(b.satoshis) > BigInt(a.satoshis) ? 1 : -1));
 
         for (const u of pureBchUtxos) {
-          txBuilder.addInput(u, unlocker);
+          addTrackedInput(u);
           gatheredSats += BigInt(u.satoshis);
           if (gatheredSats >= minRequiredSats + 500n) break;
         }
@@ -971,7 +1034,7 @@ class BchService {
             const key = `${u.txid}:${u.vout}`;
             if (usedIds.has(key)) continue;
             usedIds.add(key);
-            txBuilder.addInput(u, unlocker);
+            addTrackedInput(u);
             gatheredUnits += BigInt(u.token.amount);
             gatheredSats += BigInt(u.satoshis);
             if (gatheredSats >= minRequiredSats + 500n) break;
@@ -979,6 +1042,7 @@ class BchService {
         }
       }
 
+      const tokenChangeUnits = gatheredUnits - requiredUnits;
       if (gatheredSats < (tokenChangeUnits > 0n ? 2500n : 1500n)) {
         throw new Error(
           `Necesitas al menos ~0.00003 BCH de gas libre en tu dirección (${senderBaseAddr}) para el miner fee de red.`
@@ -1021,6 +1085,7 @@ class BchService {
     return {
       wcTransaction,
       unsignedHex,
+      inputOwners,
       chainId: isChipnet ? 'bch:bchtest' : 'bch:bitcoincash',
       senderBaseAddr,
       senderTokenAddr
@@ -1040,11 +1105,23 @@ class BchService {
 
     // If it's already a 64-character transaction hash (txid), it was already broadcasted by the wallet
     if (cleanHex.length === 64) {
+      this.recentlyBroadcastTxs.set(cleanHex.toLowerCase(), {
+        txHex: cleanHex,
+        isChipnet,
+        timestamp: Date.now()
+      });
       return cleanHex;
     }
 
     try {
       const txId = await provider.sendRawTransaction(cleanHex);
+      if (txId) {
+        this.recentlyBroadcastTxs.set(String(txId).toLowerCase(), {
+          txHex: cleanHex,
+          isChipnet,
+          timestamp: Date.now()
+        });
+      }
       return txId;
     } catch (err) {
       const msg = String(err.message || '').toLowerCase();
@@ -1058,7 +1135,13 @@ class BchService {
           const bin = hexToBin(cleanHex);
           const hash = hash256(bin);
           const reversed = new Uint8Array(hash).reverse();
-          return binToHex(reversed);
+          const computedTxId = binToHex(reversed);
+          this.recentlyBroadcastTxs.set(computedTxId.toLowerCase(), {
+            txHex: cleanHex,
+            isChipnet,
+            timestamp: Date.now()
+          });
+          return computedTxId;
         } catch {}
       }
       throw err;

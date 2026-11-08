@@ -1,7 +1,7 @@
 import { EthereumProvider } from '@walletconnect/ethereum-provider';
 import SignClient from '@walletconnect/sign-client';
 import type { SessionTypes } from '@walletconnect/types';
-import { convertCashAddressNetwork, generateQrDataUrl } from '../utils/bchAddress';
+import { convertCashAddressNetwork, generateQrDataUrl, pubkeyToCashAddress } from '../utils/bchAddress';
 
 export const WALLETCONNECT_PROJECT_ID =
   ((import.meta as any).env?.VITE_WALLETCONNECT_PROJECT_ID as string) ||
@@ -514,7 +514,7 @@ export async function restoreBchWalletConnectSession(
 
     const client = await getBchSignClient(onSessionDeleted);
     const sessions = client.session.getAll();
-    const bchSess = sessions.find(s => Boolean(s.namespaces?.bch?.accounts?.length));
+    const bchSess = [...sessions].reverse().find(s => Boolean(s.namespaces?.bch?.accounts?.length));
     if (!bchSess) return null;
 
     activeBchSession = bchSess;
@@ -534,6 +534,20 @@ export async function startBchWalletConnectPairing(
   waitForApproval: () => Promise<BchWcSessionResult>;
 }> {
   const client = await getBchSignClient(onSessionDeleted);
+
+  // Clean up any stale BCH WC2 sessions before starting a fresh pairing
+  try {
+    const existingSessions = client.session.getAll();
+    for (const sess of existingSessions) {
+      if (sess.namespaces?.bch) {
+        await client.disconnect({
+          topic: sess.topic,
+          reason: { code: 6000, message: 'Replacing previous BCH session' }
+        }).catch(() => {});
+      }
+    }
+    activeBchSession = null;
+  } catch {}
 
   const primaryChain = isTestnet ? 'bch:bchtest' : 'bch:bitcoincash';
   const secondaryChain = isTestnet ? 'bch:bitcoincash' : 'bch:bchtest';
@@ -842,11 +856,41 @@ export async function executeWeb3LpDeposit(params: {
 // ============================================================================
 // 8. 1-CLICK NON-CUSTODIAL BCH COVENANT DEPOSIT (`wc2-bch-bcr` & Paytaca Ext)
 // ============================================================================
-export function hasActiveBchSigningCapability(wizardManager?: any): boolean {
-  if (wizardManager && typeof wizardManager.signTransaction === 'function') {
-    return true;
+export function isWizardManagerConnected(wizardManager?: any): boolean {
+  if (!wizardManager || typeof wizardManager.signTransaction !== 'function') {
+    return false;
+  }
+  try {
+    if (typeof wizardManager.getSessionPaths === 'function') {
+      const paths = wizardManager.getSessionPaths();
+      if (Array.isArray(paths) && paths.length > 0) return true;
+    }
+    if (typeof wizardManager.getPubkey === 'function') {
+      const pk = wizardManager.getPubkey(0, 0);
+      if (pk) return true;
+    }
+  } catch {}
+  return false;
+}
+
+export function hasActiveBchSigningCapability(
+  wizardManager?: any,
+  preferredSource?: 'wizard' | 'wc2-bch' | 'extension' | 'manual'
+): boolean {
+  if (preferredSource === 'manual') {
+    return false;
+  }
+  if (bchSignClient && !activeBchSession) {
+    try {
+      const sessions = bchSignClient.session.getAll();
+      const latest = [...sessions].reverse().find(s => Boolean(s.namespaces?.bch?.accounts?.length));
+      if (latest) activeBchSession = latest;
+    } catch {}
   }
   if (bchSignClient && activeBchSession && activeBchSession.namespaces?.bch?.accounts?.length) {
+    return true;
+  }
+  if (isWizardManagerConnected(wizardManager)) {
     return true;
   }
   if (typeof window !== 'undefined') {
@@ -864,16 +908,77 @@ export async function executeBchSwapDeposit(params: {
   senderAddress: string;
   isTestnet: boolean;
   wizardManager?: any;
+  preferredSource?: 'wizard' | 'wc2-bch' | 'extension' | 'manual';
   bodyPayload?: Record<string, any>;
   onStatus?: (msg: string) => void;
 }): Promise<{ txHash: string }> {
-  const { backendUrl, buildEndpoint, senderAddress, isTestnet, wizardManager, bodyPayload, onStatus } = params;
+  const {
+    backendUrl,
+    buildEndpoint,
+    senderAddress,
+    isTestnet,
+    wizardManager,
+    preferredSource,
+    bodyPayload,
+    onStatus
+  } = params;
+
+  // Ensure activeBchSession is hydrated if bchSignClient is active
+  if (bchSignClient && !activeBchSession) {
+    try {
+      const sessions = bchSignClient.session.getAll();
+      const latest = [...sessions].reverse().find(s => Boolean(s.namespaces?.bch?.accounts?.length));
+      if (latest) activeBchSession = latest;
+    } catch {}
+  }
+
+  const hasWc2Session = Boolean(
+    bchSignClient && activeBchSession && activeBchSession.namespaces?.bch?.accounts?.length
+  );
+  const hasWizardSession = isWizardManagerConnected(wizardManager);
+  const useWc2First =
+    preferredSource === 'wc2-bch' || (hasWc2Session && (!hasWizardSession || preferredSource !== 'wizard'));
+
+  // Determine the exact sender address corresponding to the active signing wallet
+  let effectiveSenderAddress = senderAddress;
+  if (useWc2First && activeBchSession) {
+    const wcExtracted = extractBchAddressFromSession(activeBchSession, isTestnet);
+    if (wcExtracted?.tokenAddress) {
+      effectiveSenderAddress = wcExtracted.tokenAddress;
+    }
+  } else if (hasWizardSession && wizardManager) {
+    try {
+      const derivedList: string[] = [];
+      if (senderAddress) {
+        for (const part of senderAddress.split(',')) {
+          const trimmed = part.trim();
+          if (trimmed && !derivedList.includes(trimmed)) derivedList.push(trimmed);
+        }
+      }
+      for (const child of [0, 1]) {
+        for (let i = 0; i < 6; i++) {
+          try {
+            const pk = wizardManager.getPubkey(child, i as any);
+            if (pk) {
+              const bAddr = pubkeyToCashAddress(pk, isTestnet, false);
+              if (bAddr && !derivedList.includes(bAddr)) {
+                derivedList.push(bAddr);
+              }
+            }
+          } catch {}
+        }
+      }
+      if (derivedList.length > 0) {
+        effectiveSenderAddress = derivedList.join(',');
+      }
+    } catch {}
+  }
 
   onStatus?.('Preparando transacción CashTokens No-Custodia...');
   const buildRes = await fetch(`${backendUrl}${buildEndpoint}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ senderAddress, ...(bodyPayload || {}) })
+    body: JSON.stringify({ senderAddress: effectiveSenderAddress, ...(bodyPayload || {}) })
   });
   const buildData = await buildRes.json();
   if (!buildRes.ok || !buildData?.success || !buildData?.wcTransaction) {
@@ -882,20 +987,121 @@ export async function executeBchSwapDeposit(params: {
 
   const desiredChain = isTestnet ? 'bch:bchtest' : 'bch:bitcoincash';
 
-  // Priority 1: Active WizardConnect Nostr Tunnel (Paytaca Mobile / Desktop)
-  if (wizardManager && typeof wizardManager.signTransaction === 'function') {
-    onStatus?.('📱 Revisa Paytaca en tu teléfono: autoriza la transacción con 1 toque...');
-    const sessionPaths = typeof wizardManager.getSessionPaths === 'function' ? wizardManager.getSessionPaths() : [];
-    const defaultPathName = sessionPaths.find((p: any) => p.name === 'receive')?.name || sessionPaths[0]?.name || 'receive';
+  // Helper to broadcast raw signed hex via our backend Electrum node (idempotent even if wallet already broadcasted)
+  const broadcastRawHexToNetwork = async (rawHexOrTxId: string): Promise<string> => {
+    const cleaned = String(rawHexOrTxId || '').trim().replace(/^0x/i, '');
+    if (!cleaned) {
+      throw new Error('No se recibió transacción firmada desde la billetera.');
+    }
+    onStatus?.('Transmitiendo transacción firmada a Bitcoin Cash...');
+    const broadcastRes = await fetch(`${backendUrl}/api/bch/broadcast`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ txHex: cleaned, isChipnet: isTestnet })
+    });
+    const broadcastData = await broadcastRes.json();
+    if (!broadcastData.success || !broadcastData.txHash) {
+      throw new Error(broadcastData.error || 'Error transmitiendo la transacción firmada a la red.');
+    }
+    return broadcastData.txHash;
+  };
 
-    // CRITICAL: Extract inputs correctly from buildData.wcTransaction.transaction.inputs
+  // Branch A: WalletConnect V2 BCH (`wc2-bch-bcr`: Cashonize / Paytaca WC2 / Zapit)
+  const runWc2Sign = async (): Promise<{ txHash: string }> => {
+    if (!bchSignClient || !activeBchSession) {
+      throw new Error('Sesión WalletConnect V2 BCH no activa.');
+    }
+    const allowedChains = activeBchSession.namespaces?.bch?.chains || [];
+    const chainIdToUse = allowedChains.includes(desiredChain)
+      ? desiredChain
+      : allowedChains[0] || buildData.chainId || desiredChain;
+    const peerName = activeBchSession.peer?.metadata?.name || 'Cashonize / WalletConnect';
+
+    onStatus?.(`Confirma la firma en ${peerName}...`);
+    const wcTxPayload = {
+      ...buildData.wcTransaction,
+      broadcast: true
+    };
+
+    const signResult: any = await bchSignClient.request({
+      topic: activeBchSession.topic,
+      chainId: chainIdToUse,
+      request: {
+        method: 'bch_signTransaction',
+        params: wcTxPayload
+      }
+    });
+
+    // Extract raw signed hex if returned by Cashonize / Paytaca WC2
+    let rawSignedHex = '';
+    if (typeof signResult?.signedTransaction === 'string' && signResult.signedTransaction.length > 64) {
+      rawSignedHex = signResult.signedTransaction;
+    } else if (typeof signResult?.signedTransaction?.hex === 'string') {
+      rawSignedHex = signResult.signedTransaction.hex;
+    } else if (typeof signResult === 'string' && signResult.length > 64) {
+      rawSignedHex = signResult;
+    }
+
+    const returnedTxId =
+      signResult?.signedTransactionHash ||
+      signResult?.txid ||
+      signResult?.hash ||
+      (typeof signResult === 'string' && signResult.length === 64 ? signResult : '');
+
+    // CRITICAL FIX: Always broadcast rawSignedHex through `/api/bch/broadcast` so our Electrum node
+    // immediately indexes the transaction (even if Cashonize had broadcast=false or used a different node!)
+    if (rawSignedHex) {
+      const broadcastedTxHash = await broadcastRawHexToNetwork(rawSignedHex);
+      return { txHash: broadcastedTxHash || returnedTxId };
+    }
+
+    if (returnedTxId) {
+      return { txHash: returnedTxId };
+    }
+
+    throw new Error(`La billetera ${peerName} canceló la firma o no devolvió la transacción firmada.`);
+  };
+
+  // Branch B: WizardConnect Nostr Tunnel (Paytaca Mobile / Desktop)
+  const runWizardSign = async (): Promise<{ txHash: string }> => {
+    onStatus?.('📱 Revisa Paytaca: autoriza la transacción con 1 toque...');
+    const sessionPaths = typeof wizardManager.getSessionPaths === 'function' ? wizardManager.getSessionPaths() : [];
+    const receivePathName = sessionPaths.find((p: any) => p.name === 'receive')?.name || sessionPaths[0]?.name || 'receive';
+    const changePathName = sessionPaths.find((p: any) => p.name === 'change')?.name || (sessionPaths[1]?.name ?? 'change');
+
+    // Build lookup map of derived base CashAddress -> [pathName, addressIndex]
+    const addrToPath = new Map<string, [string, number]>();
+    try {
+      for (const [childIdx, pathLabel] of [[0, receivePathName], [1, changePathName]] as const) {
+        for (let i = 0; i < 6; i++) {
+          try {
+            const pk = wizardManager.getPubkey(childIdx, i as any);
+            if (pk) {
+              const bAddr = pubkeyToCashAddress(pk, isTestnet, false);
+              if (bAddr && !addrToPath.has(bAddr)) {
+                addrToPath.set(bAddr, [pathLabel, i]);
+              }
+            }
+          } catch {}
+        }
+      }
+    } catch {}
+
     const rawInputs =
       buildData.wcTransaction?.transaction?.inputs ||
       buildData.wcTransaction?.inputs ||
       [];
-    const inputPaths: [number, string, number][] = rawInputs.map((_: any, idx: number) => [idx, defaultPathName, 0]);
+    const inputOwners: string[] = Array.isArray(buildData.inputOwners) ? buildData.inputOwners : [];
 
-    // Keep broadcast false so Paytaca signs cleanly and returns the hex for dApp broadcast
+    const inputPaths: [number, string, number][] = rawInputs.map((_: any, idx: number) => {
+      const ownerBase = inputOwners[idx] ? convertCashAddressNetwork(inputOwners[idx], isTestnet, false) : '';
+      const matched = ownerBase ? addrToPath.get(ownerBase) : undefined;
+      if (matched) {
+        return [idx, matched[0], matched[1]];
+      }
+      return [idx, receivePathName, 0];
+    });
+
     const wcTxToSend = {
       ...buildData.wcTransaction,
       broadcast: false
@@ -925,48 +1131,20 @@ export async function executeBchSwapDeposit(params: {
       throw new Error(response?.error || 'Firma cancelada en Paytaca.');
     }
 
-    onStatus?.('Transmitiendo a Bitcoin Cash...');
-    const broadcastRes = await fetch(`${backendUrl}/api/bch/broadcast`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ txHex: signedHex, isChipnet: isTestnet })
-    });
-    const broadcastData = await broadcastRes.json();
-    if (!broadcastData.success || !broadcastData.txHash) {
-      throw new Error(broadcastData.error || 'Error transmitiendo la transacción firmada a la red.');
-    }
+    const txHash = await broadcastRawHexToNetwork(signedHex);
+    return { txHash };
+  };
 
-    return { txHash: broadcastData.txHash };
+  if (useWc2First && hasWc2Session) {
+    return await runWc2Sign();
   }
 
-  // Priority 2: Active WalletConnect V2 BCH session (`wc2-bch-bcr`: Cashonize / Paytaca Mobile / Zapit)
-  if (bchSignClient && activeBchSession) {
-    const allowedChains = activeBchSession.namespaces?.bch?.chains || [];
-    const chainIdToUse = allowedChains.includes(desiredChain)
-      ? desiredChain
-      : allowedChains[0] || buildData.chainId || desiredChain;
+  if (hasWizardSession) {
+    return await runWizardSign();
+  }
 
-    onStatus?.('Confirma el pago en tu billetera BCH conectada...');
-    const signResult: any = await bchSignClient.request({
-      topic: activeBchSession.topic,
-      chainId: chainIdToUse,
-      request: {
-        method: 'bch_signTransaction',
-        params: buildData.wcTransaction
-      }
-    });
-
-    const txHash =
-      signResult?.signedTransactionHash ||
-      signResult?.txid ||
-      signResult?.hash ||
-      (typeof signResult === 'string' && signResult.length === 64 ? signResult : '');
-
-    if (!txHash) {
-      throw new Error('La billetera canceló la firma o no devolvió el TXID.');
-    }
-
-    return { txHash };
+  if (hasWc2Session) {
+    return await runWc2Sign();
   }
 
   // Priority 3: Paytaca Browser Extension (`window.paytaca.signTransaction`)
@@ -974,12 +1152,28 @@ export async function executeBchSwapDeposit(params: {
     const ext = (window as any).paytaca || (window as any).bitcoinCash;
     if (ext && typeof ext.signTransaction === 'function') {
       onStatus?.('Confirma el pago en la extensión Paytaca...');
-      const signResult: any = await ext.signTransaction(buildData.wcTransaction);
+      const signResult: any = await ext.signTransaction({
+        ...buildData.wcTransaction,
+        broadcast: true
+      });
+
+      let rawSignedHex = '';
+      if (typeof signResult?.signedTransaction === 'string' && signResult.signedTransaction.length > 64) {
+        rawSignedHex = signResult.signedTransaction;
+      } else if (typeof signResult === 'string' && signResult.length > 64) {
+        rawSignedHex = signResult;
+      }
+
       const txHash =
         signResult?.signedTransactionHash ||
         signResult?.txid ||
         signResult?.hash ||
         (typeof signResult === 'string' && signResult.length === 64 ? signResult : '');
+
+      if (rawSignedHex) {
+        const broadcastedHash = await broadcastRawHexToNetwork(rawSignedHex);
+        return { txHash: broadcastedHash || txHash };
+      }
 
       if (!txHash) {
         throw new Error('La extensión BCH canceló la firma.');
@@ -988,5 +1182,5 @@ export async function executeBchSwapDeposit(params: {
     }
   }
 
-  throw new Error('No hay canal de firma activo (WizardConnect o Extensión).');
+  throw new Error('No hay canal de firma activo (conecta Cashonize o Paytaca).');
 }

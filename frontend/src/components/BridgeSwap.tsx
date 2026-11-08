@@ -32,6 +32,9 @@ interface BridgeSwapProps {
   userContext: any;
   userAddress: string;
   bchAddress?: string;
+  bchQueryAddress?: string;
+  bchWalletName?: string;
+  bchWalletSource?: 'wizard' | 'wc2-bch' | 'extension' | 'manual';
   evmAddress?: string;
   walletBalances?: {
     PUSD: number;
@@ -179,6 +182,9 @@ function getTokenChainId(symbol: string, isBch: boolean, isTestnet: boolean): st
 export default function BridgeSwap({
   userAddress,
   bchAddress = '',
+  bchQueryAddress = '',
+  bchWalletName = '',
+  bchWalletSource,
   evmAddress = '',
   walletBalances,
   onRefreshBalances,
@@ -188,11 +194,14 @@ export default function BridgeSwap({
   lang,
   platformNetwork = 'testnet',
   onToggleNetwork,
-  wizardConnectManager,
-  wizardConnectState
+  wizardConnectManager
 }: BridgeSwapProps) {
   const t = UI_TEXT[lang] || UI_TEXT.es;
   const isTestnet = platformNetwork === 'testnet';
+  const activeBchWalletLabel =
+    bchWalletName && !bchWalletName.toLowerCase().includes('manual')
+      ? bchWalletName
+      : 'Cashonize / Paytaca';
 
   // Core Mode & Token Pair (Default: PUSD -> USDT)
   const [activeTab, setActiveTab] = useState<'swap' | 'limit'>('swap');
@@ -581,50 +590,48 @@ export default function BridgeSwap({
       }
 
       // 2B. Paying BCH CashToken (`PUSD` -> `USDT`):
-      // Try 1-Click WizardConnect (Paytaca) / WalletConnect V2 / Extension first!
-      if (hasActiveBchSigningCapability(wizardConnectManager)) {
-        try {
-          const { txHash } = await executeBchSwapDeposit({
-            backendUrl,
-            buildEndpoint: `/api/swap/${createdSwap.id}/build-bch-tx`,
-            senderAddress: payingWalletAddress,
-            isTestnet,
-            wizardManager: wizardConnectManager,
-            onStatus: msg => setSigningStep(msg)
-          });
+      // Use 1-Click signing (Cashonize WC2 / Paytaca WizardConnect / Paytaca Extension)
+      if (hasActiveBchSigningCapability(wizardConnectManager, bchWalletSource)) {
+        const { txHash } = await executeBchSwapDeposit({
+          backendUrl,
+          buildEndpoint: `/api/swap/${createdSwap.id}/build-bch-tx`,
+          senderAddress: bchQueryAddress || payingWalletAddress,
+          isTestnet,
+          wizardManager: wizardConnectManager,
+          preferredSource: bchWalletSource,
+          onStatus: msg => setSigningStep(msg)
+        });
 
-          setProcessingStage('settling');
-          setSigningStep(t.settling);
+        setProcessingStage('settling');
+        setSigningStep(t.settling);
+
+        let verifyData: any = null;
+        for (let attempt = 1; attempt <= 3; attempt++) {
           const verifyRes = await fetch(`${backendUrl}/api/swap/${createdSwap.id}/verify-tx`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ txHash })
           });
-          const verifyData = await verifyRes.json();
-          if (!verifyData.success) {
-            throw new Error(verifyData.error || 'Error liquidando USDT en Polygon');
+          verifyData = await verifyRes.json();
+          if (verifyData?.success) break;
+          if (attempt < 3) {
+            await new Promise(r => setTimeout(r, 1500));
           }
-
-          setActiveSwap(verifyData.swap);
-          setCardState('success');
-          setAmount('');
-          onRefreshBalances?.();
-          showToast(t.completed, 'success');
-          return;
-        } catch (bchSignErr: any) {
-          const msg = String(bchSignErr?.message || '').toLowerCase();
-          const isUserCancel =
-            (msg.includes('cancel') || msg.includes('denied') || msg.includes('user rejected')) &&
-            !msg.includes('network') && !msg.includes('rules') && !msg.includes('script') && !msg.includes('stack');
-          if (isUserCancel) {
-            throw new Error(lang === 'es' ? 'Firma cancelada en tu billetera BCH' : 'Signature cancelled');
-          }
-          showToast(bchSignErr?.message || (lang === 'es' ? 'Error al procesar firma' : 'Error processing signature'), 'error');
-          // Fallback cleanly to Covenant URI/QR with live UTXO auto-detection
         }
+
+        if (!verifyData?.success) {
+          throw new Error(verifyData?.error || 'Error liquidando USDT en Polygon');
+        }
+
+        setActiveSwap(verifyData.swap);
+        setCardState('success');
+        setAmount('');
+        onRefreshBalances?.();
+        showToast(t.completed, 'success');
+        return;
       }
 
-      // Read-only BCH session or manual mode: show sleek Covenant payment sheet with auto-polling
+      // Read-only BCH session (`bchWalletSource === 'manual'`): show sleek Covenant payment sheet with auto-polling
       setManualTxOpen(false);
       setTxHashInput('');
       setCardState('deposit');
@@ -639,7 +646,7 @@ export default function BridgeSwap({
 
   // Re-trigger 1-Click Remote Sign from the Deposit Screen
   const handleTriggerRemoteSign = async () => {
-    if (!activeSwap?.id || !hasActiveBchSigningCapability(wizardConnectManager)) return;
+    if (!activeSwap?.id || !hasActiveBchSigningCapability(wizardConnectManager, bchWalletSource)) return;
     setExecuting(true);
     setCardState('processing');
     setProcessingStage('authorizing');
@@ -648,9 +655,10 @@ export default function BridgeSwap({
       const { txHash } = await executeBchSwapDeposit({
         backendUrl,
         buildEndpoint: `/api/swap/${activeSwap.id}/build-bch-tx`,
-        senderAddress: payingWalletAddress || bchAddress,
+        senderAddress: bchQueryAddress || payingWalletAddress || bchAddress,
         isTestnet,
         wizardManager: wizardConnectManager,
+        preferredSource: bchWalletSource,
         onStatus: msg => setSigningStep(msg)
       });
       setProcessingStage('settling');
@@ -670,8 +678,8 @@ export default function BridgeSwap({
       onRefreshBalances?.();
       showToast(t.completed, 'success');
     } catch (err: any) {
-      showToast(err.message || 'Error autorizando en Paytaca', 'error');
-      setCardState('deposit');
+      showToast(err.message || `Error autorizando en ${activeBchWalletLabel}`, 'error');
+      setCardState('form');
     } finally {
       setExecuting(false);
       setSigningStep('');
@@ -770,13 +778,14 @@ export default function BridgeSwap({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ txHash })
         });
-      } else if (hasActiveBchSigningCapability(wizardConnectManager)) {
+      } else if (hasActiveBchSigningCapability(wizardConnectManager, bchWalletSource)) {
         const { txHash } = await executeBchSwapDeposit({
           backendUrl,
           buildEndpoint: `/api/limit-orders/${order.id}/build-bch-tx`,
-          senderAddress: payingWalletAddress,
+          senderAddress: bchQueryAddress || payingWalletAddress,
           isTestnet,
           wizardManager: wizardConnectManager,
+          preferredSource: bchWalletSource,
           onStatus: msg => setSigningStep(msg)
         });
 
@@ -1483,7 +1492,9 @@ export default function BridgeSwap({
               <p className="text-xs text-ink-3 max-w-xs mx-auto leading-relaxed">
                 {processingStage === 'authorizing'
                   ? sellToken.isBch
-                    ? t.confirmInWalletSubBch
+                    ? lang === 'es'
+                      ? `Revisa tu billetera BCH (${activeBchWalletLabel}) para autorizar el intercambio.`
+                      : `Check your BCH wallet (${activeBchWalletLabel}) to authorize the swap.`
                     : t.confirmInWalletSubEvm
                   : sellToken.isBch
                   ? t.settlingSubBch
@@ -1573,8 +1584,8 @@ export default function BridgeSwap({
               <p className="text-[11px] text-ink-3 mt-2.5">{t.autoDetectHint}</p>
             </div>
 
-            {/* 1-Click Remote Sign Action via WizardConnect / Nostr Tunnel */}
-            {hasActiveBchSigningCapability(wizardConnectManager) && (
+            {/* 1-Click Remote Sign Action via Cashonize / Paytaca */}
+            {hasActiveBchSigningCapability(wizardConnectManager, bchWalletSource) && (
               <button
                 type="button"
                 disabled={executing}
@@ -1584,12 +1595,12 @@ export default function BridgeSwap({
                 {executing ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>{signingStep || (lang === 'es' ? 'Autorizando en Paytaca...' : 'Authorizing in Paytaca...')}</span>
+                    <span>{signingStep || (lang === 'es' ? `Autorizando en ${activeBchWalletLabel}...` : `Authorizing in ${activeBchWalletLabel}...`)}</span>
                   </>
                 ) : (
                   <>
                     <Smartphone className="w-4 h-4" />
-                    <span>{lang === 'es' ? '📱 Autorizar en Paytaca (1-Click Remoto)' : '📱 Authorize in Paytaca (1-Click)'}</span>
+                    <span>{lang === 'es' ? `📱 Autorizar en ${activeBchWalletLabel} (1-Click)` : `📱 Authorize in ${activeBchWalletLabel} (1-Click)`}</span>
                   </>
                 )}
               </button>
