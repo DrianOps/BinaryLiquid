@@ -9,7 +9,7 @@ const ctx = canvas.getContext('2d');
 const W = 1920;
 const H = 1080;
 
-let currentLang = 'es'; // default Spanish
+let currentLang = 'en'; // default English
 
 // Preload Official Protocol & Token Logos
 const TOKEN_IMAGES = {};
@@ -1410,7 +1410,7 @@ function renderScene8(tTime) {
 
     ctx.fillStyle = COLORS.bchGreen;
     ctx.font = 'bold 30px -apple-system, monospace';
-    ctx.fillText('https://bsprotocol.xyz', W / 2, 612);
+    ctx.fillText('https://bliquid.xyz', W / 2, 612);
 
     drawSubtitleCard(
         t("Postulación en Dos Pistas Oficiales", "Dual Track Submission"),
@@ -1526,8 +1526,11 @@ function playScene(index) {
 
 function setLanguage(lang) {
     currentLang = lang;
-    document.getElementById('btn-lang-es').classList.toggle('active', lang === 'es');
-    document.getElementById('btn-lang-en').classList.toggle('active', lang === 'en');
+    try { localStorage.setItem('explainer_lang', lang); } catch (e) {}
+    const btnEs = document.getElementById('btn-lang-es');
+    const btnEn = document.getElementById('btn-lang-en');
+    if (btnEs) btnEs.classList.toggle('active', lang === 'es');
+    if (btnEn) btnEn.classList.toggle('active', lang === 'en');
     
     const wasPlaying = isPlaying;
     if (currentAudio) {
@@ -1620,11 +1623,17 @@ document.getElementById('btn-next').addEventListener('click', () => {
 document.getElementById('btn-lang-es').addEventListener('click', () => setLanguage('es'));
 document.getElementById('btn-lang-en').addEventListener('click', () => setLanguage('en'));
 
-// URL Query Param Handler
+// URL Query Param & Saved Preference Handler (Default English 'en')
 const urlParams = new URLSearchParams(window.location.search);
+let initialLang = 'en';
+try {
+    const saved = localStorage.getItem('explainer_lang');
+    if (saved === 'es') initialLang = 'es';
+} catch (e) {}
 if (urlParams.has('lang')) {
-    setLanguage(urlParams.get('lang') === 'en' ? 'en' : 'es');
+    initialLang = urlParams.get('lang') === 'es' ? 'es' : 'en';
 }
+setLanguage(initialLang);
 if (urlParams.has('scene')) {
     currentSceneIndex = Math.max(0, Math.min(SCENES.length - 1, parseInt(urlParams.get('scene'), 10) - 1));
 }
