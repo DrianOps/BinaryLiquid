@@ -66,7 +66,9 @@ This directory contains the core smart contracts powering the **100% Non-Custodi
 
 ---
 
-## 🔒 Security Principles
+## 🔒 Security Principles & Formal Audit
+
+> 📄 **Full Cryptographic Security Report:** See [`../SECURITY_AUDIT.md`](../SECURITY_AUDIT.md) for the complete Attack Surface Mitigation Matrix, EIP-2/SafeERC20/Ed25519 Precompile verification details, and Institutional HSM/MPC roadmap.
 
 1. **Self-Custody Always:** Nobody, including BinaryLiquid developers, can seize or redirect user funds across Bitcoin Cash, EVM, or Solana.
 2. **Server Failure Tolerance:** If the relayer or The Watchman goes offline, user funds remain safely locked in the on-chain Covenant/Vault until the service resumes or the 24h timelock expires for unilateral refund.

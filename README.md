@@ -7,7 +7,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 > **Live Production Deployment**: [https://bsprotocol.xyz](https://bsprotocol.xyz)  
-> **Target Track**: BLAZE BCH Hackathon — `$750 PUSD (ParyonUSD) Stablecoin Ecosystem`
+> **Target Track**: BLAZE BCH Hackathon — `$750 PUSD (ParyonUSD) Stablecoin Ecosystem`  
+> **Smart Contract Security Audit**: [`SECURITY_AUDIT.md`](./SECURITY_AUDIT.md) | [`contracts/README.md`](./contracts/README.md)
 
 ---
 
