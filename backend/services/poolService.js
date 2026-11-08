@@ -332,13 +332,28 @@ class PoolService {
 
   async enrichPoolData(pool, { network = 'mainnet', vaultBalances = null } = {}) {
     const isTestnet = String(network || 'mainnet').toLowerCase() === 'testnet';
+    const reqNet = isTestnet ? 'testnet' : 'mainnet';
     const vb = await this.resolveLiveVaultBalances(vaultBalances);
 
     const priceA = await this.getTokenPrice(pool.tokenA);
     const priceB = await this.getTokenPrice(pool.tokenB);
 
-    let effectiveReserveA = Number(pool.reserveA || 0);
-    let effectiveReserveB = Number(pool.reserveB || 0);
+    // Sum genuine on-chain verified LP positions for this specific pool and network
+    const allPositions = Array.isArray(db.memoryState.lpPositions) ? db.memoryState.lpPositions : [];
+    const poolPositions = allPositions.filter(
+      p => p.poolId === pool.id && String(p.network || 'testnet').toLowerCase() === reqNet && Boolean(p.txHash)
+    );
+    const posDepositsA = poolPositions
+      .filter(p => String(p.tokenSymbol || '').toUpperCase() === String(pool.tokenA || '').toUpperCase())
+      .reduce((s, p) => s + Number(p.depositedAmount || 0), 0);
+    const posDepositsB = poolPositions
+      .filter(p => String(p.tokenSymbol || '').toUpperCase() === String(pool.tokenB || '').toUpperCase())
+      .reduce((s, p) => s + Number(p.depositedAmount || 0), 0);
+    const posTotalDepositUsd = poolPositions.reduce((s, p) => s + Number(p.depositUsd || 0), 0);
+    const posTotalShares = poolPositions.reduce((s, p) => s + Number(p.shares || 0), 0);
+
+    let effectiveReserveA = 0;
+    let effectiveReserveB = 0;
     let effectiveStatus = pool.status || 'NO_LIQUIDITY';
     let hasLiquidity = false;
     let liquidityBadge = 'Sin Liquidez';
@@ -346,12 +361,38 @@ class PoolService {
     let networkB = pool.networkB;
     let networkBadgeA = pool.networkBadgeA;
     let networkBadgeB = pool.networkBadgeB;
-    let categoryIdA = pool.categoryIdA || null;
-    let vaultAddressA = null;
-    let vaultAddressB = null;
-    let tokenAddressB = null;
-    let contractExplorerA = null;
-    let contractExplorerB = null;
+    let categoryIdA =
+      pool.categoryIdA ||
+      (pool.tokenA === 'PUSD'
+        ? isTestnet
+          ? config.bch.tokens.PUSD.chipnetCategory
+          : config.bch.tokens.PUSD.category
+        : config.bch.tokens[pool.tokenA]?.category || null);
+
+    const vaultAddressA = isTestnet
+      ? pool.tokenA === 'BCH'
+        ? config.bch.chipnetVaultAddress
+        : config.bch.chipnetVaultTokenAddress
+      : bchService.getVaultAddress(false, pool.tokenA !== 'BCH');
+
+    const vaultAddressB = isTestnet
+      ? config.evm.amoyVaultAddress
+      : evmService.getVaultAddress('polygon_mainnet');
+
+    const tokenAddressB = isTestnet
+      ? pool.tokenB === 'USDC'
+        ? config.evm.amoyTokens?.USDC?.address || '0x08d7CF325c44af76602922cBA6D37E4b267CDa71'
+        : config.evm.amoyTokens?.USDT?.address || '0x1a29793F2a64424D09f56AD045827dF1F0Fa1A75'
+      : pool.tokenB === 'USDC'
+      ? config.evm.tokens.USDC.address
+      : config.evm.tokens.USDT.address;
+
+    const contractExplorerA = isTestnet
+      ? `https://chipnet.imaginary.cash/address/${vaultAddressA}`
+      : `https://3xpl.com/bitcoin-cash/address/${vaultAddressA}`;
+    const contractExplorerB = isTestnet
+      ? `https://amoy.polygonscan.com/address/${vaultAddressB}`
+      : `https://polygonscan.com/address/${vaultAddressB}`;
 
     if (!pool.isCustom) {
       if (isTestnet) {
@@ -361,44 +402,52 @@ class PoolService {
         networkBadgeB = 'Polygon Amoy';
 
         if (pool.id === 'PUSD_USDT') {
-          effectiveReserveA = Number(vb.chipnetPusd || 0);
+          // Combine live on-chain Vault reserves + integer-unit Chipnet PUSD LP deposits
+          effectiveReserveA = Number(vb.chipnetPusd || 0) + posDepositsA;
           effectiveReserveB = Number(vb.amoyUsdt || 0);
           hasLiquidity = effectiveReserveA > 0 && effectiveReserveB > 0;
           effectiveStatus = hasLiquidity ? 'ACTIVE' : 'NO_LIQUIDITY';
           liquidityBadge = hasLiquidity ? 'Liquidez On-Chain Activa' : 'Sin Liquidez';
-          categoryIdA = config.bch.tokens.PUSD.chipnetCategory;
-          vaultAddressA = config.bch.chipnetVaultTokenAddress;
-          vaultAddressB = config.evm.amoyVaultAddress;
-          tokenAddressB = config.evm.amoyTokens?.USDT?.address || '0x1a29793F2a64424D09f56AD045827dF1F0Fa1A75';
-          contractExplorerA = `https://chipnet.imaginary.cash/address/${vaultAddressA}`;
-          contractExplorerB = `https://amoy.polygonscan.com/address/${vaultAddressB}`;
         } else {
-          // Per protocol directive: all other Testnet pairs are marked Sin Liquidez
-          effectiveReserveA = 0;
-          effectiveReserveB = 0;
-          hasLiquidity = false;
-          effectiveStatus = 'NO_LIQUIDITY';
-          liquidityBadge = 'Sin Liquidez';
+          // Secondary canonical pairs on Testnet reflect genuine user LP deposits into this pair
+          effectiveReserveA = posDepositsA;
+          effectiveReserveB = posDepositsB;
+          hasLiquidity = effectiveReserveA > 0 || effectiveReserveB > 0;
+          effectiveStatus = hasLiquidity ? 'ACTIVE' : 'NO_LIQUIDITY';
+          liquidityBadge = hasLiquidity ? 'Liquidez On-Chain Activa' : 'Sin Liquidez';
         }
       } else {
-        // Mainnet: strictly non-simulated (0 reserves -> Sin Liquidez)
+        // Mainnet: strictly non-simulated (0 reserves unless funded on-chain)
         networkA = 'Bitcoin Cash (Mainnet)';
         networkB = 'Polygon (Mainnet)';
         networkBadgeA = pool.tokenA === 'BCH' ? 'BCH Layer 1' : 'BCH CashTokens';
         networkBadgeB = 'Polygon PoS';
-        effectiveReserveA = 0;
-        effectiveReserveB = 0;
-        hasLiquidity = false;
-        effectiveStatus = 'NO_LIQUIDITY';
-        liquidityBadge = 'Sin Liquidez';
+        effectiveReserveA = (pool.id === 'PUSD_USDT' ? Number(vb.mainnetPusd || 0) : 0) + posDepositsA;
+        effectiveReserveB = (pool.id === 'PUSD_USDT' ? Number(vb.mainnetUsdt || 0) : 0) + posDepositsB;
+        hasLiquidity = effectiveReserveA > 0 || effectiveReserveB > 0;
+        effectiveStatus = hasLiquidity ? 'ACTIVE' : 'NO_LIQUIDITY';
+        liquidityBadge = hasLiquidity ? 'Liquidez On-Chain Activa' : 'Sin Liquidez';
       }
     } else {
-      // Custom registered pairs without dedicated Vault reserves remain Sin Liquidez until funded on-chain
-      effectiveReserveA = 0;
-      effectiveReserveB = 0;
-      hasLiquidity = false;
-      effectiveStatus = pool.status === 'BOOTSTRAPPING' ? 'BOOTSTRAPPING' : 'NO_LIQUIDITY';
-      liquidityBadge = 'Sin Liquidez';
+      // Custom registered pairs reflect genuine verified LP deposits on-chain
+      effectiveReserveA = posDepositsA;
+      effectiveReserveB = posDepositsB;
+      const customTvl = effectiveReserveA * priceA + effectiveReserveB * priceB;
+      if (pool.poolMode === 'BOOTSTRAPPING') {
+        if (customTvl >= Number(pool.targetTvlUsd || 2500)) {
+          hasLiquidity = true;
+          effectiveStatus = 'ACTIVE';
+          liquidityBadge = 'Liquidez On-Chain Activa';
+        } else {
+          hasLiquidity = customTvl > 0;
+          effectiveStatus = 'BOOTSTRAPPING';
+          liquidityBadge = customTvl > 0 ? 'En Fondeo On-Chain' : 'Sin Liquidez';
+        }
+      } else {
+        hasLiquidity = customTvl > 0;
+        effectiveStatus = hasLiquidity ? 'ACTIVE' : 'NO_LIQUIDITY';
+        liquidityBadge = hasLiquidity ? 'Liquidez On-Chain Activa' : 'Sin Liquidez';
+      }
     }
 
     const valA = effectiveReserveA * priceA;
@@ -429,9 +478,12 @@ class PoolService {
         )
       : 0.0;
 
-    const baseTotalShares = hasLiquidity && pool.id === 'PUSD_USDT'
-      ? Math.max(Number(pool.totalShares || 0), tvlUsd)
-      : Number(pool.totalShares || 100000);
+    // Maintain 1 LP Share = $1.00 USD base parity before fee accrual
+    const baseProtocolTvl = Math.max(0, tvlUsd - posTotalDepositUsd);
+    const baseTotalShares =
+      tvlUsd > 0
+        ? Math.max(1, Number((baseProtocolTvl + posTotalShares).toFixed(4)))
+        : Number(pool.totalShares || 100000);
 
     const fundingProgress = pool.targetTvlUsd > 0
       ? Number(Math.min(100, (tvlUsd / pool.targetTvlUsd) * 100).toFixed(1))
@@ -443,7 +495,7 @@ class PoolService {
 
     return {
       ...pool,
-      network: isTestnet ? 'testnet' : 'mainnet',
+      network: reqNet,
       networkA,
       networkB,
       networkBadgeA,
@@ -470,7 +522,10 @@ class PoolService {
       cumulativeFeesB: realSwapMetrics.lpFeesB,
       cumulativeFeesUsd,
       apyPercentage: apy,
-      sharePriceUsd: baseTotalShares > 0 && tvlUsd > 0 ? Number((tvlUsd / baseTotalShares).toFixed(4)) : 1.0,
+      sharePriceUsd:
+        baseTotalShares > 0 && tvlUsd > 0
+          ? Number(((tvlUsd + cumulativeFeesUsd) / baseTotalShares).toFixed(4))
+          : 1.0,
       fundingProgress,
       remainingFundingUsd,
       feeDistribution: {
@@ -714,108 +769,157 @@ class PoolService {
     }
 
     const isTestnet = String(network || 'testnet').toLowerCase() === 'testnet';
-    if (!isTestnet) {
-      throw new Error('Sin Liquidez en Mainnet actualmente. Cambia a la red Testnet (PUSD / USDT) para aportar liquidez no-custodia en los Smart Contracts.');
-    }
-
+    const reqNet = isTestnet ? 'testnet' : 'mainnet';
     const pool = this.getPool(poolId);
-    if (pool.id !== 'PUSD_USDT') {
-      throw new Error(`El par ${pool.pair} se encuentra marcado como Sin Liquidez. En Testnet únicamente está habilitado el Vault oficial PUSD / USDT.`);
-    }
-
     const depositToken = (token || pool.tokenA).toUpperCase();
-    if (!['PUSD', 'USDT'].includes(depositToken)) {
-      throw new Error(`Token ${depositToken} no soportado en el Vault PUSD / USDT.`);
+    const allowedTokens = [String(pool.tokenA || '').toUpperCase(), String(pool.tokenB || '').toUpperCase()];
+
+    if (!allowedTokens.includes(depositToken)) {
+      throw new Error(`El token ${depositToken} no pertenece al par ${pool.pair}.`);
     }
 
-    if (!txHash || txHash.trim().length < 20) {
+    const isEvmDeposit = ['USDT', 'USDC'].includes(depositToken);
+    let cleanTxHash = txHash ? txHash.trim() : '';
+
+    if (isEvmDeposit && (!cleanTxHash || cleanTxHash.length < 20)) {
       throw new Error(
-        depositToken === 'USDT'
-          ? 'Se requiere la firma de depósito Web3 (0x... txHash) hacia BinaryLiquidVault.sol en Polygon Amoy.'
-          : 'Por favor envía los PUSD al Covenant BinaryLiquidVault.cash y pega el TXID (64 caracteres hex) para verificar tu depósito on-chain.'
+        `Se requiere la firma de depósito Web3 (0x... txHash) de ${depositToken} hacia BinaryLiquidVault.sol.`
       );
     }
 
-    const cleanTxHash = txHash.trim();
-    if (this.isTxHashAlreadyUsed(cleanTxHash)) {
+    if (cleanTxHash && cleanTxHash !== 'AUTO_DETECT' && this.isTxHashAlreadyUsed(cleanTxHash)) {
       throw new Error('Este Hash de Transacción ya fue registrado previamente (protección Anti-Replay activa).');
     }
+
+    // Measure pre-deposit pool state
+    const prePoolState = await this.enrichPoolData(pool, { network: reqNet });
 
     let verifiedAmount = depositNum;
     let explorerUrl = '';
 
-    if (depositToken === 'USDT') {
-      const vaultAddr = config.evm.amoyVaultAddress;
+    if (isEvmDeposit) {
+      const chainKey = isTestnet ? 'polygon_amoy' : 'polygon_mainnet';
+      const vaultAddr = evmService.getVaultAddress(chainKey);
       const verification = await evmService.verifyDeposit(
         cleanTxHash,
         depositNum,
-        'USDT',
+        depositToken,
         vaultAddr,
-        'polygon_amoy'
+        chainKey
       );
       if (!verification.verified) {
-        throw new Error(verification.reason || 'No se pudo verificar el depósito de USDT en BinaryLiquidVault.sol (Polygon Amoy).');
+        throw new Error(
+          verification.reason || `No se pudo verificar el depósito de ${depositToken} en BinaryLiquidVault.sol.`
+        );
       }
       verifiedAmount = Number(verification.amount || depositNum);
-      explorerUrl = `https://amoy.polygonscan.com/tx/${cleanTxHash}`;
+      explorerUrl = isTestnet
+        ? `https://amoy.polygonscan.com/tx/${cleanTxHash}`
+        : `https://polygonscan.com/tx/${cleanTxHash}`;
     } else {
-      // PUSD on BCH Chipnet: strictly verify that this exact TXID exists on Chipnet and funded the Covenant
-      const cleanHex = cleanTxHash.replace(/^0x/i, '').toLowerCase();
-      if (!/^[0-9a-f]{64}$/.test(cleanHex)) {
-        throw new Error('El TXID de Bitcoin Cash Chipnet debe tener exactamente 64 caracteres hexadecimales.');
-      }
-
+      // BCH / CashTokens side: strictly verify on-chain UTXO or transaction on Chipnet / Mainnet
       await bchService.readyPromise;
-      const provider = bchService.chipnetProvider;
-      const vaultTokenAddr = config.bch.chipnetVaultTokenAddress;
-      const pusdCat = config.bch.tokens.PUSD.chipnetCategory;
+      const provider = isTestnet ? bchService.chipnetProvider : bchService.mainnetProvider;
+      const isNativeBch = depositToken === 'BCH';
+      const vaultTargetAddr = isTestnet
+        ? isNativeBch
+          ? config.bch.chipnetVaultAddress
+          : config.bch.chipnetVaultTokenAddress
+        : bchService.getVaultAddress(false, !isNativeBch);
+
+      const tokenCat = isNativeBch
+        ? null
+        : pool.categoryIdA || bchService.getTokenCategory(depositToken, isTestnet);
+      const tokenDecimals = Number(pool.decimalsA || config.bch.tokens[depositToken]?.decimals || 6);
+
+      let cleanHex = cleanTxHash && cleanTxHash !== 'AUTO_DETECT' ? cleanTxHash.replace(/^0x/i, '').toLowerCase() : '';
+      if (cleanHex && !/^[0-9a-f]{64}$/.test(cleanHex)) {
+        throw new Error('El TXID de Bitcoin Cash debe tener exactamente 64 caracteres hexadecimales.');
+      }
 
       let matchedAmount = 0;
       if (provider) {
-        const utxos = await provider.getUtxos(vaultTokenAddr);
-        const matchingUtxos = (utxos || []).filter(
-          u => u.txid?.toLowerCase() === cleanHex && u.token?.category === pusdCat && u.token.amount > 0n
-        );
+        const utxos = await provider.getUtxos(vaultTargetAddr);
+
+        // If AUTO_DETECT or empty txHash, find an unredeemed UTXO at the Covenant matching the token & amount
+        if (!cleanHex) {
+          const candidates = (utxos || []).filter(u => {
+            if (!u.txid || this.isTxHashAlreadyUsed(u.txid)) return false;
+            if (isNativeBch) {
+              const bchAmt = Number(u.satoshis || 0n) / 1e8;
+              return !u.token && bchAmt >= depositNum * 0.98;
+            }
+            if (u.token?.category !== tokenCat || BigInt(u.token?.amount || 0) <= 0n) return false;
+            const rawNum = Number(u.token.amount);
+            const decNum = rawNum / (10 ** tokenDecimals);
+            return decNum >= depositNum * 0.98 || (isTestnet && rawNum >= depositNum * 0.98);
+          });
+
+          if (candidates.length === 0) {
+            throw new Error(
+              `No se detectó ningún UTXO nuevo de ${depositNum} ${depositToken} en el Covenant (${vaultTargetAddr}). Firma con tu wallet o pega el TXID.`
+            );
+          }
+          cleanHex = candidates[0].txid.toLowerCase();
+          cleanTxHash = cleanHex;
+        }
+
+        const matchingUtxos = (utxos || []).filter(u => {
+          if (u.txid?.toLowerCase() !== cleanHex) return false;
+          if (isNativeBch) return BigInt(u.satoshis || 0) > 0n;
+          return u.token?.category === tokenCat && BigInt(u.token?.amount || 0) > 0n;
+        });
+
         if (matchingUtxos.length > 0) {
-          const units = matchingUtxos.reduce((s, u) => s + u.token.amount, 0n);
-          matchedAmount = Number(units) / 1e6;
+          if (isNativeBch) {
+            const sats = matchingUtxos.reduce((s, u) => s + BigInt(u.satoshis || 0), 0n);
+            matchedAmount = Number(sats) / 1e8;
+          } else {
+            const units = matchingUtxos.reduce((s, u) => s + BigInt(u.token.amount || 0), 0n);
+            const rawNum = Number(units);
+            const decNum = rawNum / (10 ** tokenDecimals);
+            // Dual-precision support on Chipnet (1:1 integer units vs 10^decimals units)
+            if (decNum >= depositNum * 0.98) {
+              matchedAmount = decNum;
+            } else if (isTestnet && rawNum >= depositNum * 0.98) {
+              matchedAmount = rawNum;
+            } else {
+              matchedAmount = isTestnet && rawNum < 1_000_000 ? rawNum : decNum;
+            }
+          }
         } else {
-          // Also check raw transaction on Electrum in case UTXO was consolidated
+          // Also check raw transaction on Electrum in case UTXO was already consolidated
           try {
             const rawHex = await provider.getRawTransaction(cleanHex);
             if (!rawHex || rawHex.length < 40) {
-              throw new Error('TX no encontrada en Chipnet');
+              throw new Error('TX no encontrada');
             }
           } catch (_) {
             throw new Error(
-              `No se encontró ningún depósito de PUSD con TXID ${cleanHex.slice(0, 12)}... hacia el Covenant (${vaultTokenAddr}) en BCH Chipnet.`
+              `No se encontró ningún depósito de ${depositToken} con TXID ${cleanHex.slice(0, 12)}... hacia el Covenant (${vaultTargetAddr}).`
             );
           }
           matchedAmount = depositNum;
         }
       }
 
-      if (matchedAmount < depositNum * 0.99) {
+      if (matchedAmount < depositNum * 0.98) {
         throw new Error(
-          `El UTXO detectado en el Covenant (${matchedAmount} PUSD) es menor al monto declarado (${depositNum} PUSD).`
+          `El UTXO detectado en el Covenant (${matchedAmount} ${depositToken}) es menor al monto declarado (${depositNum} ${depositToken}).`
         );
       }
       verifiedAmount = matchedAmount;
-      explorerUrl = `https://chipnet.imaginary.cash/tx/${cleanHex}`;
+      cleanTxHash = cleanHex;
+      explorerUrl = isTestnet
+        ? `https://chipnet.imaginary.cash/tx/${cleanHex}`
+        : `https://3xpl.com/bitcoin-cash/transaction/${cleanHex}`;
     }
 
-    // Compute LP Shares against live On-Chain Vault TVL
-    const enrichedPool = await this.enrichPoolData(pool, { network: 'testnet' });
+    // Compute LP Shares (1 LP Share = $1.00 USD base parity)
     const price = await this.getTokenPrice(depositToken);
     const depositUsd = Number((verifiedAmount * price).toFixed(2));
-
-    // Note: the on-chain Vault balance already includes the newly arrived deposit, so pre-deposit TVL = max(current - deposit, 1)
-    const preDepositTvl = Math.max(enrichedPool.tvlUsd - depositUsd, 1);
-    const currentTotalShares = Number(enrichedPool.totalShares || preDepositTvl);
-    const sharesToMint = Number(((depositUsd / preDepositTvl) * currentTotalShares).toFixed(4));
-
-    pool.totalShares = Number((currentTotalShares + sharesToMint).toFixed(4));
-    pool.updatedAt = new Date().toISOString();
+    const sharePrice = prePoolState.sharePriceUsd > 0 ? prePoolState.sharePriceUsd : 1.0;
+    const sharesToMint = Number((depositUsd / sharePrice).toFixed(4));
 
     if (!db.memoryState.lpPositions) {
       db.memoryState.lpPositions = [];
@@ -835,12 +939,21 @@ class PoolService {
       depositUsd,
       txHash: cleanTxHash,
       explorerUrl,
-      network: 'testnet',
+      network: reqNet,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
 
     db.memoryState.lpPositions.push(position);
+
+    // Re-evaluate pool state after recording the new LP position
+    const postPoolState = await this.enrichPoolData(pool, { network: reqNet });
+    const unlockedNow = prePoolState.status !== 'ACTIVE' && postPoolState.status === 'ACTIVE';
+    if (unlockedNow) {
+      pool.status = 'ACTIVE';
+    }
+    pool.totalShares = postPoolState.totalShares;
+    pool.updatedAt = new Date().toISOString();
     db.persist();
 
     if (db.pgReady && db.pgPool) {
@@ -867,7 +980,10 @@ class PoolService {
       }
     }
 
-    const userSharePercent = Number(((sharesToMint / pool.totalShares) * 100).toFixed(4));
+    const userSharePercent =
+      postPoolState.totalShares > 0
+        ? Number(((sharesToMint / postPoolState.totalShares) * 100).toFixed(4))
+        : 100.0;
 
     return {
       success: true,
@@ -878,9 +994,9 @@ class PoolService {
       explorerUrl,
       sharesMinted: sharesToMint,
       poolSharePercentage: userSharePercent,
-      newPoolTvlUsd: enrichedPool.tvlUsd,
-      poolStatus: 'ACTIVE',
-      unlockedNow: false
+      newPoolTvlUsd: postPoolState.tvlUsd,
+      poolStatus: postPoolState.status,
+      unlockedNow
     };
   }
 
@@ -925,6 +1041,7 @@ class PoolService {
     const pos = db.memoryState.lpPositions[posIdx];
     const targetPoolId = poolId || pos.poolId || this.defaultPoolId;
     const pool = this.getPool(targetPoolId);
+    const isTestnet = String(pos.network || 'testnet').toLowerCase() === 'testnet';
 
     if (pos.isLocked && pool.liquidityLocked) {
       throw new Error(
@@ -941,12 +1058,12 @@ class PoolService {
     const burnRatioOfPosition = Math.min(1, burnAmount / pos.shares);
     const shareRatio = enrichedPool.totalShares > 0 ? burnAmount / enrichedPool.totalShares : 0;
 
-    // Value of burned shares = max(proportional share of live TVL, proportional initial deposit + accrued fee share)
-    const proportionalLiveUsd = shareRatio * enrichedPool.tvlUsd;
+    // Value of burned shares = initial deposit portion + proportional share of accrued swap fees
     const baseDepositPortionUsd = (pos.depositUsd || pos.depositedAmount || 0) * burnRatioOfPosition;
-    const totalPayoutUsd = Number(Math.max(proportionalLiveUsd, baseDepositPortionUsd).toFixed(4));
+    const accruedFeeShareUsd = (enrichedPool.cumulativeFeesUsd || 0) * shareRatio;
+    const totalPayoutUsd = Number((baseDepositPortionUsd + accruedFeeShareUsd).toFixed(4));
 
-    const targetToken = (withdrawToken || pos.tokenSymbol || 'USDT').toUpperCase();
+    const targetToken = (withdrawToken || (pos.tokenSymbol === 'BCH' ? 'USDT' : pos.tokenSymbol) || 'USDT').toUpperCase();
     const uniqueOriginRef = `lp_withdraw_${positionId}_${Date.now()}`;
 
     let payoutTxHash = '';
@@ -954,7 +1071,7 @@ class PoolService {
     let payoutA = 0;
     let payoutB = 0;
 
-    if (targetToken === 'USDT') {
+    if (targetToken === 'USDT' || targetToken === 'USDC') {
       const targetEvm = (
         evmAddress ||
         pos.evmAddress ||
@@ -962,24 +1079,27 @@ class PoolService {
       ).trim();
 
       if (!targetEvm || !targetEvm.startsWith('0x')) {
-        throw new Error('Conecta tu billetera EVM (MetaMask / WalletConnect) para recibir el retiro de USDT en Polygon Amoy.');
+        throw new Error(
+          `Conecta tu billetera EVM (MetaMask / WalletConnect) para recibir el retiro de ${targetToken}.`
+        );
       }
 
+      const chainKey = isTestnet ? 'polygon_amoy' : 'polygon_mainnet';
       payoutB = Number(totalPayoutUsd.toFixed(4));
-      const tokenCfg = evmService.getTokenConfig('USDT', 'polygon_amoy');
-      const vaultAddr = evmService.getVaultAddress('polygon_amoy');
+      const tokenCfg = evmService.getTokenConfig(targetToken, chainKey);
+      const vaultAddr = evmService.getVaultAddress(chainKey);
 
       const auth = await watchmanSentinel.auditAndAuthorize({
         destinationType: 'EVM',
         originTxHash: uniqueOriginRef,
         fromToken: 'PUSD',
-        toToken: 'USDT',
+        toToken: targetToken,
         recipient: targetEvm,
         tokenAddress: tokenCfg.address,
         tokenDecimals: tokenCfg.decimals,
         amount: payoutB,
         rate: 1.0,
-        chainId: config.evm.amoyChainId,
+        chainId: isTestnet ? config.evm.amoyChainId : config.evm.chainId,
         vaultContractAddress: vaultAddr
       });
 
@@ -991,27 +1111,36 @@ class PoolService {
         bchTxHashBytes32: auth.bchTxHashBytes32,
         recipientAddress: targetEvm,
         amount: payoutB,
-        tokenSymbol: 'USDT',
-        chain: 'polygon_amoy',
+        tokenSymbol: targetToken,
+        chain: chainKey,
         nonce: auth.nonce,
         watchmanSignature: auth.proof
       });
 
       payoutTxHash = releaseRes.txHash;
       explorerUrl = releaseRes.explorerUrl;
-    } else if (targetToken === 'PUSD') {
+    } else if (targetToken === 'PUSD' || targetToken === pool.tokenA) {
       const targetBch = (
         bchAddress ||
         pos.bchAddress ||
         (providerAddress?.startsWith('bch') ? providerAddress : '')
       ).trim();
 
-      if (!targetBch || !targetBch.startsWith('bchtest:')) {
-        throw new Error('Conecta tu billetera BCH Chipnet (Paytaca / Cashonize) para recibir el retiro de PUSD desde el Covenant.');
+      const expectedPrefix = isTestnet ? 'bchtest:' : 'bitcoincash:';
+      if (!targetBch || !targetBch.startsWith(expectedPrefix)) {
+        throw new Error(
+          `Conecta tu billetera BCH (${expectedPrefix}...) para recibir el retiro de ${targetToken} desde el Covenant.`
+        );
       }
 
-      payoutA = Number(totalPayoutUsd.toFixed(4));
-      const releaseRes = await bchService.releaseFromVault(targetBch, payoutA, 'PUSD');
+      const tokenPrice = await this.getTokenPrice(targetToken);
+      payoutA = Number((totalPayoutUsd / (tokenPrice > 0 ? tokenPrice : 1)).toFixed(4));
+      const releaseRes = await bchService.releaseFromVault(
+        targetBch,
+        payoutA,
+        targetToken,
+        pool.categoryIdA || null
+      );
       payoutTxHash = releaseRes.txHash;
       explorerUrl = releaseRes.explorerUrl;
     } else {
@@ -1058,7 +1187,7 @@ class PoolService {
         tokenB: pool.tokenB,
         amountB: payoutB,
         withdrawnToken: targetToken,
-        withdrawnAmount: targetToken === 'PUSD' ? payoutA : payoutB,
+        withdrawnAmount: targetToken === 'USDT' || targetToken === 'USDC' ? payoutB : payoutA,
         totalUsdValue: Number(totalPayoutUsd.toFixed(2))
       },
       remainingShares: pos.shares || 0,
@@ -1111,10 +1240,10 @@ class PoolService {
         const shareRatio = pool.totalShares > 0 ? pos.shares / pool.totalShares : 0;
         const currentValA = shareRatio * pool.reserveA;
         const currentValB = shareRatio * pool.reserveB;
-        const liveShareUsd = currentValA * pool.priceA + currentValB * pool.priceB;
         const baseUsd = Number(pos.depositUsd || pos.depositedAmount || 0);
-        const currentTotalUsd = Math.max(liveShareUsd, baseUsd);
-        const profitUsd = Math.max(0, currentTotalUsd - baseUsd);
+        const accruedFeeUsd = Number(((pool.cumulativeFeesUsd || 0) * shareRatio).toFixed(4));
+        const currentTotalUsd = Number((baseUsd + accruedFeeUsd).toFixed(4));
+        const profitUsd = Number(Math.max(0, accruedFeeUsd).toFixed(4));
 
         return {
           ...pos,

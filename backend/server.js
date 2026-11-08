@@ -792,6 +792,52 @@ app.get('/api/pools/:poolId', async (req, res) => {
   }
 });
 
+app.post('/api/pools/build-bch-tx', async (req, res) => {
+  try {
+    const senderAddress = req.body?.senderAddress || req.query?.senderAddress;
+    const poolId = req.body?.poolId || req.query?.poolId;
+    const token = req.body?.token || req.query?.token;
+    const amount = req.body?.amount ?? req.query?.amount;
+    const network = req.body?.network || req.query?.network;
+    if (!senderAddress) {
+      return res.status(400).json({ success: false, error: 'Se requiere senderAddress (dirección BCH/CashTokens del LP).' });
+    }
+    const numAmount = parseFloat(amount);
+    if (isNaN(numAmount) || numAmount <= 0) {
+      return res.status(400).json({ success: false, error: 'Cantidad inválida para depósito de liquidez.' });
+    }
+    const targetNetwork = String(network || 'testnet').toLowerCase();
+    const isChipnet = targetNetwork === 'testnet';
+    const pool = poolService.getPool(poolId || 'PUSD_USDT');
+    const enriched = await poolService.enrichPoolData(pool, { network: targetNetwork });
+    const upperToken = String(token || enriched.tokenA || 'PUSD').toUpperCase();
+
+    const depositAddress = enriched.vaultAddressA || (isChipnet
+      ? bchService.getVaultInfo(true)?.tokenAddress
+      : bchService.getVaultInfo(false)?.tokenAddress);
+
+    const built = await bchService.buildUnsignedSwapWcTransaction({
+      senderAddress,
+      depositAddress,
+      tokenSymbol: upperToken,
+      tokenCategory: enriched.categoryIdA || undefined,
+      tokenDecimals: enriched.decimalsA ?? undefined,
+      amount: numAmount,
+      isChipnet,
+      userPrompt: `BinaryLiquid LP Pool (${enriched.pair || pool.id}): Aportar ${numAmount} ${upperToken}`
+    });
+
+    res.json({
+      success: true,
+      poolId: enriched.id,
+      depositAddress,
+      ...built
+    });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
 app.post('/api/pools/add-liquidity', async (req, res) => {
   try {
     const { providerAddress, bchAddress, evmAddress, token, amount, poolId, txHash, network } = req.body;

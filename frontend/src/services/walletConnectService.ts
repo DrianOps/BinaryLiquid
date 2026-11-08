@@ -864,15 +864,16 @@ export async function executeBchSwapDeposit(params: {
   senderAddress: string;
   isTestnet: boolean;
   wizardManager?: any;
+  bodyPayload?: Record<string, any>;
   onStatus?: (msg: string) => void;
 }): Promise<{ txHash: string }> {
-  const { backendUrl, buildEndpoint, senderAddress, isTestnet, wizardManager, onStatus } = params;
+  const { backendUrl, buildEndpoint, senderAddress, isTestnet, wizardManager, bodyPayload, onStatus } = params;
 
   onStatus?.('Preparando transacción CashTokens No-Custodia...');
   const buildRes = await fetch(`${backendUrl}${buildEndpoint}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ senderAddress })
+    body: JSON.stringify({ senderAddress, ...(bodyPayload || {}) })
   });
   const buildData = await buildRes.json();
   if (!buildRes.ok || !buildData?.success || !buildData?.wcTransaction) {

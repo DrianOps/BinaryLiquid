@@ -1629,6 +1629,9 @@ export default function App() {
             userAddress={userContext?.address || ''}
             bchAddress={bchWallet?.tokenAddress || bchWallet?.address || ''}
             evmAddress={evmWallet?.address || ''}
+            walletBalances={walletBalances}
+            wizardConnectManager={wc.manager}
+            wizardConnectState={wc.state}
             platformNetwork={platformNetwork}
             onToggleNetwork={setPlatformNetwork}
             onRefreshBalances={() => refreshWalletBalances()}

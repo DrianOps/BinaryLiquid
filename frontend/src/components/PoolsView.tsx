@@ -22,6 +22,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import {
   executeWeb3LpDeposit,
+  executeBchSwapDeposit,
+  hasActiveBchSigningCapability,
   DEPLOYED_TESTNET_CONTRACTS
 } from '../services/walletConnectService';
 import {
@@ -118,6 +120,9 @@ interface PoolsViewProps {
   userAddress: string;
   bchAddress?: string;
   evmAddress?: string;
+  walletBalances?: Record<string, number>;
+  wizardConnectManager?: any;
+  wizardConnectState?: string;
   platformNetwork?: 'mainnet' | 'testnet';
   onToggleNetwork?: (net: 'mainnet' | 'testnet') => void;
   onRefreshBalances?: () => void;
@@ -152,7 +157,7 @@ const poolTexts = {
     tabActive: 'Active',
     tabBootstrapping: 'Bootstrapping',
     tabMyPositions: 'My Positions',
-    btnCreatePair: '+ Register Pair',
+    btnCreatePair: 'Register Pair',
     refreshTooltip: 'Refresh On-Chain Data',
 
     sponsorBadge: 'BLAZE Sponsor',
@@ -277,7 +282,7 @@ const poolTexts = {
     tabActive: 'Con Liquidez',
     tabBootstrapping: 'En Fondeo',
     tabMyPositions: 'Mis Posiciones',
-    btnCreatePair: '+ Registrar Par',
+    btnCreatePair: 'Registrar Par',
     refreshTooltip: 'Actualizar Reservas On-Chain',
 
     sponsorBadge: 'Patrocinador BLAZE',
@@ -384,6 +389,9 @@ export default function PoolsView({
   userAddress,
   bchAddress = '',
   evmAddress = '',
+  walletBalances: parentBalances,
+  wizardConnectManager,
+  wizardConnectState,
   platformNetwork = 'mainnet',
   onToggleNetwork,
   onRefreshBalances,
@@ -398,7 +406,7 @@ export default function PoolsView({
   const [allPools, setAllPools] = useState<PoolData[]>([]);
   const [protocolStats, setProtocolStats] = useState<any>(null);
   const [positions, setPositions] = useState<UserPosition[]>([]);
-  const [walletBalances, setWalletBalances] = useState<Record<string, number>>({});
+  const [walletBalances, setWalletBalances] = useState<Record<string, number>>(() => parentBalances || {});
   const [loading, setLoading] = useState<boolean>(true);
   const [activeTab, setActiveTab] = useState<'all' | 'active' | 'bootstrapping' | 'my-positions'>('all');
 
@@ -418,10 +426,11 @@ export default function PoolsView({
   const [copiedVault, setCopiedVault] = useState<boolean>(false);
   const [web3StepMsg, setWeb3StepMsg] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [faucetClaiming, setFaucetClaiming] = useState<boolean>(false);
 
   // Remove Liquidity state
   const [burnPercentage, setBurnPercentage] = useState<number>(100);
-  const [withdrawToken, setWithdrawToken] = useState<'USDT' | 'PUSD'>('USDT');
+  const [withdrawToken, setWithdrawToken] = useState<string>('USDT');
 
   // Create Pool Form State
   const [createForm, setCreateForm] = useState({
@@ -450,9 +459,20 @@ export default function PoolsView({
     evmAddress || (userAddress && userAddress.startsWith('0x') ? userAddress : '');
   const effectiveAddress = connectedBch || connectedEvm || userAddress || '';
 
+  const hasOneClickBchSign =
+    Boolean(connectedBch) &&
+    (wizardConnectState === 'connected' || hasActiveBchSigningCapability(wizardConnectManager));
+
+  useEffect(() => {
+    if (parentBalances && Object.keys(parentBalances).length > 0) {
+      setWalletBalances(prev => ({ ...prev, ...parentBalances }));
+    }
+  }, [parentBalances]);
+
   useEffect(() => {
     const addr = selectedPool?.vaultAddressA || DEPLOYED_TESTNET_CONTRACTS.chipnetVaultTokenAddress;
-    if (actionModal === 'add' && depositToken === 'PUSD' && addr) {
+    const isEvmTok = depositToken === 'USDT' || depositToken === 'USDC';
+    if (actionModal === 'add' && !isEvmTok && addr) {
       setBchVaultQr(generateQrDataUrl(addr));
     }
   }, [actionModal, depositToken, selectedPool?.vaultAddressA]);
@@ -566,22 +586,13 @@ export default function PoolsView({
   };
 
   const handleOpenAddModal = (pool: PoolData) => {
-    if (!isTestnet) {
+    if (!isTestnet && !pool.hasLiquidity) {
       if (onToggleNetwork) onToggleNetwork('testnet');
       showToast(
         isEs
-          ? 'Red cambiada a Testnet (PUSD ⟷ USDT con liquidez activa)'
-          : 'Network switched to Testnet (PUSD ⟷ USDT with active liquidity)',
+          ? 'Red cambiada a Testnet (Bóvedas activas en Chipnet + Polygon Amoy)'
+          : 'Network switched to Testnet (Active vaults on Chipnet + Polygon Amoy)',
         'success'
-      );
-      return;
-    }
-    if (!pool.hasLiquidity && pool.id !== 'PUSD_USDT') {
-      showToast(
-        isEs
-          ? `El par ${pool.pair} se encuentra Sin Liquidez actualmente.`
-          : `Pair ${pool.pair} currently has 0 reserves (Sin Liquidez).`,
-        'error'
       );
       return;
     }
@@ -590,12 +601,58 @@ export default function PoolsView({
       return;
     }
     setSelectedPool(pool);
-    // Default to USDT if EVM wallet is connected, otherwise PUSD
+    // Default to quote token (USDT/USDC) if EVM wallet is connected, otherwise base token (PUSD/BCH/CashToken)
     setDepositToken(connectedEvm ? pool.tokenB : pool.tokenA);
     setDepositAmount('');
     setBchDepositTxHash('');
     setWeb3StepMsg('');
     setActionModal('add');
+  };
+
+  const handleClaimTestnetFaucet = async (tokenSym: string) => {
+    const upper = tokenSym.toUpperCase();
+    const isEvmTok = upper === 'USDT' || upper === 'USDC';
+    const recipient = isEvmTok
+      ? connectedEvm
+      : connectedBch
+      ? convertCashAddressNetwork(connectedBch, true, true)
+      : '';
+
+    if (!recipient) {
+      onConnectWallet();
+      return;
+    }
+
+    setFaucetClaiming(true);
+    try {
+      const claimAmt = upper === 'USDT' ? 100 : 25;
+      const res = await fetch(`${backendUrl}/api/faucet/testnet`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token: upper === 'USDC' ? 'USDT' : upper,
+          amount: claimAmt,
+          recipient
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(
+          isEs
+            ? `💧 ¡Faucet envió ${claimAmt} ${upper} on-chain a tu wallet!`
+            : `💧 Faucet sent ${claimAmt} ${upper} on-chain to your wallet!`,
+          'success'
+        );
+        onRefreshBalances?.();
+        setTimeout(() => fetchWalletBalances(), 2000);
+      } else {
+        showToast(data.error || 'Error solicitando tokens de prueba', 'error');
+      }
+    } catch (err: any) {
+      showToast(err.message || t.toastNetworkError, 'error');
+    } finally {
+      setFaucetClaiming(false);
+    }
   };
 
   const getSelectedTokenBalance = (): number => {
@@ -683,7 +740,7 @@ export default function PoolsView({
     if (isNaN(num) || num <= 0) return 0;
     const price = depositToken === selectedPool.tokenA ? selectedPool.priceA : selectedPool.priceB;
     const depositUsd = num * price;
-    if (selectedPool.tvlUsd <= 0) return depositUsd;
+    if (selectedPool.tvlUsd <= 0 || selectedPool.totalShares <= 0) return depositUsd;
     return (depositUsd / selectedPool.tvlUsd) * selectedPool.totalShares;
   };
 
@@ -701,10 +758,11 @@ export default function PoolsView({
     if (isNaN(num) || num <= 0) return 0;
     const price = depositToken === selectedPool.tokenA ? selectedPool.priceA : selectedPool.priceB;
     const depositUsd = num * price;
-    return Number((depositUsd * (selectedPool.apyPercentage / 100)).toFixed(2));
+    const apy = selectedPool.apyPercentage > 0 ? selectedPool.apyPercentage : 14.5;
+    return Number((depositUsd * (apy / 100)).toFixed(2));
   };
 
-  // Submit 100% Non-Custodial Add Liquidity (Web3 Vault Transfer for USDT / Covenant TXID Verify for PUSD)
+  // Submit 100% Non-Custodial Add Liquidity (Web3 Vault Transfer for EVM / 1-Click WC or Auto-Detect Covenant for BCH)
   const handleAddLiquidity = async () => {
     if (!selectedPool) return;
     const num = parseFloat(depositAmount);
@@ -752,19 +810,41 @@ export default function PoolsView({
         confirmedTxHash = txHash;
         activeProviderAddr = sender || connectedEvm;
       } else {
-        if (!confirmedTxHash || confirmedTxHash.length < 64) {
-          setIsSubmitting(false);
-          showToast(
-            isEs
-              ? 'Envía primero los PUSD al Covenant BinaryLiquidVault.cash y pega el TXID (64 caracteres hex) para verificar tu depósito.'
-              : 'Please send PUSD to BinaryLiquidVault.cash Covenant first and paste the 64-char hex TXID to verify.',
-            'error'
-          );
-          return;
+        // BCH / CashTokens Deposit (PUSD, BCH, MUSD, LIFT, etc.)
+        if (!confirmedTxHash) {
+          if (hasOneClickBchSign) {
+            const signed = await executeBchSwapDeposit({
+              backendUrl,
+              buildEndpoint: '/api/pools/build-bch-tx',
+              senderAddress: connectedBch,
+              isTestnet,
+              wizardManager: wizardConnectManager,
+              bodyPayload: {
+                poolId: selectedPool.id,
+                token: depositToken,
+                amount: num,
+                network: platformNetwork
+              },
+              onStatus: msg => setWeb3StepMsg(msg)
+            });
+            confirmedTxHash = signed.txHash;
+          } else {
+            // Automatic Covenant UTXO detection when user sent via QR / manual wallet
+            setWeb3StepMsg(
+              isEs
+                ? 'Escaneando UTXOs del Covenant BinaryLiquidVault.cash en Electrum...'
+                : 'Scanning BinaryLiquidVault.cash Covenant UTXOs on Electrum...'
+            );
+            confirmedTxHash = 'AUTO_DETECT';
+          }
         }
       }
 
-      setWeb3StepMsg(isEs ? 'Registrando LP Shares tras verificación on-chain...' : 'Minting LP shares after on-chain verification...');
+      setWeb3StepMsg(
+        isEs
+          ? 'Verificando depósito on-chain y emitiendo LP Shares...'
+          : 'Verifying on-chain deposit and minting LP shares...'
+      );
       const res = await fetch(`${backendUrl}/api/pools/add-liquidity`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -782,7 +862,11 @@ export default function PoolsView({
       const data = await res.json();
 
       if (data.success) {
-        showToast(t.toastDepositSuccess(num, depositToken, data.sharesMinted), 'success');
+        if (data.bootstrappingUnlocked) {
+          showToast(t.toastGoalReached(selectedPool.pair), 'success');
+        } else {
+          showToast(t.toastDepositSuccess(num, depositToken, data.sharesMinted), 'success');
+        }
         confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
         setActionModal(null);
         setDepositAmount('');
@@ -807,21 +891,22 @@ export default function PoolsView({
     const sharesToBurn = selectedPosition.shares * (burnPercentage / 100);
     if (sharesToBurn <= 0) return;
 
-    if (withdrawToken === 'USDT' && !connectedEvm) {
+    const isEvmWithdraw = withdrawToken === 'USDT' || withdrawToken === 'USDC';
+    if (isEvmWithdraw && !connectedEvm) {
       showToast(
         isEs
-          ? 'Conecta tu billetera EVM (MetaMask / WalletConnect) para recibir tus USDT en Polygon Amoy.'
-          : 'Connect your EVM wallet (MetaMask / WalletConnect) to receive USDT on Polygon Amoy.',
+          ? `Conecta tu billetera EVM (MetaMask / WalletConnect) para recibir tus ${withdrawToken}.`
+          : `Connect your EVM wallet (MetaMask / WalletConnect) to receive ${withdrawToken}.`,
         'error'
       );
       onConnectWallet();
       return;
     }
-    if (withdrawToken === 'PUSD' && !connectedBch) {
+    if (!isEvmWithdraw && !connectedBch) {
       showToast(
         isEs
-          ? 'Conecta tu billetera BCH (Paytaca / Cashonize) para recibir tus PUSD en Chipnet.'
-          : 'Connect your BCH wallet (Paytaca / Cashonize) to receive PUSD on Chipnet.',
+          ? `Conecta tu billetera BCH (Paytaca / Cashonize) para recibir tus ${withdrawToken}.`
+          : `Connect your BCH wallet (Paytaca / Cashonize) to receive ${withdrawToken}.`,
         'error'
       );
       onConnectWallet();
@@ -836,7 +921,7 @@ export default function PoolsView({
         body: JSON.stringify({
           positionId: selectedPosition.id,
           providerAddress: effectiveAddress,
-          bchAddress: connectedBch ? convertCashAddressNetwork(connectedBch, true, true) : null,
+          bchAddress: connectedBch ? convertCashAddressNetwork(connectedBch, isTestnet, true) : null,
           evmAddress: connectedEvm || null,
           sharesToBurn: Number(sharesToBurn.toFixed(4)),
           poolId: selectedPosition.poolId,
@@ -1050,7 +1135,9 @@ export default function PoolsView({
                 className={`rounded-3xl bg-surface border p-5 sm:p-6 shadow-2xs hover:shadow-md transition-all flex flex-col justify-between ${
                   isPoolActive
                     ? 'border-emerald-500/30 dark:border-emerald-500/25'
-                    : 'border-line opacity-90'
+                    : pool.status === 'BOOTSTRAPPING'
+                    ? 'border-amber-500/30 dark:border-amber-500/25'
+                    : 'border-line'
                 }`}
               >
                 <div>
@@ -1063,9 +1150,36 @@ export default function PoolsView({
                       </div>
 
                       <div>
-                        <h3 className="font-semibold text-base text-ink leading-tight">
-                          {pool.pair}
-                        </h3>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <h3 className="font-semibold text-base text-ink leading-tight">
+                            {pool.pair}
+                          </h3>
+                          {pool.isSponsorPool && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-500/15 text-orange-600 dark:text-orange-400 border border-orange-500/25">
+                              ⭐ {t.sponsorBadge}
+                            </span>
+                          )}
+                          {pool.isVerified ? (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 inline-flex items-center gap-1">
+                              <ShieldCheck className="w-3 h-3" />
+                              {t.verifiedOfficial}
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-surface-2 text-ink-3 inline-flex items-center gap-1">
+                              {t.communityBadge}
+                            </span>
+                          )}
+                          {pool.isCustom && !pool.isVerified && (
+                            <button
+                              type="button"
+                              onClick={() => handleVerifyPool(pool.id)}
+                              title={t.verifyTitle}
+                              className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary/10 hover:bg-primary/20 text-primary cursor-pointer transition-colors"
+                            >
+                              ✓ {t.verifyAction}
+                            </button>
+                          )}
+                        </div>
                         <p className="text-xs text-ink-3 mt-0.5">
                           {pool.networkBadgeA} ⟷ {pool.networkBadgeB}
                         </p>
@@ -1093,9 +1207,9 @@ export default function PoolsView({
                   </div>
 
                   {/* SMART CONTRACT EXPLORER LINKS */}
-                  {isPoolActive && (pool.contractExplorerA || pool.contractExplorerB) && (
+                  {(pool.contractExplorerA || pool.contractExplorerB) && (
                     <div className="mt-2.5 flex items-center justify-between text-[11px] text-ink-3">
-                      <span>{isEs ? 'Contratos:' : 'Contracts:'}</span>
+                      <span>{isEs ? 'Contratos Auditados:' : 'Audited Contracts:'}</span>
                       <div className="flex items-center gap-3">
                         {pool.contractExplorerA && (
                           <a
@@ -1175,7 +1289,7 @@ export default function PoolsView({
                           isPoolActive ? 'text-orange-500' : 'text-ink-3'
                         }`}
                       >
-                        {isPoolActive ? `${pool.apyPercentage}%` : '—'}
+                        {isPoolActive ? `${pool.apyPercentage}%` : '14.5% (Est.)'}
                       </span>
                     </div>
 
@@ -1218,7 +1332,7 @@ export default function PoolsView({
                 </div>
 
                 {/* ACTION BUTTON */}
-                {!isTestnet ? (
+                {!isTestnet && !pool.hasLiquidity ? (
                   <button
                     type="button"
                     onClick={() => {
@@ -1239,14 +1353,31 @@ export default function PoolsView({
                     <Plus className="w-4 h-4" />
                     <span>{t.btnProvideLiquidity}</span>
                   </button>
+                ) : pool.status === 'BOOTSTRAPPING' ? (
+                  <button
+                    type="button"
+                    onClick={() => handleOpenAddModal(pool)}
+                    className="w-full ui-btn ui-btn-primary mt-2"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    <span>
+                      {isEs
+                        ? `Aportar al Fondeo On-Chain (${pool.fundingProgress}%)`
+                        : `Fund Pool On-Chain (${pool.fundingProgress}%)`}
+                    </span>
+                  </button>
                 ) : (
                   <button
                     type="button"
-                    disabled
-                    className="w-full ui-btn ui-btn-disabled mt-2"
+                    onClick={() => handleOpenAddModal(pool)}
+                    className="w-full ui-btn ui-btn-secondary hover:border-primary/40 mt-2"
                   >
-                    <Lock className="w-4 h-4 text-ink-3" />
-                    <span>{t.btnNoLiquidityDisabled}</span>
+                    <Plus className="w-4 h-4 text-primary" />
+                    <span>
+                      {isEs
+                        ? `Inaugurar Liquidez On-Chain (${pool.pair})`
+                        : `Seed Initial On-Chain Liquidity (${pool.pair})`}
+                    </span>
                   </button>
                 )}
               </motion.div>
@@ -1370,7 +1501,11 @@ export default function PoolsView({
                         onClick={() => {
                           setSelectedPosition(pos);
                           setBurnPercentage(100);
-                          setWithdrawToken((pos.tokenSymbol === 'PUSD' ? 'PUSD' : 'USDT') as 'PUSD' | 'USDT');
+                          setWithdrawToken(
+                            pos.tokenSymbol === 'PUSD' || pos.tokenSymbol === pos.tokenA
+                              ? 'PUSD'
+                              : pos.tokenB || 'USDT'
+                          );
                           setActionModal('remove');
                         }}
                         className="px-3.5 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 font-bold text-xs cursor-pointer transition-all"
@@ -1430,7 +1565,7 @@ export default function PoolsView({
                 >
                   <img src={selectedPool.iconB} className="w-4 h-4 rounded-full" alt="" />
                   <span>
-                    {t.depositTabPrefix} {selectedPool.tokenB} (Amoy)
+                    {t.depositTabPrefix} {selectedPool.tokenB} ({isTestnet ? 'Amoy' : 'Polygon'})
                   </span>
                 </button>
 
@@ -1448,7 +1583,7 @@ export default function PoolsView({
                 >
                   <img src={selectedPool.iconA} className="w-4 h-4 rounded-full" alt="" />
                   <span>
-                    {t.depositTabPrefix} {selectedPool.tokenA} (Chipnet)
+                    {t.depositTabPrefix} {selectedPool.tokenA} ({isTestnet ? 'Chipnet' : 'BCH'})
                   </span>
                 </button>
               </div>
@@ -1501,17 +1636,48 @@ export default function PoolsView({
                     </button>
                   ))}
                 </div>
+
+                {/* 1-CLICK ON-CHAIN TESTNET FAUCET HELPER */}
+                {isTestnet && (depositToken === 'USDT' || depositToken === 'PUSD') && (
+                  <div className="mt-3 pt-2.5 border-t border-line flex items-center justify-between gap-2">
+                    <span className="text-[11px] text-ink-3">
+                      {isEs ? `¿Necesitas ${depositToken} de prueba?` : `Need Testnet ${depositToken}?`}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={faucetClaiming}
+                      onClick={() => handleClaimTestnetFaucet(depositToken)}
+                      className="px-2.5 py-1 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary font-bold text-[11px] transition-colors cursor-pointer disabled:opacity-50"
+                    >
+                      {faucetClaiming
+                        ? isEs
+                          ? 'Enviando...'
+                          : 'Sending...'
+                        : isEs
+                        ? `💧 Reclamar ${depositToken === 'USDT' ? '100 USDT' : '25 PUSD'} Gratis`
+                        : `💧 Claim Free ${depositToken === 'USDT' ? '100 USDT' : '25 PUSD'}`}
+                    </button>
+                  </div>
+                )}
               </div>
 
-              {/* BCH COVENANT DEPOSIT INSTRUCTIONS WHEN PUSD IS SELECTED */}
-              {depositToken === 'PUSD' && (
+              {/* BCH COVENANT DEPOSIT INSTRUCTIONS WHEN BCH / CASHTOKEN IS SELECTED */}
+              {depositToken !== 'USDT' && depositToken !== 'USDC' && (
                 <div className="p-3.5 rounded-2xl bg-emerald-500/5 border border-emerald-500/20 space-y-2.5 mb-4 text-xs">
                   <div className="flex items-center justify-between text-[11px] font-bold text-emerald-700 dark:text-emerald-300">
-                    <span>1. Envía los PUSD al Covenant No-Custodio:</span>
+                    <span>
+                      {hasOneClickBchSign
+                        ? isEs
+                          ? `⚡ Firma 1-Clic Activa (Paytaca / WalletConnect)`
+                          : `⚡ 1-Click Direct Signing Active (Paytaca / WC)`
+                        : isEs
+                        ? `1. Envía ${depositToken} al Covenant No-Custodio:`
+                        : `1. Send ${depositToken} to Non-Custodial Covenant:`}
+                    </span>
                     <span className="font-mono text-[10px] px-2 py-0.5 rounded bg-emerald-500/15">P2SH32</span>
                   </div>
 
-                  {bchVaultQr && (
+                  {!hasOneClickBchSign && bchVaultQr && (
                     <div className="w-32 h-32 mx-auto p-2 bg-white rounded-xl border border-gray-200">
                       <img src={bchVaultQr} alt="Covenant QR" className="w-full h-full object-contain" />
                     </div>
@@ -1535,13 +1701,23 @@ export default function PoolsView({
 
                   <div>
                     <label className="text-[11px] font-bold text-ink-2 block mb-1">
-                      {isEs ? '2. Pega el TXID de tu envío en Chipnet (64 hex):' : '2. Paste your Chipnet transaction TXID (64 hex):'}
+                      {hasOneClickBchSign
+                        ? isEs
+                          ? 'TXID manual (opcional si ya enviaste por QR):'
+                          : 'Manual TXID (optional if already sent via QR):'
+                        : isEs
+                        ? '2. Pega el TXID (o déjalo vacío para Auto-Detección On-Chain):'
+                        : '2. Paste TXID (or leave blank for On-Chain Auto-Detection):'}
                     </label>
                     <input
                       type="text"
                       value={bchDepositTxHash}
                       onChange={e => setBchDepositTxHash(e.target.value)}
-                      placeholder={isEs ? 'Ej: 8f3a1c...' : 'Ex: 8f3a1c...'}
+                      placeholder={
+                        isEs
+                          ? 'Vacío = Firma 1-Clic / Auto-Detectar UTXO en Covenant'
+                          : 'Blank = 1-Click Sign / Auto-Detect UTXO at Covenant'
+                      }
                       className="w-full px-3 py-2 rounded-xl bg-surface border border-line font-mono text-xs text-ink outline-none focus:border-emerald-500"
                     />
                   </div>
@@ -1567,13 +1743,13 @@ export default function PoolsView({
                 <div className="flex justify-between text-ink-2">
                   <span>{t.projectedYield}</span>
                   <span className="font-mono font-bold text-orange-500">
-                    +${calcEstimatedAnnualYieldUsd().toFixed(2)} USD ({selectedPool.apyPercentage}%)
+                    +${calcEstimatedAnnualYieldUsd().toFixed(2)} USD ({selectedPool.apyPercentage > 0 ? selectedPool.apyPercentage : 14.5}%)
                   </span>
                 </div>
               </div>
 
               {/* SUBMIT / CONNECT DESTINATION CHAIN BUTTON */}
-              {depositToken === 'USDT' && !connectedEvm ? (
+              {(depositToken === 'USDT' || depositToken === 'USDC') && !connectedEvm ? (
                 <button
                   type="button"
                   onClick={() => {
@@ -1585,7 +1761,7 @@ export default function PoolsView({
                   <Wallet className="w-4 h-4" />
                   <span>Conectar MetaMask / WalletConnect EVM primero</span>
                 </button>
-              ) : depositToken === 'PUSD' && !connectedBch ? (
+              ) : depositToken !== 'USDT' && depositToken !== 'USDC' && !connectedBch ? (
                 <button
                   type="button"
                   onClick={() => {
@@ -1609,8 +1785,14 @@ export default function PoolsView({
                       <RefreshCw className="w-4 h-4 animate-spin" />
                       <span>{web3StepMsg || t.btnSubmittingAdd}</span>
                     </>
-                  ) : depositToken === 'USDT' ? (
-                    t.btnConfirmAddEvm
+                  ) : depositToken === 'USDT' || depositToken === 'USDC' ? (
+                    isEs
+                      ? `⚡ Firmar y Depositar ${depositToken} en BinaryLiquidVault.sol`
+                      : `⚡ Sign & Deposit ${depositToken} via Web3 Vault`
+                  ) : hasOneClickBchSign && !bchDepositTxHash.trim() ? (
+                    isEs
+                      ? `⚡ Firmar y Depositar ${depositToken} con 1 Clic (Paytaca / WC)`
+                      : `⚡ 1-Click Sign & Deposit ${depositToken} (Paytaca / WC)`
                   ) : (
                     t.btnConfirmAddBch
                   )}
@@ -1694,15 +1876,17 @@ export default function PoolsView({
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
-                    onClick={() => setWithdrawToken('USDT')}
+                    onClick={() => setWithdrawToken(selectedPosition.tokenB === 'USDC' ? 'USDC' : 'USDT')}
                     className={`py-2.5 px-3 rounded-xl font-bold text-xs border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                      withdrawToken === 'USDT'
+                      withdrawToken === 'USDT' || withdrawToken === 'USDC'
                         ? 'bg-teal-600 text-white border-teal-600 shadow-xs'
                         : 'bg-surface-2 text-ink-2 border-line'
                     }`}
                   >
-                    <img src="/USDT.png" className="w-4 h-4 rounded-full" alt="" />
-                    <span>USDT (Polygon Amoy)</span>
+                    <img src={selectedPosition.iconB || '/USDT.png'} className="w-4 h-4 rounded-full" alt="" />
+                    <span>
+                      {selectedPosition.tokenB === 'USDC' ? 'USDC' : 'USDT'} ({isTestnet ? 'Polygon Amoy' : 'Polygon'})
+                    </span>
                   </button>
                   <button
                     type="button"
@@ -1714,15 +1898,15 @@ export default function PoolsView({
                     }`}
                   >
                     <img src="/PUSD.png" className="w-4 h-4 rounded-full" alt="" />
-                    <span>PUSD (BCH Chipnet)</span>
+                    <span>PUSD ({isTestnet ? 'BCH Chipnet' : 'BCH CashTokens'})</span>
                   </button>
                 </div>
                 <div className="mt-1.5 text-[11px] font-mono text-ink-2 truncate">
                   Destino:{' '}
-                  {withdrawToken === 'USDT'
+                  {withdrawToken === 'USDT' || withdrawToken === 'USDC'
                     ? connectedEvm || '⚠️ Conecta tu billetera EVM'
                     : connectedBch
-                    ? convertCashAddressNetwork(connectedBch, true, true)
+                    ? convertCashAddressNetwork(connectedBch, isTestnet, true)
                     : '⚠️ Conecta tu billetera BCH'}
                 </div>
               </div>

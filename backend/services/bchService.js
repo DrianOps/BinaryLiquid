@@ -347,7 +347,7 @@ class BchService {
    * Executes a 100% Non-Custodial CashTokens payout directly from `BinaryLiquidVault.cash` P2SH32 Covenant,
    * co-signed by The Watchman's Schnorr key and enforcing on-chain Covenant State Continuation!
    */
-  async releaseFromVault(recipientAddress, amount, tokenSymbol = 'PUSD') {
+  async releaseFromVault(recipientAddress, amount, tokenSymbol = 'PUSD', customCategory = null) {
     await this.readyPromise;
 
     if (!recipientAddress || (!recipientAddress.startsWith('bitcoincash:') && !recipientAddress.startsWith('bchtest:'))) {
@@ -370,12 +370,12 @@ class BchService {
 
     const tokenSym = tokenSymbol.toUpperCase();
     if (tokenSym === 'BCH') {
-      throw new Error(`[BCH Covenant] BinaryLiquidVault.cash opera exclusivamente con CashTokens (${tokenSym} no soportado en este Covenant)`);
+      throw new Error(`[BCH Covenant] BinaryLiquidVault.cash opera exclusivamente con CashTokens. Retira en USDT/USDC o PUSD.`);
     }
 
-    const category = this.getTokenCategory(tokenSym, isChipnet);
+    const category = customCategory || this.getTokenCategory(tokenSym, isChipnet);
     const decimals = isChipnet ? 0 : (config.bch.tokens[tokenSym]?.decimals || 6);
-    const payoutUnits = BigInt(Math.round(Number(amount) * (10 ** decimals)));
+    const payoutUnits = BigInt(Math.max(1, Math.round(Number(amount) * (10 ** decimals))));
 
     if (payoutUnits <= 0n) {
       throw new Error('El monto de liberación del Covenant debe ser mayor a cero');
@@ -823,6 +823,8 @@ class BchService {
     senderAddress,
     depositAddress,
     tokenSymbol = 'PUSD',
+    tokenCategory = null,
+    tokenDecimals = null,
     amount,
     isChipnet = true,
     userPrompt = 'Confirmar intercambio No-Custodio en BinaryLiquid'
@@ -913,14 +915,23 @@ class BchService {
         feeRate: 1.5
       });
     } else {
-      const category = this.getTokenCategory(sym, isChipnet);
-      const decimals = isChipnet ? 0 : (config.bch.tokens[sym]?.decimals || 6);
-      const requiredUnits = BigInt(Math.round(Number(amount) * (10 ** decimals)));
+      const category = tokenCategory || this.getTokenCategory(sym, isChipnet);
+      const decimals = isChipnet ? 0 : (tokenDecimals !== null ? Number(tokenDecimals) : (config.bch.tokens[sym]?.decimals || 6));
+      let requiredUnits = BigInt(Math.max(1, Math.round(Number(amount) * (10 ** decimals))));
       const { tokenAddress: depositTokenAddr } = this.toTokenAwareAddress(depositAddress);
 
       const tokenUtxos = utxos
         .filter(u => u.token?.category === category && !u.token?.nft && BigInt(u.token.amount || 0) > 0n)
         .sort((a, b) => (BigInt(b.token.amount) > BigInt(a.token.amount) ? 1 : -1));
+
+      // Dual-precision support on Chipnet: if wallet holds 1e6-scaled PUSD units instead of 1:1 integer units
+      const totalAvailableRaw = tokenUtxos.reduce((s, u) => s + BigInt(u.token.amount), 0n);
+      if (isChipnet && totalAvailableRaw >= 1_000_000n && requiredUnits < 1_000_000n) {
+        const scaledCandidate = BigInt(Math.round(Number(amount) * 1e6));
+        if (totalAvailableRaw >= scaledCandidate) {
+          requiredUnits = scaledCandidate;
+        }
+      }
 
       let gatheredUnits = 0n;
       let gatheredSats = 0n;
