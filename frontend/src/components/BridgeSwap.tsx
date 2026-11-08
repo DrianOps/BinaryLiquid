@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   ArrowDownUp,
   ChevronDown,
@@ -11,16 +11,13 @@ import {
   X,
   Lock,
   Sparkles,
-  QrCode,
   ArrowLeft,
   ArrowRight,
-  CheckCircle2,
   ClipboardPaste,
-  Smartphone,
   ArrowLeftRight
 } from 'lucide-react';
 import TokenSelectModal, { SUPPORTED_TOKENS, TokenInfo } from './TokenSelectModal';
-import { convertCashAddressNetwork, formatAddress, generateQrDataUrl, formatCryptoBalance } from '../utils/bchAddress';
+import { convertCashAddressNetwork, formatAddress, formatCryptoBalance } from '../utils/bchAddress';
 import {
   executeWeb3VaultDeposit,
   executeBchSwapDeposit,
@@ -233,15 +230,12 @@ export default function BridgeSwap({
   const [faucetAddress, setFaucetAddress] = useState<string>('');
   const [claimingFaucet, setClaimingFaucet] = useState<boolean>(false);
 
-  // Execution Lifecycle
-  const [cardState, setCardState] = useState<'form' | 'processing' | 'deposit' | 'success'>('form');
+  // Execution Lifecycle (100% Direct 1-Click Signing: form -> processing -> success)
+  const [cardState, setCardState] = useState<'form' | 'processing' | 'success'>('form');
   const [processingStage, setProcessingStage] = useState<'authorizing' | 'settling'>('authorizing');
   const [executing, setExecuting] = useState<boolean>(false);
   const [signingStep, setSigningStep] = useState<string>('');
   const [activeSwap, setActiveSwap] = useState<any>(null);
-  const [manualTxOpen, setManualTxOpen] = useState<boolean>(false);
-  const [txHashInput, setTxHashInput] = useState<string>('');
-  const [verifyingTx, setVerifyingTx] = useState<boolean>(false);
   const [copiedContract, setCopiedContract] = useState<boolean>(false);
 
   // Limit Orders
@@ -369,39 +363,6 @@ export default function BridgeSwap({
       fetchLimitOrders();
     }
   }, [activeTab, fetchLimitOrders]);
-
-  // ==========================================================================
-  // LIVE AUTO-POLLING WHEN ON COVENANT QR SCREEN (`cardState === 'deposit'`)
-  // ==========================================================================
-  useEffect(() => {
-    if (cardState !== 'deposit' || !activeSwap?.id || activeSwap.status === 'COMPLETED') {
-      return;
-    }
-
-    const interval = setInterval(async () => {
-      try {
-        const res = await fetch(`${backendUrl}/api/swap/${activeSwap.id}`);
-        const data = await res.json();
-        if (data.success && data.swap) {
-          setActiveSwap(data.swap);
-          if (data.swap.status === 'COMPLETED') {
-            setCardState('success');
-            onRefreshBalances?.();
-            showToast(
-              lang === 'es'
-                ? `¡${data.swap.toAmount} ${data.swap.toToken} recibidos en tu billetera!`
-                : `${data.swap.toAmount} ${data.swap.toToken} received in your wallet!`,
-              'success'
-            );
-          }
-        }
-      } catch {
-        // silent retry
-      }
-    }, 2000);
-
-    return () => clearInterval(interval);
-  }, [cardState, activeSwap?.id, activeSwap?.status, backendUrl, onRefreshBalances, showToast, lang]);
 
   // ==========================================================================
   // ACTIONS
@@ -590,125 +551,64 @@ export default function BridgeSwap({
       }
 
       // 2B. Paying BCH CashToken (`PUSD` -> `USDT`):
-      // Use 1-Click signing (Cashonize WC2 / Paytaca WizardConnect / Paytaca Extension)
-      if (hasActiveBchSigningCapability(wizardConnectManager, bchWalletSource)) {
-        const { txHash } = await executeBchSwapDeposit({
-          backendUrl,
-          buildEndpoint: `/api/swap/${createdSwap.id}/build-bch-tx`,
-          senderAddress: bchQueryAddress || payingWalletAddress,
-          isTestnet,
-          wizardManager: wizardConnectManager,
-          preferredSource: bchWalletSource,
-          onStatus: msg => setSigningStep(msg)
-        });
-
-        setProcessingStage('settling');
-        setSigningStep(t.settling);
-
-        let verifyData: any = null;
-        for (let attempt = 1; attempt <= 3; attempt++) {
-          const verifyRes = await fetch(`${backendUrl}/api/swap/${createdSwap.id}/verify-tx`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ txHash })
-          });
-          verifyData = await verifyRes.json();
-          if (verifyData?.success) break;
-          if (attempt < 3) {
-            await new Promise(r => setTimeout(r, 1500));
-          }
-        }
-
-        if (!verifyData?.success) {
-          throw new Error(verifyData?.error || 'Error liquidando USDT en Polygon');
-        }
-
-        setActiveSwap(verifyData.swap);
-        setCardState('success');
-        setAmount('');
-        onRefreshBalances?.();
-        showToast(t.completed, 'success');
+      // Always use 1-Click Direct Signing (Cashonize WC2 / Paytaca WizardConnect / Paytaca Extension)
+      if (!hasActiveBchSigningCapability(wizardConnectManager, bchWalletSource)) {
+        setCardState('form');
+        setExecuting(false);
+        setSigningStep('');
+        showToast(
+          lang === 'es'
+            ? 'Sesión de firma expirada: vuelve a conectar Paytaca o Cashonize para firmar en 1-Click'
+            : 'Signing session expired: please reconnect Paytaca or Cashonize for 1-Click signing',
+          'error'
+        );
+        onConnectWallet();
         return;
       }
 
-      // Read-only BCH session (`bchWalletSource === 'manual'`): show sleek Covenant payment sheet with auto-polling
-      setManualTxOpen(false);
-      setTxHashInput('');
-      setCardState('deposit');
+      const { txHash } = await executeBchSwapDeposit({
+        backendUrl,
+        buildEndpoint: `/api/swap/${createdSwap.id}/build-bch-tx`,
+        senderAddress: bchQueryAddress || payingWalletAddress,
+        isTestnet,
+        wizardManager: wizardConnectManager,
+        preferredSource: bchWalletSource,
+        onStatus: msg => setSigningStep(msg)
+      });
+
+      setProcessingStage('settling');
+      setSigningStep(t.settling);
+
+      let verifyData: any = null;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        const verifyRes = await fetch(`${backendUrl}/api/swap/${createdSwap.id}/verify-tx`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ txHash })
+        });
+        verifyData = await verifyRes.json();
+        if (verifyData?.success) break;
+        if (attempt < 3) {
+          await new Promise(r => setTimeout(r, 1500));
+        }
+      }
+
+      if (!verifyData?.success) {
+        throw new Error(verifyData?.error || 'Error liquidando USDT en Polygon');
+      }
+
+      setActiveSwap(verifyData.swap);
+      setCardState('success');
+      setAmount('');
+      onRefreshBalances?.();
+      showToast(t.completed, 'success');
+      return;
     } catch (err: any) {
       showToast(err.message || (lang === 'es' ? 'Error al ejecutar swap' : 'Error executing swap'), 'error');
       setCardState('form');
     } finally {
       setExecuting(false);
       setSigningStep('');
-    }
-  };
-
-  // Re-trigger 1-Click Remote Sign from the Deposit Screen
-  const handleTriggerRemoteSign = async () => {
-    if (!activeSwap?.id || !hasActiveBchSigningCapability(wizardConnectManager, bchWalletSource)) return;
-    setExecuting(true);
-    setCardState('processing');
-    setProcessingStage('authorizing');
-    setSigningStep(t.signing);
-    try {
-      const { txHash } = await executeBchSwapDeposit({
-        backendUrl,
-        buildEndpoint: `/api/swap/${activeSwap.id}/build-bch-tx`,
-        senderAddress: bchQueryAddress || payingWalletAddress || bchAddress,
-        isTestnet,
-        wizardManager: wizardConnectManager,
-        preferredSource: bchWalletSource,
-        onStatus: msg => setSigningStep(msg)
-      });
-      setProcessingStage('settling');
-      setSigningStep(t.settling);
-      const verifyRes = await fetch(`${backendUrl}/api/swap/${activeSwap.id}/verify-tx`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ txHash })
-      });
-      const verifyData = await verifyRes.json();
-      if (!verifyData.success) {
-        throw new Error(verifyData.error || 'Error liquidando en contrato');
-      }
-      setActiveSwap(verifyData.swap);
-      setCardState('success');
-      setAmount('');
-      onRefreshBalances?.();
-      showToast(t.completed, 'success');
-    } catch (err: any) {
-      showToast(err.message || `Error autorizando en ${activeBchWalletLabel}`, 'error');
-      setCardState('form');
-    } finally {
-      setExecuting(false);
-      setSigningStep('');
-    }
-  };
-
-  // Manual or instant check on Covenant deposit screen
-  const handleVerifyDeposit = async () => {
-    if (!activeSwap?.id) return;
-    setVerifyingTx(true);
-    try {
-      const res = await fetch(`${backendUrl}/api/swap/${activeSwap.id}/verify-tx`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ txHash: txHashInput.trim() })
-      });
-      const data = await res.json();
-      if (!data.success) {
-        throw new Error(data.error || 'Aún no se detecta confirmación en el contrato');
-      }
-      setActiveSwap(data.swap);
-      setCardState('success');
-      setAmount('');
-      onRefreshBalances?.();
-      showToast(t.completed, 'success');
-    } catch (err: any) {
-      showToast(err.message, 'error');
-    } finally {
-      setVerifyingTx(false);
     }
   };
 
@@ -1528,132 +1428,6 @@ export default function BridgeSwap({
                   {t.nonCustodialBadge}
                 </span>
               </div>
-            </div>
-
-            {/* Optional Switch to QR Code View for BCH */}
-            {sellToken.isBch && (
-              <button
-                type="button"
-                onClick={() => setCardState('deposit')}
-                className="w-full text-center text-[11px] text-ink-3 hover:text-ink transition cursor-pointer pt-0.5"
-              >
-                {t.switchToQrAction}
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* ================================================================ */}
-        {/* VIEW 3: MINIMALIST COVENANT PAYMENT FALLBACK (BCH Watch-Only QR) */}
-        {/* ================================================================ */}
-        {cardState === 'deposit' && activeSwap && (
-          <div className="p-2 space-y-4">
-            <div className="flex items-center justify-between">
-              <button
-                type="button"
-                onClick={() => setCardState('form')}
-                className="flex items-center gap-1.5 text-xs font-semibold text-ink-3 hover:text-ink cursor-pointer"
-              >
-                <ArrowLeft className="w-3.5 h-3.5" />
-                <span>{t.back}</span>
-              </button>
-              <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-amber-600 dark:text-amber-400">
-                <Loader2 className="w-3 h-3 animate-spin" />
-                {t.awaitingPayment}
-              </span>
-            </div>
-
-            <div className="text-center space-y-1">
-              <div className="text-2xl font-semibold text-ink tabular-nums">
-                {activeSwap.fromAmount} {activeSwap.fromToken}
-              </div>
-              <div className="text-xs text-ink-2">
-                → {activeSwap.toAmount} {activeSwap.toToken} ({formatAddress(activeSwap.recipientAddress)})
-              </div>
-            </div>
-
-            {/* Clean QR of Unique Per-Swap P2SH32 Covenant */}
-            <div className="flex flex-col items-center">
-              <div className="p-3 bg-white rounded-panel border border-gray-200 ">
-                <img
-                  src={generateQrDataUrl(activeSwap.depositAddress, 5, 2)}
-                  alt="Covenant QR"
-                  className="w-44 h-44 object-contain"
-                />
-              </div>
-              <p className="text-[11px] text-ink-3 mt-2.5">{t.autoDetectHint}</p>
-            </div>
-
-            {/* 1-Click Remote Sign Action via Cashonize / Paytaca */}
-            {hasActiveBchSigningCapability(wizardConnectManager, bchWalletSource) && (
-              <button
-                type="button"
-                disabled={executing}
-                onClick={handleTriggerRemoteSign}
-                className="w-full h-11 rounded-control bg-primary text-black font-semibold text-xs flex items-center justify-center gap-2 hover:brightness-105 active:scale-[0.99] transition shadow-xs cursor-pointer disabled:opacity-60"
-              >
-                {executing ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>{signingStep || (lang === 'es' ? `Autorizando en ${activeBchWalletLabel}...` : `Authorizing in ${activeBchWalletLabel}...`)}</span>
-                  </>
-                ) : (
-                  <>
-                    <Smartphone className="w-4 h-4" />
-                    <span>{lang === 'es' ? `📱 Autorizar en ${activeBchWalletLabel} (1-Click)` : `📱 Authorize in ${activeBchWalletLabel} (1-Click)`}</span>
-                  </>
-                )}
-              </button>
-            )}
-
-            {/* Copy / Deep-Link Actions */}
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => handleCopy(activeSwap.depositAddress)}
-                className="h-10 rounded-control bg-surface-2 hover:bg-surface-3 text-xs font-semibold text-ink flex items-center justify-center gap-1.5 transition cursor-pointer"
-              >
-                {copiedContract ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                <span>{copiedContract ? (lang === 'es' ? 'Copiado' : 'Copied') : t.copyAddress}</span>
-              </button>
-
-              <a
-                href={activeSwap.depositAddress}
-                className="h-10 rounded-control bg-primary text-black text-xs font-semibold flex items-center justify-center gap-1.5 hover:brightness-105 transition"
-              >
-                <QrCode className="w-3.5 h-3.5" />
-                <span>{t.openPaytaca}</span>
-              </a>
-            </div>
-
-            {/* Optional Collapsible Manual TXID Input */}
-            <div className="pt-1 border-t border-line">
-              <button
-                type="button"
-                onClick={() => setManualTxOpen(!manualTxOpen)}
-                className="w-full text-center text-[11px] text-ink-3 hover:text-ink-2 py-1 cursor-pointer"
-              >
-                {t.manualTxToggle}
-              </button>
-              {manualTxOpen && (
-                <div className="flex items-center gap-2 mt-2">
-                  <input
-                    type="text"
-                    value={txHashInput}
-                    onChange={e => setTxHashInput(e.target.value)}
-                    placeholder="TXID (64 hex)..."
-                    className="flex-1 min-w-0 bg-surface-2 border border-line rounded-control px-3 py-2 text-xs font-mono text-ink outline-none"
-                  />
-                  <button
-                    type="button"
-                    disabled={verifyingTx}
-                    onClick={handleVerifyDeposit}
-                    className="px-3.5 py-2 rounded-control bg-ink text-canvas text-xs font-semibold cursor-pointer disabled:opacity-50"
-                  >
-                    {verifyingTx ? '...' : t.verifyNow}
-                  </button>
-                </div>
-              )}
             </div>
           </div>
         )}

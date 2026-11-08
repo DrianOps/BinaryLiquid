@@ -467,8 +467,6 @@ export default function App() {
   const [selectedWalletType, setSelectedWalletType] = useState<'paytaca' | 'bch_wc2' | 'walletconnect' | 'injected' | null>(null);
   const [isEditingBch, setIsEditingBch] = useState<boolean>(false);
   const [customBchInput, setCustomBchInput] = useState<string>('');
-  const [showManualBchInput, setShowManualBchInput] = useState<boolean>(false);
-  const [manualBchModalInput, setManualBchModalInput] = useState<string>('');
 
   const t = translations[lang];
   const wc = useWizardConnect({ dappName: 'BinaryLiquid Gateway', persistSession: true });
@@ -697,9 +695,7 @@ export default function App() {
     refreshWalletBalances(base, evmWallet?.address || null);
     showToast(t.addressUpdated, 'success');
     setIsEditingBch(false);
-    setShowManualBchInput(false);
     setCustomBchInput('');
-    setManualBchModalInput('');
   };
 
   const handleConnectWallet = async (
@@ -2158,65 +2154,6 @@ export default function App() {
                         <ChevronRight className="w-4 h-4 text-ink-3 group-hover:text-ink transition-transform group-hover:translate-x-0.5" />
                       </div>
                     </button>
-
-                    {/* Manual CashAddress (Direct Paste) */}
-                    {!showManualBchInput ? (
-                      <button
-                        type="button"
-                        onClick={() => setShowManualBchInput(true)}
-                        className="w-full flex items-center justify-between p-3 rounded-control bg-surface-2 hover:bg-surface-3 border border-line text-ink transition-all group cursor-pointer"
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-9 h-9 rounded-control bg-surface border border-line flex items-center justify-center shrink-0 p-1.5 shadow-2xs">
-                            <Edit3 className="w-4 h-4 text-primary" />
-                          </div>
-                          <div className="text-left min-w-0">
-                            <div className="text-sm font-semibold text-ink flex items-center gap-1.5">
-                              <span>{t.manualAddressTitle}</span>
-                              {bchWallet?.source === 'manual' && (
-                                <span className="text-[10px] text-emerald-500 font-bold">✓</span>
-                              )}
-                            </div>
-                            <span className="text-[11px] text-ink-3">{t.manualAddressSubtitle}</span>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <span className="ui-badge text-[10px]">P2PKH</span>
-                          <ChevronRight className="w-4 h-4 text-ink-3 group-hover:text-ink transition-transform group-hover:translate-x-0.5" />
-                        </div>
-                      </button>
-                    ) : (
-                      <div className="p-3 rounded-control bg-surface-2 border border-primary/30 space-y-2">
-                        <span className="text-xs font-semibold text-ink block">{t.manualAddressPrompt}</span>
-                        <input
-                          type="text"
-                          value={manualBchModalInput}
-                          onChange={(e) => setManualBchModalInput(e.target.value)}
-                          placeholder={platformNetwork === 'testnet' ? 'bchtest:qp...' : 'bitcoincash:qp...'}
-                          className="w-full px-3 py-2 text-xs font-mono rounded-control bg-surface border border-line text-ink placeholder:text-ink-3 focus:outline-none focus:border-primary"
-                          autoFocus
-                        />
-                        <div className="flex items-center justify-end gap-2 pt-1">
-                          <button
-                            type="button"
-                            onClick={() => { setShowManualBchInput(false); setManualBchModalInput(''); }}
-                            className="px-3 py-1.5 text-xs text-ink-3 hover:text-ink rounded-control hover:bg-surface-3 cursor-pointer"
-                          >
-                            {t.cancelEdit}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              handleSaveCustomBch(manualBchModalInput);
-                              setShowWalletModal(false);
-                            }}
-                            className="px-3 py-1.5 text-xs font-semibold text-white bg-primary hover:bg-primary-hover rounded-control cursor-pointer"
-                          >
-                            {t.saveAddress}
-                          </button>
-                        </div>
-                      </div>
-                    )}
                   </>
                 ) : (
                   <>
