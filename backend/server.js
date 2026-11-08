@@ -29,20 +29,20 @@ app.use(helmet({
 app.use(cors());
 app.use(express.json());
 
-// Global Rate Limiter: max 120 requests per minute per IP
+// Global Rate Limiter: max 300 requests per minute per IP
 const globalLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 120,
+  max: 300,
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, error: 'Too many requests from this IP. Please try again in a minute.' }
 });
 app.use(globalLimiter);
 
-// Strict Rate Limiter for Swap Intent Creation: max 12 swaps per minute per IP
+// Rate Limiter for Swap Intent Creation: max 60 swaps per minute per IP
 const swapCreationLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 12,
+  max: 60,
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, error: 'Swap creation limit exceeded. Please wait a moment.' }
@@ -531,7 +531,11 @@ app.post('/api/swap/:id/verify-tx', async (req, res) => {
       });
     }
 
-    db.updateSwap(swap.id, { depositTxHash: finalTxHash, status: 'DEPOSIT_DETECTED' });
+    if (!['CONFIRMING', 'EXECUTING_PAYOUT', 'COMPLETED'].includes(swap.status)) {
+      db.updateSwap(swap.id, { depositTxHash: finalTxHash, status: 'DEPOSIT_DETECTED' });
+    } else if (!swap.depositTxHash && finalTxHash) {
+      db.updateSwap(swap.id, { depositTxHash: finalTxHash });
+    }
 
     // Trigger instant Watchman audit + Non-Custodial Vault release
     const result = await relayerEngine.executeRelay(swap.id);

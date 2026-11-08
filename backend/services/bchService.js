@@ -152,8 +152,9 @@ class BchService {
     const vaultLockingBytecode = vaultDecoded.bytecode;
 
     let refundLockingBytecode = vaultLockingBytecode;
-    if (refundAddress && (refundAddress.startsWith('bchtest:') || refundAddress.startsWith('bitcoincash:'))) {
-      const refDecoded = cashAddressToLockingBytecode(refundAddress.trim());
+    const primaryRefundAddr = refundAddress ? String(refundAddress).split(',')[0].trim() : null;
+    if (primaryRefundAddr && (primaryRefundAddr.startsWith('bchtest:') || primaryRefundAddr.startsWith('bitcoincash:'))) {
+      const refDecoded = cashAddressToLockingBytecode(primaryRefundAddr);
       if (typeof refDecoded !== 'string') {
         refundLockingBytecode = refDecoded.bytecode;
       }

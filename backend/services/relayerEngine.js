@@ -2,7 +2,6 @@ import { config } from '../config.js';
 import { db } from './db.js';
 import { bchService } from './bchService.js';
 import { evmService } from './evmService.js';
-import { solanaService } from './solanaService.js';
 import { oraclePool } from './oraclePool.js';
 import { poolService } from './poolService.js';
 import { watchmanSentinel } from './watchmanClient.js';
@@ -11,6 +10,7 @@ class RelayerEngine {
   constructor() {
     this.timer = null;
     this.isProcessing = false;
+    this.activeSwapLocks = new Map();
   }
 
   start(intervalMs = 4000) {
@@ -33,10 +33,15 @@ class RelayerEngine {
     try {
       const pending = db.getPendingSwaps();
       const cutoffMs = Date.now() - 24 * 60 * 60 * 1000;
+      const retryTxCutoffMs = Date.now() - 30 * 60 * 1000;
 
       for (const swap of pending) {
+        const createdMs = swap.createdAt ? new Date(swap.createdAt).getTime() : 0;
+
         if (swap.depositTxHash && (swap.status === 'PENDING_DEPOSIT' || swap.status === 'DEPOSIT_DETECTED')) {
-          await this.executeRelay(swap.id);
+          if (createdMs >= retryTxCutoffMs) {
+            await this.executeRelay(swap.id);
+          }
           continue;
         }
 
@@ -44,7 +49,6 @@ class RelayerEngine {
         const isBchOrigin =
           String(swap.fromChain || '').toLowerCase().includes('bch') ||
           String(swap.fromChain || '').toLowerCase().includes('chipnet');
-        const createdMs = swap.createdAt ? new Date(swap.createdAt).getTime() : 0;
 
         if (
           !swap.depositTxHash &&
@@ -115,37 +119,11 @@ class RelayerEngine {
           const expectedOutput = Number(order.expectedOutput);
 
           let payoutResult;
-          const isSolanaDest = solanaService.isSolanaChain(order.toChain);
           const isBchDest =
             String(order.toChain || '').toLowerCase().includes('bch') ||
             String(order.toChain || '').toLowerCase().includes('chipnet');
 
-          if (isSolanaDest) {
-            const tokenCfg = solanaService.getTokenConfig(order.toToken, order.toChain);
-            const auth = await watchmanSentinel.auditAndAuthorize({
-              destinationType: 'SOLANA',
-              originTxHash: order.depositTxHash,
-              fromToken: order.fromToken,
-              toToken: order.toToken,
-              recipient: order.recipientAddress,
-              tokenAddress: tokenCfg.mint,
-              tokenDecimals: tokenCfg.decimals,
-              amount: expectedOutput,
-              rate: currentRate,
-              vaultContractAddress: solanaService.programId
-            });
-            if (!auth.approved) throw new Error(auth.reason);
-
-            payoutResult = await solanaService.releaseFromVault({
-              bchTxHashBytes32: auth.bchTxHashBytes32,
-              recipientAddress: order.recipientAddress,
-              amount: expectedOutput,
-              tokenSymbol: order.toToken,
-              chain: order.toChain,
-              nonce: auth.nonce,
-              watchmanSignature: auth.proof
-            });
-          } else if (!isBchDest) {
+          if (!isBchDest) {
             const isAmoy = evmService.isAmoyChain(order.toChain);
             const chainId = isAmoy ? config.evm.amoyChainId : config.evm.chainId;
             const vaultAddress = evmService.getVaultAddress(order.toChain);
@@ -214,10 +192,24 @@ class RelayerEngine {
   }
 
   async executeRelay(swapId) {
+    if (this.activeSwapLocks.has(swapId)) {
+      return await this.activeSwapLocks.get(swapId);
+    }
+
+    const relayPromise = this._executeRelayInternal(swapId);
+    this.activeSwapLocks.set(swapId, relayPromise);
+    try {
+      return await relayPromise;
+    } finally {
+      this.activeSwapLocks.delete(swapId);
+    }
+  }
+
+  async _executeRelayInternal(swapId) {
     const swap = db.getSwap(swapId);
     if (!swap) return { success: false, error: 'Swap not found' };
 
-    if (swap.status === 'COMPLETED' || swap.status === 'EXECUTING_PAYOUT') {
+    if (swap.status === 'COMPLETED' || swap.payoutTxHash || swap.status === 'EXECUTING_PAYOUT') {
       return { success: true, swap };
     }
 
@@ -234,27 +226,17 @@ class RelayerEngine {
       const fromChainLower = String(swap.fromChain || '').toLowerCase();
       const toChainLower = String(swap.toChain || '').toLowerCase();
       const isBchOrigin = fromChainLower.includes('bch') || fromChainLower.includes('chipnet');
-      const isSolanaOrigin = solanaService.isSolanaChain(swap.fromChain);
       const isBchDestination = toChainLower.includes('bch') || toChainLower.includes('chipnet');
-      const isSolanaDestination = solanaService.isSolanaChain(swap.toChain);
 
       let verifyResult;
 
-      // 1. Verify deposit inside Non-Custodial Smart Contract / Covenant / Anchor PDA
+      // 1. Verify deposit inside Non-Custodial Smart Contract / Covenant
       if (isBchOrigin) {
         verifyResult = await bchService.verifyDeposit(
           swap.depositTxHash,
           swap.fromAmount,
           swap.fromToken,
           swap.depositAddress
-        );
-      } else if (isSolanaOrigin) {
-        verifyResult = await solanaService.verifyDeposit(
-          swap.depositTxHash,
-          swap.fromAmount,
-          swap.fromToken,
-          swap.depositAddress,
-          swap.fromChain
         );
       } else {
         verifyResult = await evmService.verifyDeposit(
@@ -296,39 +278,8 @@ class RelayerEngine {
       let payoutResult;
       let watchmanAttestation = null;
 
-      if (isSolanaDestination) {
-        // Inbound to Solana SVM (from BCH CashTokens OR from EVM Polygon/ETH) -> Ed25519 Attestation
-        const tokenCfg = solanaService.getTokenConfig(swap.toToken, swap.toChain);
-        const auth = await watchmanSentinel.auditAndAuthorize({
-          destinationType: 'SOLANA',
-          originTxHash: canonicalOriginHash,
-          fromToken: swap.fromToken,
-          toToken: swap.toToken,
-          recipient: swap.recipientAddress,
-          tokenAddress: tokenCfg.mint,
-          tokenDecimals: tokenCfg.decimals,
-          amount: swap.toAmount,
-          rate: swap.oracleRate || 1.0,
-          vaultContractAddress: solanaService.programId
-        });
-
-        if (!auth.approved) {
-          watchmanOriginRef = null;
-          throw new Error(`Watchman Sentinel rejected swap: ${auth.reason}`);
-        }
-        watchmanAttestation = auth.proof;
-
-        payoutResult = await solanaService.releaseFromVault({
-          bchTxHashBytes32: auth.bchTxHashBytes32,
-          recipientAddress: swap.recipientAddress,
-          amount: swap.toAmount,
-          tokenSymbol: swap.toToken,
-          chain: swap.toChain,
-          nonce: auth.nonce,
-          watchmanSignature: auth.proof
-        });
-      } else if (!isBchDestination) {
-        // Inbound to EVM (from BCH CashTokens OR from Solana SVM) -> ECDSA EIP-191 Attestation
+      if (!isBchDestination) {
+        // Inbound to EVM (from BCH CashTokens) -> ECDSA EIP-191 Attestation
         const isAmoy = evmService.isAmoyChain(swap.toChain);
         const chainId = isAmoy ? config.evm.amoyChainId : config.evm.chainId;
         const vaultAddress = evmService.getVaultAddress(swap.toChain);
@@ -391,8 +342,6 @@ class RelayerEngine {
       if (payoutResult.success) {
         if (isBchOrigin) {
           bchService.sweepEscrowToVault(swap).catch(() => {});
-        } else if (isSolanaOrigin && verifyResult.depositId) {
-          solanaService.markDepositSettled(verifyResult.depositId, payoutResult.txHash, swap.fromChain).catch(() => {});
         } else if (verifyResult.depositId) {
           evmService.markDepositSettled(verifyResult.depositId, payoutResult.txHash, swap.fromChain).catch(() => {});
         }
@@ -427,6 +376,10 @@ class RelayerEngine {
 
       return { success: true, swap: completedSwap };
     } catch (err) {
+      const latestSwap = db.getSwap(swapId);
+      if (latestSwap && (latestSwap.status === 'COMPLETED' || latestSwap.payoutTxHash)) {
+        return { success: true, swap: latestSwap };
+      }
       if (watchmanOriginRef) {
         watchmanSentinel.rollbackAuthorization(watchmanOriginRef);
       }

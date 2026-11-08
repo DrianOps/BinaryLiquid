@@ -14,8 +14,8 @@ export const config = {
 
   // Protocol Economics
   feePercentage: parseFloat(process.env.FEE_PERCENTAGE || '0.003'), // 0.3%
-  minSwapAmount: parseFloat(process.env.MIN_SWAP_AMOUNT || '1.0'),
-  maxSwapAmount: parseFloat(process.env.MAX_SWAP_AMOUNT || '500.0'),
+  minSwapAmount: parseFloat(process.env.MIN_SWAP_AMOUNT || '0.01'),
+  maxSwapAmount: parseFloat(process.env.MAX_SWAP_AMOUNT || '50000.0'),
 
   // Bitcoin Cash (Mainnet & Chipnet Non-Custodial CashScript Covenants)
   bch: {
