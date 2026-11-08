@@ -977,7 +977,7 @@ export default function App() {
           : 'bg-transparent border-b border-transparent shadow-none'
       }`}>
         <div className="w-full max-w-7xl mx-auto flex items-center justify-between relative">
-        <div className="flex items-center gap-3 sm:gap-8">
+        <div className="flex items-center gap-2 sm:gap-4 lg:gap-6">
           
           {/* BRAND DROPDOWN (BinaryLiquid ▾ -> Gateway, Whitepaper, SDK & API, Docs) */}
           <div
@@ -1130,14 +1130,14 @@ export default function App() {
             </AnimatePresence>
           </div>
           
-          {/* CENTER TABS (Desktop / Tablet — Centered directly over Swap Card on all screen sizes) */}
-          <div className="hidden md:flex items-center p-1 bg-surface-2 rounded-full border border-line text-xs font-semibold md:absolute md:left-1/2 md:-translate-x-1/2">
+          {/* DESKTOP NAVIGATION TABS (Left-aligned next to logo, clean & borderless) */}
+          <div className="hidden md:flex items-center gap-0.5 lg:gap-1 text-xs font-semibold ml-1 sm:ml-2">
             <button 
               onClick={() => setMainView('bridge')} 
-              className={`px-3.5 py-1.5 rounded-full transition-all cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
                 mainView === 'bridge' 
-                  ? 'bg-surface text-ink shadow-xs font-bold' 
-                  : 'text-ink-3 hover:text-ink font-medium'
+                  ? 'bg-surface-2 text-ink font-bold shadow-2xs' 
+                  : 'text-ink-3 hover:text-ink hover:bg-surface-2/60 font-medium'
               }`}
             >
               <span>{t.navSwap}</span>
@@ -1145,10 +1145,10 @@ export default function App() {
 
             <button 
               onClick={() => setMainView('perps')} 
-              className={`px-3.5 py-1.5 rounded-full transition-all cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
                 mainView === 'perps' 
-                  ? 'bg-surface text-ink shadow-xs font-bold' 
-                  : 'text-ink-3 hover:text-ink font-medium'
+                  ? 'bg-surface-2 text-ink font-bold shadow-2xs' 
+                  : 'text-ink-3 hover:text-ink hover:bg-surface-2/60 font-medium'
               }`}
             >
               <span>{t.navPerps}</span>
@@ -1156,10 +1156,10 @@ export default function App() {
 
             <button 
               onClick={() => setMainView('pools')} 
-              className={`px-3.5 py-1.5 rounded-full transition-all cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
                 mainView === 'pools' 
-                  ? 'bg-surface text-ink shadow-xs font-bold' 
-                  : 'text-ink-3 hover:text-ink font-medium'
+                  ? 'bg-surface-2 text-ink font-bold shadow-2xs' 
+                  : 'text-ink-3 hover:text-ink hover:bg-surface-2/60 font-medium'
               }`}
             >
               <span>{t.navPools}</span>
@@ -1167,10 +1167,10 @@ export default function App() {
 
             <button 
               onClick={() => setMainView('lend')} 
-              className={`px-3.5 py-1.5 rounded-full transition-all cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
                 mainView === 'lend' 
-                  ? 'bg-surface text-ink shadow-xs font-bold' 
-                  : 'text-ink-3 hover:text-ink font-medium'
+                  ? 'bg-surface-2 text-ink font-bold shadow-2xs' 
+                  : 'text-ink-3 hover:text-ink hover:bg-surface-2/60 font-medium'
               }`}
             >
               <span>{t.navLend}</span>
@@ -1178,10 +1178,10 @@ export default function App() {
 
             <button 
               onClick={() => setMainView('portfolio')} 
-              className={`px-3.5 py-1.5 rounded-full transition-all cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
                 mainView === 'portfolio' 
-                  ? 'bg-surface text-ink shadow-xs font-bold' 
-                  : 'text-ink-3 hover:text-ink font-medium'
+                  ? 'bg-surface-2 text-ink font-bold shadow-2xs' 
+                  : 'text-ink-3 hover:text-ink hover:bg-surface-2/60 font-medium'
               }`}
             >
               <span>{t.navPortfolio}</span>
@@ -1189,10 +1189,10 @@ export default function App() {
 
             <button 
               onClick={() => setMainView('docs')} 
-              className={`px-3.5 py-1.5 rounded-full transition-all cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
                 mainView === 'docs' 
-                  ? 'bg-surface text-ink shadow-xs font-bold' 
-                  : 'text-ink-3 hover:text-ink font-medium'
+                  ? 'bg-surface-2 text-ink font-bold shadow-2xs' 
+                  : 'text-ink-3 hover:text-ink hover:bg-surface-2/60 font-medium'
               }`}
             >
               <span>{t.navDocs}</span>
