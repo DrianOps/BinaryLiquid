@@ -1017,11 +1017,6 @@ export default function App() {
                   brandMenuOpen ? 'rotate-180 text-ink' : ''
                 }`}
               />
-              {(mainView === 'whitepaper' || mainView === 'sdk') && (
-                <span className="hidden lg:inline-flex items-center px-2 py-0.5 rounded-full bg-surface-2 border border-line text-[11px] font-semibold text-ink-2">
-                  {mainView === 'whitepaper' ? 'Whitepaper' : 'SDK & API'}
-                </span>
-              )}
             </button>
 
             <AnimatePresence>

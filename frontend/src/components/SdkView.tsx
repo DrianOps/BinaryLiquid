@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   Code2, 
   Copy, 
@@ -13,13 +13,26 @@ import {
   Globe,
   ShieldCheck,
   ArrowRight,
+  ArrowLeft,
   Search,
   Wallet,
   Smartphone,
   Sparkles,
   Layers,
   CheckCircle2,
-  Cpu
+  Cpu,
+  BookOpen,
+  ChevronRight,
+  ChevronDown,
+  Menu,
+  X,
+  FileCode,
+  Hash,
+  Share2,
+  Info,
+  Server,
+  Layers3,
+  ListTree
 } from 'lucide-react';
 
 interface SdkViewProps {
@@ -27,202 +40,144 @@ interface SdkViewProps {
   onNavigateToIdentity?: () => void;
 }
 
-const texts = {
-  en: {
-    heroBadge: "DEVELOPER PORTAL & SDK",
-    heroTitle: "Integrate BinaryLiquid into your ",
-    heroTitleHighlight: "dApp, Wallet or Platform",
-    heroSubtitle: "Embed our cross-chain DEX widget, resolve human UserLink handles (@myuser) into on-chain Bitcoin Cash addresses, or connect your volume bots with CoinGecko and CMC compliant APIs.",
-    
-    // Quick Nav Pills
-    navUserLink: "UserLink Protocol (Pay by Handle)",
-    navWidget: "iFrame Widget Generator",
-    navTrackers: "CoinGecko & CMC APIs",
-    navSwapCode: "Swap API Quickstart",
+type DocPageId = 
+  | 'welcome'
+  | 'quickstart'
+  | 'userlink-overview'
+  | 'userlink-resolver'
+  | 'userlink-wallets'
+  | 'userlink-api'
+  | 'userlink-python'
+  | 'userlink-nostr'
+  | 'userlink-exchanges'
+  | 'swap-widget'
+  | 'swap-api'
+  | 'coingecko-api'
+  | 'cmc-api';
 
-    // USERLINK PROTOCOL SECTION
-    userlinkBadge: "USERLINK PROTOCOL • DECENTRALIZED IDENTITY & PAYMENTS",
-    userlinkTitle: "Pay by Username: Decentralized BCH Handle Resolution",
-    userlinkSubtitle: "Enable your users to send and receive Bitcoin Cash using human-readable handles (@myuser / myuser@bliquid.xyz) instead of long 42-character alphanumeric addresses. 1-line REST API, instant NIP-05 resolution, and trustless Nostr Kind 30078 cryptographic verification.",
-    userlinkPlaygroundTitle: "Live Interactive Handle Resolver",
-    userlinkPlaygroundSubtitle: "Test live handle resolution in real time directly from our NIP-05 endpoint and Nostr relays",
-    userlinkInputPlaceholder: "Enter handle, e.g. @myuser or myuser@bliquid.xyz",
-    userlinkResolveBtn: "Resolve Handle",
-    userlinkResolving: "Resolving...",
-    userlinkResolvedTarget: "Target Handle:",
-    userlinkResolvedAddress: "Resolved BCH Mainnet Address:",
-    userlinkResolvedPubkey: "Nostr Hex Pubkey:",
-    userlinkRelaysLabel: "Active Decentralized Relays:",
-    userlinkSpeedLabel: "Resolution Latency:",
-    userlinkPaytacaBtn: "Open in Paytaca / Wallet",
-    userlinkClaimPassportBtn: "Create & Manage Your Handle",
-    userlinkTabTs: "TypeScript / JS (Wallets & Web3)",
-    userlinkTabCurl: "cURL / REST API (Exchanges & Gateways)",
-    userlinkTabPy: "Python (Bots & Daemons)",
-    userlinkTabNostr: "Nostr P2P (Serverless / Relays)",
-    userlinkFeature1Title: "Instant 0-Conf Speed",
-    userlinkFeature1Desc: "Queries resolve in under 40ms via CDN-cached NIP-05 JSON or sub-second WebSocket relay subscription.",
-    userlinkFeature2Title: "Dual Cryptographic Proof",
-    userlinkFeature2Desc: "Signed by both BCH ECDSA private key and Nostr Schnorr private key. Zero possibility of handle spoofing.",
-    userlinkFeature3Title: "Universal BIP-21 Compatibility",
-    userlinkFeature3Desc: "Seamless integration with Paytaca, Cashonize, Zapit, Electron Cash, and any wallet supporting standard Bitcoin Cash URIs.",
-    userlinkExchangesTitle: "Integration for Exchanges & Platforms",
-    userlinkExchangesStep1: "1. Handle Input: Users enter @myuser on your withdrawal or deposit page instead of a long alphanumeric hash.",
-    userlinkExchangesStep2: "2. Automatic Resolution: Your backend or frontend calls our standard NIP-05 endpoint in 1 line of code.",
-    userlinkExchangesStep3: "3. Direct Settlement: You broadcast the BCH transaction to the resolved on-chain address with 0 friction.",
+interface DocItem {
+  id: DocPageId;
+  title: { en: string; es: string };
+  category: { en: string; es: string };
+  badge?: string;
+  icon: any;
+}
 
-    // WIDGET GENERATOR
-    widgetTitle: "iFrame Widget Generator",
-    widgetBadge: "1-Click Embed",
-    widgetSubtitle: "Embed the cross-chain exchange gateway directly into any web project",
-    fromToken: "Initial Token (From):",
-    toToken: "Target Token (To):",
-    themeLabel: "Visual Theme:",
-    widthLabel: "Width (px):",
-    heightLabel: "Height (px):",
-    codeLabel: "HTML Code to embed into your website:",
-    copyCode: "Copy Code",
-    copied: "Copied!",
-    previewBadge: "Live Real-Time Preview:",
-    previewTitle: "Preview Widget",
-    
-    // TRACKERS (COINGECKO / CMC)
-    trackersTitle: "Standard APIs for CoinGecko & CoinMarketCap",
-    trackersSubtitle: "Public endpoints for DEX aggregators, volume trackers, DEXScreener, and arbitrage bots",
-    cgSpec: "CoinGecko DEX Spec",
-    cgDesc: "Endpoints compliant with the official CoinGecko DEX integration specification:",
-    cmcSpec: "CoinMarketCap DEX Spec",
-    cmcDesc: "Official endpoints structured for CoinMarketCap DEX listing:",
-    
-    // CODE SNIPPET (SWAP CREATION)
-    codeTitle: "Create Swaps with Code (JavaScript / Python / cURL)",
-    copyExample: "Copy Example",
-    codeSnippet: `// 1. Fetch real-time market quote
-const quote = await fetch('https://bliquid.xyz/api/quote?fromToken=PUSD&toToken=USDT&amount=50')
-  .then(r => r.json());
-
-// 2. Instantiate isolated Non-Custodial CashScript Covenant / Smart Contract Vault
-const order = await fetch('https://bliquid.xyz/api/swap/create', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    fromToken: 'PUSD',
-    toToken: 'USDT',
-    fromChain: 'bch_chipnet',
-    toChain: 'amoy_testnet',
-    amount: 50,
-    recipientAddress: '0xYOUR_POLYGON_WALLET'
-  })
-}).then(r => r.json());
-
-// 3. Result: Zero-Private-Key P2SH32 Covenant / Solidity Vault + 24h Timelock
-console.log('Smart Contract Vault:', order.instructions.depositAddress);
-console.log('Contract Spec:', order.instructions.contractType);`
+const DOC_ITEMS: DocItem[] = [
+  // 1. Getting Started
+  {
+    id: 'welcome',
+    category: { en: 'Getting Started', es: 'Introducción' },
+    title: { en: 'Overview & Architecture', es: 'Visión General & Arquitectura' },
+    icon: Globe
   },
-  es: {
-    heroBadge: "PORTAL DE DESARROLLADORES & SDK",
-    heroTitle: "Integra BinaryLiquid en tu ",
-    heroTitleHighlight: "dApp, Wallet o Plataforma",
-    heroSubtitle: "Incrusta nuestro widget swap cross-chain, resuelve nombres legibles de UserLink (@myuser) a direcciones de Bitcoin Cash, o conecta tus bots con APIs compatibles con CoinGecko y CMC.",
-    
-    // Quick Nav Pills
-    navUserLink: "Protocolo UserLink (Pagos por Usuario)",
-    navWidget: "Generador de Widget iFrame",
-    navTrackers: "APIs CoinGecko & CMC",
-    navSwapCode: "Quickstart Swap API",
+  {
+    id: 'quickstart',
+    category: { en: 'Getting Started', es: 'Introducción' },
+    title: { en: 'Quickstart & Installation', es: 'Inicio Rápido & Configuración' },
+    badge: '1-min',
+    icon: Zap
+  },
 
-    // USERLINK PROTOCOL SECTION
-    userlinkBadge: "PROTOCOLO USERLINK • IDENTIDAD & PAGOS DESCENTRALIZADOS",
-    userlinkTitle: "Paga por Nombre: Resolución Descentralizada de Handles BCH",
-    userlinkSubtitle: "Permite que tus usuarios envíen y reciban Bitcoin Cash usando nombres legibles (@myuser / myuser@bliquid.xyz) en lugar de direcciones criptográficas de 42 caracteres. API REST en 1 línea de código, resolución instantánea NIP-05 y verificación descentralizada Nostr Kind 30078.",
-    userlinkPlaygroundTitle: "Probador Interactivo de Resolución de Usuarios",
-    userlinkPlaygroundSubtitle: "Prueba la resolución en vivo y en tiempo real consultando nuestro endpoint NIP-05 y relays globales de Nostr",
-    userlinkInputPlaceholder: "Escribe un usuario, ej: @myuser o myuser@bliquid.xyz",
-    userlinkResolveBtn: "Resolver Usuario",
-    userlinkResolving: "Resolviendo...",
-    userlinkResolvedTarget: "Usuario Solicitado:",
-    userlinkResolvedAddress: "Dirección BCH Mainnet Resuelta:",
-    userlinkResolvedPubkey: "Clave Pública Nostr (Hex):",
-    userlinkRelaysLabel: "Relays Descentralizados Activos:",
-    userlinkSpeedLabel: "Latencia de Respuesta:",
-    userlinkPaytacaBtn: "Abrir en Paytaca / Wallet",
-    userlinkClaimPassportBtn: "Crear y Gestionar tu Usuario",
-    userlinkTabTs: "TypeScript / JS (Wallets & Web3)",
-    userlinkTabCurl: "cURL / REST API (Exchanges & Pasarelas)",
-    userlinkTabPy: "Python (Bots de Telegram / Discord)",
-    userlinkTabNostr: "Nostr P2P (Sin Servidor / Relays)",
-    userlinkFeature1Title: "Velocidad Inmediata 0-Conf",
-    userlinkFeature1Desc: "Las consultas se resuelven en menos de 40ms mediante NIP-05 con caché CDN o mediante suscripción WebSocket directa a relays.",
-    userlinkFeature2Title: "Doble Verificación Criptográfica",
-    userlinkFeature2Desc: "Firmado criptográficamente tanto por la llave privada BCH (ECDSA) como por la llave Nostr (Schnorr). Cero riesgo de suplantación.",
-    userlinkFeature3Title: "Compatibilidad Universal BIP-21",
-    userlinkFeature3Desc: "Compatible de forma nativa con Paytaca, Cashonize, Zapit, Electron Cash y cualquier wallet que soporte URIs estándar bitcoincash:.",
-    userlinkExchangesTitle: "Integración para Exchanges y Plataformas",
-    userlinkExchangesStep1: "1. Entrada de Usuario: Los clientes escriben @myuser en tu formulario de retiro o depósito en vez de una confusa dirección alfanumérica.",
-    userlinkExchangesStep2: "2. Resolución Automática: Tu backend o frontend consulta nuestro endpoint estándar NIP-05 en una sola línea de código.",
-    userlinkExchangesStep3: "3. Liquidación Directa: Envías la transacción BCH directamente a la dirección on-chain resuelta con total seguridad.",
+  // 2. UserLink Protocol (Pagos por Usuario)
+  {
+    id: 'userlink-overview',
+    category: { en: 'UserLink Protocol (Pay by Handle)', es: 'Protocolo UserLink (Pagos por Usuario)' },
+    title: { en: 'Protocol Standards & NIP-05', es: 'Estándares del Protocolo & NIP-05' },
+    badge: 'BCH Mainnet',
+    icon: AtSign
+  },
+  {
+    id: 'userlink-resolver',
+    category: { en: 'UserLink Protocol (Pay by Handle)', es: 'Protocolo UserLink (Pagos por Usuario)' },
+    title: { en: 'Interactive Live Playground', es: 'Probador Interactivo en Vivo' },
+    badge: 'Playground',
+    icon: Search
+  },
+  {
+    id: 'userlink-wallets',
+    category: { en: 'UserLink Protocol (Pay by Handle)', es: 'Protocolo UserLink (Pagos por Usuario)' },
+    title: { en: 'TypeScript / JS (Web3 Wallets)', es: 'TypeScript / JS (Wallets Web3)' },
+    badge: 'Client',
+    icon: Smartphone
+  },
+  {
+    id: 'userlink-api',
+    category: { en: 'UserLink Protocol (Pay by Handle)', es: 'Protocolo UserLink (Pagos por Usuario)' },
+    title: { en: 'REST API & cURL (Exchanges)', es: 'API REST & cURL (Exchanges)' },
+    badge: 'REST',
+    icon: Server
+  },
+  {
+    id: 'userlink-python',
+    category: { en: 'UserLink Protocol (Pay by Handle)', es: 'Protocolo UserLink (Pagos por Usuario)' },
+    title: { en: 'Python (Telegram & Discord Bots)', es: 'Python (Bots de Telegram / Discord)' },
+    badge: 'Backend',
+    icon: Terminal
+  },
+  {
+    id: 'userlink-nostr',
+    category: { en: 'UserLink Protocol (Pay by Handle)', es: 'Protocolo UserLink (Pagos por Usuario)' },
+    title: { en: 'Decentralized Nostr Relays (P2P)', es: 'Relays Nostr P2P (Sin Servidor)' },
+    badge: 'Serverless',
+    icon: Layers3
+  },
+  {
+    id: 'userlink-exchanges',
+    category: { en: 'UserLink Protocol (Pay by Handle)', es: 'Protocolo UserLink (Pagos por Usuario)' },
+    title: { en: 'Exchange Integration Guide', es: 'Guía de Integración para Exchanges' },
+    badge: 'Guide',
+    icon: Cpu
+  },
 
-    // WIDGET GENERATOR
-    widgetTitle: "Generador de Widget iFrame",
-    widgetBadge: "1-Click Embed",
-    widgetSubtitle: "Incrusta la pasarela de intercambio directamente en cualquier proyecto web",
-    fromToken: "Token Inicial (From):",
-    toToken: "Token Destino (To):",
-    themeLabel: "Tema Visual:",
-    widthLabel: "Ancho (px):",
-    heightLabel: "Alto (px):",
-    codeLabel: "Código HTML para pegar en tu web:",
-    copyCode: "Copiar Código",
-    copied: "¡Copiado!",
-    previewBadge: "Vista Previa en Tiempo Real:",
-    previewTitle: "Vista Previa Widget",
-    
-    // TRACKERS (COINGECKO / CMC)
-    trackersTitle: "APIs Estándar para CoinGecko & CoinMarketCap",
-    trackersSubtitle: "Endpoints públicos para indexación en agregadores de volumen, DEXScreener y bots de arbitraje",
-    cgSpec: "CoinGecko DEX Spec",
-    cgDesc: "Endpoints compatibles con la especificación oficial de integración DEX de CoinGecko:",
-    cmcSpec: "CoinMarketCap DEX Spec",
-    cmcDesc: "Endpoints oficiales estructurados para listado DEX en CoinMarketCap:",
-    
-    // CODE SNIPPET (SWAP CREATION)
-    codeTitle: "Crear Swaps con Código (JavaScript / Python / cURL)",
-    copyExample: "Copiar Ejemplo",
-    codeSnippet: `// 1. Consultar cotización en tiempo real
-const quote = await fetch('https://bliquid.xyz/api/quote?fromToken=PUSD&toToken=USDT&amount=50')
-  .then(r => r.json());
+  // 3. Cross-Chain Swap SDK
+  {
+    id: 'swap-widget',
+    category: { en: 'Cross-Chain Swap SDK', es: 'SDK de Swaps Cross-Chain' },
+    title: { en: 'iFrame Widget Generator', es: 'Generador de Widget iFrame' },
+    badge: 'Widget',
+    icon: Box
+  },
+  {
+    id: 'swap-api',
+    category: { en: 'Cross-Chain Swap SDK', es: 'SDK de Swaps Cross-Chain' },
+    title: { en: 'Programmatic Swaps API', es: 'API de Swaps Programáticos' },
+    badge: 'Covenants',
+    icon: Code2
+  },
 
-// 2. Instanciar Covenant CashScript P2SH32 / Smart Contract Vault No-Custodio
-const order = await fetch('https://bliquid.xyz/api/swap/create', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    fromToken: 'PUSD',
-    toToken: 'USDT',
-    fromChain: 'bch_chipnet',
-    toChain: 'amoy_testnet',
-    amount: 50,
-    recipientAddress: '0xTU_WALLET_POLYGON'
-  })
-}).then(r => r.json());
-
-// 3. Resultado: Contrato Inteligente sin llaves privadas + Reembolso 24h
-console.log('Smart Contract de Depósito:', order.instructions.depositAddress);
-console.log('Especificación del Contrato:', order.instructions.contractType);`
+  // 4. Market Indexers & Oracles
+  {
+    id: 'coingecko-api',
+    category: { en: 'Market Indexers & Oracles', es: 'Indexadores & Oráculos de Mercado' },
+    title: { en: 'CoinGecko DEX Spec', es: 'Especificación CoinGecko DEX' },
+    badge: 'DEX',
+    icon: TrendingUp
+  },
+  {
+    id: 'cmc-api',
+    category: { en: 'Market Indexers & Oracles', es: 'Indexadores & Oráculos de Mercado' },
+    title: { en: 'CoinMarketCap DEX Spec', es: 'Especificación CoinMarketCap' },
+    badge: 'CMC',
+    icon: FileCode
   }
-};
+];
 
 export const SdkView: React.FC<SdkViewProps> = ({ lang = 'en', onNavigateToIdentity }) => {
+  const isEs = lang === 'es';
+  const [activeDocId, setActiveDocId] = useState<DocPageId>('userlink-overview');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [copiedSection, setCopiedSection] = useState<string | null>(null);
-  
-  // Widget Builder States
+
+  // Widget States
   const [embedFrom, setEmbedFrom] = useState('PUSD');
   const [embedTo, setEmbedTo] = useState('USDT');
   const [embedTheme, setEmbedTheme] = useState<'dark' | 'light'>('dark');
   const [embedWidth, setEmbedWidth] = useState('420');
   const [embedHeight, setEmbedHeight] = useState('640');
 
-  // UserLink Protocol Playground States
+  // UserLink Playground States
   const [testHandle, setTestHandle] = useState('myuser');
   const [isResolving, setIsResolving] = useState(false);
   const [resolveResult, setResolveResult] = useState<{
@@ -238,9 +193,6 @@ export const SdkView: React.FC<SdkViewProps> = ({ lang = 'en', onNavigateToIdent
     relays: ['wss://nos.lol', 'wss://relay.primal.net', 'wss://nostr.mom', 'wss://purplerelay.com'],
     latencyMs: 38
   });
-  const [userlinkTab, setUserlinkTab] = useState<'ts' | 'curl' | 'py' | 'nostr'>('ts');
-
-  const t = texts[lang] || texts.en;
 
   const origin = typeof window !== 'undefined' ? window.location.origin : 'https://bliquid.xyz';
   const embedUrl = `${origin}/embed?from=${embedFrom}&to=${embedTo}&theme=${embedTheme}`;
@@ -306,73 +258,748 @@ export const SdkView: React.FC<SdkViewProps> = ({ lang = 'en', onNavigateToIdent
     }
   };
 
-  // UserLink Code Snippets
-  const codeSnippets = {
-    ts: `// ========================================================
-// 1. Resolve UserLink handle (@myuser or myuser@bliquid.xyz)
-// ========================================================
+  // Group items by category
+  const categories = useMemo(() => {
+    const map = new Map<string, DocItem[]>();
+    DOC_ITEMS.forEach(item => {
+      const cat = isEs ? item.category.es : item.category.en;
+      if (!map.has(cat)) map.set(cat, []);
+      map.get(cat)!.push(item);
+    });
+    return Array.from(map.entries());
+  }, [isEs]);
+
+  // Filtered items
+  const filteredCategories = useMemo(() => {
+    if (!searchQuery.trim()) return categories;
+    const q = searchQuery.toLowerCase();
+    const result: [string, DocItem[]][] = [];
+    categories.forEach(([cat, items]) => {
+      const filtered = items.filter(it => 
+        (isEs ? it.title.es : it.title.en).toLowerCase().includes(q) ||
+        cat.toLowerCase().includes(q)
+      );
+      if (filtered.length > 0) result.push([cat, filtered]);
+    });
+    return result;
+  }, [categories, searchQuery, isEs]);
+
+  // Current doc item
+  const currentDocIndex = DOC_ITEMS.findIndex(d => d.id === activeDocId);
+  const currentDoc = DOC_ITEMS[currentDocIndex] || DOC_ITEMS[0];
+  const prevDoc = currentDocIndex > 0 ? DOC_ITEMS[currentDocIndex - 1] : null;
+  const nextDoc = currentDocIndex < DOC_ITEMS.length - 1 ? DOC_ITEMS[currentDocIndex + 1] : null;
+
+  const navigateToIdentity = () => {
+    if (onNavigateToIdentity) {
+      onNavigateToIdentity();
+    } else if (typeof window !== 'undefined') {
+      window.location.hash = '#identity';
+    }
+  };
+
+  return (
+    <div className="w-full max-w-7xl mx-auto px-2 sm:px-4 py-4 space-y-4">
+      {/* GITBOOK HEADER STRIP */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl bg-white dark:bg-[#121622] border border-gray-200 dark:border-gray-800 shadow-sm">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
+            className="md:hidden p-2 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:text-primary transition-colors cursor-pointer"
+            title="Menu"
+          >
+            {mobileSidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </button>
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold">
+              <BookOpen className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-black text-gray-900 dark:text-white uppercase tracking-wider">
+                  BinaryLiquid Docs
+                </span>
+                <span className="text-[10px] font-mono font-bold bg-primary/10 text-primary px-2 py-0.5 rounded-full border border-primary/20">
+                  v2.4 • Mainnet
+                </span>
+              </div>
+              <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                {isEs ? 'Guía oficial para desarrolladores, wallets y exchanges' : 'Official documentation for developers, wallets & exchanges'}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={navigateToIdentity}
+            className="px-3 py-1.5 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary border border-primary/25 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+          >
+            <AtSign className="w-3.5 h-3.5" />
+            <span>@myuser ID</span>
+          </button>
+
+          <a
+            href="https://github.com/DrianOps/BinaryLiquid"
+            target="_blank"
+            rel="noreferrer"
+            className="px-3 py-1.5 rounded-xl bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs font-bold transition-all flex items-center gap-1.5"
+          >
+            <Code2 className="w-3.5 h-3.5" />
+            <span>GitHub</span>
+            <ExternalLink className="w-3 h-3 text-gray-400" />
+          </a>
+        </div>
+      </div>
+
+      {/* GITBOOK 2-COLUMN MAIN BODY */}
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
+        {/* LEFT GITBOOK SIDEBAR */}
+        <aside
+          className={`md:col-span-4 lg:col-span-3 rounded-2xl bg-white dark:bg-[#121622] border border-gray-200 dark:border-gray-800 p-4 space-y-4 transition-all ${
+            mobileSidebarOpen ? 'block' : 'hidden md:block'
+          } sticky top-20`}
+        >
+          {/* Quick Search in docs */}
+          <div className="relative">
+            <Search className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={isEs ? 'Buscar en la documentación...' : 'Search docs...'}
+              className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-gray-50 dark:bg-[#161c28] border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white text-xs font-medium focus:outline-none focus:border-primary"
+            />
+          </div>
+
+          {/* Nav Categories & Tree */}
+          <div className="space-y-4 max-h-[calc(100vh-240px)] overflow-y-auto pr-1">
+            {filteredCategories.map(([categoryName, items]) => (
+              <div key={categoryName} className="space-y-1.5">
+                <h3 className="text-[10px] uppercase font-black tracking-wider text-gray-400 dark:text-gray-500 px-2 flex items-center gap-1.5">
+                  <ListTree className="w-3 h-3" />
+                  <span>{categoryName}</span>
+                </h3>
+
+                <div className="space-y-0.5">
+                  {items.map(item => {
+                    const Icon = item.icon;
+                    const isActive = activeDocId === item.id;
+                    const itemTitle = isEs ? item.title.es : item.title.en;
+
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => {
+                          setActiveDocId(item.id);
+                          setMobileSidebarOpen(false);
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }}
+                        className={`w-full text-left px-2.5 py-2 rounded-xl text-xs font-medium transition-all flex items-center justify-between cursor-pointer ${
+                          isActive
+                            ? 'bg-primary/10 text-primary font-bold border-l-3 border-primary shadow-xs'
+                            : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-[#161c28] hover:text-gray-900 dark:hover:text-white'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 truncate">
+                          <Icon className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-primary' : 'text-gray-400'}`} />
+                          <span className="truncate">{itemTitle}</span>
+                        </div>
+                        {item.badge && (
+                          <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded-md shrink-0 font-bold ${
+                            isActive 
+                              ? 'bg-primary text-white' 
+                              : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400'
+                          }`}>
+                            {item.badge}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </aside>
+
+        {/* RIGHT GITBOOK DOCUMENT CONTENT */}
+        <main className="md:col-span-8 lg:col-span-9 rounded-3xl bg-white dark:bg-[#121622] border border-gray-200 dark:border-gray-800 p-6 sm:p-10 shadow-xl space-y-8 min-h-[700px]">
+          {/* Breadcrumb Strip */}
+          <div className="flex items-center gap-2 text-xs text-gray-400 border-b border-gray-100 dark:border-gray-800 pb-4">
+            <span className="font-bold text-gray-500 dark:text-gray-400">Docs</span>
+            <ChevronRight className="w-3.5 h-3.5" />
+            <span>{isEs ? currentDoc.category.es : currentDoc.category.en}</span>
+            <ChevronRight className="w-3.5 h-3.5" />
+            <span className="font-bold text-primary">{isEs ? currentDoc.title.es : currentDoc.title.en}</span>
+          </div>
+
+          {/* ========================================================================= */}
+          {/* DOC 1: WELCOME */}
+          {/* ========================================================================= */}
+          {activeDocId === 'welcome' && (
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <span className="text-[11px] font-black uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded-full border border-primary/20">
+                  {isEs ? 'ARQUITECTURA & VISIÓN' : 'ARCHITECTURE & OVERVIEW'}
+                </span>
+                <h1 className="text-2xl sm:text-4xl font-black text-gray-950 dark:text-white">
+                  {isEs ? 'Bienvenido a la Documentación de BinaryLiquid' : 'Welcome to BinaryLiquid Developer Documentation'}
+                </h1>
+                <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
+                  {isEs 
+                    ? 'BinaryLiquid es el primer protocolo de intercambio cross-chain no-custodio y resolución de nombres para Bitcoin Cash (BCH) y redes EVM, combinando Covenants CashScript P2SH32, contratos inteligentes Solidity y el estándar descentralizado UserLink.' 
+                    : 'BinaryLiquid is the premier non-custodial cross-chain exchange and human identity protocol for Bitcoin Cash (BCH) and EVM chains, powered by CashScript P2SH32 covenants, Solidity smart vaults, and the UserLink identity standard.'}
+                </p>
+              </div>
+
+              {/* Callout Info */}
+              <div className="p-4 rounded-2xl bg-blue-500/10 border-l-4 border-blue-500 text-blue-900 dark:text-blue-200 text-xs sm:text-sm space-y-1">
+                <div className="font-bold flex items-center gap-1.5">
+                  <Info className="w-4 h-4 text-blue-500 shrink-0" />
+                  <span>{isEs ? 'Zero Custodia y Cero Llaves Privadas Centrales' : 'Zero Custody & Zero Central Private Keys'}</span>
+                </div>
+                <p className="text-xs text-blue-800 dark:text-blue-300 leading-relaxed">
+                  {isEs 
+                    ? 'Los fondos nunca tocan servidores de terceros. Todas las swaps se resuelven on-chain mediante covenants matemáticos con timelock de reembolso de 24 horas y resolución NIP-05 verificable.' 
+                    : 'Funds never touch third-party servers. All swaps settle on-chain via mathematical covenants with 24-hour refund timelocks and verifiable NIP-05 resolution.'}
+                </p>
+              </div>
+
+              {/* 3 Core Pillars Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+                <div 
+                  onClick={() => setActiveDocId('userlink-overview')}
+                  className="p-5 rounded-2xl bg-gray-50 dark:bg-[#161c28] border border-gray-200 dark:border-gray-800 space-y-2 hover:border-primary transition-all cursor-pointer group"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold">
+                    <AtSign className="w-5 h-5" />
+                  </div>
+                  <h3 className="font-bold text-gray-900 dark:text-white text-sm group-hover:text-primary transition-colors flex items-center justify-between">
+                    <span>{isEs ? 'Protocolo UserLink' : 'UserLink Protocol'}</span>
+                    <ArrowRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                    {isEs ? 'Pagos por usuario (@myuser) con resolución NIP-05 y firmas Schnorr.' : 'Human-readable payments (@myuser) with NIP-05 & Schnorr dual proofs.'}
+                  </p>
+                </div>
+
+                <div 
+                  onClick={() => setActiveDocId('swap-widget')}
+                  className="p-5 rounded-2xl bg-gray-50 dark:bg-[#161c28] border border-gray-200 dark:border-gray-800 space-y-2 hover:border-primary transition-all cursor-pointer group"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-orange-500/10 text-orange-500 flex items-center justify-center font-bold">
+                    <Box className="w-5 h-5" />
+                  </div>
+                  <h3 className="font-bold text-gray-900 dark:text-white text-sm group-hover:text-primary transition-colors flex items-center justify-between">
+                    <span>{isEs ? 'Widget Cross-Chain' : 'Cross-Chain Widget'}</span>
+                    <ArrowRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                    {isEs ? 'Incrusta nuestra pasarela de intercambio en 1 clic en cualquier sitio web.' : 'Embed the cross-chain swap gateway in 1 click into any web project.'}
+                  </p>
+                </div>
+
+                <div 
+                  onClick={() => setActiveDocId('coingecko-api')}
+                  className="p-5 rounded-2xl bg-gray-50 dark:bg-[#161c28] border border-gray-200 dark:border-gray-800 space-y-2 hover:border-primary transition-all cursor-pointer group"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center font-bold">
+                    <TrendingUp className="w-5 h-5" />
+                  </div>
+                  <h3 className="font-bold text-gray-900 dark:text-white text-sm group-hover:text-primary transition-colors flex items-center justify-between">
+                    <span>{isEs ? 'APIs de Mercado' : 'Market Data APIs'}</span>
+                    <ArrowRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                    {isEs ? 'Endpoints estándar compatibles con CoinGecko y CoinMarketCap.' : 'Standard compliant endpoints for CoinGecko & CoinMarketCap indexers.'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ========================================================================= */}
+          {/* DOC 2: QUICKSTART */}
+          {/* ========================================================================= */}
+          {activeDocId === 'quickstart' && (
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <span className="text-[11px] font-black uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded-full border border-primary/20">
+                  {isEs ? 'INICIO RÁPIDO' : 'QUICKSTART'}
+                </span>
+                <h1 className="text-2xl sm:text-4xl font-black text-gray-950 dark:text-white">
+                  {isEs ? 'Inicio Rápido en 1 Minuto' : '1-Minute Quickstart'}
+                </h1>
+                <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
+                  {isEs 
+                    ? 'Integra resolución de nombres y swaps de Bitcoin Cash con librerías nativas o llamadas HTTP simples sin dependencias pesadas.' 
+                    : 'Integrate Bitcoin Cash username resolution and cross-chain swaps with native libraries or lightweight HTTP calls.'}
+                </p>
+              </div>
+
+              {/* Step 1 */}
+              <div className="space-y-3">
+                <h3 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-full bg-primary text-white text-xs flex items-center justify-center font-bold">1</span>
+                  <span>{isEs ? 'Resolver un usuario a dirección BCH' : 'Resolve a username to a BCH address'}</span>
+                </h3>
+                <div className="relative">
+                  <div className="flex items-center justify-between px-4 py-2 bg-gray-900 text-gray-400 text-xs font-mono rounded-t-xl border border-b-0 border-gray-800">
+                    <span>bash (cURL)</span>
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard('curl -s "https://bliquid.xyz/.well-known/nostr.json?name=myuser" | jq', 'qs-curl')}
+                      className="text-primary hover:underline font-sans cursor-pointer flex items-center gap-1"
+                    >
+                      {copiedSection === 'qs-curl' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{copiedSection === 'qs-curl' ? 'Copiado' : 'Copiar'}</span>
+                    </button>
+                  </div>
+                  <pre className="p-4 rounded-b-xl bg-gray-950 text-gray-200 font-mono text-xs overflow-x-auto border border-gray-800">
+                    <code>{`curl -s "https://bliquid.xyz/.well-known/nostr.json?name=myuser" | jq`}</code>
+                  </pre>
+                </div>
+              </div>
+
+              {/* Step 2 */}
+              <div className="space-y-3">
+                <h3 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-full bg-primary text-white text-xs flex items-center justify-center font-bold">2</span>
+                  <span>{isEs ? 'Disparar pago en wallet instalada (Paytaca / Zapit / Cashonize)' : 'Trigger payment in installed wallet (Paytaca / Zapit / Cashonize)'}</span>
+                </h3>
+                <pre className="p-4 rounded-xl bg-gray-950 text-gray-200 font-mono text-xs overflow-x-auto border border-gray-800">
+                  <code>{`// Universal BIP-21 Deep Link standard supported by all BCH wallets:
+window.location.href = "bitcoincash:qpm2qsznhks23z7629mms6s4cwef74vcwvy22gdx6a?amount=0.015&label=@myuser";`}</code>
+                </pre>
+              </div>
+            </div>
+          )}
+
+          {/* ========================================================================= */}
+          {/* DOC 3: USERLINK OVERVIEW */}
+          {/* ========================================================================= */}
+          {activeDocId === 'userlink-overview' && (
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <span className="text-[11px] font-black uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded-full border border-primary/20">
+                  {isEs ? 'PROTOCOLO USERLINK • BCH + NOSTR' : 'USERLINK PROTOCOL • BCH + NOSTR'}
+                </span>
+                <h1 className="text-2xl sm:text-4xl font-black text-gray-950 dark:text-white">
+                  {isEs ? 'Estándares del Protocolo & Resolución NIP-05' : 'Protocol Standards & NIP-05 Resolution'}
+                </h1>
+                <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
+                  {isEs 
+                    ? 'UserLink resuelve el mayor dolor de cabeza de las criptomonedas: sustituye direcciones crípticas de 42 caracteres por nombres humanos (@myuser o myuser@bliquid.xyz) con doble prueba criptográfica verificable.' 
+                    : 'UserLink eliminates the friction of crypto by replacing cryptic 42-character alphanumeric addresses with human-readable handles (@myuser or myuser@bliquid.xyz) backed by cryptographic proof.'}
+                </p>
+              </div>
+
+              {/* Callout Warning */}
+              <div className="p-4 rounded-2xl bg-amber-500/10 border-l-4 border-amber-500 text-amber-900 dark:text-amber-200 text-xs sm:text-sm space-y-1">
+                <div className="font-bold flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-amber-500 shrink-0" />
+                  <span>{isEs ? 'Doble Firma Criptográfica Incorruptible' : 'Tamper-Proof Dual Cryptography'}</span>
+                </div>
+                <p className="text-xs text-amber-800 dark:text-amber-300 leading-relaxed">
+                  {isEs 
+                    ? 'Cada usuario enlaza su dirección BCH mediante una firma ECDSA de su llave privada Bitcoin Cash y una firma Schnorr de su llave Nostr. Es imposible que un servidor o tercero suplante la identidad.' 
+                    : 'Each handle links a BCH address signed with the user’s BCH ECDSA private key and Nostr Schnorr private key. No third-party or server can spoof or alter the mapping.'}
+                </p>
+              </div>
+
+              {/* Standards Specs Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-4 rounded-2xl bg-gray-50 dark:bg-[#161c28] border border-gray-200 dark:border-gray-800 space-y-2">
+                  <div className="flex items-center gap-2 text-primary font-bold text-xs uppercase tracking-wide">
+                    <Globe className="w-4 h-4" />
+                    <span>NIP-05 DNS Endpoint</span>
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                    {isEs 
+                      ? 'Endpoint estándar HTTPS alojado en /.well-known/nostr.json con soporte CORS universal y caché CDN de 40ms.' 
+                      : 'Standard HTTPS endpoint hosted at /.well-known/nostr.json with universal CORS and 40ms CDN caching.'}
+                  </p>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-gray-50 dark:bg-[#161c28] border border-gray-200 dark:border-gray-800 space-y-2">
+                  <div className="flex items-center gap-2 text-primary font-bold text-xs uppercase tracking-wide">
+                    <Layers3 className="w-4 h-4" />
+                    <span>Nostr Kind 30078</span>
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                    {isEs 
+                      ? 'Registro reemplazable parametrizado publicado en relays públicos globales (nos.lol, relay.primal.net) 100% descentralizado.' 
+                      : 'Parameterized replaceable event published to global public relays (nos.lol, relay.primal.net) for 100% serverless P2P lookup.'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Next Step CTA */}
+              <div className="flex justify-between items-center pt-4 border-t border-gray-100 dark:border-gray-800">
+                <button
+                  type="button"
+                  onClick={() => setActiveDocId('userlink-resolver')}
+                  className="px-4 py-2 rounded-xl bg-primary hover:bg-orange-600 text-white font-bold text-xs shadow-md shadow-primary/20 flex items-center gap-2 cursor-pointer ml-auto"
+                >
+                  <span>{isEs ? 'Probar en el Playground' : 'Test in Live Playground'}</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ========================================================================= */}
+          {/* DOC 4: USERLINK RESOLVER PLAYGROUND */}
+          {/* ========================================================================= */}
+          {activeDocId === 'userlink-resolver' && (
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <span className="text-[11px] font-black uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded-full border border-primary/20">
+                  {isEs ? 'PLAYGROUND INTERACTIVO' : 'INTERACTIVE PLAYGROUND'}
+                </span>
+                <h1 className="text-2xl sm:text-4xl font-black text-gray-950 dark:text-white">
+                  {isEs ? 'Probador Interactivo de Resolución' : 'Live Interactive Handle Resolver'}
+                </h1>
+                <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
+                  {isEs 
+                    ? 'Escribe un usuario (@myuser) para consultar en vivo el endpoint NIP-05 y verificar cómo responde la infraestructura en producción.' 
+                    : 'Enter any handle (@myuser) to query the production NIP-05 endpoint live and inspect latency, addresses and keys.'}
+                </p>
+              </div>
+
+              {/* INTERACTIVE PLAYGROUND BOX */}
+              <div className="p-6 rounded-2xl bg-gray-50 dark:bg-[#0e121a] border-2 border-primary/30 space-y-5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Search className="w-4 h-4 text-primary" />
+                    <span className="text-xs font-bold text-gray-900 dark:text-white">
+                      {isEs ? 'Resolver Handle en Vivo' : 'Live Handle Resolver'}
+                    </span>
+                  </div>
+                  <span className="text-[11px] font-mono font-bold text-emerald-500 bg-emerald-500/10 px-2.5 py-1 rounded-full flex items-center gap-1.5 border border-emerald-500/20 self-start sm:self-auto">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    BCH Mainnet 200 OK
+                  </span>
+                </div>
+
+                <form onSubmit={handleResolveTester} className="flex flex-col sm:flex-row gap-2">
+                  <div className="relative flex-1">
+                    <AtSign className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={testHandle}
+                      onChange={(e) => setTestHandle(e.target.value)}
+                      placeholder="myuser o myuser@bliquid.xyz"
+                      className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-white dark:bg-[#161c28] border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white text-xs font-mono font-bold focus:outline-none focus:border-primary shadow-xs"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={isResolving}
+                    className="px-5 py-2.5 rounded-xl bg-primary hover:bg-orange-600 disabled:opacity-50 text-white text-xs font-bold transition-all shadow-md shadow-primary/20 flex items-center justify-center gap-2 cursor-pointer shrink-0"
+                  >
+                    {isResolving ? (
+                      <>
+                        <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        <span>{isEs ? 'Resolviendo...' : 'Resolving...'}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Search className="w-3.5 h-3.5" />
+                        <span>{isEs ? 'Resolver Usuario' : 'Resolve Handle'}</span>
+                      </>
+                    )}
+                  </button>
+                </form>
+
+                {/* Output Card */}
+                <div className="p-4 rounded-xl bg-white dark:bg-[#141824] border border-gray-200 dark:border-gray-800 space-y-3 font-mono text-xs">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-gray-100 dark:border-gray-800">
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-500 font-sans">{isEs ? 'Usuario Solicitado:' : 'Target Handle:'}</span>
+                      <span className="font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-md">
+                        @{resolveResult.handle}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-emerald-500 font-bold text-[11px]">
+                      <Zap className="w-3.5 h-3.5" />
+                      <span>{isEs ? 'Latencia:' : 'Latency:'} {resolveResult.latencyMs}ms</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div>
+                      <span className="text-gray-500 font-sans block text-[11px] mb-1">
+                        {isEs ? 'Dirección BCH Mainnet Resuelta:' : 'Resolved BCH Mainnet Address:'}
+                      </span>
+                      <div className="flex items-center justify-between gap-2 p-2.5 rounded-lg bg-gray-50 dark:bg-[#0c0f17] border border-gray-200 dark:border-gray-800">
+                        <span className="text-primary font-bold select-all break-all text-xs">
+                          {resolveResult.bchAddress}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => copyToClipboard(resolveResult.bchAddress, 'play-addr')}
+                          className="p-1 rounded text-gray-400 hover:text-primary shrink-0 cursor-pointer"
+                        >
+                          {copiedSection === 'play-addr' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <span className="text-gray-500 font-sans block text-[11px] mb-1">
+                        {isEs ? 'Clave Pública Nostr (Hex):' : 'Nostr Hex Pubkey:'}
+                      </span>
+                      <div className="flex items-center justify-between gap-2 p-2.5 rounded-lg bg-gray-50 dark:bg-[#0c0f17] border border-gray-200 dark:border-gray-800 text-[11px]">
+                        <span className="text-gray-700 dark:text-gray-300 select-all break-all">
+                          {resolveResult.pubkey}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => copyToClipboard(resolveResult.pubkey, 'play-pk')}
+                          className="p-1 rounded text-gray-400 hover:text-primary shrink-0 cursor-pointer"
+                        >
+                          {copiedSection === 'play-pk' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-gray-400 font-sans">
+                        <span>{isEs ? 'Relays Activos:' : 'Active Relays:'}</span>
+                        {resolveResult.relays.slice(0, 3).map((r, i) => (
+                          <span key={i} className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-mono">
+                            {r.replace('wss://', '')}
+                          </span>
+                        ))}
+                      </div>
+
+                      <a
+                        href={`bitcoincash:${resolveResult.bchAddress}?amount=0.01&label=@${resolveResult.handle}`}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary hover:text-white font-sans text-xs font-bold transition-all border border-primary/20"
+                      >
+                        <Wallet className="w-3.5 h-3.5" />
+                        <span>{isEs ? 'Abrir en Paytaca / Wallet' : 'Open in Paytaca / Wallet'}</span>
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ========================================================================= */}
+          {/* DOC 5: TYPESCRIPT / JS SDK */}
+          {/* ========================================================================= */}
+          {activeDocId === 'userlink-wallets' && (
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <span className="text-[11px] font-black uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded-full border border-primary/20">
+                  {isEs ? 'CLIENTE TYPESCRIPT / JS' : 'TYPESCRIPT / JS CLIENT'}
+                </span>
+                <h1 className="text-2xl sm:text-4xl font-black text-gray-950 dark:text-white">
+                  {isEs ? 'Integración para Wallets Web3 y Móviles' : 'Web3 & Mobile Wallet Integration'}
+                </h1>
+                <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
+                  {isEs 
+                    ? 'Añade resolución de nombres a tu billetera Bitcoin Cash (Paytaca, Zapit, Cashonize o dApp) con esta función simple y libre de dependencias.' 
+                    : 'Add username resolution to your Bitcoin Cash wallet (Paytaca, Zapit, Cashonize, or dApp) with this zero-dependency TypeScript snippet.'}
+                </p>
+              </div>
+
+              <div className="relative">
+                <div className="flex items-center justify-between px-4 py-2 bg-gray-900 text-gray-400 text-xs font-mono rounded-t-xl border border-b-0 border-gray-800">
+                  <span>resolveUserLink.ts</span>
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(`// UserLink Resolution Standard for BCH Wallets
 export async function resolveUserLink(handle: string): Promise<string> {
   const clean = handle.replace(/^@/, '').trim();
   const [user, domain = 'bliquid.xyz'] = clean.split('@');
 
-  // Query standard NIP-05 endpoint with bch_addresses extension
+  // Query NIP-05 endpoint with bch_addresses mapping
   const res = await fetch(\`https://\${domain}/.well-known/nostr.json?name=\${user}\`);
-  if (!res.ok) throw new Error(\`Failed to resolve handle: HTTP \${res.status}\`);
+  if (!res.ok) throw new Error(\`Failed to resolve UserLink: HTTP \${res.status}\`);
 
   const data = await res.json();
   const address = data.bch_addresses?.[user];
-  if (!address) throw new Error(\`@\${user} has no registered BCH address\`);
+  if (!address) throw new Error(\`Handle @\${user} is not linked to any Bitcoin Cash address\`);
 
-  return address; // => bitcoincash:qpm2qsznhks23z76...
+  return address; // => bitcoincash:qpm2qsznhks23z7629mms6s4cwef74vcwvy22gdx6a
 }
 
-// ========================================================
-// 2. Trigger 1-Click Payment via Paytaca, Cashonize, Zapit, or Electron Cash
-// ========================================================
-const targetAddress = await resolveUserLink('@myuser');
-const amountBch = '0.025';
-const bip21Uri = \`bitcoincash:\${targetAddress}?amount=\${amountBch}&label=@myuser\`;
+// 2. Launch Universal BIP-21 Payment:
+const recipientAddress = await resolveUserLink('@myuser');
+const bip21Uri = \`bitcoincash:\${recipientAddress}?amount=0.025&label=@myuser\`;
+window.location.href = bip21Uri;`, 'ts-code')}
+                    className="text-primary hover:underline font-sans cursor-pointer flex items-center gap-1"
+                  >
+                    {copiedSection === 'ts-code' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedSection === 'ts-code' ? 'Copiado' : 'Copiar Código'}</span>
+                  </button>
+                </div>
+                <pre className="p-4 rounded-b-xl bg-gray-950 text-gray-200 font-mono text-xs overflow-x-auto border border-gray-800 leading-relaxed">
+                  <code>{`// UserLink Resolution Standard for BCH Wallets
+export async function resolveUserLink(handle: string): Promise<string> {
+  const clean = handle.replace(/^@/, '').trim();
+  const [user, domain = 'bliquid.xyz'] = clean.split('@');
 
-// Opens installed Bitcoin Cash mobile or desktop wallet automatically:
-window.location.href = bip21Uri;`,
+  // Query NIP-05 endpoint with bch_addresses mapping
+  const res = await fetch(\`https://\${domain}/.well-known/nostr.json?name=\${user}\`);
+  if (!res.ok) throw new Error(\`Failed to resolve UserLink: HTTP \${res.status}\`);
 
-    curl: `# ========================================================
-# 1. Direct REST API Query (HTTP 200 OK)
-# ========================================================
-curl -s "https://bliquid.xyz/.well-known/nostr.json?name=myuser" | jq
+  const data = await res.json();
+  const address = data.bch_addresses?.[user];
+  if (!address) throw new Error(\`Handle @\${user} is not linked to any Bitcoin Cash address\`);
 
-# Sample Response:
-# {
-#   "names": {
-#     "myuser": "de69276e520917aa8227ba4ab4460edd64b5dc263e6f475b29f33fad3af81990"
-#   },
-#   "bch_addresses": {
-#     "myuser": "bitcoincash:qpm2qsznhks23z7629mms6s4cwef74vcwvy22gdx6a"
-#   },
-#   "relays": {
-#     "de69276e...": [
-#       "wss://nos.lol",
-#       "wss://relay.primal.net",
-#       "wss://nostr.mom"
-#     ]
-#   }
-# }
+  return address; // => bitcoincash:qpm2qsznhks23z7629mms6s4cwef74vcwvy22gdx6a
+}
 
-# ========================================================
-# 2. Fast Bash One-Liner (Extract ONLY the BCH Address)
-# ========================================================
-BCH_ADDR=$(curl -s "https://bliquid.xyz/.well-known/nostr.json?name=myuser" | jq -r '.bch_addresses.myuser')
-echo "Sending BCH to: $BCH_ADDR"`,
+// 2. Launch Universal BIP-21 Payment:
+const recipientAddress = await resolveUserLink('@myuser');
+const bip21Uri = \`bitcoincash:\${recipientAddress}?amount=0.025&label=@myuser\`;
+window.location.href = bip21Uri;`}</code>
+                </pre>
+              </div>
+            </div>
+          )}
 
-    py: `# ========================================================
-# UserLink Resolver for Python (Telegram/Discord Bots & Gateways)
-# ========================================================
-import requests
+          {/* ========================================================================= */}
+          {/* DOC 6: REST API & CURL */}
+          {/* ========================================================================= */}
+          {activeDocId === 'userlink-api' && (
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <span className="text-[11px] font-black uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded-full border border-primary/20">
+                  {isEs ? 'API REST PÚBLICA' : 'PUBLIC REST API'}
+                </span>
+                <h1 className="text-2xl sm:text-4xl font-black text-gray-950 dark:text-white">
+                  {isEs ? 'Especificación API REST & cURL' : 'REST API & cURL Specification'}
+                </h1>
+                <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
+                  {isEs 
+                    ? 'Endpoint público NIP-05 para resolución por microservicios, bots y exchanges centralizados.' 
+                    : 'Standard public NIP-05 endpoint for microservices, backend bots, and centralized exchanges.'}
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-gray-50 dark:bg-[#161c28] border border-gray-200 dark:border-gray-800 space-y-2 font-mono text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-0.5 rounded bg-emerald-500 text-white font-bold text-[10px]">GET</span>
+                  <span className="text-gray-900 dark:text-white font-bold">/.well-known/nostr.json?name={'{username}'}</span>
+                </div>
+                <p className="text-gray-500 text-[11px] font-sans">
+                  {isEs ? 'Devuelve el mapeo criptográfico de nombres, direcciones BCH y relays recomendados.' : 'Returns cryptographic mapping of names, BCH addresses, and recommended relays.'}
+                </p>
+              </div>
+
+              {/* cURL Snippet */}
+              <div className="relative">
+                <div className="flex items-center justify-between px-4 py-2 bg-gray-900 text-gray-400 text-xs font-mono rounded-t-xl border border-b-0 border-gray-800">
+                  <span>cURL Command & Response</span>
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(`curl -s "https://bliquid.xyz/.well-known/nostr.json?name=myuser" | jq`, 'curl-spec')}
+                    className="text-primary hover:underline font-sans cursor-pointer flex items-center gap-1"
+                  >
+                    {copiedSection === 'curl-spec' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedSection === 'curl-spec' ? 'Copiado' : 'Copiar'}</span>
+                  </button>
+                </div>
+                <pre className="p-4 rounded-b-xl bg-gray-950 text-gray-200 font-mono text-xs overflow-x-auto border border-gray-800 leading-relaxed">
+                  <code>{`# 1. Execute request:
+curl -s "https://bliquid.xyz/.well-known/nostr.json?name=myuser"
+
+# 2. HTTP 200 OK Response:
+{
+  "names": {
+    "myuser": "de69276e520917aa8227ba4ab4460edd64b5dc263e6f475b29f33fad3af81990"
+  },
+  "bch_addresses": {
+    "myuser": "bitcoincash:qpm2qsznhks23z7629mms6s4cwef74vcwvy22gdx6a"
+  },
+  "relays": {
+    "de69276e520917aa8227ba4ab4460edd64b5dc263e6f475b29f33fad3af81990": [
+      "wss://nos.lol",
+      "wss://relay.primal.net",
+      "wss://nostr.mom",
+      "wss://purplerelay.com"
+    ]
+  }
+}`}</code>
+                </pre>
+              </div>
+            </div>
+          )}
+
+          {/* ========================================================================= */}
+          {/* DOC 7: PYTHON */}
+          {/* ========================================================================= */}
+          {activeDocId === 'userlink-python' && (
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <span className="text-[11px] font-black uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded-full border border-primary/20">
+                  {isEs ? 'PYTHON PARA BOTS & BACKENDS' : 'PYTHON FOR BOTS & BACKENDS'}
+                </span>
+                <h1 className="text-2xl sm:text-4xl font-black text-gray-950 dark:text-white">
+                  {isEs ? 'Integración en Python (Telegram, Discord & Daemons)' : 'Python Integration (Telegram, Discord & Daemons)'}
+                </h1>
+                <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
+                  {isEs 
+                    ? 'Permite que los usuarios de tu bot envíen propinas en Bitcoin Cash con comandos como `/tip @myuser 5 USD` resolviendo la dirección al instante.' 
+                    : 'Enable your bot users to send Bitcoin Cash tips via commands like `/tip @myuser 5 USD` by resolving handles on the fly.'}
+                </p>
+              </div>
+
+              <div className="relative">
+                <div className="flex items-center justify-between px-4 py-2 bg-gray-900 text-gray-400 text-xs font-mono rounded-t-xl border border-b-0 border-gray-800">
+                  <span>userlink_resolver.py</span>
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(`import requests
 
 def resolve_userlink(handle: str) -> str:
     """
     Resolves human-readable UserLink handles (@myuser) into on-chain BCH addresses.
-    Perfect for Telegram Tip Bots, Discord Bots, and Exchange Withdrawal flows.
+    Use in Telegram bots, Discord tip bots, or exchange withdrawal gateways.
+    """
+    clean = handle.lstrip('@')
+    parts = clean.split('@')
+    user = parts[0]
+    domain = parts[1] if len(parts) > 1 else 'bliquid.xyz'
+    
+    url = f"https://{domain}/.well-known/nostr.json"
+    res = requests.get(url, params={"name": user}, timeout=4)
+    res.raise_for_status()
+    
+    data = res.json()
+    bch_address = data.get("bch_addresses", {}).get(user)
+    if not bch_address:
+        raise ValueError(f"Handle @{user} is not linked to any BCH address")
+        
+    return bch_address
+
+# Usage Example:
+if __name__ == "__main__":
+    bch_dest = resolve_userlink("@myuser")
+    print(f"Target on-chain BCH Address: {bch_dest}")`, 'py-code')}
+                    className="text-primary hover:underline font-sans cursor-pointer flex items-center gap-1"
+                  >
+                    {copiedSection === 'py-code' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedSection === 'py-code' ? 'Copiado' : 'Copiar Código'}</span>
+                  </button>
+                </div>
+                <pre className="p-4 rounded-b-xl bg-gray-950 text-gray-200 font-mono text-xs overflow-x-auto border border-gray-800 leading-relaxed">
+                  <code>{`import requests
+
+def resolve_userlink(handle: str) -> str:
+    """
+    Resolves human-readable UserLink handles (@myuser) into on-chain BCH addresses.
+    Use in Telegram bots, Discord tip bots, or exchange withdrawal gateways.
     """
     clean = handle.lstrip('@')
     parts = clean.split('@')
@@ -394,13 +1021,33 @@ def resolve_userlink(handle: str) -> str:
 if __name__ == "__main__":
     bch_dest = resolve_userlink("@myuser")
     print(f"Target on-chain BCH Address: {bch_dest}")
-    # => Target on-chain BCH Address: bitcoincash:qpm2qsznhks23z7629mms6s4cwef74vcwvy22gdx6a`,
+    # => bitcoincash:qpm2qsznhks23z7629mms6s4cwef74vcwvy22gdx6a`}</code>
+                </pre>
+              </div>
+            </div>
+          )}
 
-    nostr: `// ========================================================
-// 100% Serverless & Decentralized Resolution via Global Relays
-// Zero central points of failure: queries Nostr Kind 30078 directly.
-// ========================================================
-import { SimplePool } from 'nostr-tools';
+          {/* ========================================================================= */}
+          {/* DOC 8: NOSTR P2P */}
+          {/* ========================================================================= */}
+          {activeDocId === 'userlink-nostr' && (
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <span className="text-[11px] font-black uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded-full border border-primary/20">
+                  {isEs ? 'NOSTR P2P SERVERLESS' : 'NOSTR P2P SERVERLESS'}
+                </span>
+                <h1 className="text-2xl sm:text-4xl font-black text-gray-950 dark:text-white">
+                  {isEs ? 'Resolución Descentralizada P2P en Relays' : 'Decentralized P2P Relay Resolution'}
+                </h1>
+                <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
+                  {isEs 
+                    ? 'Cero servidores centrales. Consulta eventos Kind 30078 directamente en relays globales públicos de Nostr mediante WebSockets.' 
+                    : 'Zero centralized servers. Query Kind 30078 events directly on global public Nostr relays over WebSockets.'}
+                </p>
+              </div>
+
+              <pre className="p-4 rounded-xl bg-gray-950 text-gray-200 font-mono text-xs overflow-x-auto border border-gray-800 leading-relaxed">
+                <code>{`import { SimplePool } from 'nostr-tools';
 
 const pool = new SimplePool();
 const PUBLIC_RELAYS = [
@@ -424,744 +1071,325 @@ export async function resolveDecentralized(nostrHexPubkey: string) {
   console.log('Cryptographically Verified BCH Address:', passport.bchAddress);
   console.log('ECDSA/Schnorr Proof Signature:', passport.bchSignature);
   return passport;
-}`
-  };
-
-  const navigateToIdentity = () => {
-    if (onNavigateToIdentity) {
-      onNavigateToIdentity();
-    } else if (typeof window !== 'undefined') {
-      window.location.hash = '#identity';
-    }
-  };
-
-  return (
-    <div className="w-full max-w-6xl mx-auto px-4 py-8 space-y-12">
-      {/* HERO SECTION */}
-      <div className="text-center space-y-4 max-w-3xl mx-auto">
-        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-bold tracking-wide">
-          <Code2 className="w-4 h-4" />
-          <span>{t.heroBadge}</span>
-        </div>
-        <h1 className="text-3xl sm:text-5xl font-black text-gray-950 dark:text-white tracking-tight">
-          {t.heroTitle}<span className="text-primary">{t.heroTitleHighlight}</span>
-        </h1>
-        <p className="text-gray-600 dark:text-gray-400 text-sm sm:text-base leading-relaxed">
-          {t.heroSubtitle}
-        </p>
-
-        {/* Quick Nav Anchors */}
-        <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
-          <a
-            href="#userlink-protocol"
-            className="px-3.5 py-1.5 rounded-full bg-primary/15 text-primary text-xs font-bold hover:bg-primary/25 transition-colors border border-primary/30 flex items-center gap-1.5"
-          >
-            <AtSign className="w-3.5 h-3.5" />
-            <span>{t.navUserLink}</span>
-          </a>
-          <a
-            href="#iframe-widget"
-            className="px-3.5 py-1.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs font-bold hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors flex items-center gap-1.5"
-          >
-            <Box className="w-3.5 h-3.5" />
-            <span>{t.navWidget}</span>
-          </a>
-          <a
-            href="#trackers-api"
-            className="px-3.5 py-1.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs font-bold hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors flex items-center gap-1.5"
-          >
-            <TrendingUp className="w-3.5 h-3.5" />
-            <span>{t.navTrackers}</span>
-          </a>
-          <a
-            href="#code-quickstart"
-            className="px-3.5 py-1.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs font-bold hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors flex items-center gap-1.5"
-          >
-            <Terminal className="w-3.5 h-3.5" />
-            <span>{t.navSwapCode}</span>
-          </a>
-        </div>
-      </div>
-
-      {/* SECTION 1: USERLINK IDENTITY & PAYMENT PROTOCOL (FEATURED) */}
-      <div id="userlink-protocol" className="p-6 sm:p-8 rounded-3xl bg-white dark:bg-[#121622] border-2 border-primary/30 shadow-2xl space-y-8 relative overflow-hidden">
-        {/* Glowing Ambient Backdrop */}
-        <div className="absolute top-0 right-0 w-96 h-96 bg-primary/5 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
-
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-gray-100 dark:border-gray-800">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center border border-primary/25">
-              <AtSign className="w-6 h-6" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] font-black uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded-full border border-primary/20">
-                  {t.userlinkBadge}
-                </span>
-              </div>
-              <h2 className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white mt-1">
-                {t.userlinkTitle}
-              </h2>
-              <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 max-w-3xl mt-1">
-                {t.userlinkSubtitle}
-              </p>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={navigateToIdentity}
-            className="shrink-0 px-4 py-2.5 rounded-xl bg-primary hover:bg-orange-600 text-white font-bold text-xs shadow-md shadow-primary/20 transition-all flex items-center gap-2 cursor-pointer self-start md:self-auto"
-          >
-            <Sparkles className="w-4 h-4" />
-            <span>{t.userlinkClaimPassportBtn}</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
-        </div>
-
-        {/* 3 VALUE PILLARS */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="p-4 rounded-2xl bg-gray-50 dark:bg-[#161c28] border border-gray-100 dark:border-gray-800 space-y-2">
-            <div className="flex items-center gap-2 text-primary font-bold text-sm">
-              <Zap className="w-4 h-4" />
-              <span>{t.userlinkFeature1Title}</span>
-            </div>
-            <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
-              {t.userlinkFeature1Desc}
-            </p>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-gray-50 dark:bg-[#161c28] border border-gray-100 dark:border-gray-800 space-y-2">
-            <div className="flex items-center gap-2 text-primary font-bold text-sm">
-              <ShieldCheck className="w-4 h-4" />
-              <span>{t.userlinkFeature2Title}</span>
-            </div>
-            <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
-              {t.userlinkFeature2Desc}
-            </p>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-gray-50 dark:bg-[#161c28] border border-gray-100 dark:border-gray-800 space-y-2">
-            <div className="flex items-center gap-2 text-primary font-bold text-sm">
-              <Smartphone className="w-4 h-4" />
-              <span>{t.userlinkFeature3Title}</span>
-            </div>
-            <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
-              {t.userlinkFeature3Desc}
-            </p>
-          </div>
-        </div>
-
-        {/* INTERACTIVE RESOLVER PLAYGROUND */}
-        <div className="p-5 sm:p-6 rounded-2xl bg-gray-50 dark:bg-[#0e121a] border border-primary/20 space-y-5">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div>
-              <h3 className="text-sm font-black text-gray-900 dark:text-white flex items-center gap-2">
-                <Search className="w-4 h-4 text-primary" />
-                <span>{t.userlinkPlaygroundTitle}</span>
-              </h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                {t.userlinkPlaygroundSubtitle}
-              </p>
-            </div>
-            <span className="text-[11px] font-mono font-bold text-emerald-500 bg-emerald-500/10 px-2.5 py-1 rounded-full self-start sm:self-auto flex items-center gap-1.5 border border-emerald-500/20">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              BCH Mainnet Live
-            </span>
-          </div>
-
-          {/* Search Box */}
-          <form onSubmit={handleResolveTester} className="flex flex-col sm:flex-row gap-2">
-            <div className="relative flex-1">
-              <AtSign className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                value={testHandle}
-                onChange={(e) => setTestHandle(e.target.value)}
-                placeholder={t.userlinkInputPlaceholder}
-                className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-white dark:bg-[#161c28] border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white text-xs font-mono font-bold focus:outline-none focus:border-primary shadow-xs"
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={isResolving}
-              className="px-5 py-2.5 rounded-xl bg-primary hover:bg-orange-600 disabled:opacity-50 text-white text-xs font-bold transition-all shadow-md shadow-primary/20 flex items-center justify-center gap-2 cursor-pointer shrink-0"
-            >
-              {isResolving ? (
-                <>
-                  <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  <span>{t.userlinkResolving}</span>
-                </>
-              ) : (
-                <>
-                  <Search className="w-3.5 h-3.5" />
-                  <span>{t.userlinkResolveBtn}</span>
-                </>
-              )}
-            </button>
-          </form>
-
-          {/* Results Box */}
-          <div className="p-4 rounded-xl bg-white dark:bg-[#141824] border border-gray-200 dark:border-gray-800 space-y-3 font-mono text-xs">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-gray-100 dark:border-gray-800">
-              <div className="flex items-center gap-2">
-                <span className="text-gray-500 font-sans">{t.userlinkResolvedTarget}</span>
-                <span className="font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-md">
-                  @{resolveResult.handle}
-                </span>
-              </div>
-              <div className="flex items-center gap-1.5 text-emerald-500 font-bold text-[11px]">
-                <Zap className="w-3.5 h-3.5" />
-                <span>{t.userlinkSpeedLabel} {resolveResult.latencyMs}ms</span>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <div>
-                <span className="text-gray-500 font-sans block text-[11px] mb-1">
-                  {t.userlinkResolvedAddress}
-                </span>
-                <div className="flex items-center justify-between gap-2 p-2.5 rounded-lg bg-gray-50 dark:bg-[#0c0f17] border border-gray-200 dark:border-gray-800">
-                  <span className="text-primary font-bold select-all break-all text-xs">
-                    {resolveResult.bchAddress}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => copyToClipboard(resolveResult.bchAddress, 'resolved-addr')}
-                    className="p-1 rounded text-gray-400 hover:text-primary shrink-0 cursor-pointer"
-                    title="Copiar"
-                  >
-                    {copiedSection === 'resolved-addr' ? (
-                      <Check className="w-3.5 h-3.5 text-emerald-500" />
-                    ) : (
-                      <Copy className="w-3.5 h-3.5" />
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <span className="text-gray-500 font-sans block text-[11px] mb-1">
-                  {t.userlinkResolvedPubkey}
-                </span>
-                <div className="flex items-center justify-between gap-2 p-2.5 rounded-lg bg-gray-50 dark:bg-[#0c0f17] border border-gray-200 dark:border-gray-800 text-[11px]">
-                  <span className="text-gray-700 dark:text-gray-300 select-all break-all">
-                    {resolveResult.pubkey}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => copyToClipboard(resolveResult.pubkey, 'resolved-pk')}
-                    className="p-1 rounded text-gray-400 hover:text-primary shrink-0 cursor-pointer"
-                    title="Copiar"
-                  >
-                    {copiedSection === 'resolved-pk' ? (
-                      <Check className="w-3.5 h-3.5 text-emerald-500" />
-                    ) : (
-                      <Copy className="w-3.5 h-3.5" />
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              <div className="pt-1 flex flex-wrap items-center justify-between gap-2">
-                <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-gray-400 font-sans">
-                  <span>{t.userlinkRelaysLabel}</span>
-                  {resolveResult.relays.slice(0, 3).map((r, i) => (
-                    <span key={i} className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-mono">
-                      {r.replace('wss://', '')}
-                    </span>
-                  ))}
-                </div>
-
-                <a
-                  href={`bitcoincash:${resolveResult.bchAddress}?amount=0.01&label=@${resolveResult.handle}`}
-                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary hover:text-white font-sans text-xs font-bold transition-all border border-primary/20"
-                >
-                  <Wallet className="w-3.5 h-3.5" />
-                  <span>{t.userlinkPaytacaBtn}</span>
-                </a>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* CODE INTEGRATION TABS */}
-        <div className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 dark:border-gray-800 pb-2">
-            <div className="flex flex-wrap gap-1.5">
-              <button
-                type="button"
-                onClick={() => setUserlinkTab('ts')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                  userlinkTab === 'ts'
-                    ? 'bg-primary text-white shadow-xs'
-                    : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
-                }`}
-              >
-                {t.userlinkTabTs}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setUserlinkTab('curl')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                  userlinkTab === 'curl'
-                    ? 'bg-primary text-white shadow-xs'
-                    : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
-                }`}
-              >
-                {t.userlinkTabCurl}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setUserlinkTab('py')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                  userlinkTab === 'py'
-                    ? 'bg-primary text-white shadow-xs'
-                    : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
-                }`}
-              >
-                {t.userlinkTabPy}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setUserlinkTab('nostr')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                  userlinkTab === 'nostr'
-                    ? 'bg-primary text-white shadow-xs'
-                    : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
-                }`}
-              >
-                {t.userlinkTabNostr}
-              </button>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => copyToClipboard(codeSnippets[userlinkTab], `code-${userlinkTab}`)}
-              className="flex items-center gap-1.5 text-xs text-primary font-bold hover:underline cursor-pointer"
-            >
-              {copiedSection === `code-${userlinkTab}` ? (
-                <>
-                  <Check className="w-3.5 h-3.5 text-emerald-500" />
-                  <span className="text-emerald-500">{t.copied}</span>
-                </>
-              ) : (
-                <>
-                  <Copy className="w-3.5 h-3.5" />
-                  <span>{t.copyCode}</span>
-                </>
-              )}
-            </button>
-          </div>
-
-          <pre className="p-4 rounded-2xl bg-gray-950 text-gray-200 font-mono text-xs overflow-x-auto border border-gray-800 leading-relaxed max-h-96">
-            <code>{codeSnippets[userlinkTab]}</code>
-          </pre>
-        </div>
-
-        {/* EXCHANGE & GATEWAY INTEGRATION ROADMAP */}
-        <div className="p-5 rounded-2xl bg-primary/5 border border-primary/20 space-y-3">
-          <div className="flex items-center gap-2">
-            <Cpu className="w-4 h-4 text-primary" />
-            <h4 className="text-xs font-black uppercase tracking-wider text-gray-900 dark:text-white">
-              {t.userlinkExchangesTitle}
-            </h4>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs text-gray-600 dark:text-gray-300">
-            <div className="p-3 rounded-xl bg-white dark:bg-[#161c28] border border-gray-200 dark:border-gray-800">
-              {t.userlinkExchangesStep1}
-            </div>
-            <div className="p-3 rounded-xl bg-white dark:bg-[#161c28] border border-gray-200 dark:border-gray-800">
-              {t.userlinkExchangesStep2}
-            </div>
-            <div className="p-3 rounded-xl bg-white dark:bg-[#161c28] border border-gray-200 dark:border-gray-800">
-              {t.userlinkExchangesStep3}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* SECTION 2: INTERACTIVE IFRAME GENERATOR */}
-      <div id="iframe-widget" className="p-6 sm:p-8 rounded-3xl bg-white dark:bg-[#121622] border border-gray-200 dark:border-gray-800 shadow-xl space-y-8">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-gray-100 dark:border-gray-800">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-orange-500/10 text-orange-500 flex items-center justify-center">
-              <Box className="w-6 h-6" />
-            </div>
-            <div>
-              <h2 className="text-xl font-black text-gray-900 dark:text-white flex items-center gap-2">
-                {t.widgetTitle}
-                <span className="text-xs bg-emerald-500/10 text-emerald-500 font-bold px-2 py-0.5 rounded-full">
-                  {t.widgetBadge}
-                </span>
-              </h2>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                {t.widgetSubtitle}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          {/* CONFIGURATION CONTROLS */}
-          <div className="lg:col-span-6 space-y-5">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1.5">
-                  {t.fromToken}
-                </label>
-                <select
-                  value={embedFrom}
-                  onChange={(e) => setEmbedFrom(e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-xl bg-gray-50 dark:bg-[#161c28] border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white font-bold text-xs focus:outline-none focus:border-primary"
-                >
-                  <option value="PUSD">PUSD (BCH CashTokens)</option>
-                  <option value="BCH">BCH (Bitcoin Cash Native)</option>
-                  <option value="USDC">USDC (Polygon PoS)</option>
-                  <option value="MUSD">MUSD (CashTokens)</option>
-                  <option value="LIFT">Paytaca LIFT (CashToken)</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1.5">
-                  {t.toToken}
-                </label>
-                <select
-                  value={embedTo}
-                  onChange={(e) => setEmbedTo(e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-xl bg-gray-50 dark:bg-[#161c28] border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white font-bold text-xs focus:outline-none focus:border-primary"
-                >
-                  <option value="USDC">USDC (Polygon PoS)</option>
-                  <option value="PUSD">PUSD (BCH CashTokens)</option>
-                  <option value="USDT">USDT (Polygon PoS)</option>
-                  <option value="POL">POL (Polygon Native)</option>
-                  <option value="BCH">BCH Native</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1.5">
-                  {t.themeLabel}
-                </label>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setEmbedTheme('dark')}
-                    className={`flex-1 py-2 text-xs font-bold rounded-xl border transition-all cursor-pointer ${
-                      embedTheme === 'dark' 
-                        ? 'bg-gray-900 text-white border-primary shadow-xs' 
-                        : 'bg-gray-100 dark:bg-[#161c28] text-gray-500 border-transparent'
-                    }`}
-                  >
-                    🌙 Dark
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setEmbedTheme('light')}
-                    className={`flex-1 py-2 text-xs font-bold rounded-xl border transition-all cursor-pointer ${
-                      embedTheme === 'light' 
-                        ? 'bg-primary text-white border-primary shadow-xs' 
-                        : 'bg-gray-100 dark:bg-[#161c28] text-gray-500 border-transparent'
-                    }`}
-                  >
-                    ☀️ Light
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1.5">
-                  {t.widthLabel}
-                </label>
-                <input
-                  type="text"
-                  value={embedWidth}
-                  onChange={(e) => setEmbedWidth(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-gray-50 dark:bg-[#161c28] border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white font-mono text-xs focus:outline-none focus:border-primary"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1.5">
-                  {t.heightLabel}
-                </label>
-                <input
-                  type="text"
-                  value={embedHeight}
-                  onChange={(e) => setEmbedHeight(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-gray-50 dark:bg-[#161c28] border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white font-mono text-xs focus:outline-none focus:border-primary"
-                />
-              </div>
-            </div>
-
-            {/* CODE SNIPPET */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-gray-700 dark:text-gray-300">
-                  {t.codeLabel}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => copyToClipboard(iframeSnippet, 'iframe')}
-                  className="flex items-center gap-1.5 text-xs text-primary font-bold hover:underline cursor-pointer"
-                >
-                  {copiedSection === 'iframe' ? (
-                    <>
-                      <Check className="w-3.5 h-3.5 text-emerald-500" />
-                      <span className="text-emerald-500">{t.copied}</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-3.5 h-3.5" />
-                      <span>{t.copyCode}</span>
-                    </>
-                  )}
-                </button>
-              </div>
-
-              <pre className="p-4 rounded-2xl bg-gray-950 text-gray-200 font-mono text-xs overflow-x-auto border border-gray-800 leading-relaxed">
-                <code>{iframeSnippet}</code>
+}`}</code>
               </pre>
             </div>
-          </div>
+          )}
 
-          {/* LIVE IFRAME PREVIEW */}
-          <div className="lg:col-span-6 flex flex-col items-center">
-            <span className="text-xs font-bold text-gray-500 mb-2 flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              {t.previewBadge}
-            </span>
-            <div className="w-full max-w-[420px] rounded-3xl overflow-hidden border border-gray-200 dark:border-gray-800 shadow-2xl bg-gray-900">
-              <iframe
-                src={embedUrl}
-                width="100%"
-                height="580"
-                style={{ border: 'none' }}
-                title={t.previewTitle}
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* SECTION 3: TRACKERS & INDEXERS (CoinGecko / CoinMarketCap) */}
-      <div id="trackers-api" className="space-y-6">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
-            <TrendingUp className="w-5 h-5" />
-          </div>
-          <div>
-            <h2 className="text-2xl font-black text-gray-900 dark:text-white">
-              {t.trackersTitle}
-            </h2>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              {t.trackersSubtitle}
-            </p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* COINGECKO CARD */}
-          <div className="p-6 rounded-3xl bg-white dark:bg-[#121622] border border-gray-200 dark:border-gray-800 shadow-xl space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-gray-800">
-              <div className="flex items-center gap-2">
-                <span className="text-lg">🦎</span>
-                <h3 className="font-bold text-gray-900 dark:text-white text-base">
-                  {t.cgSpec}
-                </h3>
-              </div>
-              <span className="text-[10px] font-mono bg-emerald-500/10 text-emerald-500 font-bold px-2 py-0.5 rounded-full">
-                HTTP REST • 200 OK
-              </span>
-            </div>
-
-            <p className="text-xs text-gray-600 dark:text-gray-400">
-              {t.cgDesc}
-            </p>
-
-            <div className="space-y-2 text-xs font-mono">
-              <div className="p-3 rounded-xl bg-gray-50 dark:bg-[#161c28] border border-gray-100 dark:border-gray-800 flex items-center justify-between">
-                <div className="overflow-hidden truncate pr-2">
-                  <span className="text-emerald-500 font-bold">GET</span>{' '}
-                  <span className="text-gray-700 dark:text-gray-300">/api/coingecko/pairs</span>
-                </div>
-                <a
-                  href="/api/coingecko/pairs"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-primary hover:text-orange-500 shrink-0"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                </a>
+          {/* ========================================================================= */}
+          {/* DOC 9: EXCHANGE INTEGRATION */}
+          {/* ========================================================================= */}
+          {activeDocId === 'userlink-exchanges' && (
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <span className="text-[11px] font-black uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded-full border border-primary/20">
+                  {isEs ? 'EXCHANGES & PASARELAS' : 'EXCHANGES & GATEWAYS'}
+                </span>
+                <h1 className="text-2xl sm:text-4xl font-black text-gray-950 dark:text-white">
+                  {isEs ? 'Guía de Integración para Exchanges Centralizados' : 'Centralized Exchange Integration Guide'}
+                </h1>
+                <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
+                  {isEs 
+                    ? 'Cómo permitir que tus clientes retiren fondos escribiendo @myuser en lugar de copiar y pegar una dirección alfanumérica propensa a errores.' 
+                    : 'How to allow your exchange clients to withdraw BCH by entering @myuser instead of copying long error-prone strings.'}
+                </p>
               </div>
 
-              <div className="p-3 rounded-xl bg-gray-50 dark:bg-[#161c28] border border-gray-100 dark:border-gray-800 flex items-center justify-between">
-                <div className="overflow-hidden truncate pr-2">
-                  <span className="text-emerald-500 font-bold">GET</span>{' '}
-                  <span className="text-gray-700 dark:text-gray-300">/api/coingecko/tickers</span>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="p-4 rounded-2xl bg-gray-50 dark:bg-[#161c28] border border-gray-200 dark:border-gray-800 space-y-2">
+                  <div className="flex items-center gap-2 text-primary font-bold text-xs">
+                    <span className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center">1</span>
+                    <span>{isEs ? 'Input del Usuario' : 'User Input'}</span>
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {isEs ? 'El cliente ingresa @myuser en el campo de retiro de Bitcoin Cash.' : 'User enters @myuser in the Bitcoin Cash withdrawal field.'}
+                  </p>
                 </div>
-                <a
-                  href="/api/coingecko/tickers"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-primary hover:text-orange-500 shrink-0"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                </a>
-              </div>
 
-              <div className="p-3 rounded-xl bg-gray-50 dark:bg-[#161c28] border border-gray-100 dark:border-gray-800 flex items-center justify-between">
-                <div className="overflow-hidden truncate pr-2">
-                  <span className="text-emerald-500 font-bold">GET</span>{' '}
-                  <span className="text-gray-700 dark:text-gray-300">/api/coingecko/orderbook</span>
+                <div className="p-4 rounded-2xl bg-gray-50 dark:bg-[#161c28] border border-gray-200 dark:border-gray-800 space-y-2">
+                  <div className="flex items-center gap-2 text-primary font-bold text-xs">
+                    <span className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center">2</span>
+                    <span>{isEs ? 'Resolución Backend' : 'Backend Resolution'}</span>
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {isEs ? 'Tu backend consulta /.well-known/nostr.json y valida la dirección on-chain.' : 'Your backend queries /.well-known/nostr.json and extracts on-chain address.'}
+                  </p>
                 </div>
-                <a
-                  href="/api/coingecko/orderbook?ticker_id=PUSD_USDC"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-primary hover:text-orange-500 shrink-0"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                </a>
-              </div>
 
-              <div className="p-3 rounded-xl bg-gray-50 dark:bg-[#161c28] border border-gray-100 dark:border-gray-800 flex items-center justify-between">
-                <div className="overflow-hidden truncate pr-2">
-                  <span className="text-emerald-500 font-bold">GET</span>{' '}
-                  <span className="text-gray-700 dark:text-gray-300">/api/coingecko/historical_trades</span>
+                <div className="p-4 rounded-2xl bg-gray-50 dark:bg-[#161c28] border border-gray-200 dark:border-gray-800 space-y-2">
+                  <div className="flex items-center gap-2 text-primary font-bold text-xs">
+                    <span className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center">3</span>
+                    <span>{isEs ? 'Broadcast Seguro' : 'Safe Broadcast'}</span>
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {isEs ? 'Transmites la transacción BCH a la dirección resuelta con cero riesgo de typos.' : 'Broadcast the BCH tx to the resolved address with zero typo risk.'}
+                  </p>
                 </div>
-                <a
-                  href="/api/coingecko/historical_trades?ticker_id=PUSD_USDC"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-primary hover:text-orange-500 shrink-0"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                </a>
               </div>
             </div>
-          </div>
+          )}
 
-          {/* COINMARKETCAP CARD */}
-          <div className="p-6 rounded-3xl bg-white dark:bg-[#121622] border border-gray-200 dark:border-gray-800 shadow-xl space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-gray-800">
-              <div className="flex items-center gap-2">
-                <span className="text-lg">Ⓜ️</span>
-                <h3 className="font-bold text-gray-900 dark:text-white text-base">
-                  {t.cmcSpec}
-                </h3>
+          {/* ========================================================================= */}
+          {/* DOC 10: SWAP WIDGET */}
+          {/* ========================================================================= */}
+          {activeDocId === 'swap-widget' && (
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <span className="text-[11px] font-black uppercase tracking-wider text-orange-500 bg-orange-500/10 px-2 py-0.5 rounded-full border border-orange-500/20">
+                  {isEs ? 'GENERADOR DE WIDGET' : 'WIDGET GENERATOR'}
+                </span>
+                <h1 className="text-2xl sm:text-4xl font-black text-gray-950 dark:text-white">
+                  {isEs ? 'Incrusta el Widget Cross-Chain en tu Web' : 'Embed the Cross-Chain Widget into your Web'}
+                </h1>
+                <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
+                  {isEs 
+                    ? 'Permite a los usuarios de tu web intercambiar tokens nativos de Bitcoin Cash (PUSD, MUSD, BCH) con USDT/USDC de Polygon sin salir de tu sitio.' 
+                    : 'Allow your website visitors to swap Bitcoin Cash native tokens (PUSD, MUSD, BCH) with Polygon USDT/USDC directly on your site.'}
+                </p>
               </div>
-              <span className="text-[10px] font-mono bg-blue-500/10 text-blue-500 font-bold px-2 py-0.5 rounded-full">
-                CMC DEX Data
-              </span>
+
+              {/* Widget Configurator & Preview */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start p-6 rounded-2xl bg-gray-50 dark:bg-[#161c28] border border-gray-200 dark:border-gray-800">
+                <div className="lg:col-span-6 space-y-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1">
+                        Token Inicial:
+                      </label>
+                      <select
+                        value={embedFrom}
+                        onChange={(e) => setEmbedFrom(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#121622] border border-gray-200 dark:border-gray-700 text-xs font-bold"
+                      >
+                        <option value="PUSD">PUSD (BCH CashTokens)</option>
+                        <option value="BCH">BCH (Bitcoin Cash Native)</option>
+                        <option value="USDC">USDC (Polygon PoS)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1">
+                        Token Destino:
+                      </label>
+                      <select
+                        value={embedTo}
+                        onChange={(e) => setEmbedTo(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#121622] border border-gray-200 dark:border-gray-700 text-xs font-bold"
+                      >
+                        <option value="USDC">USDC (Polygon PoS)</option>
+                        <option value="PUSD">PUSD (BCH CashTokens)</option>
+                        <option value="USDT">USDT (Polygon PoS)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-gray-700 dark:text-gray-300">
+                        {isEs ? 'Código HTML a incrustar:' : 'HTML Embed Code:'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(iframeSnippet, 'widget-code')}
+                        className="text-xs text-primary font-bold hover:underline cursor-pointer flex items-center gap-1"
+                      >
+                        {copiedSection === 'widget-code' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>{copiedSection === 'widget-code' ? '¡Copiado!' : 'Copiar'}</span>
+                      </button>
+                    </div>
+                    <pre className="p-3 rounded-xl bg-gray-950 text-gray-200 font-mono text-[11px] overflow-x-auto border border-gray-800">
+                      <code>{iframeSnippet}</code>
+                    </pre>
+                  </div>
+                </div>
+
+                <div className="lg:col-span-6 flex flex-col items-center">
+                  <span className="text-[11px] font-bold text-gray-400 mb-2 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    Live Preview
+                  </span>
+                  <div className="w-full max-w-[360px] rounded-2xl overflow-hidden border border-gray-300 dark:border-gray-700 shadow-xl bg-gray-900">
+                    <iframe
+                      src={embedUrl}
+                      width="100%"
+                      height="460"
+                      style={{ border: 'none' }}
+                      title="Preview Widget"
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
+          )}
 
-            <p className="text-xs text-gray-600 dark:text-gray-400">
-              {t.cmcDesc}
-            </p>
-
-            <div className="space-y-2 text-xs font-mono">
-              <div className="p-3 rounded-xl bg-gray-50 dark:bg-[#161c28] border border-gray-100 dark:border-gray-800 flex items-center justify-between">
-                <div className="overflow-hidden truncate pr-2">
-                  <span className="text-blue-500 font-bold">GET</span>{' '}
-                  <span className="text-gray-700 dark:text-gray-300">/api/cmc/summary</span>
-                </div>
-                <a
-                  href="/api/cmc/summary"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-primary hover:text-orange-500 shrink-0"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                </a>
+          {/* ========================================================================= */}
+          {/* DOC 11: SWAP API */}
+          {/* ========================================================================= */}
+          {activeDocId === 'swap-api' && (
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <span className="text-[11px] font-black uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded-full border border-primary/20">
+                  {isEs ? 'SWAPS PROGRAMÁTICOS' : 'PROGRAMMATIC SWAPS'}
+                </span>
+                <h1 className="text-2xl sm:text-4xl font-black text-gray-950 dark:text-white">
+                  {isEs ? 'Crear Swaps por Código (JavaScript / Python)' : 'Programmatic Swap API (JavaScript / Python)'}
+                </h1>
+                <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
+                  {isEs 
+                    ? 'Consulta cotizaciones de liquidez y crea órdenes de intercambio no-custodias directamente mediante nuestra API REST.' 
+                    : 'Fetch quotes and create non-custodial smart covenant orders directly via our REST API.'}
+                </p>
               </div>
 
-              <div className="p-3 rounded-xl bg-gray-50 dark:bg-[#161c28] border border-gray-100 dark:border-gray-800 flex items-center justify-between">
-                <div className="overflow-hidden truncate pr-2">
-                  <span className="text-blue-500 font-bold">GET</span>{' '}
-                  <span className="text-gray-700 dark:text-gray-300">/api/cmc/ticker</span>
-                </div>
-                <a
-                  href="/api/cmc/ticker"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-primary hover:text-orange-500 shrink-0"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                </a>
+              <pre className="p-4 rounded-xl bg-gray-950 text-gray-200 font-mono text-xs overflow-x-auto border border-gray-800 leading-relaxed">
+                <code>{`// 1. Fetch real-time market quote
+const quote = await fetch('https://bliquid.xyz/api/quote?fromToken=PUSD&toToken=USDT&amount=50')
+  .then(r => r.json());
+
+// 2. Instantiate isolated Non-Custodial CashScript Covenant / Smart Contract Vault
+const order = await fetch('https://bliquid.xyz/api/swap/create', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    fromToken: 'PUSD',
+    toToken: 'USDT',
+    fromChain: 'bch_chipnet',
+    toChain: 'amoy_testnet',
+    amount: 50,
+    recipientAddress: '0xTU_WALLET_POLYGON'
+  })
+}).then(r => r.json());
+
+// 3. Result: Zero-Private-Key P2SH32 Covenant / Solidity Vault + 24h Timelock
+console.log('Smart Contract Vault:', order.instructions.depositAddress);
+console.log('Contract Spec:', order.instructions.contractType);`}</code>
+              </pre>
+            </div>
+          )}
+
+          {/* ========================================================================= */}
+          {/* DOC 12: COINGECKO API */}
+          {/* ========================================================================= */}
+          {activeDocId === 'coingecko-api' && (
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <span className="text-[11px] font-black uppercase tracking-wider text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                  🦎 COINGECKO DEX SPEC
+                </span>
+                <h1 className="text-2xl sm:text-4xl font-black text-gray-950 dark:text-white">
+                  {isEs ? 'Endpoints Estándar para CoinGecko' : 'CoinGecko DEX Endpoints'}
+                </h1>
+                <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
+                  {isEs 
+                    ? 'Endpoints compatibles con la especificación oficial de integración DEX de CoinGecko para agregadores de volumen y bots de arbitraje.' 
+                    : 'Endpoints strictly compliant with the official CoinGecko DEX integration specification.'}
+                </p>
               </div>
 
-              <div className="p-3 rounded-xl bg-gray-50 dark:bg-[#161c28] border border-gray-100 dark:border-gray-800 flex items-center justify-between">
-                <div className="overflow-hidden truncate pr-2">
-                  <span className="text-blue-500 font-bold">GET</span>{' '}
-                  <span className="text-gray-700 dark:text-gray-300">/api/cmc/orderbook</span>
-                </div>
-                <a
-                  href="/api/cmc/orderbook?pair=PUSD_USDC"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-primary hover:text-orange-500 shrink-0"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                </a>
-              </div>
-
-              <div className="p-3 rounded-xl bg-gray-50 dark:bg-[#161c28] border border-gray-100 dark:border-gray-800 flex items-center justify-between">
-                <div className="overflow-hidden truncate pr-2">
-                  <span className="text-blue-500 font-bold">GET</span>{' '}
-                  <span className="text-gray-700 dark:text-gray-300">/api/cmc/trades</span>
-                </div>
-                <a
-                  href="/api/cmc/trades?pair=PUSD_USDC"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-primary hover:text-orange-500 shrink-0"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                </a>
+              <div className="space-y-2 font-mono text-xs">
+                {[
+                  { method: 'GET', path: '/api/coingecko/pairs', desc: 'Lista de pares activos (PUSD/USDC, MUSD/USDT)' },
+                  { method: 'GET', path: '/api/coingecko/tickers', desc: 'Precios, volumenes de 24h y profundidad' },
+                  { method: 'GET', path: '/api/coingecko/orderbook?ticker_id=PUSD_USDC', desc: 'Libro de órdenes bids y asks' },
+                  { method: 'GET', path: '/api/coingecko/historical_trades?ticker_id=PUSD_USDC', desc: 'Historial de ejecuciones y swaps' }
+                ].map((ep, idx) => (
+                  <div key={idx} className="p-3 rounded-xl bg-gray-50 dark:bg-[#161c28] border border-gray-200 dark:border-gray-800 flex items-center justify-between">
+                    <div>
+                      <span className="text-emerald-500 font-bold mr-2">{ep.method}</span>
+                      <span className="text-gray-900 dark:text-white font-bold">{ep.path}</span>
+                      <p className="text-gray-400 text-[11px] font-sans mt-0.5">{ep.desc}</p>
+                    </div>
+                    <a href={ep.path} target="_blank" rel="noreferrer" className="text-primary hover:text-orange-500 shrink-0">
+                      <ExternalLink className="w-4 h-4" />
+                    </a>
+                  </div>
+                ))}
               </div>
             </div>
-          </div>
-        </div>
-      </div>
+          )}
 
-      {/* SECTION 4: JAVASCRIPT / TYPESCRIPT QUICKSTART (SWAPS) */}
-      <div id="code-quickstart" className="p-6 sm:p-8 rounded-3xl bg-white dark:bg-[#121622] border border-gray-200 dark:border-gray-800 shadow-xl space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <Terminal className="w-5 h-5 text-primary" />
-            <h3 className="font-black text-gray-900 dark:text-white text-base">
-              {t.codeTitle}
-            </h3>
-          </div>
-          <button
-            type="button"
-            onClick={() => copyToClipboard(t.codeSnippet, 'code')}
-            className="flex items-center gap-1.5 text-xs text-primary font-bold hover:underline cursor-pointer"
-          >
-            {copiedSection === 'code' ? (
-              <>
-                <Check className="w-3.5 h-3.5 text-emerald-500" />
-                <span className="text-emerald-500">{t.copied}</span>
-              </>
-            ) : (
-              <>
-                <Copy className="w-3.5 h-3.5" />
-                <span>{t.copyExample}</span>
-              </>
+          {/* ========================================================================= */}
+          {/* DOC 13: COINMARKETCAP API */}
+          {/* ========================================================================= */}
+          {activeDocId === 'cmc-api' && (
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <span className="text-[11px] font-black uppercase tracking-wider text-blue-500 bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/20">
+                  Ⓜ️ COINMARKETCAP DEX DATA
+                </span>
+                <h1 className="text-2xl sm:text-4xl font-black text-gray-950 dark:text-white">
+                  {isEs ? 'Endpoints para CoinMarketCap' : 'CoinMarketCap DEX Endpoints'}
+                </h1>
+                <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
+                  {isEs 
+                    ? 'Endpoints estructurados bajo la especificación oficial de listado de DEXes de CoinMarketCap.' 
+                    : 'Endpoints structured according to the official CoinMarketCap DEX listing spec.'}
+                </p>
+              </div>
+
+              <div className="space-y-2 font-mono text-xs">
+                {[
+                  { method: 'GET', path: '/api/cmc/summary', desc: 'Resumen consolidado de pares, liquidez y volúmenes 24h' },
+                  { method: 'GET', path: '/api/cmc/ticker', desc: 'Cotizaciones en tiempo real' },
+                  { method: 'GET', path: '/api/cmc/orderbook?pair=PUSD_USDC', desc: 'Profundidad de liquidez P2SH32' },
+                  { method: 'GET', path: '/api/cmc/trades?pair=PUSD_USDC', desc: 'Trades recientes liquidados on-chain' }
+                ].map((ep, idx) => (
+                  <div key={idx} className="p-3 rounded-xl bg-gray-50 dark:bg-[#161c28] border border-gray-200 dark:border-gray-800 flex items-center justify-between">
+                    <div>
+                      <span className="text-blue-500 font-bold mr-2">{ep.method}</span>
+                      <span className="text-gray-900 dark:text-white font-bold">{ep.path}</span>
+                      <p className="text-gray-400 text-[11px] font-sans mt-0.5">{ep.desc}</p>
+                    </div>
+                    <a href={ep.path} target="_blank" rel="noreferrer" className="text-primary hover:text-orange-500 shrink-0">
+                      <ExternalLink className="w-4 h-4" />
+                    </a>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* GITBOOK BOTTOM PAGINATION (ANTERIOR / SIGUIENTE) */}
+          <div className="pt-8 border-t border-gray-100 dark:border-gray-800 flex flex-col sm:flex-row items-center justify-between gap-4">
+            {prevDoc ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveDocId(prevDoc.id);
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                className="w-full sm:w-auto p-3.5 rounded-2xl bg-gray-50 dark:bg-[#161c28] border border-gray-200 dark:border-gray-800 hover:border-primary transition-all text-left cursor-pointer group"
+              >
+                <span className="text-[10px] text-gray-400 uppercase font-bold flex items-center gap-1">
+                  <ArrowLeft className="w-3 h-3 group-hover:-translate-x-0.5 transition-transform" />
+                  <span>{isEs ? 'Anterior' : 'Previous'}</span>
+                </span>
+                <span className="text-xs font-bold text-gray-900 dark:text-white block mt-0.5 group-hover:text-primary transition-colors">
+                  {isEs ? prevDoc.title.es : prevDoc.title.en}
+                </span>
+              </button>
+            ) : <div />}
+
+            {nextDoc && (
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveDocId(nextDoc.id);
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                className="w-full sm:w-auto p-3.5 rounded-2xl bg-gray-50 dark:bg-[#161c28] border border-gray-200 dark:border-gray-800 hover:border-primary transition-all text-right cursor-pointer group sm:ml-auto"
+              >
+                <span className="text-[10px] text-gray-400 uppercase font-bold flex items-center justify-end gap-1">
+                  <span>{isEs ? 'Siguiente' : 'Next'}</span>
+                  <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+                </span>
+                <span className="text-xs font-bold text-gray-900 dark:text-white block mt-0.5 group-hover:text-primary transition-colors">
+                  {isEs ? nextDoc.title.es : nextDoc.title.en}
+                </span>
+              </button>
             )}
-          </button>
-        </div>
-
-        <pre className="p-4 rounded-2xl bg-gray-950 text-gray-200 font-mono text-xs overflow-x-auto border border-gray-800 leading-relaxed">
-          <code>{t.codeSnippet}</code>
-        </pre>
+          </div>
+        </main>
       </div>
     </div>
   );
