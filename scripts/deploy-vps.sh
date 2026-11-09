@@ -53,5 +53,5 @@ rm -f /tmp/backend.tar.gz /tmp/frontend-dist.tar.gz
 echo ""
 echo "=========================================================="
 echo "🎉 Deployment completed successfully!"
-echo "🌐 Live URL: https://bsprotocol.xyz"
+echo "🌐 Live URL: https://bliquid.xyz"
 echo "=========================================================="

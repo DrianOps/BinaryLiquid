@@ -17,7 +17,7 @@ dotenv.config({ path: path.resolve(__dirname, '../backend/.env') });
 
 const AMOY_RPC = process.env.EVM_AMOY_RPC_URL || 'https://polygon-amoy-bor-rpc.publicnode.com';
 const VAULT_ADDRESS = process.env.EVM_AMOY_VAULT_ADDRESS || '0xc830c7cB16cd05bdEd8CA9d0c73E9038ed25Aa4A';
-const WATCHMAN_EVM_KEY = process.env.EVM_HOT_WALLET_KEY || '';
+const WATCHMAN_EVM_KEY = process.env.EVM_WATCHMAN_KEY || process.env.EVM_HOT_WALLET_KEY || '';
 
 if (!WATCHMAN_EVM_KEY) {
   console.error('❌ Missing EVM_HOT_WALLET_KEY in ../backend/.env');

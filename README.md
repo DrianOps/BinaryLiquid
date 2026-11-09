@@ -117,15 +117,12 @@ BinaryLiquid_swap/
 │   ├── services/
 │   │   ├── bchService.js         # Bitcoin Cash CashTokens UTXO & token management
 │   │   ├── evmService.js         # Polygon EVM contract interactions (ERC-20 transfers)
-│   │   ├── hdWalletService.js    # BIP-44 multi-chain deterministic derivation
 │   │   ├── poolService.js        # Constant product AMM, custom pool factory, Anti-Rug
+│   │   ├── lendingService.js     # Non-custodial lending vaults & borrow engine
+│   │   ├── perpsService.js       # Perpetual Futures & synthetic settlement
 │   │   ├── relayerEngine.js      # Autonomous order state machine & executor
-│   │   ├── sweeperEngine.js      # Hot-to-cold treasury risk mitigation daemon
 │   │   ├── oraclePool.js         # Multi-source live price feeds
 │   │   └── db.js                 # PostgreSQL + Redis store with memory fallback
-│   └── scripts/
-│       ├── generate_hot_wallets.js
-│       └── generate_cold_treasury_wallet.js
 │
 ├── frontend/
 │   ├── src/

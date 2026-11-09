@@ -74,7 +74,7 @@ mkdir -p /var/www/binaryliquid-bridge
 cd /var/www/binaryliquid-bridge/backend
 npm install --omit=dev
 
-# 4. Configure .env with your Hot Wallet keys
+# 4. Configure .env with your Watchman Relayer keys & contract addresses
 nano .env
 
 # 5. Start with PM2
@@ -88,7 +88,7 @@ pm2 startup
 ## 📡 API Endpoints Reference
 
 ### 1. `GET /api/status`
-Returns network health, hot wallet addresses, and available liquidity on BCH & EVM.
+Returns network health, smart contract vault balances, and available liquidity on BCH & EVM.
 
 ### 2. `GET /api/quote?fromToken=PUSD&toToken=USDC&amount=100`
 Calculates net payout, 0.3% bridge fee, and 1:1 oracle rate.

@@ -1,6 +1,6 @@
-# 🛠️ BinaryLiquid Bridge — Automation & Management Scripts
+# 🛠️ BinaryLiquid Protocol — Automation & Management Scripts
 
-Esta carpeta contiene todos los scripts de automatización para desplegar, gestionar y mantener el puente **BinaryLiquid** tanto en local como en cualquier servidor VPS (InterServer / Ubuntu / Debian).
+Esta carpeta contiene los scripts de automatización para desplegar, auditar y mantener **BinaryLiquid Protocol** tanto en desarrollo local como en el servidor de producción VPS (Ubuntu / Debian).
 
 ---
 
@@ -8,11 +8,10 @@ Esta carpeta contiene todos los scripts de automatización para desplegar, gesti
 
 | Script | Descripción |
 |---|---|
-| [`deploy-vps.sh`](./deploy-vps.sh) | Despliegue en 1-clic: compila el frontend, empaqueta el backend, lo sube vía SCP y reinicia PM2 y Nginx. |
-| [`configure-wallets.sh`](./configure-wallets.sh) | Menú interactivo para cambiar claves privadas de Hot Wallets, direcciones, comisiones (fee %) y red (Chipnet/Mainnet). |
-| [`check-status.sh`](./check-status.sh) | Inspecciona la salud del servidor, estado de PM2, saldos de las Hot Wallets y métricas de tesorería. |
-| [`setup-ssl.sh`](./setup-ssl.sh) | Instala y renueva automáticamente certificados SSL HTTPS gratuitos con Let's Encrypt / Certbot. |
-| [`backup-db.sh`](./backup-db.sh) | Crea una copia de seguridad con fecha y hora de la base de datos de swaps y tesorería (`bridge_db.json`). |
+| [`deploy-vps.sh`](./deploy-vps.sh) | Despliegue en 1-clic: compila el frontend, empaqueta el backend, lo transfiere al VPS y reinicia PM2 y Nginx. |
+| [`check-status.sh`](./check-status.sh) | Inspecciona la salud del backend relayer, estado de procesos PM2, puertos de escucha y contratos en vivo. |
+| [`setup-ssl.sh`](./setup-ssl.sh) | Configura y renueva certificados SSL HTTPS gratuitos con Let's Encrypt / Certbot. |
+| [`backup-db.sh`](./backup-db.sh) | Genera copias de seguridad con timestamp de los registros de swaps y auditorías de liquidez. |
 
 ---
 
@@ -25,35 +24,17 @@ chmod +x scripts/*.sh
 ./scripts/deploy-vps.sh 68.168.218.242 root
 ```
 
-### 2. Cambiar claves privadas o saldo de Hot Wallets
-Tanto en local como dentro del VPS:
+### 2. Verificar el estado del protocolo en vivo
 ```bash
-./scripts/configure-wallets.sh
-```
-Te mostrará un menú interactivo:
-```
-1) Update BCH Hot Wallet WIF (Private Key)
-2) Update BCH Hot Wallet Public Address
-3) Update EVM Hot Wallet Private Key (Hex)
-4) Update EVM Hot Wallet Public Address
-5) Update Bridge Fee Percentage (e.g. 0.003 = 0.3%)
-6) Switch Network Mode (chipnet vs mainnet)
-7) Toggle Sandbox Simulation (true / false)
-8) Reload Backend PM2 Process
+./scripts/check-status.sh https://bliquid.xyz
 ```
 
-### 3. Verificar el estado del puente en vivo
+### 3. Configurar SSL para un dominio
 ```bash
-./scripts/check-status.sh https://bsprotocol.xyz
+sudo ./scripts/setup-ssl.sh bliquid.xyz admin@bliquid.xyz
 ```
 
-### 4. Configurar SSL para otro dominio
-Si en el futuro cambias el dominio:
-```bash
-sudo ./scripts/setup-ssl.sh tu-nuevo-dominio.com admin@tu-dominio.com
-```
-
-### 5. Respaldar la base de datos
+### 4. Respaldar la base de datos
 ```bash
 ./scripts/backup-db.sh
 ```

@@ -15,15 +15,15 @@ echo "--- 1. API Status Endpoint ---"
 STATUS_JSON=$(curl -s "$TARGET_HOST/api/status")
 if [ -z "$STATUS_JSON" ]; then
     # Try public domain
-    TARGET_HOST="https://bsprotocol.xyz"
-    echo "⚠️ Local host not responding, trying https://bsprotocol.xyz..."
+    TARGET_HOST="https://bliquid.xyz"
+    echo "⚠️ Local host not responding, trying https://bliquid.xyz..."
     STATUS_JSON=$(curl -s "$TARGET_HOST/api/status")
 fi
 
 echo "$STATUS_JSON" | grep -o '"status":"[^"]*"' || echo "Response: $STATUS_JSON"
 echo ""
 
-echo "--- 2. Hot Wallets & Liquidity ---"
+echo "--- 2. Vaults & Liquidity ---"
 echo "$STATUS_JSON" | python3 -m json.tool 2>/dev/null || echo "$STATUS_JSON"
 echo ""
 

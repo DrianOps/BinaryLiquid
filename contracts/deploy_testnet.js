@@ -19,8 +19,8 @@ dotenv.config({ path: path.resolve(__dirname, '../backend/.env') });
 
 const AMOY_RPC = process.env.EVM_AMOY_RPC_URL || 'https://polygon-amoy-bor-rpc.publicnode.com';
 const CIRCLE_AMOY_USDC = '0x41E94Eb019C0762f9Bfcf9Fb1E58725BfB0e7582';
-const WATCHMAN_EVM_KEY = process.env.EVM_HOT_WALLET_KEY || '';
-const WATCHMAN_BCH_WIF = process.env.BCH_CHIPNET_HOT_WALLET_WIF || '';
+const WATCHMAN_EVM_KEY = process.env.EVM_WATCHMAN_KEY || process.env.EVM_HOT_WALLET_KEY || '';
+const WATCHMAN_BCH_WIF = process.env.BCH_CHIPNET_WATCHMAN_WIF || process.env.BCH_CHIPNET_HOT_WALLET_WIF || '';
 
 async function main() {
   console.log('======================================================================');

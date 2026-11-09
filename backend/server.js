@@ -772,6 +772,14 @@ app.get('/api/pools/stats', async (req, res) => {
       allPools: stats.allPools, 
       protocolStats: stats.protocolStats,
       vaultBalances,
+      relayerBalances: {
+        bch: bchBalances.chipnet?.bch || bchBalances.mainnet?.bch || 0,
+        pusd: bchBalances.chipnet?.PUSD || bchBalances.mainnet?.PUSD || 0,
+        musd: bchBalances.mainnet?.MUSD || 0,
+        pol: evmBalances.amoy?.native || evmBalances.mainnet?.native || 0,
+        usdc: evmBalances.amoy?.USDC || evmBalances.mainnet?.USDC || 0,
+        usdt: evmBalances.amoy?.USDT || evmBalances.mainnet?.USDT || 0
+      },
       hotWalletBalances: {
         bch: bchBalances.chipnet?.bch || bchBalances.mainnet?.bch || 0,
         pusd: bchBalances.chipnet?.PUSD || bchBalances.mainnet?.PUSD || 0,
