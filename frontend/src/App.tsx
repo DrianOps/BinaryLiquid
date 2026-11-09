@@ -1192,17 +1192,6 @@ export default function App() {
             >
               <span>{t.navPortfolio}</span>
             </button>
-
-            <button 
-              onClick={() => setMainView('docs')} 
-              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                mainView === 'docs' 
-                  ? 'bg-surface-2 text-ink font-bold shadow-2xs' 
-                  : 'text-ink-3 hover:text-ink hover:bg-surface-2/60 font-medium'
-              }`}
-            >
-              <span>{t.navDocs}</span>
-            </button>
           </div>
         </div>
         
