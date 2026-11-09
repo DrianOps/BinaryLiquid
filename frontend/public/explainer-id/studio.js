@@ -1,8 +1,8 @@
 /**
- * SovereignLink Animated Explainer Studio
- * 1080p High-Fidelity Vector Motion Graphics Renderer
- * Bilingual Engine: 🇺🇸 English + 🇪🇸 Español
- * Topic: Decentralized Identity for Bitcoin Cash & Nostr (Paytaca $500 Bounty)
+ * SovereignLink Video Explainer Studio
+ * 1080p High-Fidelity Vector Motion Graphics Renderer & Audio Engine
+ * Bilingual Voiceover: 🇪🇸 Español (es-MX-JorgeNeural) + 🇺🇸 English (en-US-ChristopherNeural)
+ * Built for BCH BLAZE 2026 Hackathon · Powered by Paytaca & Drian Stack Labs
  */
 
 const canvas = document.getElementById('stage');
@@ -10,18 +10,17 @@ const ctx = canvas.getContext('2d');
 const W = 1920;
 const H = 1080;
 
-let currentLang = 'en'; // default English
-let isPlaying = false;
-let currentSceneIdx = 0;
-let sceneTime = 0;
-let lastTimestamp = 0;
-let animationFrameId = null;
+let currentLang = 'es'; // default Spanish as requested by user
+try {
+    const saved = localStorage.getItem('explainer_lang');
+    if (saved === 'es' || saved === 'en') currentLang = saved;
+} catch (e) {}
 
 // Color Palette
 const COLORS = {
     bg: '#080B11',
     cardBg: 'rgba(15, 23, 42, 0.85)',
-    cardBorder: 'rgba(255, 255, 255, 0.1)',
+    cardBorder: 'rgba(255, 255, 255, 0.12)',
     textMain: '#FFFFFF',
     textMuted: '#94A3B8',
     bchGreen: '#10B981',
@@ -34,949 +33,298 @@ const COLORS = {
     gold: '#FBBF24'
 };
 
-// 6 Scenes Configuration
+// 7 Scenes Configuration with Exact Neural Audio Files and Durations
 const SCENES = [
     {
         id: 1,
-        titleEn: "1. The Centralized Identity Trap",
-        titleEs: "1. La Trampa de la Identidad Centralizada",
-        duration: 16.0,
+        titleEs: "1. La Trampa de la Identidad Centralizada y el Gas",
+        titleEn: "1. The Centralized Identity & Gas Fee Trap",
+        chapterEs: "El Dilema",
         chapterEn: "The Trap",
-        chapterEs: "El Dilema"
+        durationEs: 38.90,
+        durationEn: 30.14,
+        audioEs: "./audio/scene1_es.mp3",
+        audioEn: "./audio/scene1.mp3"
     },
     {
         id: 2,
-        titleEn: "2. What is SovereignLink & Real Use Cases",
-        titleEs: "2. ¿Para Qué Sirve SovereignLink?",
-        duration: 18.0,
-        chapterEn: "Use Cases",
-        chapterEs: "Utilidad Real"
+        titleEs: "2. ¿Qué es SovereignLink y Cómo Funciona?",
+        titleEn: "2. What is SovereignLink & How Does It Work?",
+        chapterEs: "Qué y Cómo",
+        chapterEn: "What & How",
+        durationEs: 53.93,
+        durationEn: 48.74,
+        audioEs: "./audio/scene2_es.mp3",
+        audioEn: "./audio/scene2.mp3"
     },
     {
         id: 3,
-        titleEn: "3. Unbreakable Cryptographic Security",
-        titleEs: "3. Seguridad Criptográfica Impenetrable",
-        duration: 18.0,
-        chapterEn: "Security",
-        chapterEs: "Seguridad"
+        titleEs: "3. ¿Para Qué Sirve? — Casos de Uso Reales",
+        titleEn: "3. Real-World Utility & Key Use Cases",
+        chapterEs: "Para Qué Sirve",
+        chapterEn: "Use Cases",
+        durationEs: 38.28,
+        durationEn: 33.10,
+        audioEs: "./audio/scene3_es.mp3",
+        audioEn: "./audio/scene3.mp3"
     },
     {
         id: 4,
-        titleEn: "4. Direct Comparison: Sovereign vs Traditional",
-        titleEs: "4. Comparativa: Soberano vs Tradicional",
-        duration: 16.0,
-        chapterEn: "Comparison",
-        chapterEs: "Ventajas"
+        titleEs: "4. Seguridad Criptográfica Impenetrable",
+        titleEn: "4. Unbreakable Cryptographic Security",
+        chapterEs: "Seguridad",
+        chapterEn: "Security",
+        durationEs: 32.11,
+        durationEn: 25.25,
+        audioEs: "./audio/scene4_es.mp3",
+        audioEn: "./audio/scene4.mp3"
     },
     {
         id: 5,
-        titleEn: "5. How to Use in 3 Simple Steps",
-        titleEs: "5. Cómo se Usa en 3 Pasos",
-        duration: 16.0,
-        chapterEn: "How to Use",
-        chapterEs: "3 Pasos"
+        titleEs: "5. Comparativa: Soberano vs Sistemas Tradicionales",
+        titleEn: "5. Direct Comparison: Sovereign vs Traditional",
+        chapterEs: "Ventajas",
+        chapterEn: "Comparison",
+        durationEs: 29.09,
+        durationEn: 23.57,
+        audioEs: "./audio/scene5_es.mp3",
+        audioEn: "./audio/scene5.mp3"
     },
     {
         id: 6,
-        titleEn: "6. Grand Finale — Spotlight to Paytaca",
-        titleEs: "6. Gran Cierre — Patrocinio Paytaca",
-        duration: 20.0,
+        titleEs: "6. Cómo Usar SovereignLink en 3 Sencillos Pasos",
+        titleEn: "6. How to Use SovereignLink in 3 Simple Steps",
+        chapterEs: "3 Pasos",
+        chapterEn: "How to Use",
+        durationEs: 26.59,
+        durationEn: 24.94,
+        audioEs: "./audio/scene6_es.mp3",
+        audioEn: "./audio/scene6.mp3"
+    },
+    {
+        id: 7,
+        titleEs: "7. Gran Cierre — Homenaje y Patrocinio a Paytaca",
+        titleEn: "7. Grand Finale — Spotlight & Tribute to Paytaca",
+        chapterEs: "Paytaca",
         chapterEn: "Paytaca Spotlight",
-        chapterEs: "Paytaca"
+        durationEs: 32.64,
+        durationEn: 29.90,
+        audioEs: "./audio/scene7_es.mp3",
+        audioEn: "./audio/scene7.mp3"
     }
 ];
 
-// Helper Easing Functions
-function easeOutCubic(t) {
-    return 1 - Math.pow(1 - Math.min(1, Math.max(0, t)), 3);
-}
-function easeInOutQuad(t) {
-    return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+let currentSceneIndex = 0;
+let sceneTime = 0;
+let isPlaying = false;
+let currentAudio = null;
+let animationFrameId = null;
+let lastTimestamp = 0;
+
+function t(es, en) {
+    return currentLang === 'es' ? es : en;
 }
 
-// Background Grid with Ambient Glows
-function drawBackground(t) {
-    // Deep dark background
+function getCurDuration() {
+    return currentLang === 'es' ? SCENES[currentSceneIndex].durationEs : SCENES[currentSceneIndex].durationEn;
+}
+
+// ==============================================================================
+// DRAWING PRIMITIVES & VECTOR ILLUSTRATIONS
+// ==============================================================================
+
+function drawBackground(tTime) {
     ctx.fillStyle = COLORS.bg;
     ctx.fillRect(0, 0, W, H);
 
-    // Subtle grid lines
+    // Subtle moving cyber grid
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
     ctx.lineWidth = 1;
-    const gridSize = 60;
-    for (let x = 0; x < W; x += gridSize) {
+    const gridSpacing = 60;
+    const offset = (tTime * 15) % gridSpacing;
+    for (let x = 0; x <= W; x += gridSpacing) {
         ctx.beginPath();
         ctx.moveTo(x, 0);
         ctx.lineTo(x, H);
         ctx.stroke();
     }
-    for (let y = 0; y < H; y += gridSize) {
+    for (let y = offset; y <= H; y += gridSpacing) {
         ctx.beginPath();
         ctx.moveTo(0, y);
         ctx.lineTo(W, y);
         ctx.stroke();
     }
 
-    // Ambient radial glows in corners
-    const glow1 = ctx.createRadialGradient(200, 200, 10, 200, 200, 600);
-    glow1.addColorStop(0, 'rgba(247, 147, 26, 0.08)');
+    // Ambient radial glow effects in corners
+    const glow1 = ctx.createRadialGradient(250, 250, 10, 250, 250, 700);
+    glow1.addColorStop(0, 'rgba(247, 147, 26, 0.07)');
     glow1.addColorStop(1, 'rgba(0, 0, 0, 0)');
     ctx.fillStyle = glow1;
     ctx.fillRect(0, 0, W, H);
 
-    const glow2 = ctx.createRadialGradient(W - 200, H - 200, 10, W - 200, H - 200, 600);
-    glow2.addColorStop(0, 'rgba(0, 209, 178, 0.08)');
+    const glow2 = ctx.createRadialGradient(W - 250, H - 250, 10, W - 250, H - 250, 700);
+    glow2.addColorStop(0, 'rgba(0, 209, 178, 0.07)');
     glow2.addColorStop(1, 'rgba(0, 0, 0, 0)');
     ctx.fillStyle = glow2;
     ctx.fillRect(0, 0, W, H);
+
+    // Top Navigation Bar
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.75)';
+    ctx.fillRect(0, 0, W, 80);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+    ctx.beginPath();
+    ctx.moveTo(0, 80);
+    ctx.lineTo(W, 80);
+    ctx.stroke();
+
+    // SovereignLink Brand
+    ctx.beginPath();
+    ctx.arc(75, 40, 20, 0, Math.PI * 2);
+    ctx.fillStyle = COLORS.paytacaTeal;
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(85, 40, 15, 0, Math.PI * 2);
+    ctx.fillStyle = COLORS.nostrPurple;
+    ctx.fill();
+
+    ctx.fillStyle = COLORS.textMain;
+    ctx.font = 'bold 24px -apple-system, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('SovereignLink', 120, 48);
+    const brandW = ctx.measureText('SovereignLink').width;
+
+    ctx.fillStyle = COLORS.textMuted;
+    ctx.font = '500 16px -apple-system, sans-serif';
+    ctx.fillText(t('•  Identidad Descentralizada Bitcoin Cash & Nostr', '•  Decentralized Identity for Bitcoin Cash & Nostr'), 120 + brandW + 18, 47);
+
+    // Track Badges (Top Right)
+    drawPill(1400, 24, 230, 32, 'BCH BLAZE 2026 ($500)', COLORS.btcOrange);
+    drawPill(1650, 24, 210, 32, 'POWERED BY PAYTACA', COLORS.paytacaTeal);
 }
 
-// Draw Top Header Pill
-function drawHeaderBadge(categoryEn, categoryEs, titleEn, titleEs) {
+function drawPill(x, y, w, h, text, color) {
     ctx.save();
-    // Badge
-    const badgeText = currentLang === 'es' ? categoryEs : categoryEn;
-    ctx.font = '700 18px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-    const textWidth = ctx.measureText(badgeText).width;
-    const pillW = textWidth + 36;
-    const pillH = 36;
-    const pillX = (W - pillW) / 2;
-    const pillY = 50;
-
-    ctx.fillStyle = 'rgba(247, 147, 26, 0.12)';
-    ctx.strokeStyle = 'rgba(247, 147, 26, 0.4)';
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+    ctx.strokeStyle = color;
     ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.roundRect(pillX, pillY, pillW, pillH, 18);
+    ctx.roundRect(x, y, w, h, h / 2);
     ctx.fill();
     ctx.stroke();
 
-    ctx.fillStyle = COLORS.btcOrange;
+    ctx.fillStyle = color;
+    ctx.font = 'bold 12px -apple-system, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(badgeText, W / 2, pillY + pillH / 2);
-
-    // Main Scene Title
-    const title = currentLang === 'es' ? titleEs : titleEn;
-    ctx.font = '800 44px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-    ctx.fillStyle = COLORS.textMain;
-    ctx.fillText(title, W / 2, 125);
+    ctx.fillText(text, x + w / 2, y + h / 2);
     ctx.restore();
 }
 
-// ==========================================
-// SCENE 1: THE CENTRALIZED IDENTITY TRAP
-// ==========================================
-function renderScene1(t) {
-    drawHeaderBadge(
-        "THE WEB2 & TRADITIONAL WEB3 PROBLEM",
-        "EL PROBLEMA EN WEB2 Y WEB3 TRADICIONAL",
-        "The Centralized Identity & Gas Fee Trap",
-        "La Trampa de la Identidad Centralizada"
-    );
-
-    const entrance = easeOutCubic(t / 1.2);
-
-    // Card 1: Web2 Monopolies (Google/Meta/Apple)
+function drawCoin(x, y, radius, symbol, bgColor, glowColor, tTime = 0) {
     ctx.save();
-    const c1X = 220;
-    const c1Y = 220 + (1 - entrance) * 50;
-    const cW = 680;
-    const cH = 600;
+    const floatY = y + Math.sin(tTime * 3) * 6;
 
-    ctx.fillStyle = 'rgba(239, 68, 68, 0.06)';
-    ctx.strokeStyle = 'rgba(239, 68, 68, 0.3)';
-    ctx.lineWidth = 2;
+    // 1. 3D Outer Bevel & Neon Glow
+    ctx.shadowColor = glowColor || bgColor;
+    ctx.shadowBlur = 28;
+
+    const rimGrad = ctx.createRadialGradient(
+        x - radius * 0.35, floatY - radius * 0.35, radius * 0.15,
+        x, floatY, radius
+    );
+    rimGrad.addColorStop(0, '#FFFFFF');
+    rimGrad.addColorStop(0.35, bgColor);
+    rimGrad.addColorStop(1, '#020617');
+
     ctx.beginPath();
-    ctx.roundRect(c1X, c1Y, cW, cH, 24);
+    ctx.arc(x, floatY, radius, 0, Math.PI * 2);
+    ctx.fillStyle = rimGrad;
     ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // Polished rim highlight
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+    ctx.lineWidth = Math.max(2, radius * 0.06);
     ctx.stroke();
 
-    // Red pill
-    ctx.fillStyle = '#EF4444';
-    ctx.font = '700 20px sans-serif';
-    ctx.textAlign = 'left';
-    ctx.fillText(currentLang === 'es' ? "❌ RIESGO WEB2: MONOPOLIOS CENTRALIZADOS" : "❌ WEB2 RISK: CORPORATE MONOPOLIES", c1X + 40, c1Y + 55);
-
-    // Bullet points
-    const bulletsWeb2 = currentLang === 'es' ? [
-        "• Tu cuenta le pertenece a Google, Apple o Meta.",
-        "• Si te banean o censuran, pierdes tu reputación y accesos.",
-        "• Tus datos personales se venden a terceros.",
-        "• Cero soberanía: tú eres el producto, no el dueño."
-    ] : [
-        "• Your account belongs to Google, Apple, or Meta.",
-        "• Arbitrary bans lock you out of contacts and reputation.",
-        "• Your personal data is harvested and sold.",
-        "• Zero sovereignty: you are the product, not the owner."
-    ];
-
-    ctx.font = '500 24px sans-serif';
-    ctx.fillStyle = COLORS.textMain;
-    bulletsWeb2.forEach((line, i) => {
-        ctx.fillText(line, c1X + 40, c1Y + 130 + i * 55);
-    });
-
-    // Big alert box at bottom of card 1
-    ctx.fillStyle = 'rgba(239, 68, 68, 0.15)';
-    ctx.strokeStyle = 'rgba(239, 68, 68, 0.4)';
+    // 2. Inner Coin Body
+    const innerRadius = radius * 0.84;
     ctx.beginPath();
-    ctx.roundRect(c1X + 40, c1Y + 390, cW - 80, 150, 16);
+    ctx.arc(x, floatY, innerRadius, 0, Math.PI * 2);
+    ctx.fillStyle = '#080B11';
     ctx.fill();
-    ctx.stroke();
 
-    ctx.fillStyle = '#FCA5A5';
-    ctx.font = '700 22px sans-serif';
-    ctx.fillText(currentLang === 'es' ? "⚠️ Pérdida Total de Acceso" : "⚠️ Total Access Loss", c1X + 70, c1Y + 440);
-    ctx.font = '400 19px sans-serif';
+    // 3. Fallback / Custom Symbol
     ctx.fillStyle = '#FFFFFF';
-    ctx.fillText(currentLang === 'es' ? "Sin claves privadas, dependes de servidores corporativos." : "Without private keys, you depend entirely on corporate servers.", c1X + 70, c1Y + 485);
-    ctx.restore();
-
-    // Card 2: Traditional Web3 (Ethereum ENS Gas Trap)
-    ctx.save();
-    const c2X = 1020;
-    const c2Y = 220 + (1 - entrance) * 50;
-
-    ctx.fillStyle = 'rgba(247, 147, 26, 0.06)';
-    ctx.strokeStyle = 'rgba(247, 147, 26, 0.3)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.roundRect(c2X, c2Y, cW, cH, 24);
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.fillStyle = COLORS.btcOrange;
-    ctx.font = '700 20px sans-serif';
-    ctx.textAlign = 'left';
-    ctx.fillText(currentLang === 'es' ? "⚠️ WEB3 TRADICIONAL: COMISIONES ABUSIVAS" : "⚠️ TRADITIONAL WEB3: EXORBITANT GAS TRAP", c2X + 40, c2Y + 55);
-
-    const bulletsWeb3 = currentLang === 'es' ? [
-        "• Registrar un dominio ENS cuesta $20 a $50 dólares en gas.",
-        "• Renovaciones periódicas forzadas o pierdes tu nombre.",
-        "• No incluye pagos directos en Bitcoin Cash.",
-        "• Congestión de red y transacciones lentas."
-    ] : [
-        "• Registering an ENS domain costs $20-$50+ in gas fees.",
-        "• Forced annual renewals or your name expires.",
-        "• Disconnected from native Bitcoin Cash payments.",
-        "• Network congestion and slow execution times."
-    ];
-
-    ctx.font = '500 24px sans-serif';
-    ctx.fillStyle = COLORS.textMain;
-    bulletsWeb3.forEach((line, i) => {
-        ctx.fillText(line, c2X + 40, c2Y + 130 + i * 55);
-    });
-
-    // Solution callout
-    ctx.fillStyle = 'rgba(16, 185, 129, 0.15)';
-    ctx.strokeStyle = 'rgba(16, 185, 129, 0.4)';
-    ctx.beginPath();
-    ctx.roundRect(c2X + 40, c2Y + 390, cW - 80, 150, 16);
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.fillStyle = COLORS.bchGreen;
-    ctx.font = '700 22px sans-serif';
-    ctx.fillText(currentLang === 'es' ? "💡 La Alternativa Soberana" : "💡 The Sovereign Alternative", c2X + 70, c2Y + 440);
-    ctx.font = '400 19px sans-serif';
-    ctx.fillStyle = '#FFFFFF';
-    ctx.fillText(currentLang === 'es' ? "Bitcoin Cash + Nostr: Costo $0, instantáneo y sin intermediarios." : "Bitcoin Cash + Nostr: $0 cost, instant, and truly peer-to-peer.", c2X + 70, c2Y + 485);
-    ctx.restore();
-
-    // Bottom summary pill
-    ctx.save();
-    ctx.font = '600 22px sans-serif';
-    ctx.fillStyle = COLORS.textMuted;
+    ctx.font = `bold ${radius * 0.85}px -apple-system, sans-serif`;
     ctx.textAlign = 'center';
-    ctx.fillText(
-        currentLang === 'es'
-            ? "«SovereignLink rompe el monopolio uniendo Bitcoin Cash con Nostr en una identidad autosoberana.»"
-            : "«SovereignLink breaks the monopoly by cryptographically unifying Bitcoin Cash with Nostr.»",
-        W / 2,
-        910
+    ctx.textBaseline = 'middle';
+    ctx.fillText(symbol, x, floatY + 2);
+
+    // 4. Glass Sheen
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(x, floatY, innerRadius, 0, Math.PI * 2);
+    ctx.clip();
+
+    const sheenGrad = ctx.createLinearGradient(
+        x - radius, floatY - radius,
+        x + radius, floatY + radius
     );
+    sheenGrad.addColorStop(0, 'rgba(255, 255, 255, 0.4)');
+    sheenGrad.addColorStop(0.3, 'rgba(255, 255, 255, 0.1)');
+    sheenGrad.addColorStop(0.6, 'rgba(255, 255, 255, 0)');
+
+    ctx.beginPath();
+    ctx.ellipse(
+        x - radius * 0.15, floatY - radius * 0.25,
+        innerRadius * 0.9, innerRadius * 0.45,
+        -Math.PI / 4, 0, Math.PI * 2
+    );
+    ctx.fillStyle = sheenGrad;
+    ctx.fill();
+    ctx.restore();
+
     ctx.restore();
 }
 
-// ==========================================
-// SCENE 2: WHAT IS SOVEREIGNLINK & REAL USE CASES
-// ==========================================
-function renderScene2(t) {
-    drawHeaderBadge(
-        "REAL-WORLD VALUE & UTILITY",
-        "UTILIDAD Y CASOS DE USO REALES",
-        "What is SovereignLink & Why Does It Matter?",
-        "¿Para Qué Sirve SovereignLink en la Vida Real?"
-    );
-
-    const progress = Math.min(1, t / 1.5);
-    const cardY = 240;
-    const cardW = 440;
-    const cardH = 580;
-    const startX = 220;
-    const gap = 50;
-
-    const useCases = [
-        {
-            icon: "⚡",
-            tag: currentLang === 'es' ? "PAGOS INSTANTÁNEOS" : "INSTANT PAYMENTS",
-            title: currentLang === 'es' ? "Zaps P2P Directos a tu Perfil" : "P2P Zaps & Tips to Nostr Profiles",
-            desc: currentLang === 'es'
-                ? "Envía y recibe Bitcoin Cash directamente en clientes de Nostr (Damus, Primal, Amethyst) sin copiar ni pegar direcciones de 42 caracteres."
-                : "Send and receive Bitcoin Cash directly to Nostr profiles across apps like Damus and Primal without copying 42-character addresses.",
-            color: COLORS.btcOrange
-        },
-        {
-            icon: "🛡️",
-            tag: currentLang === 'es' ? "ANTI-ESTAFAS" : "SCAM PROTECTION",
-            title: currentLang === 'es' ? "Perfiles Verificados sin Fraude" : "Mathematical Anti-Impersonation",
-            desc: currentLang === 'es'
-                ? "Los compradores y usuarios verifican criptográficamente que la billetera BCH pertenece al autor legítimo. Cero cuentas clonadas o bots."
-                : "Buyers and peers verify on-chain that the BCH address genuinely belongs to that content creator. Zero impostors or cloned accounts.",
-            color: COLORS.bchGreen
-        },
-        {
-            icon: "🔑",
-            tag: currentLang === 'es' ? "LOGIN UNIVERSAL" : "UNIVERSAL LOGIN",
-            title: currentLang === 'es' ? "Inicio de Sesión sin Contraseñas" : "Passwordless Challenge-Response",
-            desc: currentLang === 'es'
-                ? "Autentícate en cualquier dApp, foro o comercio Web3 firmando un reto criptográfico desde tu billetera Paytaca. Cero contraseñas que hackear."
-                : "Sign in to any Web3 dApp, forum, or store by signing a nonce challenge from Paytaca. Zero passwords to breach or leak.",
-            color: COLORS.paytacaTeal
-        }
-    ];
-
-    useCases.forEach((uc, i) => {
-        const x = startX + i * (cardW + gap);
-        const cardEntrance = easeOutCubic(Math.max(0, (t - i * 0.3) / 1.0));
-        const y = cardY + (1 - cardEntrance) * 60;
-
-        ctx.save();
-        ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
-        ctx.strokeStyle = uc.color;
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.roundRect(x, y, cardW, cardH, 20);
-        ctx.fill();
-        ctx.stroke();
-
-        // Icon circle
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
-        ctx.beginPath();
-        ctx.arc(x + 70, y + 80, 45, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.font = '40px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(uc.icon, x + 70, y + 80);
-
-        // Tag
-        ctx.fillStyle = uc.color;
-        ctx.font = '700 14px sans-serif';
-        ctx.textAlign = 'left';
-        ctx.fillText(uc.tag, x + 135, y + 80);
-
-        // Title
-        ctx.fillStyle = COLORS.textMain;
-        ctx.font = '700 24px sans-serif';
-        ctx.fillText(uc.title, x + 35, y + 175, cardW - 70);
-
-        // Divider
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-        ctx.beginPath();
-        ctx.moveTo(x + 35, y + 230);
-        ctx.lineTo(x + cardW - 35, y + 230);
-        ctx.stroke();
-
-        // Description
-        ctx.fillStyle = COLORS.textMuted;
-        ctx.font = '400 19px -apple-system, sans-serif';
-        wrapText(ctx, uc.desc, x + 35, y + 280, cardW - 70, 32);
-
-        ctx.restore();
-    });
-
-    // Bottom banner
+function drawSubtitleCard(title, body, badgeText, badgeColor = COLORS.bchGreen) {
     ctx.save();
-    ctx.font = '600 22px sans-serif';
-    ctx.fillStyle = COLORS.textMain;
-    ctx.textAlign = 'center';
-    ctx.fillText(
-        currentLang === 'es'
-            ? "«Libertad de expresión en Nostr + Dinero soberano en Bitcoin Cash = Soberanía Digital Completa.»"
-            : "«Censorship-free speech on Nostr + Censorship-free cash on BCH = Complete Digital Sovereignty.»",
-        W / 2,
-        910
-    );
-    ctx.restore();
-}
+    const boxW = 1400;
+    const boxH = 150;
+    const boxX = (W - boxW) / 2;
+    const boxY = H - 190;
 
-// ==========================================
-// SCENE 3: UNBREAKABLE CRYPTOGRAPHIC SECURITY
-// ==========================================
-function renderScene3(t) {
-    drawHeaderBadge(
-        "CRYPTOGRAPHIC ARCHITECTURE & ISOLATION",
-        "ARQUITECTURA Y BLINDAJE CRIPTOGRÁFICO",
-        "Unbreakable Mathematical Security",
-        "Seguridad Criptográfica Impenetrable"
-    );
-
-    const entrance = easeOutCubic(t / 1.2);
-
-    // Left visual: Dual curve isolation blueprint
-    const bpX = 200;
-    const bpY = 220;
-    const bpW = 700;
-    const bpH = 620;
-
-    ctx.save();
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+    ctx.fillStyle = 'rgba(8, 11, 17, 0.94)';
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.roundRect(bpX, bpY, bpW, bpH, 24);
+    ctx.roundRect(boxX, boxY, boxW, boxH, 18);
     ctx.fill();
     ctx.stroke();
 
-    ctx.fillStyle = COLORS.gold;
-    ctx.font = '700 18px sans-serif';
-    ctx.textAlign = 'left';
-    ctx.fillText(currentLang === 'es' ? "PROTOCOLO DE DOBLE FIRMA SECP256K1" : "SECP256K1 DUAL-SIGNATURE PROTOCOL", bpX + 40, bpY + 50);
+    drawPill(boxX + 35, boxY + 24, 260, 30, badgeText, badgeColor);
 
-    // Box 1: BCH Wallet
-    ctx.fillStyle = 'rgba(16, 185, 129, 0.1)';
-    ctx.strokeStyle = COLORS.bchGreen;
-    ctx.beginPath();
-    ctx.roundRect(bpX + 40, bpY + 90, bpW - 80, 110, 16);
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.fillStyle = COLORS.bchGreen;
-    ctx.font = '700 20px sans-serif';
-    ctx.fillText("Bitcoin Cash (Paytaca Wallet)", bpX + 65, bpY + 130);
-    ctx.fillStyle = COLORS.textMuted;
-    ctx.font = '16px monospace';
-    ctx.fillText("SignAttestation(statementHash, bchPrivateKey) ➜ secp256k1", bpX + 65, bpY + 165);
-
-    // Connecting arrows
-    ctx.fillStyle = COLORS.btcOrange;
-    ctx.font = '700 28px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText("↕", bpX + bpW / 2, bpY + 235);
-
-    // Box 2: Nostr Keypair
-    ctx.fillStyle = 'rgba(138, 43, 226, 0.1)';
-    ctx.strokeStyle = COLORS.nostrPurple;
-    ctx.beginPath();
-    ctx.roundRect(bpX + 40, bpY + 260, bpW - 80, 110, 16);
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.fillStyle = '#C084FC';
-    ctx.font = '700 20px sans-serif';
-    ctx.textAlign = 'left';
-    ctx.fillText("Nostr Identity (BIP-340 Schnorr)", bpX + 65, bpY + 300);
-    ctx.fillStyle = COLORS.textMuted;
-    ctx.font = '16px monospace';
-    ctx.fillText("FinalizeEvent(Kind 30078 + NIP-39 tags) ➜ Schnorr Sig", bpX + 65, bpY + 335);
-
-    // Box 3: Relays
-    ctx.fillStyle = 'rgba(0, 209, 178, 0.1)';
-    ctx.strokeStyle = COLORS.paytacaTeal;
-    ctx.beginPath();
-    ctx.roundRect(bpX + 40, bpY + 430, bpW - 80, 140, 16);
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.fillStyle = COLORS.paytacaTeal;
-    ctx.font = '700 20px sans-serif';
-    ctx.fillText(currentLang === 'es' ? "Relays Descentralizados (P2P)" : "Decentralized Relays (P2P)", bpX + 65, bpY + 475);
     ctx.fillStyle = COLORS.textMain;
-    ctx.font = '16px sans-serif';
-    ctx.fillText("wss://relay.damus.io • wss://nos.lol • wss://relay.primal.net", bpX + 65, bpY + 510);
-    ctx.font = '15px sans-serif';
-    ctx.fillStyle = COLORS.textMuted;
-    ctx.fillText(currentLang === 'es' ? "Verificable en milisegundos por cualquier cliente Web3." : "Verifiable in milliseconds by any Web3 client.", bpX + 65, bpY + 540);
-    ctx.restore();
-
-    // Right: 4 Security Guarantees
-    const secX = 960;
-    const secW = 760;
-    const secH = 620;
-
-    ctx.save();
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.roundRect(secX, bpY, secW, secH, 24);
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.fillStyle = COLORS.bchGreen;
-    ctx.font = '700 18px sans-serif';
+    ctx.font = 'bold 26px -apple-system, sans-serif';
     ctx.textAlign = 'left';
-    ctx.fillText(currentLang === 'es' ? "GARANTÍAS DE SEGURIDAD CRIPTOGRÁFICA" : "CRYPTOGRAPHIC SECURITY GUARANTEES", secX + 40, bpY + 50);
-
-    const pillars = [
-        {
-            title: currentLang === 'es' ? "1. Claves Privadas 100% Protegidas" : "1. Zero Private Keys Exposed",
-            desc: currentLang === 'es'
-                ? "Tus claves privadas nunca salen de tu billetera Paytaca. El sistema solo transmite firmas criptográficas."
-                : "Your private keys never leave your Paytaca wallet. Only compact mathematical signatures are published."
-        },
-        {
-            title: currentLang === 'es' ? "2. Aislamiento e Independencia de Claves" : "2. Strict Keypair Isolation",
-            desc: currentLang === 'es'
-                ? "La clave de Bitcoin Cash y la clave de Nostr son independientes. Si rotas tu clave Nostr, tus fondos en BCH siguen 100% a salvo."
-                : "Your BCH key and Nostr key are completely independent. Rotating your Nostr identity never risks your BCH funds."
-        },
-        {
-            title: currentLang === 'es' ? "3. Cero Servidores Centralizados" : "3. Zero Centralized Servers or DBs",
-            desc: currentLang === 'es'
-                ? "Ningún gobierno, empresa o atacante puede apagar tu identidad; vive distribuida en la red global de relays."
-                : "No government or corporate entity can shut down your profile; it lives distributed across global Nostr relays."
-        },
-        {
-            title: currentLang === 'es' ? "4. Blindaje Anti-Replay" : "4. Cryptographic Anti-Replay Defense",
-            desc: currentLang === 'es'
-                ? "Cada firma incluye marcas de tiempo UTC y hashes canónicos, impidiendo que alguien reutilice firmas viejas."
-                : "Every proof includes UTC timestamps and canonical hashes, preventing attackers from replaying stale signatures."
-        }
-    ];
-
-    pillars.forEach((p, idx) => {
-        const itemY = bpY + 95 + idx * 125;
-        ctx.fillStyle = COLORS.textMain;
-        ctx.font = '700 21px sans-serif';
-        ctx.fillText(p.title, secX + 40, itemY);
-
-        ctx.fillStyle = COLORS.textMuted;
-        ctx.font = '400 18px sans-serif';
-        wrapText(ctx, p.desc, secX + 40, itemY + 30, secW - 80, 26);
-    });
-
-    ctx.restore();
-}
-
-// ==========================================
-// SCENE 4: DIRECT COMPARISON: SOVEREIGN VS TRADITIONAL
-// ==========================================
-function renderScene4(t) {
-    drawHeaderBadge(
-        "THE DEFINITIVE COMPARISON",
-        "LA COMPARATIVA DEFINITIVA",
-        "Why SovereignLink Beats Legacy Systems",
-        "¿Por Qué SovereignLink Supera a las Alternativas?"
-    );
-
-    const cW = 460;
-    const cH = 620;
-    const startX = 200;
-    const gap = 40;
-    const cardY = 220;
-
-    const cols = [
-        {
-            badge: "WEB2 TRADICIONAL",
-            badgeEn: "LEGACY WEB2",
-            title: "Google / Apple / OAuth",
-            color: '#EF4444',
-            items: currentLang === 'es' ? [
-                "❌ Identidad alquilada",
-                "❌ Te pueden banear en cualquier momento",
-                "❌ Venden tu historial de datos",
-                "❌ Sin pagos cripto nativos",
-                "❌ Servidores centralizados frágiles"
-            ] : [
-                "❌ Rented corporate identity",
-                "❌ Arbitrary bans and deplatforming",
-                "❌ Personal data is harvested & sold",
-                "❌ No native crypto payments",
-                "❌ Centralized single points of failure"
-            ]
-        },
-        {
-            badge: "WEB3 ETHEREUM",
-            badgeEn: "ETHEREUM WEB3",
-            title: "ENS / Smart Contracts",
-            color: '#F59E0B',
-            items: currentLang === 'es' ? [
-                "🟡 Descentralizado pero costoso",
-                "❌ Comisiones de gas de $20 a $50+",
-                "❌ Renovaciones periódicas obligatorias",
-                "❌ No conectado al dinero de Bitcoin Cash",
-                "❌ Red lenta en momentos de congestión"
-            ] : [
-                "🟡 Decentralized but expensive",
-                "❌ High gas fees ($20-$50+ per name)",
-                "❌ Forced annual rent / expiration",
-                "❌ Disconnected from Bitcoin Cash economy",
-                "❌ Congested EVM execution bottlenecks"
-            ]
-        },
-        {
-            badge: "SOVEREIGNLINK",
-            badgeEn: "SOVEREIGNLINK",
-            title: "BCH ⟷ Nostr (Paytaca)",
-            color: COLORS.bchGreen,
-            items: currentLang === 'es' ? [
-                "✅ 100% No-custodio y autosoberano",
-                "✅ Costo $0 (Prácticamente gratis)",
-                "✅ Pagos y Zaps instantáneos en BCH",
-                "✅ Sin vencimiento forzado ni cobros anuales",
-                "✅ Relays abiertos P2P globales"
-            ] : [
-                "✅ 100% Non-custodial & self-sovereign",
-                "✅ Virtually $0 setup & verification",
-                "✅ Instant micro-cent BCH Zaps & tips",
-                "✅ Permanent identity with zero annual rent",
-                "✅ Open global P2P relay federation"
-            ]
-        }
-    ];
-
-    cols.forEach((col, i) => {
-        const x = startX + i * (cW + gap);
-        ctx.save();
-
-        ctx.fillStyle = i === 2 ? 'rgba(16, 185, 129, 0.08)' : 'rgba(15, 23, 42, 0.85)';
-        ctx.strokeStyle = col.color;
-        ctx.lineWidth = i === 2 ? 2.5 : 1.5;
-        ctx.beginPath();
-        ctx.roundRect(x, cardY, cW, cH, 20);
-        ctx.fill();
-        ctx.stroke();
-
-        // Badge
-        ctx.fillStyle = col.color;
-        ctx.font = '700 14px sans-serif';
-        ctx.textAlign = 'left';
-        ctx.fillText(currentLang === 'es' ? col.badge : col.badgeEn, x + 35, cardY + 50);
-
-        // Title
-        ctx.fillStyle = COLORS.textMain;
-        ctx.font = '700 24px sans-serif';
-        ctx.fillText(col.title, x + 35, cardY + 95);
-
-        // Divider
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-        ctx.beginPath();
-        ctx.moveTo(x + 35, cardY + 125);
-        ctx.lineTo(x + cW - 35, cardY + 125);
-        ctx.stroke();
-
-        // Items
-        col.items.forEach((item, itemIdx) => {
-            const isGood = item.startsWith('✅');
-            const isMid = item.startsWith('🟡');
-            ctx.fillStyle = isGood ? '#34D399' : (isMid ? '#FBBF24' : '#F87171');
-            ctx.font = '600 20px sans-serif';
-            ctx.fillText(item, x + 35, cardY + 180 + itemIdx * 80, cW - 70);
-        });
-
-        ctx.restore();
-    });
-
-    // Bottom verdict
-    ctx.save();
-    ctx.font = '700 22px sans-serif';
-    ctx.fillStyle = COLORS.btcOrange;
-    ctx.textAlign = 'center';
-    ctx.fillText(
-        currentLang === 'es'
-            ? "«SovereignLink ofrece soberanía real sin las tarifas de gas abusivas de Ethereum.»"
-            : "«SovereignLink delivers true sovereignty without the predatory gas fees of Ethereum.»",
-        W / 2,
-        910
-    );
-    ctx.restore();
-}
-
-// ==========================================
-// SCENE 5: HOW TO USE IN 3 SIMPLE STEPS
-// ==========================================
-function renderScene5(t) {
-    drawHeaderBadge(
-        "EFFORTLESS USER EXPERIENCE",
-        "EXPERIENCIA DE USUARIO FLUIDA",
-        "How to Use SovereignLink in 3 Steps",
-        "Cómo Usar SovereignLink en 3 Sencillos Pasos"
-    );
-
-    const stepW = 460;
-    const stepH = 580;
-    const startX = 200;
-    const gap = 40;
-    const stepY = 240;
-
-    const steps = [
-        {
-            num: "1",
-            icon: "📲",
-            title: currentLang === 'es' ? "Conecta tu Billetera Paytaca" : "Connect Paytaca Wallet",
-            desc: currentLang === 'es'
-                ? "Abre la dApp en bliquid.xyz/identity y toca 'Conectar Paytaca'. Escanea el código QR desde tu app móvil o usa la extensión web."
-                : "Open the dApp at bliquid.xyz/identity and click 'Connect Paytaca'. Scan the QR code from mobile or connect via browser extension.",
-            action: currentLang === 'es' ? "Listo en 5 segundos" : "Ready in 5 seconds"
-        },
-        {
-            num: "2",
-            icon: "✍️",
-            title: currentLang === 'es' ? "Firma la Vinculación Cruzada" : "Sign Cross-Attestation",
-            desc: currentLang === 'es'
-                ? "Toca 'Crear Enlace Soberano'. Tu app Paytaca te pedirá autorizar la firma criptográfica para vincular tu dirección BCH con tu clave Nostr."
-                : "Tap 'Create Sovereign Link'. Paytaca prompts you to sign the attestation statement tying your BCH address to your Nostr identity.",
-            action: currentLang === 'es' ? "1 solo toque en tu móvil" : "1 tap on your device"
-        },
-        {
-            num: "3",
-            icon: "🌐",
-            title: currentLang === 'es' ? "Verificación y Uso Mundial" : "Global Live Verification",
-            desc: currentLang === 'es'
-                ? "El evento firmado se publica en los relays de Nostr. Ya puedes recibir zaps en BCH, evitar fraudes y autenticarte en cualquier dApp."
-                : "The signed event broadcasts to Nostr relays. You can now receive BCH zaps, eliminate impersonators, and log in passwordless.",
-            action: currentLang === 'es' ? "Activo en todo el planeta" : "Active worldwide"
-        }
-    ];
-
-    steps.forEach((st, i) => {
-        const x = startX + i * (stepW + gap);
-        ctx.save();
-
-        ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
-        ctx.strokeStyle = COLORS.btcOrange;
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.roundRect(x, stepY, stepW, stepH, 20);
-        ctx.fill();
-        ctx.stroke();
-
-        // Step number badge
-        ctx.fillStyle = COLORS.btcOrange;
-        ctx.beginPath();
-        ctx.arc(x + 50, stepY + 60, 24, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = '#05070B';
-        ctx.font = '800 22px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(st.num, x + 50, stepY + 60);
-
-        // Icon
-        ctx.font = '36px sans-serif';
-        ctx.fillText(st.icon, x + stepW - 50, stepY + 60);
-
-        // Title
-        ctx.fillStyle = COLORS.textMain;
-        ctx.font = '700 24px sans-serif';
-        ctx.textAlign = 'left';
-        ctx.fillText(st.title, x + 35, stepY + 140, stepW - 70);
-
-        // Divider
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-        ctx.beginPath();
-        ctx.moveTo(x + 35, stepY + 185);
-        ctx.lineTo(x + stepW - 35, stepY + 185);
-        ctx.stroke();
-
-        // Desc
-        ctx.fillStyle = COLORS.textMuted;
-        ctx.font = '400 20px -apple-system, sans-serif';
-        wrapText(ctx, st.desc, x + 35, stepY + 230, stepW - 70, 32);
-
-        // Action Pill at Bottom
-        ctx.fillStyle = 'rgba(247, 147, 26, 0.12)';
-        ctx.strokeStyle = 'rgba(247, 147, 26, 0.3)';
-        ctx.beginPath();
-        ctx.roundRect(x + 35, stepY + 480, stepW - 70, 50, 12);
-        ctx.fill();
-        ctx.stroke();
-
-        ctx.fillStyle = COLORS.btcOrange;
-        ctx.font = '700 16px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText(`✓ ${st.action}`, x + stepW / 2, stepY + 505);
-
-        ctx.restore();
-    });
-
-    // Bottom note
-    ctx.save();
-    ctx.font = '600 22px sans-serif';
-    ctx.fillStyle = COLORS.bchGreen;
-    ctx.textAlign = 'center';
-    ctx.fillText(
-        currentLang === 'es'
-            ? "«Sin formularios, sin subir tu documento de identidad (KYC) y sin custodios.»"
-            : "«No forms, no intrusive KYC identity uploads, and zero centralized custodians.»",
-        W / 2,
-        910
-    );
-    ctx.restore();
-}
-
-// ==========================================
-// SCENE 6: GRAND FINALE — SPOTLIGHT TO PAYTACA
-// ==========================================
-function renderScene6(t) {
-    drawHeaderBadge(
-        "OFFICIAL SUBMISSION · BCH BLAZE 2026",
-        "ENTREGA OFICIAL · HACKATHON BCH BLAZE 2026",
-        "Special Thanks & Spotlight to Paytaca",
-        "Homenaje Especial y Agradecimiento a Paytaca"
-    );
-
-    const entrance = easeOutCubic(t / 1.5);
-
-    // Center Hero Spotlight Card
-    const cX = 320;
-    const cY = 220;
-    const cW = 1280;
-    const cH = 640;
-
-    ctx.save();
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
-    ctx.strokeStyle = 'rgba(0, 209, 178, 0.4)';
-    ctx.lineWidth = 2.5;
-    ctx.beginPath();
-    ctx.roundRect(cX, cY, cW, cH, 28);
-    ctx.fill();
-    ctx.stroke();
-
-    // Subtle glow behind the logo
-    const centerGlow = ctx.createRadialGradient(W / 2, cY + 140, 10, W / 2, cY + 140, 250);
-    centerGlow.addColorStop(0, 'rgba(0, 209, 178, 0.2)');
-    centerGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    ctx.fillStyle = centerGlow;
-    ctx.fillRect(cX, cY, cW, 300);
-
-    // Paytaca Brand Emblem
-    ctx.fillStyle = COLORS.paytacaTeal;
-    ctx.font = '900 68px -apple-system, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText("Paytaca", W / 2, cY + 120);
+    ctx.fillText(title, boxX + 315, boxY + 46);
 
     ctx.fillStyle = COLORS.textMuted;
-    ctx.font = '600 24px sans-serif';
-    ctx.fillText(
-        currentLang === 'es'
-            ? "La Billetera Móvil No-Custodia por Excelencia de Bitcoin Cash"
-            : "The Premier Non-Custodial Mobile Wallet for Bitcoin Cash",
-        W / 2,
-        cY + 175
-    );
+    ctx.font = '400 19px -apple-system, sans-serif';
+    wrapText(ctx, body, boxX + 35, boxY + 88, boxW - 70, 26);
 
-    // Divider
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
-    ctx.beginPath();
-    ctx.moveTo(cX + 120, cY + 220);
-    ctx.lineTo(cX + cW - 120, cY + 220);
-    ctx.stroke();
-
-    // Quote & Callout
-    ctx.fillStyle = COLORS.btcOrange;
-    ctx.font = '700 30px sans-serif';
-    ctx.fillText(
-        currentLang === 'es'
-            ? "«La libertad de expresión necesita dinero libre de censura.»"
-            : "«Freedom of speech requires censorship-resistant money.»",
-        W / 2,
-        cY + 285
-    );
-
-    // 3 Highlight badges for Paytaca
-    const badgeW = 340;
-    const badgeH = 120;
-    const bStartX = cX + 80;
-    const bGap = 40;
-    const bY = cY + 340;
-
-    const sponsorBadges = [
-        {
-            title: currentLang === 'es' ? "Bounty Sponsor" : "Bounty Sponsor",
-            sub: "$500 PUSD Prize Track",
-            color: COLORS.gold
-        },
-        {
-            title: currentLang === 'es' ? "Soberanía Total" : "True Sovereignty",
-            sub: "Keys Belong to You",
-            color: COLORS.bchGreen
-        },
-        {
-            title: "CashTokens & DeFi",
-            sub: "Full Ecosystem Ready",
-            color: COLORS.cyan
-        }
-    ];
-
-    sponsorBadges.forEach((sb, i) => {
-        const bx = bStartX + i * (badgeW + bGap);
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.04)';
-        ctx.strokeStyle = sb.color;
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.roundRect(bx, bY, badgeW, badgeH, 16);
-        ctx.fill();
-        ctx.stroke();
-
-        ctx.fillStyle = sb.color;
-        ctx.font = '700 22px sans-serif';
-        ctx.fillText(sb.title, bx + badgeW / 2, bY + 45);
-
-        ctx.fillStyle = COLORS.textMain;
-        ctx.font = '500 17px sans-serif';
-        ctx.fillText(sb.sub, bx + badgeW / 2, bY + 85);
-    });
-
-    // Download Paytaca CTA Banner
-    const ctaY = cY + 500;
-    ctx.fillStyle = COLORS.paytacaTeal;
-    ctx.beginPath();
-    ctx.roundRect(W / 2 - 280, ctaY, 560, 60, 30);
-    ctx.fill();
-
-    ctx.fillStyle = '#05070B';
-    ctx.font = '800 22px sans-serif';
-    ctx.fillText(
-        currentLang === 'es' ? "📲 Descarga Paytaca en paytaca.com" : "📲 Download Paytaca at paytaca.com",
-        W / 2,
-        ctaY + 36
-    );
-
-    ctx.restore();
-
-    // Bottom author signature
-    ctx.save();
-    ctx.font = '600 20px sans-serif';
-    ctx.fillStyle = COLORS.textMuted;
-    ctx.textAlign = 'center';
-    ctx.fillText(
-        currentLang === 'es'
-            ? "Diseñado y desarrollado por Drian Stack Labs (@drianops) para el hackathon BCH BLAZE 2026."
-            : "Architected & engineered by Drian Stack Labs (@drianops) for BCH BLAZE 2026 Hackathon.",
-        W / 2,
-        920
-    );
     ctx.restore();
 }
 
-// Text wrapping helper
 function wrapText(context, text, x, y, maxWidth, lineHeight) {
     const words = text.split(' ');
     let line = '';
     let currentY = y;
-
     for (let n = 0; n < words.length; n++) {
         const testLine = line + words[n] + ' ';
         const metrics = context.measureText(testLine);
-        const testWidth = metrics.width;
-        if (testWidth > maxWidth && n > 0) {
+        if (metrics.width > maxWidth && n > 0) {
             context.fillText(line, x, currentY);
             line = words[n] + ' ';
             currentY += lineHeight;
@@ -987,49 +335,960 @@ function wrapText(context, text, x, y, maxWidth, lineHeight) {
     context.fillText(line, x, currentY);
 }
 
-// ==========================================
-// MAIN RENDER LOOP & PLAYBACK CONTROLLER
-// ==========================================
-function render(timestamp) {
-    if (!lastTimestamp) lastTimestamp = timestamp;
-    const delta = (timestamp - lastTimestamp) / 1000;
-    lastTimestamp = timestamp;
+// ==============================================================================
+// 7 SCENES ANIMATION RENDERERS (BILINGUAL WITH SIMULATIONS)
+// ==============================================================================
 
-    const currentScene = SCENES[currentSceneIdx];
+// SCENE 1: THE CENTRALIZED IDENTITY TRAP
+function renderScene1(tTime) {
+    drawBackground(tTime);
 
-    if (isPlaying) {
-        sceneTime += delta;
-        if (sceneTime >= currentScene.duration) {
-            if (currentSceneIdx < SCENES.length - 1) {
-                currentSceneIdx++;
-                sceneTime = 0;
-                updateSceneUI();
-            } else {
-                isPlaying = false;
-                sceneTime = currentScene.duration;
-                document.getElementById('btn-play').textContent = '▶ Replay';
+    // Title Header
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 44px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(t('¿Quién es el Dueño de tu Identidad en la Red?', 'Who Owns Your Identity on the Web?'), W / 2, 160);
+
+    ctx.fillStyle = COLORS.textMuted;
+    ctx.font = '500 22px -apple-system, sans-serif';
+    ctx.fillText(t('La Trampa de los Monopolios Web2 y las Comisiones Excesivas de Web3', 'The Big Tech Web2 Monopolies & Traditional Web3 Gas Trap'), W / 2, 205);
+
+    // Left Simulation: Corporate Server Rack & Account Ban
+    const c1X = 220;
+    const c1Y = 250;
+    const cW = 680;
+    const cH = 460;
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(239, 68, 68, 0.08)';
+    ctx.strokeStyle = COLORS.dangerRed;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.roundRect(c1X, c1Y, cW, cH, 20);
+    ctx.fill();
+    ctx.stroke();
+
+    drawPill(c1X + 35, c1Y + 30, 280, 32, t('❌ RIESGO WEB2: MONOPOLIOS', '❌ WEB2 RISK: BIG TECH MONOPOLY'), COLORS.dangerRed);
+
+    // Server rack graphic
+    const rackX = c1X + 60;
+    const rackY = c1Y + 90;
+    ctx.fillStyle = '#0F172A';
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+    ctx.beginPath();
+    ctx.roundRect(rackX, rackY, 220, 240, 12);
+    ctx.fill();
+    ctx.stroke();
+
+    // Server blades with blinking LEDs
+    for (let i = 0; i < 4; i++) {
+        const bY = rackY + 20 + i * 50;
+        ctx.fillStyle = '#1E293B';
+        ctx.fillRect(rackX + 15, bY, 190, 36);
+        // Blinking red/yellow LEDs
+        ctx.fillStyle = (Math.sin(tTime * 5 + i) > 0) ? COLORS.dangerRed : '#475569';
+        ctx.beginPath();
+        ctx.arc(rackX + 35, bY + 18, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#10B981';
+        ctx.beginPath();
+        ctx.arc(rackX + 55, bY + 18, 6, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // Ban Lockout Animation
+    const lockX = c1X + 330;
+    const lockY = c1Y + 130;
+    ctx.fillStyle = 'rgba(239, 68, 68, 0.15)';
+    ctx.strokeStyle = COLORS.dangerRed;
+    ctx.beginPath();
+    ctx.roundRect(lockX, lockY, 280, 180, 14);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.font = '40px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('🔒', lockX + 140, lockY + 55);
+
+    ctx.fillStyle = COLORS.dangerRed;
+    ctx.font = 'bold 20px -apple-system, sans-serif';
+    ctx.fillText(t('CUENTA SUSPENDIDA', 'ACCOUNT SUSPENDED'), lockX + 140, lockY + 100);
+
+    ctx.fillStyle = COLORS.textMuted;
+    ctx.font = '14px -apple-system, sans-serif';
+    ctx.fillText(t('Cero claves = Cero control', 'No private keys = No control'), lockX + 140, lockY + 130);
+    ctx.fillText(t('Tus datos son monetizados', 'Your data is sold to brokers'), lockX + 140, lockY + 152);
+
+    ctx.restore();
+
+    // Right Simulation: Ethereum ENS Gas Trap
+    const c2X = 1020;
+    const c2Y = 250;
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(247, 147, 26, 0.08)';
+    ctx.strokeStyle = COLORS.btcOrange;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.roundRect(c2X, c2Y, cW, cH, 20);
+    ctx.fill();
+    ctx.stroke();
+
+    drawPill(c2X + 35, c2Y + 30, 310, 32, t('⚠️ WEB3 TRADICIONAL: TRAMPA DE GAS', '⚠️ TRADITIONAL WEB3: GAS TRAP'), COLORS.btcOrange);
+
+    // Gas Meter Gauge
+    const gaugeX = c2X + 160;
+    const gaugeY = c2Y + 210;
+    const gaugeR = 90;
+
+    ctx.beginPath();
+    ctx.arc(gaugeX, gaugeY, gaugeR, Math.PI * 0.8, Math.PI * 2.2);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+    ctx.lineWidth = 14;
+    ctx.stroke();
+
+    // Red high gas arc
+    ctx.beginPath();
+    ctx.arc(gaugeX, gaugeY, gaugeR, Math.PI * 1.5, Math.PI * 2.2);
+    ctx.strokeStyle = COLORS.dangerRed;
+    ctx.lineWidth = 14;
+    ctx.stroke();
+
+    // Needle shaking in red zone
+    const needleAngle = Math.PI * 1.8 + Math.sin(tTime * 8) * 0.15;
+    ctx.save();
+    ctx.translate(gaugeX, gaugeY);
+    ctx.rotate(needleAngle);
+    ctx.strokeStyle = '#FFFFFF';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(gaugeR - 10, 0);
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 22px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('95 Gwei ($48.50)', gaugeX, gaugeY + 45);
+
+    // Bill Box
+    const billX = c2X + 330;
+    const billY = c2Y + 130;
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+    ctx.beginPath();
+    ctx.roundRect(billX, billY, 280, 180, 14);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = COLORS.btcOrange;
+    ctx.font = 'bold 18px -apple-system, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(t('Factura de Registro ENS:', 'ENS Registration Invoice:'), billX + 20, billY + 40);
+
+    ctx.fillStyle = COLORS.dangerRed;
+    ctx.font = 'bold 22px monospace';
+    ctx.fillText(t('Gas: $48.50 USD', 'Gas: $48.50 USD'), billX + 20, billY + 80);
+
+    ctx.fillStyle = COLORS.gold;
+    ctx.font = '16px -apple-system, sans-serif';
+    ctx.fillText(t('+ Renta Anual: $25.00/año', '+ Annual Rent: $25.00/yr'), billX + 20, billY + 115);
+
+    ctx.fillStyle = COLORS.textMuted;
+    ctx.font = '14px -apple-system, sans-serif';
+    ctx.fillText(t('Si no pagas, pierdes tu nombre.', 'Miss a payment and lose it.'), billX + 20, billY + 145);
+
+    ctx.restore();
+
+    // Subtitle card synchronized with voiceover
+    drawSubtitleCard(
+        t('La Soberanía Digital no Puede Depender de Corporaciones ni Gas', 'Digital Sovereignty Cannot Depend on Monopolies or Gas Rents'),
+        t('SovereignLink rompe este dilema combinando Bitcoin Cash con Nostr: sin servidores, sin gas y sin costos anuales.', 'SovereignLink breaks the dilemma by uniting Bitcoin Cash with Nostr: zero servers, zero gas, zero annual rents.'),
+        t('EL PROBLEMA REAL', 'THE CORE PROBLEM'),
+        COLORS.dangerRed
+    );
+}
+
+// SCENE 2: WHAT IS SOVEREIGNLINK & HOW DOES IT WORK?
+function renderScene2(tTime) {
+    drawBackground(tTime);
+
+    const splitTime = currentLang === 'es' ? 26.0 : 23.0;
+
+    if (tTime < splitTime) {
+        // PHASE A: WHAT IS IT? (BCH ⇄ Nostr Bridge)
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = 'bold 44px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(t('¿Qué es SovereignLink?', 'What is SovereignLink?'), W / 2, 160);
+
+        ctx.fillStyle = COLORS.textMuted;
+        ctx.font = '500 22px -apple-system, sans-serif';
+        ctx.fillText(t('El Puente Criptográfico que Une Dinero Incensurable con Expresión Incensurable', 'The Cryptographic Bridge Binding Unstoppable Money to Uncensorable Free Speech'), W / 2, 205);
+
+        // Left Coin: Bitcoin Cash
+        drawCoin(480, 420, 80, '₿', COLORS.bchGreen, COLORS.bchGreen, tTime);
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = 'bold 28px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Bitcoin Cash (BCH)', 480, 540);
+        ctx.fillStyle = COLORS.bchGreen;
+        ctx.font = 'bold 18px -apple-system, sans-serif';
+        ctx.fillText(t('Dinero P2P Soberano (Paytaca)', 'Sovereign P2P Cash (Paytaca)'), 480, 570);
+
+        // Right Coin: Nostr
+        drawCoin(1440, 420, 80, '🔑', COLORS.nostrPurple, COLORS.nostrPurple, tTime + 0.5);
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = 'bold 28px -apple-system, sans-serif';
+        ctx.fillText('Nostr Protocol', 1440, 540);
+        ctx.fillStyle = COLORS.nostrPurple;
+        ctx.font = 'bold 18px -apple-system, sans-serif';
+        ctx.fillText(t('Identidad y Comunicación Libre (BIP-340)', 'Censorship-Free Identity (BIP-340)'), 1440, 570);
+
+        // Center Laser Bridge with traveling particle energy
+        ctx.save();
+        ctx.strokeStyle = COLORS.paytacaTeal;
+        ctx.lineWidth = 6;
+        ctx.shadowColor = COLORS.paytacaTeal;
+        ctx.shadowBlur = 24;
+        ctx.beginPath();
+        ctx.moveTo(580, 420);
+        ctx.lineTo(1340, 420);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+
+        // Traveling particles
+        const particleX = 580 + ((tTime * 350) % 760);
+        ctx.fillStyle = '#FFFFFF';
+        ctx.beginPath();
+        ctx.arc(particleX, 420, 12, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Center Atom Badge
+        drawPill(W / 2 - 180, 385, 360, 70, '⚡ SOVEREIGNLINK ⚡', COLORS.btcOrange);
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = 'bold 14px monospace';
+        ctx.fillText('secp256k1 (ECDSA) ⇄ BIP-340 (Schnorr)', W / 2, 435);
+        ctx.restore();
+
+        drawSubtitleCard(
+            t('Identidad Autosoberana (DID) 100% No Custodial', '100% Non-Custodial Self-Sovereign Identity (DID)'),
+            t('Une tu billetera Paytaca con tus claves de Nostr: sin empresas que guarden tus datos ni permisos requeridos.', 'Binds your Paytaca wallet to your Nostr keypair: no corporate databases, no permission required.'),
+            t('DEFINICIÓN DEL PROTOCOLO', 'PROTOCOL DEFINITION'),
+            COLORS.paytacaTeal
+        );
+    } else {
+        // PHASE B: HOW DOES IT WORK? (THE 3-PHASE ENGINE)
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = 'bold 44px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(t('¿Cómo Funciona Paso a Paso?', 'How Does It Work Step-by-Step?'), W / 2, 160);
+
+        ctx.fillStyle = COLORS.textMuted;
+        ctx.font = '500 22px -apple-system, sans-serif';
+        ctx.fillText(t('El Engranaje Criptográfico de Doble Firma (NIP-39 / Kind 30078)', 'The Cryptographic Dual-Signature Engine (NIP-39 / Kind 30078)'), W / 2, 205);
+
+        // 3 Process Cards Side by Side
+        const cardW = 440;
+        const cardH = 430;
+        const gap = 50;
+        const startX = 250;
+
+        const steps = [
+            {
+                num: "01",
+                badge: t("ATESTACIÓN CANÓNICA", "CANONICAL STATEMENT"),
+                title: t("Paso 1: Declaración JSON", "Step 1: JSON Payload"),
+                desc: t("Se construye un payload estandarizado vinculando la dirección BCH con la clave pública Nostr (npub), red y timestamp.", "Constructs a standardized payload binding the BCH address with Nostr pubkey, network, and UTC timestamp."),
+                color: COLORS.btcOrange,
+                icon: "📄"
+            },
+            {
+                num: "02",
+                badge: t("DOBLE FIRMA DUAL", "DUAL SIGNATURE"),
+                title: t("Paso 2: Doble Sello Matemático", "Step 2: Dual Crypto Sign"),
+                desc: t("Paytaca firma con secp256k1 (ECDSA) y Nostr firma con BIP-340 Schnorr. Ambas firmas quedan selladas irrevocablemente.", "Paytaca signs with secp256k1 (ECDSA) and Nostr signs with BIP-340 Schnorr. Both signatures are inextricably locked."),
+                color: COLORS.bchGreen,
+                icon: "🔐"
+            },
+            {
+                num: "03",
+                badge: t("DIFUSIÓN P2P EN RELAYS", "RELAY BROADCAST"),
+                title: t("Paso 3: Verificación Global", "Step 3: Global Verification"),
+                desc: t("Se publica en relays globales (damus, nos.lol). Cualquier dApp en el planeta verifica ambas firmas en < 30 milisegundos.", "Broadcasts across global relays. Any dApp or user on Earth verifies both signatures in under 30 milliseconds."),
+                color: COLORS.paytacaTeal,
+                icon: "🌐"
             }
+        ];
+
+        steps.forEach((st, i) => {
+            const x = startX + i * (cardW + gap);
+            const y = 250;
+
+            ctx.save();
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+            ctx.strokeStyle = st.color;
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.roundRect(x, y, cardW, cardH, 20);
+            ctx.fill();
+            ctx.stroke();
+
+            // Step Number Pill
+            drawPill(x + 30, y + 25, 90, 32, `PASO ${st.num}`, st.color);
+
+            ctx.font = '40px sans-serif';
+            ctx.textAlign = 'right';
+            ctx.fillText(st.icon, x + cardW - 35, y + 55);
+
+            ctx.fillStyle = COLORS.textMain;
+            ctx.font = 'bold 22px -apple-system, sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText(st.title, x + 30, y + 105);
+
+            // Divider
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+            ctx.beginPath();
+            ctx.moveTo(x + 30, y + 130);
+            ctx.lineTo(x + cardW - 30, y + 130);
+            ctx.stroke();
+
+            ctx.fillStyle = COLORS.textMuted;
+            ctx.font = '400 17px -apple-system, sans-serif';
+            wrapText(ctx, st.desc, x + 30, y + 170, cardW - 60, 26);
+
+            // Bottom Pulse check
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
+            ctx.beginPath();
+            ctx.roundRect(x + 30, y + 330, cardW - 60, 65, 12);
+            ctx.fill();
+
+            ctx.fillStyle = st.color;
+            ctx.font = 'bold 15px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText(i === 0 ? "Canonical JSON ✓" : (i === 1 ? "secp256k1 + Schnorr ✓" : "Relays: <28ms Verified ✓"), x + cardW / 2, y + 370);
+
+            ctx.restore();
+        });
+
+        drawSubtitleCard(
+            t('Prueba Matemática Verificable por Cualquier Nodo', 'Mathematical Proof Verifiable by Any Node in Real-Time'),
+            t('Sin servidores intermedios: la identidad se comprueba directamente contra las claves públicas mediante álgebra elíptica.', 'Zero intermediate servers: identity is proven directly against public keys using elliptic curve mathematics.'),
+            t('ARQUITECTURA DE FUNCIONAMIENTO', 'HOW IT WORKS'),
+            COLORS.bchGreen
+        );
+    }
+}
+
+// SCENE 3: REAL-WORLD VALUE & USE CASES
+function renderScene3(tTime) {
+    drawBackground(tTime);
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 44px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(t('¿Para Qué Sirve en la Vida Real?', 'What is it Used For in Everyday Life?'), W / 2, 160);
+
+    ctx.fillStyle = COLORS.textMuted;
+    ctx.font = '500 22px -apple-system, sans-serif';
+    ctx.fillText(t('Tres Aplicaciones Inmediatas para Creadores, Comercios y dApps', 'Three Immediate Applications for Creators, Merchants & dApps'), W / 2, 205);
+
+    // 3 Use Case Visual Cards
+    const cardW = 440;
+    const cardH = 460;
+    const gap = 50;
+    const startX = 250;
+
+    const cases = [
+        {
+            icon: "⚡",
+            badge: t("ZAPS & MICROPAGOS", "ZAPS & MICROPAYMENTS"),
+            title: t("Zaps P2P a tu Perfil Nostr", "P2P Zaps to Nostr Profiles"),
+            desc: t("Envía y recibe Bitcoin Cash directamente en clientes de Nostr como Damus, Primal o Amethyst con un toque, sin intermediarios bancarios.", "Send and receive Bitcoin Cash directly to Nostr profiles across Damus and Primal with a single tap, zero bank middlemen."),
+            color: COLORS.btcOrange,
+            simAction: "+0.05 BCH Zap ⚡"
+        },
+        {
+            icon: "🛡️",
+            badge: t("ANTI-SUPLANTACIÓN", "ANTI-IMPERSONATION"),
+            title: t("Protección Contra Estafas", "Cryptographic Anti-Scam"),
+            desc: t("Compradores y comerciantes verifican en tiempo real que la dirección BCH pertenece al creador auténtico. Cero bots ni cuentas clonadas.", "Merchants and peers verify on-chain that the BCH address genuinely belongs to that creator. Zero impostors or cloned accounts."),
+            color: COLORS.bchGreen,
+            simAction: "Verificado Criptográfico ✓"
+        },
+        {
+            icon: "🔑",
+            badge: t("LOGIN UNIVERSAL", "PASSWORDLESS LOGIN"),
+            title: t("Inicio de Sesión sin Contraseña", "Universal Passwordless Login"),
+            desc: t("Inicia sesión en tiendas y foros Web3 firmando un reto criptográfico con tu billetera Paytaca. Cero contraseñas que hackear o filtrar.", "Sign into Web3 stores and dApps by signing a cryptographic nonce challenge from Paytaca. Zero passwords to leak or breach."),
+            color: COLORS.paytacaTeal,
+            simAction: "Login en 15ms ✓"
         }
+    ];
+
+    cases.forEach((c, i) => {
+        const x = startX + i * (cardW + gap);
+        const y = 240;
+
+        ctx.save();
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+        ctx.strokeStyle = c.color;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.roundRect(x, y, cardW, cardH, 20);
+        ctx.fill();
+        ctx.stroke();
+
+        drawPill(x + 30, y + 25, 220, 30, c.badge, c.color);
+
+        ctx.font = '45px sans-serif';
+        ctx.textAlign = 'right';
+        ctx.fillText(c.icon, x + cardW - 35, y + 55);
+
+        ctx.fillStyle = COLORS.textMain;
+        ctx.font = 'bold 22px -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(c.title, x + 30, y + 105);
+
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+        ctx.beginPath();
+        ctx.moveTo(x + 30, y + 130);
+        ctx.lineTo(x + cardW - 30, y + 130);
+        ctx.stroke();
+
+        ctx.fillStyle = COLORS.textMuted;
+        ctx.font = '400 17px -apple-system, sans-serif';
+        wrapText(ctx, c.desc, x + 30, y + 165, cardW - 60, 26);
+
+        // Simulation Box at bottom of each card
+        const simY = y + 360;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
+        ctx.strokeStyle = c.color;
+        ctx.beginPath();
+        ctx.roundRect(x + 30, simY, cardW - 60, 65, 12);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = c.color;
+        ctx.font = 'bold 16px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(c.simAction, x + cardW / 2, simY + 38);
+
+        ctx.restore();
+    });
+
+    drawSubtitleCard(
+        t('De las Redes Sociales al Comercio Web3 Global', 'From Social Media to Global Web3 Commerce'),
+        t('Micropagos instantáneos en Bitcoin Cash + credenciales verificables en Nostr con cero comisiones abusivas.', 'Instant Bitcoin Cash micropayments + verifiable Nostr credentials with zero predatory gas taxes.'),
+        t('CASOS DE USO REALES', 'REAL-WORLD UTILITY'),
+        COLORS.btcOrange
+    );
+}
+
+// SCENE 4: UNBREAKABLE CRYPTOGRAPHIC SECURITY
+function renderScene4(tTime) {
+    drawBackground(tTime);
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 44px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(t('Seguridad Criptográfica Impenetrable', 'Unbreakable Cryptographic Security'), W / 2, 160);
+
+    ctx.fillStyle = COLORS.textMuted;
+    ctx.font = '500 22px -apple-system, sans-serif';
+    ctx.fillText(t('Aislamiento Total de Claves y Protección con Álgebra de Curvas Elípticas', 'Strict Key Isolation Enclave & Battle-Tested Elliptic Curve Cryptography'), W / 2, 205);
+
+    // Visual Key Vault Isolation
+    const v1X = 280;
+    const vY = 250;
+    const vW = 540;
+    const vH = 450;
+
+    // Vault A: BCH Paytaca Enclave
+    ctx.save();
+    ctx.fillStyle = 'rgba(16, 185, 129, 0.08)';
+    ctx.strokeStyle = COLORS.bchGreen;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.roundRect(v1X, vY, vW, vH, 20);
+    ctx.fill();
+    ctx.stroke();
+
+    drawPill(v1X + 35, vY + 30, 280, 32, t('BÓVEDA BITCOIN CASH (PAYTACA)', 'BITCOIN CASH ENCLAVE'), COLORS.bchGreen);
+
+    ctx.font = '50px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('🛡️', v1X + vW / 2, vY + 130);
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 24px -apple-system, sans-serif';
+    ctx.fillText(t('Clave Privada BCH Protegida', 'Secured BCH Private Key'), v1X + vW / 2, vY + 190);
+
+    ctx.fillStyle = COLORS.textMuted;
+    ctx.font = '16px -apple-system, sans-serif';
+    ctx.fillText(t('Firma digital secp256k1 en dispositivo local.', 'secp256k1 digital signatures strictly on-device.'), v1X + vW / 2, vY + 230);
+    ctx.fillText(t('Nunca se envía a internet ni a ningún servidor.', 'Never transmitted over the network or cloud.'), v1X + vW / 2, vY + 260);
+
+    ctx.fillStyle = 'rgba(16, 185, 129, 0.15)';
+    ctx.beginPath();
+    ctx.roundRect(v1X + 40, vY + 320, vW - 80, 80, 12);
+    ctx.fill();
+    ctx.fillStyle = COLORS.bchGreen;
+    ctx.font = 'bold 16px monospace';
+    ctx.fillText("✓ ECDSA Mathematical Signature", v1X + vW / 2, vY + 365);
+    ctx.restore();
+
+    // Center Firewall Barrier
+    const wallX = 890;
+    ctx.save();
+    ctx.fillStyle = 'rgba(239, 68, 68, 0.2)';
+    ctx.strokeStyle = COLORS.dangerRed;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.roundRect(wallX, vY + 40, 140, vH - 80, 12);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = COLORS.dangerRed;
+    ctx.font = 'bold 14px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(t('AISLAMIENTO', 'KEY'), wallX + 70, vY + 180);
+    ctx.fillText(t('TOTAL DE', 'ISOLATION'), wallX + 70, vY + 205);
+    ctx.fillText(t('CLAVES', 'FIREWALL'), wallX + 70, vY + 230);
+
+    ctx.font = '32px sans-serif';
+    ctx.fillText('⚡', wallX + 70, vY + 290);
+    ctx.restore();
+
+    // Vault B: Nostr Enclave
+    const v2X = 1100;
+    ctx.save();
+    ctx.fillStyle = 'rgba(138, 43, 226, 0.08)';
+    ctx.strokeStyle = COLORS.nostrPurple;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.roundRect(v2X, vY, vW, vH, 20);
+    ctx.fill();
+    ctx.stroke();
+
+    drawPill(v2X + 35, vY + 30, 260, 32, t('BÓVEDA NOSTR (BIP-340)', 'NOSTR IDENTITY ENCLAVE'), COLORS.nostrPurple);
+
+    ctx.font = '50px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('🔑', v2X + vW / 2, vY + 130);
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 24px -apple-system, sans-serif';
+    ctx.fillText(t('Clave Privada Nostr Protegida', 'Secured Nostr Secret Key'), v2X + vW / 2, vY + 190);
+
+    ctx.fillStyle = COLORS.textMuted;
+    ctx.font = '16px -apple-system, sans-serif';
+    ctx.fillText(t('Firma de eventos Kind 30078 con Schnorr.', 'Signs Kind 30078 events with BIP-340 Schnorr.'), v2X + vW / 2, vY + 230);
+    ctx.fillText(t('Aislamiento completo de tus fondos en BCH.', 'Fully segregated from your Bitcoin Cash funds.'), v2X + vW / 2, vY + 260);
+
+    ctx.fillStyle = 'rgba(138, 43, 226, 0.15)';
+    ctx.beginPath();
+    ctx.roundRect(v2X + 40, vY + 320, vW - 80, 80, 12);
+    ctx.fill();
+    ctx.fillStyle = COLORS.nostrPurple;
+    ctx.font = 'bold 16px monospace';
+    ctx.fillText("✓ BIP-340 Schnorr Signature", v2X + vW / 2, vY + 365);
+    ctx.restore();
+
+    drawSubtitleCard(
+        t('Tus Fondos y tu Identidad Permanecen Estrictamente Segregados', 'Your Funds and Identity Remain Strictly Segregated'),
+        t('Si tu clave Nostr llegara a comprometerse, tus fondos en Bitcoin Cash siguen 100% seguros bajo el control de Paytaca.', 'Even if your Nostr secret key were compromised, your BCH funds remain 100% secure in Paytaca.'),
+        t('SEGURIDAD DE GRADO BANCARIO', 'BANK-GRADE SECURITY'),
+        COLORS.bchGreen
+    );
+}
+
+// SCENE 5: DIRECT COMPARISON: SOVEREIGN VS TRADITIONAL
+function renderScene5(tTime) {
+    drawBackground(tTime);
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 44px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(t('Comparativa: Soberano vs Sistemas Tradicionales', 'Direct Comparison: Sovereign vs Traditional'), W / 2, 160);
+
+    ctx.fillStyle = COLORS.textMuted;
+    ctx.font = '500 22px -apple-system, sans-serif';
+    ctx.fillText(t('Por Qué SovereignLink Supera a Web2 y a los Dominios Tradicionales en L1', 'Why SovereignLink Outperforms Web2 and Legacy L1 Name Services'), W / 2, 205);
+
+    // Table Matrix
+    const tX = 260;
+    const tY = 250;
+    const tW = 1400;
+    const rowH = 90;
+
+    const rows = [
+        {
+            feature: t("Costo de Registro en Gas", "Registration Gas Fee"),
+            web2: t("Gratis (Tú eres el producto)", "Free (You are the product)"),
+            ens: "$35 - $60 USD en Gas (ETH)",
+            sovereign: "$0.00 USD (Costo Cero)"
+        },
+        {
+            feature: t("Cuota de Renovación Forzada", "Forced Annual Renewal Rent"),
+            web2: t("Sujeto a TOS corporativo", "Subject to arbitrary TOS"),
+            ens: "$25.00 USD / cada año",
+            sovereign: t("Gratis Vitalicio (Tuyo para siempre)", "Lifetime Free (Yours forever)")
+        },
+        {
+            feature: t("Riesgo de Baneo o Censura", "Risk of Censorship / Ban"),
+            web2: t("Extremo (Google/Apple/Meta)", "High (Big Tech Monopoly)"),
+            ens: t("Medio (Contratos congelables)", "Medium (Smart Contract risks)"),
+            sovereign: t("Cero (Resistente a censura)", "Zero (P2P Mathematical)")
+        },
+        {
+            feature: t("Pagos en Efectivo P2P", "Native P2P Cash Payments"),
+            web2: t("No (Tarjetas y bancos)", "No (Credit cards / Stripe)"),
+            ens: t("Lento y caro en L1", "Slow & expensive L1 gas"),
+            sovereign: t("Instantáneo en Bitcoin Cash", "Instant P2P Bitcoin Cash")
+        }
+    ];
+
+    // Table Headers
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+    ctx.fillRect(tX, tY, tW, 60);
+
+    ctx.fillStyle = COLORS.textMuted;
+    ctx.font = 'bold 18px -apple-system, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(t("CARACTERÍSTICA", "FEATURE"), tX + 30, tY + 38);
+    ctx.textAlign = 'center';
+    ctx.fillText("WEB2 (GOOGLE/META)", tX + 460, tY + 38);
+    ctx.fillText("ETHEREUM ENS (.ETH)", tX + 800, tY + 38);
+    ctx.fillStyle = COLORS.paytacaTeal;
+    ctx.fillText("SOVEREIGNLINK (BCH + NOSTR)", tX + 1170, tY + 38);
+
+    rows.forEach((r, idx) => {
+        const rY = tY + 60 + idx * rowH;
+
+        ctx.fillStyle = idx % 2 === 0 ? 'rgba(255, 255, 255, 0.02)' : 'rgba(255, 255, 255, 0.05)';
+        ctx.fillRect(tX, rY, tW, rowH);
+
+        // Feature
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = 'bold 18px -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(r.feature, tX + 30, rY + 52);
+
+        // Web2
+        ctx.fillStyle = COLORS.dangerRed;
+        ctx.font = '16px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(r.web2, tX + 460, rY + 52);
+
+        // ENS
+        ctx.fillStyle = COLORS.btcOrange;
+        ctx.fillText(r.ens, tX + 800, rY + 52);
+
+        // SovereignLink Highlight Box
+        ctx.fillStyle = 'rgba(0, 209, 178, 0.15)';
+        ctx.beginPath();
+        ctx.roundRect(tX + 980, rY + 12, 380, rowH - 24, 10);
+        ctx.fill();
+
+        ctx.fillStyle = COLORS.paytacaTeal;
+        ctx.font = 'bold 17px -apple-system, sans-serif';
+        ctx.fillText(`✓ ${r.sovereign}`, tX + 1170, rY + 52);
+    });
+
+    drawSubtitleCard(
+        t('La Libertad Digital No Debe Pagar Impuesto de Gas', 'Digital Freedom Should Not Pay an Annual Gas Tax'),
+        t('SovereignLink ofrece la mejor experiencia de usuario sin barreras económicas ni riesgos de custodia.', 'SovereignLink delivers frictionless identity with zero financial barriers and zero custody honeypots.'),
+        t('VENTAJA COMPETITIVA', 'COMPETITIVE EDGE'),
+        COLORS.paytacaTeal
+    );
+}
+
+// SCENE 6: HOW TO USE IN 3 SIMPLE STEPS
+function renderScene6(tTime) {
+    drawBackground(tTime);
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 44px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(t('Cómo Usar SovereignLink en 3 Sencillos Pasos', 'How to Use SovereignLink in 3 Simple Steps'), W / 2, 160);
+
+    ctx.fillStyle = COLORS.textMuted;
+    ctx.font = '500 22px -apple-system, sans-serif';
+    ctx.fillText(t('Tu Identidad Verificada en la Red Nostr en Menos de 30 Segundos', 'Your Cryptographically Verified Nostr Identity in Under 30 Seconds'), W / 2, 205);
+
+    // 3 Step Walkthrough Cards
+    const cardW = 440;
+    const cardH = 460;
+    const gap = 50;
+    const startX = 250;
+
+    const steps = [
+        {
+            num: "01",
+            icon: "📲",
+            title: t("Conecta tu Billetera Paytaca", "Connect Paytaca Wallet"),
+            desc: t("Accede a bliquid.xyz/identity y conecta tu billetera Bitcoin Cash compatible como Paytaca o Cashonize con un solo clic.", "Visit bliquid.xyz/identity and connect your Bitcoin Cash wallet like Paytaca in a single click."),
+            mock: "🟢 Conectado: bitcoincash:qp...377d",
+            color: COLORS.btcOrange
+        },
+        {
+            num: "02",
+            icon: "✍️",
+            title: t("Autoriza la Doble Firma", "Authorize Dual Signature"),
+            desc: t("Firma la atestación canónica en tu billetera. Paytaca firma con secp256k1 y Nostr firma con BIP-340 Schnorr.", "Sign the canonical attestation statement. Paytaca signs with secp256k1 and Nostr seals with Schnorr."),
+            mock: "🔐 Firmado: secp256k1 + Schnorr ✓",
+            color: COLORS.bchGreen
+        },
+        {
+            num: "03",
+            icon: "🎉",
+            title: t("Publica en Relays Públicos", "Broadcast to Nostr Relays"),
+            desc: t("Tu atestación se transmite a damus, nos.lol y primal. Tu perfil queda 100% verificado y listo para Zaps y login.", "Broadcasts via NIP-39 to public relays. Your profile is verified across Nostr dApps and ready for Zaps."),
+            mock: "🌐 Relays: Verificado < 25ms ✓",
+            color: COLORS.paytacaTeal
+        }
+    ];
+
+    steps.forEach((st, i) => {
+        const x = startX + i * (cardW + gap);
+        const y = 240;
+
+        ctx.save();
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+        ctx.strokeStyle = st.color;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.roundRect(x, y, cardW, cardH, 20);
+        ctx.fill();
+        ctx.stroke();
+
+        drawPill(x + 30, y + 25, 110, 32, `PASO ${st.num}`, st.color);
+
+        ctx.font = '45px sans-serif';
+        ctx.textAlign = 'right';
+        ctx.fillText(st.icon, x + cardW - 35, y + 55);
+
+        ctx.fillStyle = COLORS.textMain;
+        ctx.font = 'bold 22px -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(st.title, x + 30, y + 105);
+
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+        ctx.beginPath();
+        ctx.moveTo(x + 30, y + 130);
+        ctx.lineTo(x + cardW - 30, y + 130);
+        ctx.stroke();
+
+        ctx.fillStyle = COLORS.textMuted;
+        ctx.font = '400 17px -apple-system, sans-serif';
+        wrapText(ctx, st.desc, x + 30, y + 165, cardW - 60, 26);
+
+        // Simulated Mockup Status
+        const mY = y + 360;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
+        ctx.strokeStyle = st.color;
+        ctx.beginPath();
+        ctx.roundRect(x + 30, mY, cardW - 60, 65, 12);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = st.color;
+        ctx.font = 'bold 15px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(st.mock, x + cardW / 2, mY + 38);
+
+        ctx.restore();
+    });
+
+    drawSubtitleCard(
+        t('Verificación Instantánea sin Esperas ni Descargas Complejas', 'Frictionless Experience in Under 30 Seconds'),
+        t('Todo el proceso ocurre en tu navegador y billetera de forma privada, segura y sin fricción.', 'The entire procedure happens locally inside your browser and wallet, zero third-party dependencies.'),
+        t('GUÍA RÁPIDA', 'HOW TO USE'),
+        COLORS.bchGreen
+    );
+}
+
+// SCENE 7: GRAND FINALE — SPOTLIGHT TO PAYTACA
+function renderScene7(tTime) {
+    drawBackground(tTime);
+
+    // Floating celebratory particles
+    ctx.save();
+    for (let i = 0; i < 25; i++) {
+        const pX = (W / 2) + Math.cos(tTime * 2 + i) * (300 + (i * 20));
+        const pY = 400 + Math.sin(tTime * 3 + i * 2) * 160;
+        ctx.fillStyle = i % 2 === 0 ? COLORS.paytacaTeal : COLORS.btcOrange;
+        ctx.beginPath();
+        ctx.arc(pX, pY, 3 + (i % 4), 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.restore();
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 44px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(t('Soberanía Digital: Impulsada por Paytaca y Bitcoin Cash', 'Digital Sovereignty: Powered by Paytaca & Bitcoin Cash'), W / 2, 160);
+
+    ctx.fillStyle = COLORS.textMuted;
+    ctx.font = '500 22px -apple-system, sans-serif';
+    ctx.fillText(t('Entrega Oficial para el Hackathon BCH BLAZE 2026 · Pista Decentralized Identity', 'Official Submission · BCH BLAZE 2026 Hackathon · Decentralized Identity Track'), W / 2, 205);
+
+    // Paytaca Spotlight Centerpiece
+    const cX = W / 2;
+    const cY = 430;
+
+    // Glowing aura
+    const aura = ctx.createRadialGradient(cX, cY, 40, cX, cY, 320);
+    aura.addColorStop(0, 'rgba(0, 209, 178, 0.25)');
+    aura.addColorStop(0.5, 'rgba(247, 147, 26, 0.12)');
+    aura.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = aura;
+    ctx.fillRect(cX - 350, cY - 350, 700, 700);
+
+    // Center Card
+    ctx.save();
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+    ctx.strokeStyle = COLORS.paytacaTeal;
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.roundRect(cX - 420, cY - 160, 840, 320, 24);
+    ctx.fill();
+    ctx.stroke();
+
+    drawPill(cX - 180, cY - 135, 360, 36, '🏆 BCH BLAZE 2026 OFFICIAL SUBMISSION', COLORS.btcOrange);
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 36px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Homenaje y Agradecimiento a Paytaca', cX, cY - 45);
+
+    ctx.fillStyle = COLORS.paytacaTeal;
+    ctx.font = 'bold 24px -apple-system, sans-serif';
+    ctx.fillText('www.paytaca.com · Líderes en Pagos No Custodiales en BCH', cX, cY);
+
+    ctx.fillStyle = COLORS.textMuted;
+    ctx.font = '18px -apple-system, sans-serif';
+    ctx.fillText(t('Dinero Soberano (BCH) + Identidad Soberana (Nostr) = Libertad Total', 'Sovereign Cash (BCH) + Sovereign Identity (Nostr) = True Freedom'), cX, cY + 45);
+
+    // Action button inside card
+    drawPill(cX - 220, cY + 80, 440, 50, '🚀 PROBAR EN VIVO: BLIQUID.XYZ/IDENTITY', COLORS.bchGreen);
+    ctx.restore();
+
+    drawSubtitleCard(
+        t('Gracias a Paytaca por Impulsar la Revolución No Custodial', 'Special Tribute to Paytaca for Championing Non-Custodial Innovation'),
+        t('Desarrollado con dedicación por Drian Stack Labs (@drianops). Código abierto para toda la comunidad de Bitcoin Cash.', 'Built with passion by Drian Stack Labs (@drianops). Open-source for the global Bitcoin Cash ecosystem.'),
+        t('GRAN CIERRE', 'GRAND FINALE'),
+        COLORS.paytacaTeal
+    );
+}
+
+// ==============================================================================
+// AUDIO ENGINE & PLAYBACK CONTROLLER
+// ==============================================================================
+
+function loadScene(index, shouldPlay = false) {
+    currentSceneIndex = index;
+    sceneTime = 0;
+
+    if (currentAudio) {
+        currentAudio.pause();
+        currentAudio.currentTime = 0;
+        currentAudio = null;
     }
 
-    // Render Canvas
-    drawBackground(sceneTime);
+    const scene = SCENES[index];
+    const audioPath = currentLang === 'es' ? scene.audioEs : scene.audioEn;
+    currentAudio = new Audio(audioPath);
 
-    switch (currentSceneIdx) {
-        case 0: renderScene1(sceneTime); break;
-        case 1: renderScene2(sceneTime); break;
-        case 2: renderScene3(sceneTime); break;
-        case 3: renderScene4(sceneTime); break;
-        case 4: renderScene5(sceneTime); break;
-        case 5: renderScene6(sceneTime); break;
+    currentAudio.addEventListener('timeupdate', () => {
+        if (isPlaying && currentAudio) {
+            sceneTime = currentAudio.currentTime;
+        }
+    });
+
+    currentAudio.addEventListener('ended', () => {
+        if (currentSceneIndex < SCENES.length - 1) {
+            loadScene(currentSceneIndex + 1, true);
+        } else {
+            isPlaying = false;
+            updateUI();
+        }
+    });
+
+    if (shouldPlay) {
+        isPlaying = true;
+        currentAudio.play().catch(e => console.log('Audio autoplay prevented:', e));
+    } else {
+        isPlaying = false;
     }
 
-    // Update Progress bar & time display
-    const progressPercent = (sceneTime / currentScene.duration) * 100;
-    document.getElementById('progress-bar').style.width = `${progressPercent}%`;
-    document.getElementById('time-display').textContent = `${formatTime(sceneTime)} / ${formatTime(currentScene.duration)}`;
+    updateUI();
+}
 
-    animationFrameId = requestAnimationFrame(render);
+function updateUI() {
+    const cur = SCENES[currentSceneIndex];
+    const curDur = getCurDuration();
+
+    // Title
+    const titleEl = document.getElementById('video-title');
+    if (titleEl) {
+        titleEl.textContent = currentLang === 'es' ? cur.titleEs : cur.titleEn;
+    }
+
+    // Play button
+    const btnPlay = document.getElementById('btn-play');
+    if (btnPlay) {
+        btnPlay.textContent = isPlaying ? '⏸ Pause' : '▶ Play';
+    }
+
+    // Time display
+    const td = document.getElementById('time-display');
+    if (td) {
+        td.textContent = `${formatTime(sceneTime)} / ${formatTime(curDur)}`;
+    }
+
+    // Progress bar
+    const pb = document.getElementById('progress-bar');
+    if (pb) {
+        const pct = Math.min(100, Math.max(0, (sceneTime / curDur) * 100));
+        pb.style.width = pct + '%';
+    }
+
+    // Pills
+    document.querySelectorAll('.scene-pill').forEach((pill, idx) => {
+        if (idx === currentSceneIndex) {
+            pill.classList.add('active');
+            pill.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+        } else {
+            pill.classList.remove('active');
+        }
+    });
+}
+
+function setLanguage(lang) {
+    currentLang = lang;
+    try { localStorage.setItem('explainer_lang', lang); } catch (e) {}
+
+    const btnEs = document.getElementById('btn-lang-es');
+    const btnEn = document.getElementById('btn-lang-en');
+    if (btnEs) btnEs.classList.toggle('active', lang === 'es');
+    if (btnEn) btnEn.classList.toggle('active', lang === 'en');
+
+    const wasPlaying = isPlaying;
+    if (currentAudio) {
+        currentAudio.pause();
+        currentAudio = null;
+    }
+    sceneTime = 0;
+    setupPills();
+
+    if (wasPlaying) {
+        loadScene(currentSceneIndex, true);
+    } else {
+        updateUI();
+    }
 }
 
 function formatTime(seconds) {
@@ -1039,100 +1298,134 @@ function formatTime(seconds) {
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
 }
 
-function updateSceneUI() {
-    const cur = SCENES[currentSceneIdx];
-    document.getElementById('video-title').textContent = currentLang === 'es' ? cur.titleEs : cur.titleEn;
-
-    // Update pills active status
-    document.querySelectorAll('.scene-pill').forEach((pill, idx) => {
-        if (idx === currentSceneIdx) {
-            pill.classList.add('active');
-            pill.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-        } else {
-            pill.classList.remove('active');
-        }
-    });
-}
-
 function setupPills() {
     const container = document.getElementById('scene-pills');
+    if (!container) return;
     container.innerHTML = '';
+
     SCENES.forEach((scene, idx) => {
         const btn = document.createElement('button');
-        btn.className = `scene-pill ${idx === currentSceneIdx ? 'active' : ''}`;
+        btn.className = `scene-pill ${idx === currentSceneIndex ? 'active' : ''}`;
         btn.textContent = currentLang === 'es' ? scene.chapterEs : scene.chapterEn;
         btn.onclick = () => {
-            currentSceneIdx = idx;
-            sceneTime = 0;
-            updateSceneUI();
+            loadScene(idx, isPlaying);
         };
         container.appendChild(btn);
     });
 }
 
-// Event Listeners
-document.getElementById('btn-play').onclick = () => {
+// Main Animation Loop
+function loop(timestamp) {
+    if (!lastTimestamp) lastTimestamp = timestamp;
+    const delta = (timestamp - lastTimestamp) / 1000;
+    lastTimestamp = timestamp;
+
+    const curDur = getCurDuration();
+
     if (isPlaying) {
-        isPlaying = false;
-        document.getElementById('btn-play').textContent = '▶ Play';
-    } else {
-        if (currentSceneIdx === SCENES.length - 1 && sceneTime >= SCENES[currentSceneIdx].duration) {
-            currentSceneIdx = 0;
-            sceneTime = 0;
+        if (currentAudio && !currentAudio.paused) {
+            sceneTime = currentAudio.currentTime;
+        } else {
+            sceneTime += delta;
+        }
+
+        if (sceneTime >= curDur) {
+            if (currentSceneIndex < SCENES.length - 1) {
+                loadScene(currentSceneIndex + 1, true);
+            } else {
+                isPlaying = false;
+                sceneTime = curDur;
+                updateUI();
+            }
+        }
+    }
+
+    // Update Progress bar & time display
+    const pct = Math.min(100, Math.max(0, (sceneTime / curDur) * 100));
+    const pb = document.getElementById('progress-bar');
+    if (pb) pb.style.width = pct + '%';
+    const td = document.getElementById('time-display');
+    if (td) td.textContent = `${formatTime(sceneTime)} / ${formatTime(curDur)}`;
+
+    // Render Canvas for Current Scene
+    switch (currentSceneIndex) {
+        case 0: renderScene1(sceneTime); break;
+        case 1: renderScene2(sceneTime); break;
+        case 2: renderScene3(sceneTime); break;
+        case 3: renderScene4(sceneTime); break;
+        case 4: renderScene5(sceneTime); break;
+        case 5: renderScene6(sceneTime); break;
+        case 6: renderScene7(sceneTime); break;
+    }
+
+    animationFrameId = requestAnimationFrame(loop);
+}
+
+// Event Listeners
+document.getElementById('btn-play').addEventListener('click', () => {
+    if (!isPlaying) {
+        if (!currentAudio) {
+            const scene = SCENES[currentSceneIndex];
+            const audioPath = currentLang === 'es' ? scene.audioEs : scene.audioEn;
+            currentAudio = new Audio(audioPath);
+            currentAudio.currentTime = sceneTime;
+
+            currentAudio.addEventListener('timeupdate', () => {
+                if (isPlaying && currentAudio) {
+                    sceneTime = currentAudio.currentTime;
+                }
+            });
+
+            currentAudio.addEventListener('ended', () => {
+                if (currentSceneIndex < SCENES.length - 1) {
+                    loadScene(currentSceneIndex + 1, true);
+                } else {
+                    isPlaying = false;
+                    updateUI();
+                }
+            });
         }
         isPlaying = true;
-        document.getElementById('btn-play').textContent = '⏸ Pause';
+        currentAudio.play().catch(e => console.log('Playback error:', e));
+    } else {
+        isPlaying = false;
+        if (currentAudio) currentAudio.pause();
     }
-};
+    updateUI();
+});
 
-document.getElementById('btn-prev').onclick = () => {
-    if (currentSceneIdx > 0) {
-        currentSceneIdx--;
-        sceneTime = 0;
-        updateSceneUI();
-    }
-};
+document.getElementById('btn-prev').addEventListener('click', () => {
+    if (currentSceneIndex > 0) loadScene(currentSceneIndex - 1, isPlaying);
+});
 
-document.getElementById('btn-next').onclick = () => {
-    if (currentSceneIdx < SCENES.length - 1) {
-        currentSceneIdx++;
-        sceneTime = 0;
-        updateSceneUI();
-    }
-};
+document.getElementById('btn-next').addEventListener('click', () => {
+    if (currentSceneIndex < SCENES.length - 1) loadScene(currentSceneIndex + 1, isPlaying);
+});
 
-document.getElementById('btn-lang-en').onclick = () => {
-    currentLang = 'en';
-    document.getElementById('btn-lang-en').classList.add('active');
-    document.getElementById('btn-lang-es').classList.remove('active');
-    updateSceneUI();
-    setupPills();
-};
+document.getElementById('btn-lang-en').addEventListener('click', () => setLanguage('en'));
+document.getElementById('btn-lang-es').addEventListener('click', () => setLanguage('es'));
 
-document.getElementById('btn-lang-es').onclick = () => {
-    currentLang = 'es';
-    document.getElementById('btn-lang-es').classList.add('active');
-    document.getElementById('btn-lang-en').classList.remove('active');
-    updateSceneUI();
-    setupPills();
-};
-
-document.getElementById('btn-fullscreen').onclick = () => {
+document.getElementById('btn-fullscreen').addEventListener('click', () => {
     const el = document.getElementById('stage-container');
     if (!document.fullscreenElement) {
         el.requestFullscreen().catch(err => console.warn(err));
     } else {
         document.exitFullscreen();
     }
-};
+});
 
-document.getElementById('progress-bar-container').onclick = (e) => {
+document.getElementById('progress-bar-container').addEventListener('click', (e) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const pos = (e.clientX - rect.left) / rect.width;
-    sceneTime = pos * SCENES[currentSceneIdx].duration;
-};
+    const curDur = getCurDuration();
+    sceneTime = pos * curDur;
+    if (currentAudio) {
+        currentAudio.currentTime = sceneTime;
+    }
+    updateUI();
+});
 
-// Keyboard controls
+// Keyboard Controls
 window.addEventListener('keydown', (e) => {
     if (e.code === 'Space') {
         e.preventDefault();
@@ -1141,29 +1434,36 @@ window.addEventListener('keydown', (e) => {
         document.getElementById('btn-next').click();
     } else if (e.code === 'ArrowLeft') {
         document.getElementById('btn-prev').click();
+    } else if (e.key === 'f' || e.key === 'F') {
+        document.getElementById('btn-fullscreen').click();
     }
 });
 
-// Initialize
+// Parse initial URL query parameters
 try {
     const params = new URLSearchParams(window.location.search);
     const sceneParam = params.get('scene') || window.location.hash.replace('#', '');
     if (sceneParam) {
         const sIdx = parseInt(sceneParam, 10);
         if (!isNaN(sIdx) && sIdx >= 1 && sIdx <= SCENES.length) {
-            currentSceneIdx = sIdx - 1;
+            currentSceneIndex = sIdx - 1;
         }
     }
     const langParam = params.get('lang');
     if (langParam === 'es' || langParam === 'en') {
         currentLang = langParam;
-        if (langParam === 'es') {
-            document.getElementById('btn-lang-es')?.classList.add('active');
-            document.getElementById('btn-lang-en')?.classList.remove('active');
-        }
     }
 } catch (e) {}
 
+// Apply initial language UI
+if (currentLang === 'es') {
+    document.getElementById('btn-lang-es')?.classList.add('active');
+    document.getElementById('btn-lang-en')?.classList.remove('active');
+} else {
+    document.getElementById('btn-lang-en')?.classList.add('active');
+    document.getElementById('btn-lang-es')?.classList.remove('active');
+}
+
 setupPills();
-updateSceneUI();
-requestAnimationFrame(render);
+updateUI();
+requestAnimationFrame(loop);
