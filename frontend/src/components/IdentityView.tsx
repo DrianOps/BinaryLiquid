@@ -64,9 +64,9 @@ export default function IdentityView({
   // Navigation tab
   const [activeTab, setActiveTab] = useState<'card' | 'pay' | 'verify' | 'auth' | 'spec'>('card');
 
-  // Custom Human Username Handle (e.g. "adrian" -> @adrian / adrian@bliquid.xyz)
+  // Custom Human Username Handle (e.g. "myuser" -> @myuser / myuser@bliquid.xyz)
   const [userHandle, setUserHandle] = useState<string>(() => {
-    return localStorage.getItem('userlink_custom_handle') || 'adrian';
+    return localStorage.getItem('userlink_custom_handle') || 'myuser';
   });
   const [isEditingHandle, setIsEditingHandle] = useState<boolean>(false);
   const [tempHandleInput, setTempHandleInput] = useState<string>(userHandle);
@@ -179,7 +179,7 @@ export default function IdentityView({
 
   // Handle Save
   const handleSaveHandle = () => {
-    const formatted = tempHandleInput.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '') || 'adrian';
+    const formatted = tempHandleInput.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '') || 'myuser';
     setUserHandle(formatted);
     localStorage.setItem('userlink_custom_handle', formatted);
     setIsEditingHandle(false);
@@ -309,7 +309,7 @@ export default function IdentityView({
 
     const rawTarget = payTarget.trim().replace(/^@/, '').toLowerCase();
     
-    // If user entered their own handle or "adrian"
+    // If user entered their own handle or "myuser"
     const targetAddress = effectiveBchAddress || 'bchtest:qpc5tceta5qgl4tsynwhxtgn608pteevvsqm5xqt7p';
     const targetNpub = nostrKeys?.npub || 'npub1me5jwmjjpyt64q38hf9tg3swm4jtthpx8eh5wkef7vl66whcrxgqh936zr';
 
@@ -1507,12 +1507,12 @@ export default function IdentityView({
     ["bch", "bchtest:qpc5tceta5qgl4tsynwhxtgn608pteevvsqm5xqt7p"],
     ["bch_pubkey", "03de69276e520917aa8227ba4ab4460edd64b5dc263e6f475b29f33fad3af81990"],
     ["bch_sig", "30440220..."],
-    ["handle", "adrian"],
-    ["nip05", "adrian@bliquid.xyz"],
+    ["handle", "myuser"],
+    ["nip05", "myuser@bliquid.xyz"],
     ["c", "userlink-bch-id"],
     ["client", "UserLink by Drian Stack Labs"]
   ],
-  "content": "{\\"protocol\\":\\"bch-nostr-userlink-id-v1\\",\\"username\\":\\"@adrian\\"}"
+  "content": "{\\"protocol\\":\\"bch-nostr-userlink-id-v1\\",\\"username\\":\\"@myuser\\"}"
 }`}
               </div>
             </div>

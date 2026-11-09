@@ -562,7 +562,7 @@ function renderScene2(tTime) {
         ctx.fillText(t("🟢 CON USERLINK: TU NOMBRE DE USUARIO / NOSTR", "🟢 WITH USERLINK: YOUR HUMAN USERNAME / NOSTR"), compX + 765, compY + 28);
         ctx.fillStyle = '#FFFFFF';
         ctx.font = 'bold 19px monospace';
-        ctx.fillText(t("@adrian  o  adrian@bliquid.xyz  (Pago en 1 Clic)", "@adrian  or  adrian@bliquid.xyz  (1-Click Pay)"), compX + 765, compY + 56);
+        ctx.fillText(t("@myuser  o  myuser@bliquid.xyz  (Pago en 1 Clic)", "@myuser  or  myuser@bliquid.xyz  (1-Click Pay)"), compX + 765, compY + 56);
 
         // Left Coin: Bitcoin Cash
         drawCoin(460, 460, 75, '₿', COLORS.bchGreen, COLORS.bchGreen, tTime);
@@ -744,7 +744,7 @@ function renderScene3(tTime) {
             title: t("Paga Directo a @nombre", "Pay Direct to @handle"),
             desc: t("Olvídate de direcciones de 42 caracteres. Solo di: 'párgame a mi @usuario en Nostr'. Satoshis directos a tu Paytaca en 1 clic.", "Forget copying 42-character strings. Just say: 'pay to my Nostr handle'. Satoshis arrive straight in your Paytaca in 1 click."),
             color: COLORS.btcOrange,
-            simAction: "@adrian ➔ +0.05 BCH Paytaca ✓"
+            simAction: "@myuser ➔ +0.05 BCH Paytaca ✓"
         },
         {
             icon: "🛡️",
