@@ -34,7 +34,8 @@ import {
   Cpu,
   Database,
   Code2,
-  PieChart
+  PieChart,
+  Fingerprint
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import BridgeSwap from './components/BridgeSwap';
@@ -46,6 +47,7 @@ import DocsView from './components/DocsView';
 import WhitepaperView from './components/WhitepaperView';
 import PerpsView from './components/PerpsView';
 import PortfolioView from './components/PortfolioView';
+import IdentityView from './components/IdentityView';
 import { useWizardConnect, AlphanumericQRCode } from '@wizardconnect/react';
 import {
   deriveCashAddressFromXpub,
@@ -79,6 +81,7 @@ const translations = {
     navPools: "Pools",
     navLend: "Lend",
     navPortfolio: "Portfolio",
+    navIdentity: "Identity",
     navDocs: "Docs",
     navWallet: "Connect Wallet",
     connect: "Connect Wallet",
@@ -129,6 +132,7 @@ const translations = {
     navPools: "Pools",
     navLend: "Lend",
     navPortfolio: "Portafolio",
+    navIdentity: "Identidad",
     navDocs: "Docs",
     navWallet: "Conectar Billetera",
     connect: "Conectar Billetera",
@@ -199,22 +203,22 @@ const PLATFORM_NETWORKS = {
   }
 };
 
-const VALID_VIEWS = ['bridge', 'perps', 'pools', 'lend', 'portfolio', 'docs', 'sdk', 'whitepaper'] as const;
+const VALID_VIEWS = ['bridge', 'perps', 'pools', 'lend', 'portfolio', 'identity', 'docs', 'sdk', 'whitepaper'] as const;
 type MainView = typeof VALID_VIEWS[number] | 'gateway';
 
 function getViewFromUrl(): MainView {
   if (typeof window === 'undefined') return 'gateway';
   
-  // 1. Clean path routing: e.g. /perps, /swap, /bridge, /pools, /lend, /docs, /whitepaper, /sdk
+  // 1. Clean path routing: e.g. /perps, /swap, /bridge, /pools, /lend, /identity, /id, /docs, /whitepaper, /sdk
   const pathPart = window.location.pathname.replace(/^\/+/, '').split('/')[0].toLowerCase();
-  const normalizedPath = pathPart === 'swap' ? 'bridge' : pathPart;
+  const normalizedPath = pathPart === 'swap' ? 'bridge' : (pathPart === 'id' ? 'identity' : pathPart);
   if ((VALID_VIEWS as readonly string[]).includes(normalizedPath)) {
     return normalizedPath as MainView;
   }
 
   // 2. Fallback to hash for legacy bookmarks (e.g. /#perps -> cleaned automatically)
   const hashPart = window.location.hash.replace('#', '').split('/')[0].split('?')[0].toLowerCase();
-  const normalizedHash = hashPart === 'swap' ? 'bridge' : hashPart;
+  const normalizedHash = hashPart === 'swap' ? 'bridge' : (hashPart === 'id' ? 'identity' : hashPart);
   if ((VALID_VIEWS as readonly string[]).includes(normalizedHash)) {
     return normalizedHash as MainView;
   }
@@ -1050,6 +1054,13 @@ export default function App() {
                       icon: Code2
                     },
                     {
+                      id: 'identity',
+                      title: lang === 'es' ? 'Identidad Soberana' : 'Sovereign Identity',
+                      desc: lang === 'es' ? 'BCH ↔ Nostr ID (Paytaca $500)' : 'BCH ↔ Nostr ID (Paytaca $500)',
+                      badge: 'BCH ⟷ Nostr',
+                      icon: Fingerprint
+                    },
+                    {
                       id: 'docs',
                       title: lang === 'es' ? 'Documentación' : 'Documentation',
                       desc: lang === 'es' ? 'Guía de uso y contratos' : 'User guide & contracts',
@@ -1185,6 +1196,19 @@ export default function App() {
               }`}
             >
               <span>{t.navPortfolio}</span>
+            </button>
+
+            <button 
+              onClick={() => setMainView('identity')} 
+              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
+                mainView === 'identity' 
+                  ? 'bg-surface-2 text-ink font-bold shadow-2xs' 
+                  : 'text-ink-3 hover:text-ink hover:bg-surface-2/60 font-medium'
+              }`}
+            >
+              <Fingerprint className="w-3.5 h-3.5 text-primary" />
+              <span>{t.navIdentity}</span>
+              <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-primary/10 text-primary font-bold">Bounty</span>
             </button>
 
             <button 
@@ -1362,6 +1386,7 @@ export default function App() {
                     { id: 'pools', label: 'Pools', icon: Droplets },
                     { id: 'lend', label: 'Lend', icon: Lock },
                     { id: 'portfolio', label: lang === 'es' ? 'Portafolio' : 'Portfolio', icon: PieChart },
+                    { id: 'identity', label: lang === 'es' ? 'Identidad Soberana ($500)' : 'Sovereign ID ($500)', icon: Fingerprint },
                     { id: 'gateway', label: 'Gateway', icon: Sparkles },
                     { id: 'whitepaper', label: 'Whitepaper', icon: BookOpen },
                     { id: 'docs', label: 'Docs', icon: FileText },
@@ -1716,6 +1741,18 @@ export default function App() {
             onNavigate={(view) => setMainView(view)}
             showToast={showToast}
             lang={lang}
+          />
+        </main>
+      )}
+
+      {/* SOVEREIGN IDENTITY VIEW (Paytaca $500 PUSD Bounty PoC) */}
+      {mainView === 'identity' && (
+        <main className="flex-1 flex flex-col items-center justify-start p-3 sm:p-6 w-full max-w-7xl mx-auto pb-28 md:pb-12 text-left">
+          <IdentityView
+            bchWallet={bchWallet}
+            onConnectBch={() => { setWalletModalTab('bch'); setShowWalletModal(true); }}
+            lang={lang}
+            platformNetwork={platformNetwork}
           />
         </main>
       )}
