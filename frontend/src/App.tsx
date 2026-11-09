@@ -1213,7 +1213,7 @@ export default function App() {
         
         {/* RIGHT CONTROLS (Responsive) */}
         <div className="flex items-center gap-2 sm:gap-2.5">
-          {/* SovereignLink Identity Pill (Placed next to Chipnet button) */}
+          {/* UserLink Identity Pill (Placed next to Chipnet button) */}
           <button
             onClick={() => setMainView('identity')}
             className={`hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all cursor-pointer shadow-2xs ${
@@ -1221,7 +1221,7 @@ export default function App() {
                 ? 'bg-primary/10 border-primary/40 text-primary font-bold'
                 : 'bg-surface hover:bg-surface-2 border-line text-ink-2 hover:text-ink'
             }`}
-            title={lang === 'es' ? 'SovereignLink: Identidad BCH ↔ Nostr (Bounty Paytaca $500 PUSD)' : 'SovereignLink: BCH ↔ Nostr Identity (Paytaca $500 PUSD Bounty)'}
+            title={lang === 'es' ? 'UserLink: Identidad BCH ↔ Nostr (Bounty Paytaca $500 PUSD)' : 'UserLink: BCH ↔ Nostr Identity (Paytaca $500 PUSD Bounty)'}
           >
             <Fingerprint className="w-3.5 h-3.5 text-primary" />
             <span>{t.navIdentity}</span>

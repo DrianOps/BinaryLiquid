@@ -169,8 +169,8 @@ export default function IdentityView({
 
       // 1. Canonical Identity Binding Statement
       const statementObject = {
-        protocol: 'bch-nostr-sovereign-id-v1',
-        issuer: 'Drian Stack Labs SovereignLink',
+        protocol: 'bch-nostr-userlink-id-v1',
+        issuer: 'Drian Stack Labs UserLink',
         bchAddress: effectiveBchAddress,
         bchPubkeyHex: demoBchData.pubkeyHex,
         nostrPubkey: nostrKeys.pk,
@@ -195,7 +195,7 @@ export default function IdentityView({
           ['bch_pubkey', demoBchData.pubkeyHex],
           ['bch_sig', bchSignatureHex],
           ['i', `bch:${effectiveBchAddress}`, bchSignatureHex], // NIP-39 External Identity Claim compliance
-          ['client', 'SovereignLink by Drian Stack Labs'],
+          ['client', 'UserLink by Drian Stack Labs'],
           ['version', '1.0.0']
         ],
         content: statementJson
@@ -366,13 +366,13 @@ export default function IdentityView({
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-ink tracking-tight flex items-center gap-2.5">
             <Fingerprint className="w-8 h-8 text-primary" />
-            <span>SovereignLink</span>
+            <span>UserLink</span>
             <span className="text-xs px-2 py-0.5 rounded-full bg-surface-2 text-ink-3 font-mono font-normal">v1.0-PoC</span>
           </h1>
           <p className="text-sm text-ink-2 mt-1 max-w-2xl">
             {isEs 
-              ? 'Prueba de concepto no-custodial que vincula criptográficamente billeteras Bitcoin Cash con identidades Nostr (NIP-39). Descubrible en relays públicos sin bases de datos intermediarias.'
-              : 'Non-custodial proof of concept cryptographically linking Bitcoin Cash wallets with Nostr identities (NIP-39). Fully discoverable and verifiable across public Nostr relays without proprietary databases.'}
+              ? 'Protocolo no-custodial para enviar y recibir Bitcoin Cash por nombre de usuario (@handle / Nostr). Sin comisiones de gas y 100% verificable en relays públicos.'
+              : 'Non-custodial protocol enabling Bitcoin Cash payments via human usernames (@handle / Nostr). Zero gas fees and verifiable across public Nostr relays.'}
           </p>
         </div>
 
@@ -384,7 +384,7 @@ export default function IdentityView({
             target="_blank"
             rel="noreferrer"
             className="ui-btn-secondary ui-btn-sm text-xs font-semibold flex items-center gap-1.5 hover:border-primary/40 hover:text-primary transition-all shadow-xs"
-            title={isEs ? 'Ver Video Explicativo Interactivo de SovereignLink' : 'Watch SovereignLink Interactive Explainer Video'}
+            title={isEs ? 'Ver Video Explicativo Interactivo de UserLink' : 'Watch UserLink Interactive Explainer Video'}
           >
             <Sparkles className="w-3.5 h-3.5 text-primary" />
             <span>{isEs ? '🎬 Video Explainer' : '🎬 Video Explainer'}</span>
@@ -576,7 +576,7 @@ export default function IdentityView({
               ) : (
                 <>
                   <ShieldCheck className="w-4 h-4 text-black" />
-                  <span>{isEs ? 'Crear Enlace Soberano' : 'Create Sovereign Link'}</span>
+                  <span>{isEs ? 'Crear Enlace UserLink' : 'Create UserLink'}</span>
                 </>
               )}
             </button>
@@ -717,7 +717,7 @@ export default function IdentityView({
                   <div className="flex items-center gap-2">
                     <span className="w-3 h-3 rounded-full bg-emerald-400 animate-pulse" />
                     <span className="text-sm font-bold text-emerald-400">
-                      {isEs ? '✅ Identidad Soberana Criptográficamente Verificada' : '✅ Cryptographically Verified Sovereign Identity'}
+                      {isEs ? '✅ Enlace UserLink Criptográficamente Verificado' : '✅ Cryptographically Verified UserLink Identity'}
                     </span>
                   </div>
                   <span className="text-[11px] font-mono text-ink-3">
@@ -763,7 +763,7 @@ export default function IdentityView({
                   </div>
                   <div>Event ID: {verificationResult.event.id}</div>
                   <div>Timestamp: {new Date(verificationResult.timestamp * 1000).toUTCString()}</div>
-                  <div>Client: SovereignLink by Drian Stack Labs</div>
+                  <div>Client: UserLink by Drian Stack Labs</div>
                 </div>
               </motion.div>
             )}
@@ -821,7 +821,7 @@ export default function IdentityView({
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-ink flex items-center gap-2">
                     <span className="w-5 h-5 rounded-full bg-primary/20 text-primary flex items-center justify-center text-[11px] font-bold">2</span>
-                    <span>{isEs ? 'Firmar Reto con la Identidad Soberana' : 'Sign Challenge with Sovereign Identity'}</span>
+                    <span>{isEs ? 'Firmar Reto con Enlace UserLink' : 'Sign Challenge with UserLink Identity'}</span>
                   </span>
                   <button
                     type="button"
@@ -885,7 +885,7 @@ export default function IdentityView({
 
             <div className="text-xs text-ink-2 space-y-3 leading-relaxed">
               <p>
-                <strong>SovereignLink</strong> implementa un protocolo de doble firma criptográfica sobre curvas elípticas <code>secp256k1</code> (BIP-340 Schnorr y ECDSA) para ligar una dirección de Bitcoin Cash con una identidad de Nostr sin comprometer la soberanía de ninguna de las dos claves.
+                <strong>UserLink</strong> implementa un protocolo de doble firma criptográfica sobre curvas elípticas <code>secp256k1</code> (BIP-340 Schnorr y ECDSA) para ligar una dirección de Bitcoin Cash con una identidad de Nostr sin comprometer la soberanía de ninguna de las dos claves.
               </p>
 
               <div className="p-4 rounded-xl bg-surface-2 border border-line font-mono text-[11px] space-y-1 select-all">
@@ -898,7 +898,7 @@ export default function IdentityView({
                 <div className="pl-8">{`["bch", "bitcoincash:<address>"],`}</div>
                 <div className="pl-8">{`["bch_sig", "<secp256k1_signature_hex>"],`}</div>
                 <div className="pl-8">{`["i", "bch:<address>", "<signature>"], // NIP-39 Claim`}</div>
-                <div className="pl-8">{`["client", "SovereignLink by Drian Stack Labs"]`}</div>
+                <div className="pl-8">{`["client", "UserLink by Drian Stack Labs"]`}</div>
                 <div className="pl-4">{`],`}</div>
                 <div className="pl-4">{`"content": "{ statement_json }"`}</div>
                 <div>{`}`}</div>

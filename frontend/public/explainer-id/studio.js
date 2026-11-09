@@ -1,5 +1,5 @@
 /**
- * SovereignLink Video Explainer Studio
+ * UserLink Video Explainer Studio
  * 1080p High-Fidelity Vector Motion Graphics Renderer & Audio Engine
  * Bilingual Voiceover: 🇪🇸 Español (es-MX-JorgeNeural) + 🇺🇸 English (en-US-ChristopherNeural)
  * Built for BCH BLAZE 2026 Hackathon · Powered by Paytaca & Drian Stack Labs
@@ -41,19 +41,19 @@ const SCENES = [
         titleEn: "1. The Centralized Identity & Gas Fee Trap",
         chapterEs: "El Dilema",
         chapterEn: "The Trap",
-        durationEs: 38.90,
-        durationEn: 30.14,
+        durationEs: 38.66,
+        durationEn: 30.02,
         audioEs: "./audio/scene1_es.mp3",
         audioEn: "./audio/scene1.mp3"
     },
     {
         id: 2,
-        titleEs: "2. ¿Qué es SovereignLink? — Pagos por Nombre de Usuario",
-        titleEn: "2. What is SovereignLink? — Payments by Username",
+        titleEs: "2. ¿Qué es UserLink? — Pagos por Nombre de Usuario",
+        titleEn: "2. What is UserLink? — Payments by Username",
         chapterEs: "Qué y Cómo",
         chapterEn: "What & How",
-        durationEs: 54.79,
-        durationEn: 50.74,
+        durationEs: 54.26,
+        durationEn: 50.57,
         audioEs: "./audio/scene2_es.mp3",
         audioEn: "./audio/scene2.mp3"
     },
@@ -74,29 +74,29 @@ const SCENES = [
         titleEn: "4. Unbreakable Cryptographic Security",
         chapterEs: "Seguridad",
         chapterEn: "Security",
-        durationEs: 32.11,
-        durationEn: 25.25,
+        durationEs: 31.92,
+        durationEn: 25.13,
         audioEs: "./audio/scene4_es.mp3",
         audioEn: "./audio/scene4.mp3"
     },
     {
         id: 5,
-        titleEs: "5. Comparativa: Soberano vs Sistemas Tradicionales",
-        titleEn: "5. Direct Comparison: Sovereign vs Traditional",
+        titleEs: "5. Comparativa: UserLink vs Sistemas Tradicionales",
+        titleEn: "5. Direct Comparison: UserLink vs Traditional",
         chapterEs: "Ventajas",
         chapterEn: "Comparison",
-        durationEs: 29.09,
-        durationEn: 23.57,
+        durationEs: 28.63,
+        durationEn: 23.33,
         audioEs: "./audio/scene5_es.mp3",
         audioEn: "./audio/scene5.mp3"
     },
     {
         id: 6,
-        titleEs: "6. Cómo Usar SovereignLink en 3 Sencillos Pasos",
-        titleEn: "6. How to Use SovereignLink in 3 Simple Steps",
+        titleEs: "6. Cómo Usar UserLink en 3 Sencillos Pasos",
+        titleEn: "6. How to Use UserLink in 3 Simple Steps",
         chapterEs: "3 Pasos",
         chapterEn: "How to Use",
-        durationEs: 26.59,
+        durationEs: 26.42,
         durationEn: 24.94,
         audioEs: "./audio/scene6_es.mp3",
         audioEn: "./audio/scene6.mp3"
@@ -107,8 +107,8 @@ const SCENES = [
         titleEn: "7. Grand Finale — Spotlight & Tribute to Paytaca",
         chapterEs: "Paytaca",
         chapterEn: "Paytaca Spotlight",
-        durationEs: 32.64,
-        durationEn: 29.90,
+        durationEs: 32.09,
+        durationEn: 29.71,
         audioEs: "./audio/scene7_es.mp3",
         audioEn: "./audio/scene7.mp3"
     }
@@ -177,7 +177,7 @@ function drawBackground(tTime) {
     ctx.lineTo(W, 80);
     ctx.stroke();
 
-    // SovereignLink Brand
+    // UserLink Brand
     ctx.beginPath();
     ctx.arc(75, 40, 20, 0, Math.PI * 2);
     ctx.fillStyle = COLORS.paytacaTeal;
@@ -190,8 +190,8 @@ function drawBackground(tTime) {
     ctx.fillStyle = COLORS.textMain;
     ctx.font = 'bold 24px -apple-system, sans-serif';
     ctx.textAlign = 'left';
-    ctx.fillText('SovereignLink', 120, 48);
-    const brandW = ctx.measureText('SovereignLink').width;
+    ctx.fillText('UserLink', 120, 48);
+    const brandW = ctx.measureText('UserLink').width;
 
     ctx.fillStyle = COLORS.textMuted;
     ctx.font = '500 16px -apple-system, sans-serif';
@@ -504,13 +504,13 @@ function renderScene1(tTime) {
     // Subtitle card synchronized with voiceover
     drawSubtitleCard(
         t('La Soberanía Digital no Puede Depender de Corporaciones ni Gas', 'Digital Sovereignty Cannot Depend on Monopolies or Gas Rents'),
-        t('SovereignLink rompe este dilema combinando Bitcoin Cash con Nostr: sin servidores, sin gas y sin costos anuales.', 'SovereignLink breaks the dilemma by uniting Bitcoin Cash with Nostr: zero servers, zero gas, zero annual rents.'),
+        t('UserLink rompe este dilema combinando Bitcoin Cash con Nostr: sin servidores, sin gas y sin costos anuales.', 'UserLink breaks the dilemma by uniting Bitcoin Cash with Nostr: zero servers, zero gas, zero annual rents.'),
         t('EL PROBLEMA REAL', 'THE CORE PROBLEM'),
         COLORS.dangerRed
     );
 }
 
-// SCENE 2: WHAT IS SOVEREIGNLINK & HOW DOES IT WORK?
+// SCENE 2: WHAT IS USERLINK & HOW DOES IT WORK?
 function renderScene2(tTime) {
     drawBackground(tTime);
 
@@ -521,7 +521,7 @@ function renderScene2(tTime) {
         ctx.fillStyle = '#FFFFFF';
         ctx.font = 'bold 44px -apple-system, sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText(t('¿Qué es SovereignLink? — Pagos por Nombre de Usuario', 'What is SovereignLink? — Username Payments'), W / 2, 150);
+        ctx.fillText(t('¿Qué es UserLink? — Pagos por Nombre de Usuario', 'What is UserLink? — Username Payments'), W / 2, 150);
 
         ctx.fillStyle = COLORS.textMuted;
         ctx.font = '500 22px -apple-system, sans-serif';
@@ -549,7 +549,7 @@ function renderScene2(tTime) {
         ctx.font = '500 16px monospace';
         ctx.fillText("bitcoincash:qpc5tceta5qgl4tsynwhxtgn608pteevvsqm5xqt7p", compX + 25, compY + 56);
 
-        // New SovereignLink Way (Green Box)
+        // New UserLink Way (Green Box)
         ctx.fillStyle = 'rgba(16, 185, 129, 0.12)';
         ctx.strokeStyle = 'rgba(16, 185, 129, 0.45)';
         ctx.beginPath();
@@ -559,7 +559,7 @@ function renderScene2(tTime) {
 
         ctx.fillStyle = COLORS.bchGreen;
         ctx.font = 'bold 15px monospace';
-        ctx.fillText(t("🟢 CON SOVEREIGNLINK: TU NOMBRE DE USUARIO / NOSTR", "🟢 WITH SOVEREIGNLINK: YOUR HUMAN USERNAME / NOSTR"), compX + 765, compY + 28);
+        ctx.fillText(t("🟢 CON USERLINK: TU NOMBRE DE USUARIO / NOSTR", "🟢 WITH USERLINK: YOUR HUMAN USERNAME / NOSTR"), compX + 765, compY + 28);
         ctx.fillStyle = '#FFFFFF';
         ctx.font = 'bold 19px monospace';
         ctx.fillText(t("@adrian  o  adrian@bliquid.xyz  (Pago en 1 Clic)", "@adrian  or  adrian@bliquid.xyz  (1-Click Pay)"), compX + 765, compY + 56);
@@ -611,7 +611,7 @@ function renderScene2(tTime) {
 
         drawSubtitleCard(
             t('Envía y Recibe BCH por Nombre de Usuario sin Intermediarios', 'Send and Receive BCH by Username Without Middlemen'),
-            t('SovereignLink es como un CashApp descentralizado: vincula tu billetera Paytaca a tu identidad de Nostr a costo de gas cero.', 'SovereignLink is like a decentralized CashApp: binds your Paytaca wallet to your Nostr identity at zero gas cost.'),
+            t('UserLink es como un CashApp descentralizado: vincula tu billetera Paytaca a tu identidad de Nostr a costo de gas cero.', 'UserLink is like a decentralized CashApp: binds your Paytaca wallet to your Nostr identity at zero gas cost.'),
             t('DEFINICIÓN DEL PROTOCOLO', 'PROTOCOL DEFINITION'),
             COLORS.paytacaTeal
         );
@@ -948,11 +948,11 @@ function renderScene5(tTime) {
     ctx.fillStyle = '#FFFFFF';
     ctx.font = 'bold 44px -apple-system, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText(t('Comparativa: Soberano vs Sistemas Tradicionales', 'Direct Comparison: Sovereign vs Traditional'), W / 2, 160);
+    ctx.fillText(t('Comparativa: UserLink vs Sistemas Tradicionales', 'Direct Comparison: UserLink vs Traditional'), W / 2, 160);
 
     ctx.fillStyle = COLORS.textMuted;
     ctx.font = '500 22px -apple-system, sans-serif';
-    ctx.fillText(t('Por Qué SovereignLink Supera a Web2 y a los Dominios Tradicionales en L1', 'Why SovereignLink Outperforms Web2 and Legacy L1 Name Services'), W / 2, 205);
+    ctx.fillText(t('Por Qué UserLink Supera a Web2 y a los Dominios Tradicionales en L1', 'Why UserLink Outperforms Web2 and Legacy L1 Name Services'), W / 2, 205);
 
     // Table Matrix
     const tX = 260;
@@ -999,7 +999,7 @@ function renderScene5(tTime) {
     ctx.fillText("WEB2 (GOOGLE/META)", tX + 460, tY + 38);
     ctx.fillText("ETHEREUM ENS (.ETH)", tX + 800, tY + 38);
     ctx.fillStyle = COLORS.paytacaTeal;
-    ctx.fillText("SOVEREIGNLINK (BCH + NOSTR)", tX + 1170, tY + 38);
+    ctx.fillText("USERLINK (BCH + NOSTR)", tX + 1170, tY + 38);
 
     rows.forEach((r, idx) => {
         const rY = tY + 60 + idx * rowH;
@@ -1023,7 +1023,7 @@ function renderScene5(tTime) {
         ctx.fillStyle = COLORS.btcOrange;
         ctx.fillText(r.ens, tX + 800, rY + 52);
 
-        // SovereignLink Highlight Box
+        // UserLink Highlight Box
         ctx.fillStyle = 'rgba(0, 209, 178, 0.15)';
         ctx.beginPath();
         ctx.roundRect(tX + 980, rY + 12, 380, rowH - 24, 10);
@@ -1036,7 +1036,7 @@ function renderScene5(tTime) {
 
     drawSubtitleCard(
         t('La Libertad Digital No Debe Pagar Impuesto de Gas', 'Digital Freedom Should Not Pay an Annual Gas Tax'),
-        t('SovereignLink ofrece la mejor experiencia de usuario sin barreras económicas ni riesgos de custodia.', 'SovereignLink delivers frictionless identity with zero financial barriers and zero custody honeypots.'),
+        t('UserLink ofrece la mejor experiencia de usuario sin barreras económicas ni riesgos de custodia.', 'UserLink delivers frictionless identity with zero financial barriers and zero custody honeypots.'),
         t('VENTAJA COMPETITIVA', 'COMPETITIVE EDGE'),
         COLORS.paytacaTeal
     );
@@ -1049,7 +1049,7 @@ function renderScene6(tTime) {
     ctx.fillStyle = '#FFFFFF';
     ctx.font = 'bold 44px -apple-system, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText(t('Cómo Usar SovereignLink en 3 Sencillos Pasos', 'How to Use SovereignLink in 3 Simple Steps'), W / 2, 160);
+    ctx.fillText(t('Cómo Usar UserLink en 3 Sencillos Pasos', 'How to Use UserLink in 3 Simple Steps'), W / 2, 160);
 
     ctx.fillStyle = COLORS.textMuted;
     ctx.font = '500 22px -apple-system, sans-serif';
