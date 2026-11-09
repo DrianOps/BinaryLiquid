@@ -48,23 +48,23 @@ const SCENES = [
     },
     {
         id: 2,
-        titleEs: "2. ¿Qué es SovereignLink y Cómo Funciona?",
-        titleEn: "2. What is SovereignLink & How Does It Work?",
+        titleEs: "2. ¿Qué es SovereignLink? — Pagos por Nombre de Usuario",
+        titleEn: "2. What is SovereignLink? — Payments by Username",
         chapterEs: "Qué y Cómo",
         chapterEn: "What & How",
-        durationEs: 53.93,
-        durationEn: 48.74,
+        durationEs: 54.79,
+        durationEn: 50.74,
         audioEs: "./audio/scene2_es.mp3",
         audioEn: "./audio/scene2.mp3"
     },
     {
         id: 3,
-        titleEs: "3. ¿Para Qué Sirve? — Casos de Uso Reales",
-        titleEn: "3. Real-World Utility & Key Use Cases",
+        titleEs: "3. ¿Para Qué Sirve? — Pagos P2P sin Direcciones Largas",
+        titleEn: "3. Real-World Utility — P2P Payments Without Long Hashes",
         chapterEs: "Para Qué Sirve",
         chapterEn: "Use Cases",
-        durationEs: 38.28,
-        durationEn: 33.10,
+        durationEs: 38.54,
+        durationEn: 35.78,
         audioEs: "./audio/scene3_es.mp3",
         audioEn: "./audio/scene3.mp3"
     },
@@ -517,34 +517,71 @@ function renderScene2(tTime) {
     const splitTime = currentLang === 'es' ? 26.0 : 23.0;
 
     if (tTime < splitTime) {
-        // PHASE A: WHAT IS IT? (BCH ⇄ Nostr Bridge)
+        // PHASE A: WHAT IS IT? (Username Payments & BCH ⇄ Nostr Bridge)
         ctx.fillStyle = '#FFFFFF';
         ctx.font = 'bold 44px -apple-system, sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText(t('¿Qué es SovereignLink?', 'What is SovereignLink?'), W / 2, 160);
+        ctx.fillText(t('¿Qué es SovereignLink? — Pagos por Nombre de Usuario', 'What is SovereignLink? — Username Payments'), W / 2, 150);
 
         ctx.fillStyle = COLORS.textMuted;
         ctx.font = '500 22px -apple-system, sans-serif';
-        ctx.fillText(t('El Puente Criptográfico que Une Dinero Incensurable con Expresión Incensurable', 'The Cryptographic Bridge Binding Unstoppable Money to Uncensorable Free Speech'), W / 2, 205);
+        ctx.fillText(t('Envía y Recibe Bitcoin Cash por tu @usuario en vez de Códigos Largos de 42 Caracteres', 'Send and Receive Bitcoin Cash via your @handle instead of 42-Character Hash Strings'), W / 2, 192);
+
+        // Visual Comparison Bar: ANTES vs AHORA
+        const compY = 225;
+        const compW = 1440;
+        const compX = (W - compW) / 2;
+
+        // Old Way (Red Box)
+        ctx.fillStyle = 'rgba(239, 68, 68, 0.12)';
+        ctx.strokeStyle = 'rgba(239, 68, 68, 0.45)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.roundRect(compX, compY, 700, 78, 12);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = COLORS.dangerRed;
+        ctx.font = 'bold 15px monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText(t("❌ ANTES: DIRECCIÓN COMPLEJA DE 42 CARACTERES", "❌ BEFORE: 42-CHARACTER UNREADABLE STRING"), compX + 25, compY + 28);
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = '500 16px monospace';
+        ctx.fillText("bitcoincash:qpc5tceta5qgl4tsynwhxtgn608pteevvsqm5xqt7p", compX + 25, compY + 56);
+
+        // New SovereignLink Way (Green Box)
+        ctx.fillStyle = 'rgba(16, 185, 129, 0.12)';
+        ctx.strokeStyle = 'rgba(16, 185, 129, 0.45)';
+        ctx.beginPath();
+        ctx.roundRect(compX + 740, compY, 700, 78, 12);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = COLORS.bchGreen;
+        ctx.font = 'bold 15px monospace';
+        ctx.fillText(t("🟢 CON SOVEREIGNLINK: TU NOMBRE DE USUARIO / NOSTR", "🟢 WITH SOVEREIGNLINK: YOUR HUMAN USERNAME / NOSTR"), compX + 765, compY + 28);
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = 'bold 19px monospace';
+        ctx.fillText(t("@adrian  o  adrian@bliquid.xyz  (Pago en 1 Clic)", "@adrian  or  adrian@bliquid.xyz  (1-Click Pay)"), compX + 765, compY + 56);
 
         // Left Coin: Bitcoin Cash
-        drawCoin(480, 420, 80, '₿', COLORS.bchGreen, COLORS.bchGreen, tTime);
+        drawCoin(460, 460, 75, '₿', COLORS.bchGreen, COLORS.bchGreen, tTime);
         ctx.fillStyle = '#FFFFFF';
-        ctx.font = 'bold 28px -apple-system, sans-serif';
+        ctx.font = 'bold 26px -apple-system, sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('Bitcoin Cash (BCH)', 480, 540);
+        ctx.fillText('Bitcoin Cash (BCH)', 460, 565);
         ctx.fillStyle = COLORS.bchGreen;
-        ctx.font = 'bold 18px -apple-system, sans-serif';
-        ctx.fillText(t('Dinero P2P Soberano (Paytaca)', 'Sovereign P2P Cash (Paytaca)'), 480, 570);
+        ctx.font = 'bold 17px -apple-system, sans-serif';
+        ctx.fillText(t('Dinero P2P Soberano (Paytaca)', 'Sovereign P2P Cash (Paytaca)'), 460, 595);
 
         // Right Coin: Nostr
-        drawCoin(1440, 420, 80, '🔑', COLORS.nostrPurple, COLORS.nostrPurple, tTime + 0.5);
+        drawCoin(1460, 460, 75, '🔑', COLORS.nostrPurple, COLORS.nostrPurple, tTime + 0.5);
         ctx.fillStyle = '#FFFFFF';
-        ctx.font = 'bold 28px -apple-system, sans-serif';
-        ctx.fillText('Nostr Protocol', 1440, 540);
+        ctx.font = 'bold 26px -apple-system, sans-serif';
+        ctx.fillText('Nostr Protocol', 1460, 565);
         ctx.fillStyle = COLORS.nostrPurple;
-        ctx.font = 'bold 18px -apple-system, sans-serif';
-        ctx.fillText(t('Identidad y Comunicación Libre (BIP-340)', 'Censorship-Free Identity (BIP-340)'), 1440, 570);
+        ctx.font = 'bold 17px -apple-system, sans-serif';
+        ctx.fillText(t('Identidad y Comunicación Libre (BIP-340)', 'Censorship-Free Identity (BIP-340)'), 1460, 595);
 
         // Center Laser Bridge with traveling particle energy
         ctx.save();
@@ -553,28 +590,28 @@ function renderScene2(tTime) {
         ctx.shadowColor = COLORS.paytacaTeal;
         ctx.shadowBlur = 24;
         ctx.beginPath();
-        ctx.moveTo(580, 420);
-        ctx.lineTo(1340, 420);
+        ctx.moveTo(560, 460);
+        ctx.lineTo(1360, 460);
         ctx.stroke();
         ctx.shadowBlur = 0;
 
         // Traveling particles
-        const particleX = 580 + ((tTime * 350) % 760);
+        const particleX = 560 + ((tTime * 350) % 800);
         ctx.fillStyle = '#FFFFFF';
         ctx.beginPath();
-        ctx.arc(particleX, 420, 12, 0, Math.PI * 2);
+        ctx.arc(particleX, 460, 12, 0, Math.PI * 2);
         ctx.fill();
 
         // Center Atom Badge
-        drawPill(W / 2 - 180, 385, 360, 70, '⚡ SOVEREIGNLINK ⚡', COLORS.btcOrange);
+        drawPill(W / 2 - 190, 425, 380, 70, '⚡ PAGOS POR NOMBRE DE USUARIO ⚡', COLORS.btcOrange);
         ctx.fillStyle = '#FFFFFF';
         ctx.font = 'bold 14px monospace';
-        ctx.fillText('secp256k1 (ECDSA) ⇄ BIP-340 (Schnorr)', W / 2, 435);
+        ctx.fillText('secp256k1 (ECDSA) ⇄ BIP-340 (Schnorr)', W / 2, 475);
         ctx.restore();
 
         drawSubtitleCard(
-            t('Identidad Autosoberana (DID) 100% No Custodial', '100% Non-Custodial Self-Sovereign Identity (DID)'),
-            t('Une tu billetera Paytaca con tus claves de Nostr: sin empresas que guarden tus datos ni permisos requeridos.', 'Binds your Paytaca wallet to your Nostr keypair: no corporate databases, no permission required.'),
+            t('Envía y Recibe BCH por Nombre de Usuario sin Intermediarios', 'Send and Receive BCH by Username Without Middlemen'),
+            t('SovereignLink es como un CashApp descentralizado: vincula tu billetera Paytaca a tu identidad de Nostr a costo de gas cero.', 'SovereignLink is like a decentralized CashApp: binds your Paytaca wallet to your Nostr identity at zero gas cost.'),
             t('DEFINICIÓN DEL PROTOCOLO', 'PROTOCOL DEFINITION'),
             COLORS.paytacaTeal
         );
@@ -703,11 +740,11 @@ function renderScene3(tTime) {
     const cases = [
         {
             icon: "⚡",
-            badge: t("ZAPS & MICROPAGOS", "ZAPS & MICROPAYMENTS"),
-            title: t("Zaps P2P a tu Perfil Nostr", "P2P Zaps to Nostr Profiles"),
-            desc: t("Envía y recibe Bitcoin Cash directamente en clientes de Nostr como Damus, Primal o Amethyst con un toque, sin intermediarios bancarios.", "Send and receive Bitcoin Cash directly to Nostr profiles across Damus and Primal with a single tap, zero bank middlemen."),
+            badge: t("PAGOS POR @USUARIO", "PAYMENTS BY @USERNAME"),
+            title: t("Paga Directo a @nombre", "Pay Direct to @handle"),
+            desc: t("Olvídate de direcciones de 42 caracteres. Solo di: 'párgame a mi @usuario en Nostr'. Satoshis directos a tu Paytaca en 1 clic.", "Forget copying 42-character strings. Just say: 'pay to my Nostr handle'. Satoshis arrive straight in your Paytaca in 1 click."),
             color: COLORS.btcOrange,
-            simAction: "+0.05 BCH Zap ⚡"
+            simAction: "@adrian ➔ +0.05 BCH Paytaca ✓"
         },
         {
             icon: "🛡️",
