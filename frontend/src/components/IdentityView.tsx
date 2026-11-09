@@ -40,9 +40,10 @@ interface IdentityViewProps {
 }
 
 const PUBLIC_RELAYS = [
-  'wss://relay.damus.io',
   'wss://nos.lol',
-  'wss://relay.primal.net'
+  'wss://relay.primal.net',
+  'wss://nostr.mom',
+  'wss://purplerelay.com'
 ];
 
 export default function IdentityView({
