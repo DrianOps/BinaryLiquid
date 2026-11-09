@@ -1,0 +1,20 @@
+{
+  "names": {
+    "myuser": "de69276e520917aa8227ba4ab4460edd64b5dc263e6f475b29f33fad3af81990",
+    "adrian": "de69276e520917aa8227ba4ab4460edd64b5dc263e6f475b29f33fad3af81990",
+    "_": "de69276e520917aa8227ba4ab4460edd64b5dc263e6f475b29f33fad3af81990"
+  },
+  "bch_addresses": {
+    "myuser": "bitcoincash:qpm2qsznhks23z7629mms6s4cwef74vcwvy22gdx6a",
+    "adrian": "bitcoincash:qpm2qsznhks23z7629mms6s4cwef74vcwvy22gdx6a",
+    "_": "bitcoincash:qpm2qsznhks23z7629mms6s4cwef74vcwvy22gdx6a"
+  },
+  "relays": {
+    "de69276e520917aa8227ba4ab4460edd64b5dc263e6f475b29f33fad3af81990": [
+      "wss://nos.lol",
+      "wss://relay.primal.net",
+      "wss://nostr.mom",
+      "wss://purplerelay.com"
+    ]
+  }
+}
