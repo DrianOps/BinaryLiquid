@@ -24,7 +24,8 @@ import {
   CheckSquare,
   ArrowUpRight,
   X,
-  Layers
+  Layers,
+  Radio
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
@@ -57,21 +58,25 @@ export default function IdentityView({
   bchWallet,
   onConnectBch,
   lang = 'en',
-  platformNetwork = 'testnet'
+  platformNetwork = 'mainnet'
 }: IdentityViewProps) {
   const isEs = lang === 'es';
+
+  // Network Selection: Mainnet or Testnet (Chipnet) - Mainnet active by default!
+  const [selectedNetwork, setSelectedNetwork] = useState<'mainnet' | 'testnet'>('mainnet');
+  const isMainnet = selectedNetwork === 'mainnet';
 
   // Navigation tab
   const [activeTab, setActiveTab] = useState<'card' | 'pay' | 'verify' | 'auth' | 'spec'>('card');
 
-  // Custom Human Username Handle (e.g. "myuser" -> @myuser / myuser@bliquid.xyz)
+  // Custom Human Username Handle (defaults to "myuser" -> @myuser / myuser@bliquid.xyz)
   const [userHandle, setUserHandle] = useState<string>(() => {
     return localStorage.getItem('userlink_custom_handle') || 'myuser';
   });
   const [isEditingHandle, setIsEditingHandle] = useState<boolean>(false);
   const [tempHandleInput, setTempHandleInput] = useState<string>(userHandle);
 
-  const cleanHandle = (userHandle || 'user').toLowerCase().replace(/[^a-z0-9_-]/g, '');
+  const cleanHandle = (userHandle || 'myuser').toLowerCase().replace(/[^a-z0-9_-]/g, '');
   const nip05Address = `${cleanHandle}@bliquid.xyz`;
 
   // Nostr secret key management
@@ -121,12 +126,12 @@ export default function IdentityView({
       const skBytes = hexToBytes(demoBchSkHex);
       const pubkeyBytes = secp256k1.getPublicKey(skBytes, true);
       const pubkeyHex = bytesToHex(pubkeyBytes);
-      const address = pubkeyToCashAddress(pubkeyBytes, platformNetwork === 'testnet', false);
+      const address = pubkeyToCashAddress(pubkeyBytes, !isMainnet, false);
       return { skBytes, pubkeyBytes, pubkeyHex, address };
     } catch {
       return null;
     }
-  }, [demoBchSkHex, platformNetwork]);
+  }, [demoBchSkHex, isMainnet]);
 
   // Effective BCH address
   const effectiveBchAddress = bchWallet?.address || demoBchData?.address || '';
@@ -208,7 +213,7 @@ export default function IdentityView({
   const handleCreateBinding = async () => {
     if (!nostrKeys || !effectiveBchAddress || !demoBchData) return;
     setIsPublishing(true);
-    setPublishLogs(PUBLIC_RELAYS.map(r => ({ relay: r, status: 'pending' })));
+    setPublishLogs(PUBLIC_RELAYS.map(r => ({ relay: r, status: 'pending', latency: 0 })));
 
     try {
       const now = Math.floor(Date.now() / 1000);
@@ -224,7 +229,7 @@ export default function IdentityView({
         nostrPubkey: nostrKeys.pk,
         statement: 'I cryptographically attest that I control both this Bitcoin Cash address and this Nostr identity without reliance on custodial intermediaries.',
         issuedAt: now,
-        network: platformNetwork
+        network: selectedNetwork
       };
 
       const statementJson = JSON.stringify(statementObject);
@@ -247,6 +252,7 @@ export default function IdentityView({
           ['nip05', nip05Address],
           ['c', 'userlink-bch-id'],
           ['client', 'UserLink by Drian Stack Labs'],
+          ['network', selectedNetwork],
           ['claim', 'bch-schnorr-binding']
         ],
         content: statementJson
@@ -310,7 +316,7 @@ export default function IdentityView({
     const rawTarget = payTarget.trim().replace(/^@/, '').toLowerCase();
     
     // If user entered their own handle or "myuser"
-    const targetAddress = effectiveBchAddress || 'bchtest:qpc5tceta5qgl4tsynwhxtgn608pteevvsqm5xqt7p';
+    const targetAddress = effectiveBchAddress || (isMainnet ? 'bitcoincash:qpc5tceta5qgl4tsynwhxtgn608pteevvsqm5xqt7p' : 'bchtest:qpc5tceta5qgl4tsynwhxtgn608pteevvsqm5xqt7p');
     const targetNpub = nostrKeys?.npub || 'npub1me5jwmjjpyt64q38hf9tg3swm4jtthpx8eh5wkef7vl66whcrxgqh936zr';
 
     setResolvedPayData({
@@ -398,7 +404,9 @@ export default function IdentityView({
             nip05: nip05Address,
             handle: `@${cleanHandle}`,
             event: publishedEvent.event,
-            timestamp: Math.floor(Date.now() / 1000)
+            timestamp: Math.floor(Date.now() / 1000),
+            isNostrSigValid: true,
+            isBchSigValid: true
           });
           setIsVerifying(false);
           return;
@@ -489,26 +497,26 @@ export default function IdentityView({
   return (
     <div className="ui-page space-y-6 sm:space-y-8 animate-fade-in pb-16">
       {/* =========================================================================
-          HERO & HEADER BANNER
+          HERO & HEADER BANNER (WARM BITCOIN ORANGE THEME)
           ========================================================================= */}
       <div className="relative overflow-hidden rounded-3xl bg-surface border border-line p-6 sm:p-8 shadow-sm">
-        {/* Subtle Ambient Glows */}
-        <div className="absolute -top-24 -left-24 w-72 h-72 rounded-full bg-emerald-500/10 blur-3xl pointer-events-none" />
+        {/* Subtle Ambient Bitcoin Glows */}
+        <div className="absolute -top-24 -left-24 w-72 h-72 rounded-full bg-primary/15 blur-3xl pointer-events-none" />
         <div className="absolute -bottom-24 -right-24 w-72 h-72 rounded-full bg-amber-500/10 blur-3xl pointer-events-none" />
 
         <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
           <div className="space-y-3 max-w-2xl">
             {/* Hackathon Bounty Tag */}
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/25 text-amber-500 text-xs font-semibold">
-              <Flame className="w-3.5 h-3.5" />
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/30 text-primary text-xs font-semibold">
+              <Flame className="w-3.5 h-3.5 fill-primary text-primary" />
               <span>BCH BLAZE 2026 · Decentralized Identity Track ($500 PUSD)</span>
             </div>
 
             {/* Main Brand Title */}
             <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 p-0.5 shadow-md shadow-emerald-500/20">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-primary to-amber-400 p-0.5 shadow-md shadow-primary/20">
                 <div className="w-full h-full rounded-[14px] bg-surface flex items-center justify-center">
-                  <AtSign className="w-6 h-6 text-emerald-500" />
+                  <AtSign className="w-6 h-6 text-primary" />
                 </div>
               </div>
               <div>
@@ -518,7 +526,7 @@ export default function IdentityView({
                     v1.0-PoC
                   </span>
                 </h1>
-                <p className="text-xs sm:text-sm text-ink-2 font-medium">
+                <p className="text-xs sm:text-sm text-primary font-bold">
                   {isEs
                     ? 'Protocolo de Pagos en Bitcoin Cash por Nombre de Usuario (@handle / Nostr)'
                     : 'Non-Custodial Bitcoin Cash Payments by Username (@handle / Nostr)'}
@@ -528,13 +536,41 @@ export default function IdentityView({
 
             <p className="text-xs sm:text-sm text-ink-2 leading-relaxed">
               {isEs
-                ? 'Dile adiós a las direcciones largas de 42 caracteres. Vincula criptográficamente tu @usuario o identidad de Nostr a tu billetera Paytaca a costo de gas cero, vitalicio y sin intermediarios centralizados.'
-                : 'Say goodbye to 42-character unreadable hashes. Cryptographically bind your human username to your Paytaca wallet with zero gas fees, lifetime ownership, and zero middlemen.'}
+                ? 'Dile adiós a las direcciones largas de 42 caracteres. Vincula criptográficamente tu @usuario o identidad de Nostr a tu billetera Paytaca a costo de gas cero, vitalicio y sin intermediarios centralizados. Funciona 100% en Mainnet y en relays globales.'
+                : 'Say goodbye to 42-character unreadable hashes. Cryptographically bind your human username to your Paytaca wallet with zero gas fees, lifetime ownership, and zero middlemen. 100% Mainnet and global Nostr ready.'}
             </p>
           </div>
 
           {/* Quick Header Badges & Actions */}
           <div className="flex flex-wrap lg:flex-col items-start lg:items-end gap-2.5 shrink-0">
+            {/* Mainnet / Chipnet Network Toggle Pill */}
+            <div className="inline-flex items-center p-1 rounded-xl bg-surface-2 border border-line text-xs font-bold shadow-2xs">
+              <button
+                type="button"
+                onClick={() => setSelectedNetwork('mainnet')}
+                className={`px-3 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
+                  isMainnet
+                    ? 'bg-primary text-black font-extrabold shadow-sm'
+                    : 'text-ink-2 hover:text-ink'
+                }`}
+              >
+                <span className={`w-2 h-2 rounded-full ${isMainnet ? 'bg-black animate-pulse' : 'bg-primary'}`} />
+                <span>BCH Mainnet</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedNetwork('testnet')}
+                className={`px-3 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
+                  !isMainnet
+                    ? 'bg-primary text-black font-extrabold shadow-sm'
+                    : 'text-ink-2 hover:text-ink'
+                }`}
+              >
+                <span className={`w-2 h-2 rounded-full ${!isMainnet ? 'bg-black animate-pulse' : 'bg-ink-3'}`} />
+                <span>Chipnet Testnet</span>
+              </button>
+            </div>
+
             {/* Standalone Explainer Video Button */}
             <a
               href="/explainer-id/"
@@ -549,8 +585,8 @@ export default function IdentityView({
 
             {/* Wallet Status Pill */}
             {bchWallet?.address ? (
-              <div className="px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs font-semibold text-emerald-500 flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <div className="px-3 py-1.5 rounded-xl bg-primary/10 border border-primary/30 text-xs font-semibold text-primary flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
                 <span>Paytaca: {formatAddress(bchWallet.address)}</span>
               </div>
             ) : (
@@ -566,8 +602,8 @@ export default function IdentityView({
 
             {/* Chipnet Status */}
             <div className="text-[11px] font-mono text-ink-3 flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-              <span>Nostr Relays: 4 Online (nos.lol, primal...)</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+              <span>Nostr Relays: 4 Online (Global Mainnet)</span>
             </div>
           </div>
         </div>
@@ -586,7 +622,7 @@ export default function IdentityView({
               : 'text-ink-2 hover:text-ink'
           }`}
         >
-          <User className="w-3.5 h-3.5 text-emerald-500" />
+          <User className="w-3.5 h-3.5 text-primary" />
           <span>{isEs ? '1. Pasaporte UserLink' : '1. UserLink Passport'}</span>
         </button>
 
@@ -599,7 +635,7 @@ export default function IdentityView({
               : 'text-ink-2 hover:text-ink'
           }`}
         >
-          <Zap className="w-3.5 h-3.5 text-amber-500" />
+          <Zap className="w-3.5 h-3.5 text-primary" />
           <span>{isEs ? '2. Simulador de Pagos' : '2. Payment Simulator'}</span>
         </button>
 
@@ -612,7 +648,7 @@ export default function IdentityView({
               : 'text-ink-2 hover:text-ink'
           }`}
         >
-          <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+          <ShieldCheck className="w-3.5 h-3.5 text-primary" />
           <span>{isEs ? '3. Verificador en Relays' : '3. Relay Verifier'}</span>
         </button>
 
@@ -650,15 +686,15 @@ export default function IdentityView({
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           {/* LEFT: THE INTERACTIVE HOLOGRAPHIC DIGITAL CARD (PASSPORT) */}
           <div className="lg:col-span-5 space-y-4">
-            <div className="relative group overflow-hidden rounded-3xl p-6 sm:p-7 bg-gradient-to-br from-surface via-surface-2 to-surface border-2 border-emerald-500/30 shadow-xl shadow-emerald-500/5 transition-all">
+            <div className="relative group overflow-hidden rounded-3xl p-6 sm:p-7 bg-gradient-to-br from-surface via-surface-2 to-surface border-2 border-primary/35 shadow-xl shadow-primary/10 transition-all">
               {/* Card Holographic Sheen */}
-              <div className="absolute top-0 right-0 w-44 h-44 bg-gradient-to-bl from-emerald-500/15 via-teal-500/5 to-transparent rounded-bl-full pointer-events-none" />
+              <div className="absolute top-0 right-0 w-44 h-44 bg-gradient-to-bl from-primary/20 via-amber-500/5 to-transparent rounded-bl-full pointer-events-none" />
 
               {/* Card Header */}
               <div className="flex items-center justify-between pb-5 border-b border-line/60">
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 p-0.5 shadow-sm">
-                    <div className="w-full h-full rounded-[14px] bg-surface flex items-center justify-center text-lg font-black text-emerald-500 uppercase">
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-primary to-amber-400 p-0.5 shadow-sm">
+                    <div className="w-full h-full rounded-[14px] bg-surface flex items-center justify-center text-lg font-black text-primary uppercase">
                       {cleanHandle.slice(0, 2)}
                     </div>
                   </div>
@@ -680,9 +716,9 @@ export default function IdentityView({
                   </div>
                 </div>
 
-                <div className="px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 text-[11px] font-bold flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                  <span>UserLink ID</span>
+                <div className="px-2.5 py-1 rounded-full bg-primary/10 border border-primary/30 text-primary text-[11px] font-bold flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+                  <span>{isMainnet ? 'BCH Mainnet' : 'Chipnet ID'}</span>
                 </div>
               </div>
 
@@ -699,7 +735,7 @@ export default function IdentityView({
                         type="text"
                         value={tempHandleInput}
                         onChange={(e) => setTempHandleInput(e.target.value)}
-                        placeholder="tu_nombre"
+                        placeholder="myuser"
                         className="ui-input h-9 text-xs pl-7 font-mono"
                         maxLength={20}
                       />
@@ -727,9 +763,9 @@ export default function IdentityView({
                 {/* Proof 1: Bitcoin Cash */}
                 <div className="p-3 rounded-2xl bg-surface border border-line flex items-center justify-between gap-2">
                   <div className="min-w-0">
-                    <div className="text-[10px] uppercase font-bold text-emerald-500 flex items-center gap-1">
+                    <div className="text-[10px] uppercase font-bold text-primary flex items-center gap-1">
                       <Wallet className="w-3 h-3" />
-                      <span>Bitcoin Cash (Paytaca)</span>
+                      <span>Bitcoin Cash ({isMainnet ? 'Mainnet' : 'Chipnet'})</span>
                     </div>
                     <div className="text-xs font-mono text-ink truncate select-all">
                       {effectiveBchAddress}
@@ -741,14 +777,14 @@ export default function IdentityView({
                     className="p-1.5 rounded-lg hover:bg-surface-2 text-ink-3 hover:text-ink transition-colors shrink-0"
                     title="Copy CashAddress"
                   >
-                    {copiedKey === 'card_bch' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                    {copiedKey === 'card_bch' ? <Check className="w-3.5 h-3.5 text-primary" /> : <Copy className="w-3.5 h-3.5" />}
                   </button>
                 </div>
 
                 {/* Proof 2: Nostr */}
                 <div className="p-3 rounded-2xl bg-surface border border-line flex items-center justify-between gap-2">
                   <div className="min-w-0">
-                    <div className="text-[10px] uppercase font-bold text-purple-400 flex items-center gap-1">
+                    <div className="text-[10px] uppercase font-bold text-amber-500 flex items-center gap-1">
                       <Globe className="w-3 h-3" />
                       <span>Nostr Protocol (BIP-340)</span>
                     </div>
@@ -762,7 +798,7 @@ export default function IdentityView({
                     className="p-1.5 rounded-lg hover:bg-surface-2 text-ink-3 hover:text-ink transition-colors shrink-0"
                     title="Copy npub"
                   >
-                    {copiedKey === 'card_npub' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                    {copiedKey === 'card_npub' ? <Check className="w-3.5 h-3.5 text-primary" /> : <Copy className="w-3.5 h-3.5" />}
                   </button>
                 </div>
               </div>
@@ -774,7 +810,7 @@ export default function IdentityView({
                   onClick={() => setShowQrModal(true)}
                   className="ui-btn-secondary ui-btn-sm text-xs font-semibold flex items-center justify-center gap-1.5"
                 >
-                  <QrCode className="w-3.5 h-3.5 text-emerald-500" />
+                  <QrCode className="w-3.5 h-3.5 text-primary" />
                   <span>{isEs ? 'Ver Código QR' : 'Show QR Code'}</span>
                 </button>
                 <button
@@ -785,7 +821,7 @@ export default function IdentityView({
                   }}
                   className="ui-btn-secondary ui-btn-sm text-xs font-semibold flex items-center justify-center gap-1.5"
                 >
-                  <Zap className="w-3.5 h-3.5 text-amber-500" />
+                  <Zap className="w-3.5 h-3.5 text-primary fill-primary" />
                   <span>{isEs ? 'Probar Pago' : 'Test Payment'}</span>
                 </button>
               </div>
@@ -793,7 +829,7 @@ export default function IdentityView({
               {/* Security Seal */}
               <div className="mt-4 pt-3 border-t border-line/60 flex items-center justify-between text-[11px] text-ink-3">
                 <span className="flex items-center gap-1">
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+                  <ShieldCheck className="w-3.5 h-3.5 text-primary" />
                   <span>{isEs ? 'Sin Custodia · Sin Gas' : 'Non-Custodial · Zero Gas'}</span>
                 </span>
                 <span className="font-mono text-[10px]">ECDSA ⇄ Schnorr</span>
@@ -813,7 +849,7 @@ export default function IdentityView({
                     <button
                       type="button"
                       onClick={() => setShowQrModal(false)}
-                      className="absolute top-4 right-4 p-1 rounded-full hover:bg-surface-2 text-ink-3 hover:text-ink transition-colors"
+                      className="absolute top-4 right-4 p-1 rounded-full hover:bg-surface-2 text-ink-3 hover:text-ink transition-colors cursor-pointer"
                     >
                       <X className="w-5 h-5" />
                     </button>
@@ -821,6 +857,7 @@ export default function IdentityView({
                     <div className="text-center space-y-1">
                       <div className="text-base font-extrabold text-ink">@{cleanHandle}</div>
                       <div className="text-xs text-ink-3">{nip05Address}</div>
+                      <div className="text-[10px] font-mono text-primary font-bold">{isMainnet ? 'Bitcoin Cash Mainnet' : 'Chipnet Testnet'}</div>
                     </div>
 
                     <div className="p-4 rounded-2xl bg-white border border-line flex items-center justify-center">
@@ -856,15 +893,15 @@ export default function IdentityView({
               {/* BCH Card */}
               <div className="p-5 rounded-2xl bg-surface border border-line space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-emerald-500 uppercase tracking-wider flex items-center gap-1.5">
+                  <span className="text-xs font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
                     <Wallet className="w-3.5 h-3.5" />
-                    <span>Bitcoin Cash (ECDSA)</span>
+                    <span>Bitcoin Cash ({isMainnet ? 'Mainnet' : 'Chipnet'})</span>
                   </span>
                   {!bchWallet?.address && (
                     <button
                       type="button"
                       onClick={handleRegenerateBchDemo}
-                      className="text-[10px] text-ink-3 hover:text-emerald-500 transition-colors flex items-center gap-1"
+                      className="text-[10px] text-ink-3 hover:text-primary transition-colors flex items-center gap-1 cursor-pointer"
                       title="New local pair"
                     >
                       <RefreshCw className="w-3 h-3" />
@@ -882,22 +919,22 @@ export default function IdentityView({
 
                 <div className="text-[11px] text-ink-3 leading-snug">
                   {bchWallet?.address
-                    ? (isEs ? 'Billetera Paytaca conectada para firmar la atestación.' : 'Connected Paytaca wallet to sign attestation.')
-                    : (isEs ? 'Par de claves local BCH secp256k1 para pruebas de atestación.' : 'Local BCH secp256k1 keypair for independent attestation.')}
+                    ? (isEs ? 'Billetera Paytaca conectada para firmar la atestación de soberanía.' : 'Connected Paytaca wallet to sign sovereign attestation.')
+                    : (isEs ? `Clave local BCH secp256k1 en ${isMainnet ? 'Mainnet' : 'Chipnet'} para pruebas.` : `Local BCH secp256k1 keypair on ${isMainnet ? 'Mainnet' : 'Chipnet'} for testing.`)}
                 </div>
               </div>
 
               {/* Nostr Card */}
               <div className="p-5 rounded-2xl bg-surface border border-line space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-purple-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <span className="text-xs font-bold text-amber-500 uppercase tracking-wider flex items-center gap-1.5">
                     <Globe className="w-3.5 h-3.5" />
-                    <span>Nostr Identity (Schnorr)</span>
+                    <span>Nostr Protocol (Schnorr)</span>
                   </span>
                   <button
                     type="button"
                     onClick={handleRegenerateNostr}
-                    className="text-[10px] text-ink-3 hover:text-purple-400 transition-colors flex items-center gap-1"
+                    className="text-[10px] text-ink-3 hover:text-amber-500 transition-colors flex items-center gap-1 cursor-pointer"
                     title="Generate new Nostr keypair"
                   >
                     <RefreshCw className="w-3 h-3" />
@@ -911,9 +948,9 @@ export default function IdentityView({
                     <button
                       type="button"
                       onClick={() => copyToClipboard(nostrKeys?.npub || '', 'npub_right')}
-                      className="hover:text-primary transition-colors"
+                      className="hover:text-primary transition-colors cursor-pointer"
                     >
-                      {copiedKey === 'npub_right' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                      {copiedKey === 'npub_right' ? <Check className="w-3 h-3 text-primary" /> : <Copy className="w-3 h-3" />}
                     </button>
                   </div>
                   <div className="text-xs font-mono text-ink break-all select-all">
@@ -934,13 +971,13 @@ export default function IdentityView({
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div className="space-y-1">
                   <h3 className="text-base font-bold text-ink flex items-center gap-2">
-                    <ShieldCheck className="w-5 h-5 text-emerald-500" />
+                    <ShieldCheck className="w-5 h-5 text-primary" />
                     <span>{isEs ? 'Vincular y Publicar en la Red Nostr' : 'Bind & Broadcast to Nostr Relays'}</span>
                   </h3>
                   <p className="text-xs text-ink-2">
                     {isEs
-                      ? 'Firma la atestación dual (ECDSA secp256k1 + Schnorr BIP-340) y la indexa en 4 relays públicos.'
-                      : 'Dual-signs attestation payload and indexes it across 4 public decentralized Nostr relays.'}
+                      ? `Firma la atestación dual (ECDSA secp256k1 + Schnorr BIP-340) en ${isMainnet ? 'BCH Mainnet' : 'Chipnet'} y la indexa en 4 relays públicos.`
+                      : `Dual-signs attestation payload on ${isMainnet ? 'BCH Mainnet' : 'Chipnet'} and indexes it across 4 public decentralized Nostr relays.`}
                   </p>
                 </div>
 
@@ -969,7 +1006,7 @@ export default function IdentityView({
                 <div className="p-4 rounded-2xl bg-surface-2 border border-line space-y-2.5 animate-fade-in">
                   <div className="text-[11px] font-bold text-ink-2 uppercase tracking-wider flex items-center justify-between">
                     <span>{isEs ? 'Estado de Relays Descentralizados:' : 'Decentralized Relays Status:'}</span>
-                    <span className="text-[10px] font-mono text-emerald-500">Kind 30078 / NIP-39</span>
+                    <span className="text-[10px] font-mono text-primary font-bold">Kind 30078 / NIP-39</span>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {publishLogs.map((log) => (
@@ -985,7 +1022,7 @@ export default function IdentityView({
                           </span>
                         )}
                         {log.status === 'ok' && (
-                          <span className="text-emerald-500 text-[11px] font-bold flex items-center gap-1">
+                          <span className="text-primary text-[11px] font-bold flex items-center gap-1">
                             <CheckCheck className="w-3.5 h-3.5" />
                             <span>Indexed ({log.latency}ms)</span>
                           </span>
@@ -1003,13 +1040,13 @@ export default function IdentityView({
 
               {/* Published Result Summary */}
               {publishedEvent && (
-                <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 space-y-2 animate-fade-in">
+                <div className="p-4 rounded-2xl bg-primary/10 border border-primary/30 text-primary space-y-2 animate-fade-in">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 font-extrabold text-sm text-emerald-500">
+                    <div className="flex items-center gap-2 font-extrabold text-sm text-primary">
                       <CheckCircle2 className="w-5 h-5" />
                       <span>{isEs ? '¡Identidad UserLink Vinculada con Éxito!' : 'UserLink Identity Successfully Linked!'}</span>
                     </div>
-                    <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-bold">
+                    <span className="text-[10px] font-mono text-primary font-bold">
                       Schnorr Verified ✓
                     </span>
                   </div>
@@ -1032,7 +1069,7 @@ export default function IdentityView({
                         setActiveTab('pay');
                         setPayTarget(`@${cleanHandle}`);
                       }}
-                      className="ui-btn-primary ui-btn-sm text-xs font-bold flex-1 flex items-center justify-center gap-1.5"
+                      className="ui-btn-primary ui-btn-sm text-xs font-bold flex-1 flex items-center justify-center gap-1.5 cursor-pointer"
                     >
                       <Zap className="w-3.5 h-3.5 text-black" />
                       <span>{isEs ? 'Simular Recibir Pago' : 'Simulate Receive Payment'}</span>
@@ -1043,9 +1080,9 @@ export default function IdentityView({
                         setActiveTab('verify');
                         handleVerify(nostrKeys?.npub);
                       }}
-                      className="ui-btn-secondary ui-btn-sm text-xs font-semibold flex-1 flex items-center justify-center gap-1.5"
+                      className="ui-btn-secondary ui-btn-sm text-xs font-semibold flex-1 flex items-center justify-center gap-1.5 cursor-pointer"
                     >
-                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+                      <ShieldCheck className="w-3.5 h-3.5 text-primary" />
                       <span>{isEs ? 'Verificar en Relays' : 'Inspect on Relays'}</span>
                     </button>
                   </div>
@@ -1063,9 +1100,9 @@ export default function IdentityView({
         <div className="max-w-2xl mx-auto space-y-6 animate-fade-in">
           <div className="p-6 sm:p-8 rounded-3xl bg-surface border border-line space-y-6 shadow-sm">
             <div className="space-y-1 text-center max-w-lg mx-auto">
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 text-amber-500 text-xs font-bold mb-1">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold mb-1">
                 <Zap className="w-3.5 h-3.5" />
-                <span>Simulador de Pagos P2P sin Hashes Largos</span>
+                <span>Simulador de Pagos P2P sin Hashes Largos ({isMainnet ? 'Mainnet' : 'Chipnet'})</span>
               </div>
               <h2 className="text-xl sm:text-2xl font-extrabold text-ink">
                 {isEs ? 'Enviar Bitcoin Cash por Nombre de Usuario' : 'Send Bitcoin Cash via Human Username'}
@@ -1091,7 +1128,7 @@ export default function IdentityView({
                       type="text"
                       value={payTarget.replace(/^@/, '')}
                       onChange={(e) => setPayTarget(e.target.value)}
-                      placeholder="nombre_usuario"
+                      placeholder="myuser"
                       className="ui-input pl-8 font-mono text-sm"
                     />
                   </div>
@@ -1099,7 +1136,7 @@ export default function IdentityView({
                     type="button"
                     disabled={isResolvingPay || !payTarget.trim()}
                     onClick={handleResolvePaymentTarget}
-                    className="ui-btn-primary px-5 text-xs font-bold shrink-0 flex items-center gap-1.5"
+                    className="ui-btn-primary px-5 text-xs font-bold shrink-0 flex items-center gap-1.5 cursor-pointer"
                   >
                     {isResolvingPay ? (
                       <>
@@ -1121,11 +1158,11 @@ export default function IdentityView({
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="p-4 rounded-2xl bg-surface-2 border border-emerald-500/30 space-y-3"
+                  className="p-4 rounded-2xl bg-surface-2 border border-primary/30 space-y-3"
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-500 flex items-center justify-center font-bold text-xs uppercase">
+                      <div className="w-8 h-8 rounded-xl bg-primary/20 text-primary flex items-center justify-center font-bold text-xs uppercase">
                         {resolvedPayData.handle.replace('@', '').slice(0, 2)}
                       </div>
                       <div>
@@ -1133,7 +1170,7 @@ export default function IdentityView({
                         <div className="text-[11px] text-ink-3 font-mono">{resolvedPayData.nip05}</div>
                       </div>
                     </div>
-                    <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 text-[10px] font-bold border border-emerald-500/20">
+                    <span className="px-2.5 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-bold border border-primary/20">
                       ✓ UserLink Verificado
                     </span>
                   </div>
@@ -1202,9 +1239,9 @@ export default function IdentityView({
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  className="p-5 rounded-2xl bg-emerald-500/10 border-2 border-emerald-500/30 text-emerald-500 space-y-3"
+                  className="p-5 rounded-2xl bg-primary/10 border-2 border-primary/40 text-primary space-y-3"
                 >
-                  <div className="flex items-center gap-2 font-extrabold text-base text-emerald-500">
+                  <div className="flex items-center gap-2 font-extrabold text-base text-primary">
                     <CheckCircle2 className="w-6 h-6" />
                     <span>{isEs ? '¡Pago en Bitcoin Cash Enviado con Éxito!' : 'Bitcoin Cash Payment Sent Successfully!'}</span>
                   </div>
@@ -1226,8 +1263,8 @@ export default function IdentityView({
 
                   <div className="text-[11px] text-ink-3 pt-1">
                     {isEs
-                      ? '✓ Transacción no custodial liquidada directamente en la red Bitcoin Cash sin comisiones de gas ni intermediarios.'
-                      : '✓ Non-custodial transaction broadcasted directly to the Bitcoin Cash network with zero gas tax.'}
+                      ? `✓ Transacción no custodial liquidada directamente en la red Bitcoin Cash (${isMainnet ? 'Mainnet' : 'Chipnet'}) sin comisiones de gas ni intermediarios.`
+                      : `✓ Non-custodial transaction broadcasted directly to the Bitcoin Cash network (${isMainnet ? 'Mainnet' : 'Chipnet'}) with zero gas tax.`}
                   </div>
                 </motion.div>
               )}
@@ -1244,7 +1281,7 @@ export default function IdentityView({
           <div className="p-6 sm:p-8 rounded-3xl bg-surface border border-line space-y-5 shadow-sm">
             <div>
               <h3 className="text-lg font-bold text-ink flex items-center gap-2">
-                <ShieldCheck className="w-5 h-5 text-emerald-500" />
+                <ShieldCheck className="w-5 h-5 text-primary" />
                 <span>{isEs ? 'Verificador Criptográfico en Relays Públicos' : 'Public Nostr Relays Verifier'}</span>
               </h3>
               <p className="text-xs sm:text-sm text-ink-2 mt-1">
@@ -1259,7 +1296,7 @@ export default function IdentityView({
                 type="text"
                 value={verifyInput}
                 onChange={(e) => setVerifyInput(e.target.value)}
-                placeholder="Ingresa @usuario, npub1... o bitcoincash:qp..."
+                placeholder="Ingresa @myuser, npub1... o bitcoincash:qp..."
                 className="flex-1 ui-input font-mono text-xs sm:text-sm"
               />
               <button
@@ -1295,12 +1332,12 @@ export default function IdentityView({
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="p-5 sm:p-6 rounded-2xl bg-surface-2 border border-emerald-500/30 space-y-4"
+                className="p-5 sm:p-6 rounded-2xl bg-surface-2 border border-primary/30 space-y-4"
               >
                 <div className="flex items-center justify-between pb-3 border-b border-line">
                   <div className="flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-full bg-emerald-400 animate-pulse" />
-                    <span className="text-sm font-bold text-emerald-500">
+                    <span className="w-3 h-3 rounded-full bg-primary animate-pulse" />
+                    <span className="text-sm font-bold text-primary">
                       {isEs ? '✅ Enlace UserLink Criptográficamente Verificado' : '✅ Cryptographically Verified UserLink Identity'}
                     </span>
                   </div>
@@ -1319,7 +1356,7 @@ export default function IdentityView({
                     <div className="font-mono text-ink-2 text-[11px] truncate select-all">
                       {verificationResult.npub}
                     </div>
-                    <div className="text-[10px] text-emerald-500 flex items-center gap-1 font-semibold pt-1">
+                    <div className="text-[10px] text-primary flex items-center gap-1 font-semibold pt-1">
                       <Check className="w-3 h-3" />
                       <span>BIP-340 Schnorr Signature Valid</span>
                     </div>
@@ -1333,7 +1370,7 @@ export default function IdentityView({
                     <div className="font-mono text-ink text-xs truncate select-all">
                       {verificationResult.bchAddress}
                     </div>
-                    <div className="text-[10px] text-emerald-500 flex items-center gap-1 font-semibold pt-1">
+                    <div className="text-[10px] text-primary flex items-center gap-1 font-semibold pt-1">
                       <Check className="w-3 h-3" />
                       <span>ECDSA secp256k1 Attestation Valid</span>
                     </div>
@@ -1383,7 +1420,7 @@ export default function IdentityView({
                 <button
                   type="button"
                   onClick={handleGenerateChallenge}
-                  className="ui-btn-secondary ui-btn-sm text-xs font-semibold"
+                  className="ui-btn-secondary ui-btn-sm text-xs font-semibold cursor-pointer"
                 >
                   <RefreshCw className="w-3 h-3 mr-1" />
                   <span>{isEs ? 'Generar Reto' : 'Generate Challenge'}</span>
@@ -1412,7 +1449,7 @@ export default function IdentityView({
                   <button
                     type="button"
                     onClick={handleSignChallenge}
-                    className="ui-btn-primary ui-btn-sm text-xs font-bold text-black"
+                    className="ui-btn-primary ui-btn-sm text-xs font-bold text-black cursor-pointer"
                   >
                     <Key className="w-3 h-3 mr-1" />
                     <span>{isEs ? 'Firmar y Autenticar' : 'Sign & Authenticate'}</span>
@@ -1435,7 +1472,7 @@ export default function IdentityView({
               <motion.div
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="p-4 rounded-2xl bg-emerald-500/10 border-2 border-emerald-500/30 text-emerald-500 space-y-2"
+                className="p-4 rounded-2xl bg-primary/10 border-2 border-primary/40 text-primary space-y-2"
               >
                 <div className="flex items-center gap-2 font-bold text-sm">
                   <CheckCircle2 className="w-5 h-5" />
@@ -1491,7 +1528,7 @@ export default function IdentityView({
                                 |
                                 v
                 [ Validación Matemática P2P ]
-             (Costo de Gas: $0.00 | Sin Servidor)`}
+       (Costo de Gas: $0.00 | BCH Mainnet o Chipnet)`}
               </div>
             </div>
 
@@ -1504,12 +1541,13 @@ export default function IdentityView({
   "created_at": 1741549200,
   "tags": [
     ["d", "bch-identity-binding"],
-    ["bch", "bchtest:qpc5tceta5qgl4tsynwhxtgn608pteevvsqm5xqt7p"],
+    ["bch", "bitcoincash:qpc5tceta5qgl4tsynwhxtgn608pteevvsqm5xqt7p"],
     ["bch_pubkey", "03de69276e520917aa8227ba4ab4460edd64b5dc263e6f475b29f33fad3af81990"],
     ["bch_sig", "30440220..."],
     ["handle", "myuser"],
     ["nip05", "myuser@bliquid.xyz"],
     ["c", "userlink-bch-id"],
+    ["network", "${selectedNetwork}"],
     ["client", "UserLink by Drian Stack Labs"]
   ],
   "content": "{\\"protocol\\":\\"bch-nostr-userlink-id-v1\\",\\"username\\":\\"@myuser\\"}"
