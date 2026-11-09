@@ -177,7 +177,7 @@ export default function WhitepaperView({
         <div className="pt-3 border-t border-line flex flex-wrap items-center justify-between gap-3 text-xs text-ink-3">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
             <span>
-              <strong className="text-ink-2 font-semibold">{isEs ? 'Autoría:' : 'Authorship:'}</strong> BinaryLiquid Protocol Engineering
+              <strong className="text-ink-2 font-semibold">{isEs ? 'Autoría:' : 'Authorship:'}</strong> Drian Stack Labs (Adrian • @drianops)
             </span>
             <span>
               <strong className="text-ink-2 font-semibold">{isEs ? 'Ecosistema:' : 'Ecosystem:'}</strong> Bitcoin Cash (CashTokens) ⟷ Polygon EVM

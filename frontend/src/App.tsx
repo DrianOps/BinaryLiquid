@@ -1413,7 +1413,7 @@ export default function App() {
                 <div className="flex items-center justify-between text-[11px] text-ink-3 px-1 pt-1">
                   <a href="https://bchblaze.cash" target="_blank" rel="noreferrer" className="hover:text-ink transition-colors">BLAZE</a>
                   <a href="https://paryonusd.com" target="_blank" rel="noreferrer" className="hover:text-ink transition-colors">ParyonUSD</a>
-                  <a href="https://t.me/drianops" target="_blank" rel="noreferrer" className="hover:text-primary transition-colors font-medium">@drianops</a>
+                  <a href="https://t.me/drianops" target="_blank" rel="noreferrer" className="hover:text-primary transition-colors font-medium">Drian Stack Labs</a>
                   <a href={PLATFORM_NETWORKS[platformNetwork].explorerBch} target="_blank" rel="noreferrer" className="hover:text-ink transition-colors">Explorer</a>
                 </div>
               </div>

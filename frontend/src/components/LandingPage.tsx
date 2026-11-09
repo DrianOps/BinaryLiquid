@@ -418,7 +418,7 @@ export default function LandingPage({ onLaunchApp, onOpenDocs, onOpenWhitepaper,
           <span>© 2026 BinaryLiquid</span>
           <span>•</span>
           <a href="https://t.me/drianops" target="_blank" rel="noreferrer" className="hover:text-primary transition-colors font-medium text-ink-2">
-            Dev: @drianops
+            Built by Drian Stack Labs (@drianops)
           </a>
         </div>
         <div className="flex flex-wrap items-center gap-5">
@@ -438,7 +438,7 @@ export default function LandingPage({ onLaunchApp, onOpenDocs, onOpenWhitepaper,
             ParyonUSD
           </a>
           <a href="https://t.me/drianops" target="_blank" rel="noreferrer" className="hover:text-primary transition-colors font-semibold text-primary">
-            Telegram (@drianops)
+            Drian Stack Labs (@drianops)
           </a>
           <a href="https://t.me/bchblaze" target="_blank" rel="noreferrer" className="hover:text-ink transition-colors">
             BCH Blaze TG

@@ -19,7 +19,7 @@
     "evm",
     "usdc"
   ],
-  "author": "BinaryLiquid / Adrian",
+  "author": "Drian Stack Labs <@drianops>",
   "license": "MIT",
   "dependencies": {
     "@solana/web3.js": "^3.1.1",

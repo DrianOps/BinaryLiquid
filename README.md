@@ -1,12 +1,13 @@
 # 🌊 BinaryLiquid Protocol
 ### Next-Gen Non-Custodial Cross-Chain Stablecoin Bridge & AMM Factory for Bitcoin Cash CashTokens
 
-[![BCH Blaze Hackathon](https://img.shields.io/badge/BCH%20BLAZE-Hackathon%20Track%20%24750%20PUSD-00b894.svg)](https://bsprotocol.xyz)
-[![Live Demo](https://img.shields.io/badge/Live%20Demo-bsprotocol.xyz-0984e3.svg)](https://bsprotocol.xyz)
-[![Network](https://img.shields.io/badge/Networks-BCH%20%7C%20Polygon%20%7C%20Solana-6c5ce7.svg)](https://bsprotocol.xyz)
+[![BCH Blaze Hackathon](https://img.shields.io/badge/BCH%20BLAZE-Hackathon%20Track%20%24750%20PUSD-00b894.svg)](https://bliquid.xyz)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-bliquid.xyz-0984e3.svg)](https://bliquid.xyz)
+[![Network](https://img.shields.io/badge/Networks-BCH%20%7C%20Polygon%20%7C%20Solana-6c5ce7.svg)](https://bliquid.xyz)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-> **Live Production Deployment**: [https://bsprotocol.xyz](https://bsprotocol.xyz)  
+> **Live Production Deployment**: [https://bliquid.xyz](https://bliquid.xyz)  
+> **Engineering & Research**: **Drian Stack Labs** ([@drianops](https://t.me/drianops))  
 > **Target Track**: BLAZE BCH Hackathon — `$750 PUSD (ParyonUSD) Stablecoin Ecosystem`  
 > **Smart Contract Security Audit**: [`SECURITY_AUDIT.md`](./SECURITY_AUDIT.md) | [`contracts/README.md`](./contracts/README.md)
 
@@ -180,10 +181,10 @@ npm run build
 
 ## 🛡️ Security & Non-Custodial Principles
 
-1. **No Co-Mingled Funds**: BIP-44 isolated derivation paths prevent race conditions, replay attacks, and UTXO contention.
-2. **Cold Storage Protection**: Hot wallets maintain only operational liquidity; surplus is automatically swept to multi-signature cold storage.
+1. **Zero-Custody Covenants**: User deposits are locked inside CashScript P2SH32 smart contracts with an immutable, unilateral 24-hour timelock refund mechanism.
+2. **Attestation-Only Watchman**: The Sentinel relayer holds zero user funds; it only signs cryptographic proofs confirming origin deposits.
 3. **Anti-Rug Pool Lock**: In Bootstrapping mode, the contract logic enforces permanent locking of initial LP shares, eliminating the risk of sudden liquidity drain while rewarding creators with perpetual swap fee revenue.
-4. **Environment Isolation**: Production private keys and seed phrases are stored exclusively in secure server keystores and never exposed to public repositories or client builds.
+4. **Environment Isolation**: Operational relayer keys are stored exclusively in secure server keystores and never exposed to public repositories or client builds.
 
 ---
 
@@ -191,9 +192,18 @@ npm run build
 
 - **Category**: Stablecoin Track — `$750 PUSD (ParyonUSD) Prize Pool`
 - **Impact**: Provides instant cross-chain liquidity and accessibility for `PUSD` and `MUSD`, enabling seamless swaps between Bitcoin Cash CashTokens and multi-billion-dollar EVM stablecoin liquidity.
-- **Production URL**: [https://bsprotocol.xyz](https://bsprotocol.xyz)
+- **Production URL**: [https://bliquid.xyz](https://bliquid.xyz)
+
+---
+
+## 👥 Engineering & Authorship
+
+Developed with ⚡ by **Drian Stack Labs**  
+- **Lead Architect**: Adrian ([@drianops](https://t.me/drianops))  
+- **Telegram Contact**: [@drianops](https://t.me/drianops)  
+- **Live dApp**: [https://bliquid.xyz](https://bliquid.xyz)  
 
 ---
 
 ## 📄 License
-This project is open-source under the [MIT License](LICENSE).
+Copyright © 2026 **Drian Stack Labs**. Open-source under the [MIT License](LICENSE).

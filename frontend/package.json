@@ -2,6 +2,7 @@
   "name": "binaryliquid-frontend",
   "private": true,
   "version": "0.0.0",
+  "author": "Drian Stack Labs <@drianops>",
   "type": "module",
   "scripts": {
     "dev": "vite",
