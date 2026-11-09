@@ -1199,19 +1199,6 @@ export default function App() {
             </button>
 
             <button 
-              onClick={() => setMainView('identity')} 
-              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
-                mainView === 'identity' 
-                  ? 'bg-surface-2 text-ink font-bold shadow-2xs' 
-                  : 'text-ink-3 hover:text-ink hover:bg-surface-2/60 font-medium'
-              }`}
-            >
-              <Fingerprint className="w-3.5 h-3.5 text-primary" />
-              <span>{t.navIdentity}</span>
-              <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-primary/10 text-primary font-bold">Bounty</span>
-            </button>
-
-            <button 
               onClick={() => setMainView('docs')} 
               className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
                 mainView === 'docs' 
@@ -1226,6 +1213,23 @@ export default function App() {
         
         {/* RIGHT CONTROLS (Responsive) */}
         <div className="flex items-center gap-2 sm:gap-2.5">
+          {/* SovereignLink Identity Pill (Placed next to Chipnet button) */}
+          <button
+            onClick={() => setMainView('identity')}
+            className={`hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all cursor-pointer shadow-2xs ${
+              mainView === 'identity'
+                ? 'bg-primary/10 border-primary/40 text-primary font-bold'
+                : 'bg-surface hover:bg-surface-2 border-line text-ink-2 hover:text-ink'
+            }`}
+            title={lang === 'es' ? 'SovereignLink: Identidad BCH ↔ Nostr (Bounty Paytaca $500 PUSD)' : 'SovereignLink: BCH ↔ Nostr Identity (Paytaca $500 PUSD Bounty)'}
+          >
+            <Fingerprint className="w-3.5 h-3.5 text-primary" />
+            <span>{t.navIdentity}</span>
+            <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-primary/20 text-primary font-bold">
+              $500
+            </span>
+          </button>
+
           {/* Network Switcher Pill (Desktop/Tablet: hidden on mobile to avoid navbar crowding) */}
           <button
             onClick={() => {
@@ -1271,9 +1275,13 @@ export default function App() {
               className="bg-surface hover:bg-surface-2 text-ink px-2.5 sm:px-3.5 py-1.5 rounded-full font-semibold text-xs transition-all border border-line shadow-2xs flex items-center gap-1.5 sm:gap-2 hover:border-line-strong cursor-pointer shrink-0"
             >
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              <span className="font-mono text-xs">
-                {bchWallet && evmWallet
-                  ? `BCH + EVM (${formatAddress(evmWallet.address)})`
+              <span className="font-semibold text-xs flex items-center gap-1">
+                {(bchWallet && evmWallet) || (userContext?.bchAddress && userContext?.evmAddress)
+                  ? 'BCH ⇄ EVM'
+                  : bchWallet?.address
+                  ? `BCH (${formatAddress(bchWallet.address)})`
+                  : evmWallet
+                  ? `EVM (${formatAddress(evmWallet.address)})`
                   : userContext.address
                   ? formatAddress(userContext.address)
                   : 'Connected'}
