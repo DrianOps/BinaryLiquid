@@ -7,7 +7,10 @@ import {
   Wallet, 
   Check, 
   CheckCircle2, 
-  Loader2 
+  Loader2,
+  X,
+  ExternalLink,
+  Sparkles
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -40,6 +43,13 @@ const LANDING_TEXTS = {
     settlementTimeVal: '~2.8 seconds',
     securityLabel: 'Security:',
     securityVal: 'Covenant CashScript P2SH32',
+    promoModal: {
+      badge: 'Official Hackathon Selection',
+      title: 'BinaryLiquid @ BCH BLAZE 2026',
+      desc: 'BinaryLiquid has been entered into the global Bitcoin Cash hackathon on DoraHacks. Explore our non-custodial bridge and vote for innovation on BCH!',
+      acceptBtn: 'Accept & Visit Hackathon',
+      dismissBtn: 'Continue to dApp',
+    },
     features: [
       {
         icon: ShieldCheck,
@@ -79,6 +89,13 @@ const LANDING_TEXTS = {
     settlementTimeVal: '~2.8 segundos',
     securityLabel: 'Seguridad:',
     securityVal: 'Covenant CashScript P2SH32',
+    promoModal: {
+      badge: 'Selección Oficial Hackathon',
+      title: 'BinaryLiquid @ BCH BLAZE 2026',
+      desc: 'BinaryLiquid participa en el hackathon global de Bitcoin Cash en DoraHacks. ¡Descubre nuestro puente sin custodia y apoya la innovación en BCH!',
+      acceptBtn: 'Aceptar y Visitar Hackathon',
+      dismissBtn: 'Continuar a la app',
+    },
     features: [
       {
         icon: ShieldCheck,
@@ -364,6 +381,38 @@ function AnimatedSwapPreview({ onLaunchApp, lang = 'en' }: { onLaunchApp: () => 
 
 export default function LandingPage({ onLaunchApp, onOpenDocs, onOpenWhitepaper, lang = 'en' }: LandingPageProps) {
   const t = LANDING_TEXTS[lang === 'es' ? 'es' : 'en'];
+  const [showPromoModal, setShowPromoModal] = useState<boolean>(false);
+
+  useEffect(() => {
+    try {
+      const isDismissed = localStorage.getItem('bliq_blaze_banner_dismissed') === 'true';
+      const forceShow = typeof window !== 'undefined' && (
+        window.location.search.includes('promo=1') ||
+        window.location.search.includes('banner=1')
+      );
+      if (!isDismissed || forceShow) {
+        const timer = setTimeout(() => setShowPromoModal(true), 400);
+        return () => clearTimeout(timer);
+      }
+    } catch {
+      setShowPromoModal(true);
+    }
+  }, []);
+
+  const handleAcceptPromo = () => {
+    try {
+      localStorage.setItem('bliq_blaze_banner_dismissed', 'true');
+    } catch {}
+    setShowPromoModal(false);
+    window.open('https://dorahacks.io/hackathon/bchblaze2026/detail', '_blank', 'noopener,noreferrer');
+  };
+
+  const handleDismissPromo = () => {
+    try {
+      localStorage.setItem('bliq_blaze_banner_dismissed', 'true');
+    } catch {}
+    setShowPromoModal(false);
+  };
 
   return (
     <div className="w-full flex flex-col flex-1 text-ink pb-28 md:pb-12 overflow-x-hidden">
@@ -445,6 +494,81 @@ export default function LandingPage({ onLaunchApp, onOpenDocs, onOpenWhitepaper,
           </a>
         </div>
       </footer>
+
+      {/* PROMOTIONAL HACKATHON MODAL */}
+      <AnimatePresence>
+        {showPromoModal && (
+          <div 
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md transition-opacity"
+            onClick={handleDismissPromo}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.92, y: 16 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.92, y: 16 }}
+              transition={{ type: 'spring', damping: 26, stiffness: 340 }}
+              onClick={(e) => e.stopPropagation()}
+              className="relative w-full max-w-lg bg-surface border border-line rounded-card shadow-2xl overflow-hidden flex flex-col"
+            >
+              {/* Top Close Button */}
+              <button
+                type="button"
+                onClick={handleDismissPromo}
+                className="absolute top-3 right-3 z-20 w-8 h-8 rounded-full bg-black/60 hover:bg-black/90 text-white flex items-center justify-center transition-colors cursor-pointer border border-white/10"
+                title="Cerrar / Close"
+              >
+                <X className="w-4 h-4" />
+              </button>
+
+              {/* Banner Image with Badge */}
+              <div className="relative w-full overflow-hidden bg-black flex items-center justify-center border-b border-line group">
+                <img
+                  src="/binaryliquid_.jpeg"
+                  alt="BinaryLiquid - BCH BLAZE 2026"
+                  className="w-full h-auto max-h-[260px] sm:max-h-[300px] object-cover"
+                />
+                <div className="absolute top-3 left-3 pointer-events-none">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/85 backdrop-blur-md border border-primary/40 text-primary text-[11px] font-bold shadow-md">
+                    <Sparkles className="w-3.5 h-3.5 text-primary" />
+                    {t.promoModal.badge}
+                  </span>
+                </div>
+              </div>
+
+              {/* Content Body */}
+              <div className="p-5 sm:p-6 space-y-4">
+                <div>
+                  <h3 className="text-xl sm:text-2xl font-bold text-ink tracking-tight flex items-center gap-2">
+                    {t.promoModal.title}
+                  </h3>
+                  <p className="mt-2 text-xs sm:text-sm text-ink-2 leading-relaxed">
+                    {t.promoModal.desc}
+                  </p>
+                </div>
+
+                {/* Actions */}
+                <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                  <button
+                    type="button"
+                    onClick={handleAcceptPromo}
+                    className="flex-1 ui-btn-primary ui-btn-lg text-sm font-bold flex items-center justify-center gap-2 shadow-lg shadow-primary/20 hover:scale-[1.01] active:scale-[0.99] transition-all"
+                  >
+                    <span>{t.promoModal.acceptBtn}</span>
+                    <ExternalLink className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDismissPromo}
+                    className="ui-btn-secondary ui-btn-lg text-xs sm:text-sm font-semibold"
+                  >
+                    {t.promoModal.dismissBtn}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
