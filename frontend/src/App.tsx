@@ -1273,19 +1273,62 @@ export default function App() {
             <button 
               onClick={() => setShowAccountModal(true)} 
               className="bg-surface hover:bg-surface-2 text-ink px-2.5 sm:px-3.5 py-1.5 rounded-full font-semibold text-xs transition-all border border-line shadow-2xs flex items-center gap-1.5 sm:gap-2 hover:border-line-strong cursor-pointer shrink-0"
+              title={
+                ((bchWallet?.address || userContext?.bchAddress) && (evmWallet?.address || userContext?.evmAddress))
+                  ? (lang === 'es' ? 'Puente Dual Conectado: BCH ⇄ EVM' : 'Dual Bridge Connected: BCH ⇄ EVM')
+                  : (bchWallet?.address || userContext?.bchAddress)
+                  ? (lang === 'es' ? 'BCH conectado » Esperando conexión EVM' : 'BCH connected » Awaiting EVM connection')
+                  : (lang === 'es' ? 'EVM conectado « Esperando conexión BCH' : 'EVM connected « Awaiting BCH connection')
+              }
             >
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              <span className="font-semibold text-xs flex items-center gap-1">
-                {(bchWallet && evmWallet) || (userContext?.bchAddress && userContext?.evmAddress)
-                  ? 'BCH ⇄ EVM'
-                  : bchWallet?.address
-                  ? `BCH (${formatAddress(bchWallet.address)})`
-                  : evmWallet
-                  ? `EVM (${formatAddress(evmWallet.address)})`
-                  : userContext.address
-                  ? formatAddress(userContext.address)
-                  : 'Connected'}
-              </span>
+              {(() => {
+                const hasBch = Boolean(bchWallet?.address || userContext?.bchAddress);
+                const hasEvm = Boolean(evmWallet?.address || userContext?.evmAddress);
+
+                if (hasBch && hasEvm) {
+                  return (
+                    <>
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                      <span className="font-semibold text-xs flex items-center gap-1">
+                        BCH ⇄ EVM
+                      </span>
+                    </>
+                  );
+                }
+
+                if (hasBch && !hasEvm) {
+                  return (
+                    <>
+                      <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                      <span className="font-semibold text-xs flex items-center gap-1">
+                        <span>BCH</span>
+                        <span className="text-primary font-bold text-sm leading-none">»</span>
+                      </span>
+                    </>
+                  );
+                }
+
+                if (!hasBch && hasEvm) {
+                  return (
+                    <>
+                      <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                      <span className="font-semibold text-xs flex items-center gap-1">
+                        <span className="text-primary font-bold text-sm leading-none">«</span>
+                        <span>EVM</span>
+                      </span>
+                    </>
+                  );
+                }
+
+                return (
+                  <>
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="font-semibold text-xs">
+                      {userContext?.address ? formatAddress(userContext.address) : 'Connected'}
+                    </span>
+                  </>
+                );
+              })()}
             </button>
           ) : (
             <button 
