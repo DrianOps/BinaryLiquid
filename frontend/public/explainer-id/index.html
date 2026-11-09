@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>SovereignLink | Decentralized Identity for Bitcoin Cash & Nostr — BCH BLAZE 2026</title>
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="shortcut icon" type="image/png" href="/favicon.png">
+    <meta name="theme-color" content="#F7931A">
+    <meta name="description" content="SovereignLink — Self-sovereign decentralized identity linking Bitcoin Cash and Nostr (NIP-39). Built for BCH BLAZE 2026. Powered by Paytaca.">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+        body {
+            background-color: #05070B;
+            color: #FFFFFF;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            min-height: 100vh;
+            padding: 12px;
+            overflow-x: hidden;
+        }
+
+        .player-wrapper {
+            width: 100%;
+            max-width: 1280px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin: auto 0;
+        }
+
+        /* YouTube-style 16:9 responsive stage */
+        #stage-container {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            box-shadow: 0 16px 50px rgba(0,0,0,0.85), 0 0 35px rgba(247, 147, 26, 0.2);
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid rgba(247, 147, 26, 0.25);
+            background: #080B11;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        /* Progress Bar (YouTube Style) */
+        #progress-bar-container {
+            width: 100%;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            overflow: hidden;
+            cursor: pointer;
+            margin-top: 4px;
+        }
+        #progress-bar {
+            height: 100%;
+            width: 0%;
+            background: #F7931A;
+            box-shadow: 0 0 8px #F7931A;
+            transition: width 0.1s linear;
+        }
+
+        /* Video Info Header below video */
+        .video-info {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .video-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #FFFFFF;
+            line-height: 1.3;
+        }
+        .video-meta {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 8px;
+            font-size: 13px;
+            color: #94A3B8;
+        }
+        .channel-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+            color: #FFFFFF;
+        }
+        .channel-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #F7931A;
+            box-shadow: 0 0 8px #F7931A;
+        }
+
+        /* Controls Toolbar */
+        .controls-toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            background: rgba(15, 23, 42, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            padding: 10px 14px;
+        }
+
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            background: #F7931A;
+            color: #05070B;
+            border: none;
+            padding: 8px 16px;
+            font-weight: 700;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+            user-select: none;
+        }
+        button:hover { background: #E07D08; }
+        button:active { transform: scale(0.97); }
+
+        .btn-outline {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: #FFFFFF;
+        }
+        .btn-outline:hover { background: rgba(255, 255, 255, 0.12); }
+
+        .lang-switch {
+            display: flex;
+            gap: 4px;
+            background: rgba(0, 0, 0, 0.4);
+            padding: 3px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .btn-lang {
+            background: transparent;
+            color: #94A3B8;
+            padding: 5px 12px;
+            font-size: 13px;
+            border-radius: 6px;
+        }
+        .btn-lang.active {
+            background: #F7931A;
+            color: #05070B;
+            font-weight: 700;
+        }
+
+        /* Scene indicator pills for mobile scrolling */
+        .scene-pills {
+            display: flex;
+            gap: 6px;
+            overflow-x: auto;
+            padding: 4px 0;
+            scrollbar-width: none;
+        }
+        .scene-pills::-webkit-scrollbar { display: none; }
+        .scene-pill {
+            flex-shrink: 0;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #94A3B8;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 6px 12px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .scene-pill.active {
+            background: rgba(247, 147, 26, 0.2);
+            border-color: #F7931A;
+            color: #F7931A;
+        }
+
+        /* Action bar below */
+        .bottom-actions {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 10px;
+            padding: 10px 4px;
+            font-size: 12px;
+            color: #94A3B8;
+        }
+        .action-link {
+            color: #F7931A;
+            text-decoration: none;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            transition: opacity 0.2s;
+        }
+        .action-link:hover { opacity: 0.8; }
+
+        @media (max-width: 768px) {
+            body { padding: 6px; }
+            .video-title { font-size: 15px; }
+            .controls-toolbar { padding: 8px 10px; }
+            button { padding: 7px 12px; font-size: 13px; }
+            .btn-lang { padding: 5px 8px; font-size: 12px; }
+            #stage-container { border-radius: 8px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="player-wrapper">
+        <!-- Responsive 16:9 Stage -->
+        <div id="stage-container">
+            <canvas id="stage" width="1920" height="1080"></canvas>
+        </div>
+
+        <!-- Progress Bar -->
+        <div id="progress-bar-container">
+            <div id="progress-bar"></div>
+        </div>
+
+        <!-- Video Info Header -->
+        <div class="video-info">
+            <div class="video-title" id="video-title">Scene 1: The Centralized Identity Trap</div>
+            <div class="video-meta">
+                <div class="channel-badge">
+                    <span class="channel-dot"></span>
+                    <span>SovereignLink • Powered by Paytaca • BCH BLAZE 2026</span>
+                </div>
+                <div id="time-display">0:00 / 0:16</div>
+            </div>
+        </div>
+
+        <!-- Toolbar Controls -->
+        <div class="controls-toolbar">
+            <div class="control-group">
+                <button id="btn-play">▶ Play</button>
+                <button id="btn-prev" class="btn-outline">◀</button>
+                <button id="btn-next" class="btn-outline">▶</button>
+            </div>
+
+            <div class="control-group">
+                <div class="lang-switch">
+                    <button id="btn-lang-en" class="btn-lang active">🇺🇸 EN</button>
+                    <button id="btn-lang-es" class="btn-lang">🇪🇸 ES</button>
+                </div>
+                <button id="btn-fullscreen" class="btn-outline" title="Fullscreen">⛶</button>
+            </div>
+        </div>
+
+        <!-- Chapter Pill Badges -->
+        <div class="scene-pills" id="scene-pills">
+            <!-- Populated dynamically by studio.js -->
+        </div>
+
+        <!-- Bottom Links -->
+        <div class="bottom-actions">
+            <div>
+                Built by <strong style="color: #FFFFFF;">Drian Stack Labs</strong> (@drianops)
+            </div>
+            <div style="display: flex; gap: 16px; align-items: center;">
+                <a href="/identity" class="action-link">🚀 Launch SovereignLink dApp ➜</a>
+                <a href="https://www.paytaca.com" target="_blank" rel="noreferrer" class="action-link">📲 Download Paytaca Wallet ➜</a>
+            </div>
+        </div>
+    </div>
+
+    <script src="studio.js"></script>
+</body>
+</html>
