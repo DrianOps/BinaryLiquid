@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import { 
   Wallet, 
   TrendingUp, 
@@ -40,14 +40,14 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import BridgeSwap from './components/BridgeSwap';
 import LandingPage from './components/LandingPage';
-import PoolsView from './components/PoolsView';
-import SdkView from './components/SdkView';
-import LendingView from './components/LendingView';
-import DocsView from './components/DocsView';
-import WhitepaperView from './components/WhitepaperView';
-import PerpsView from './components/PerpsView';
-import PortfolioView from './components/PortfolioView';
-import IdentityView from './components/IdentityView';
+const PoolsView = lazy(() => import('./components/PoolsView'));
+const SdkView = lazy(() => import('./components/SdkView'));
+const LendingView = lazy(() => import('./components/LendingView'));
+const DocsView = lazy(() => import('./components/DocsView'));
+const WhitepaperView = lazy(() => import('./components/WhitepaperView'));
+const PerpsView = lazy(() => import('./components/PerpsView'));
+const PortfolioView = lazy(() => import('./components/PortfolioView'));
+const IdentityView = lazy(() => import('./components/IdentityView'));
 import { useWizardConnect, AlphanumericQRCode } from '@wizardconnect/react';
 import {
   deriveCashAddressFromXpub,
@@ -1645,8 +1645,15 @@ export default function App() {
         </div>
       )}
 
-      {/* DOCUMENTATION VIEW */}
-      {mainView === 'docs' && (
+      {/* LAZY LOADED SUB-VIEWS WRAPPER */}
+      <Suspense fallback={
+        <div className="flex-1 flex flex-col items-center justify-center min-h-[50vh] space-y-3">
+          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+          <span className="text-xs font-bold text-ink-3">{lang === 'es' ? 'Cargando módulo...' : 'Loading module...'}</span>
+        </div>
+      }>
+        {/* DOCUMENTATION VIEW */}
+        {mainView === 'docs' && (
         <main className="flex-1 p-4 sm:p-6 max-w-[1240px] w-full mx-auto animate-in fade-in zoom-in duration-300 pb-28 md:pb-12 text-left">
           <DocsView 
             lang={lang}
@@ -1812,6 +1819,7 @@ export default function App() {
           />
         </main>
       )}
+      </Suspense>
 
       {/* NON-CUSTODIAL DUAL-CHAIN ACCOUNT MODAL */}
       <AnimatePresence>

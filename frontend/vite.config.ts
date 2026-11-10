@@ -11,9 +11,11 @@ export default defineConfig({
     target: 'esnext',
     rollupOptions: {
       output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom', 'lucide-react', 'lightweight-charts'],
-          wizard: ['@wizardconnect/react', '@wizardconnect/core', '@wizardconnect/dapp']
+        manualChunks(id) {
+          if (id.includes('node_modules/lucide-react')) return 'icons';
+          if (id.includes('node_modules/lightweight-charts')) return 'charts';
+          if (id.includes('node_modules/@wizardconnect')) return 'wizard';
+          if (id.includes('node_modules/nostr-tools') || id.includes('node_modules/@noble')) return 'nostr';
         }
       }
     }
