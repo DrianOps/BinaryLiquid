@@ -261,7 +261,12 @@ export default function App() {
     return 'testnet';
   });
 
+  const isFirstNetworkMount = useRef(true);
   useEffect(() => {
+    if (isFirstNetworkMount.current) {
+      isFirstNetworkMount.current = false;
+      return;
+    }
     if (typeof window !== 'undefined') {
       localStorage.setItem('bliq_network', platformNetwork);
     }
@@ -272,11 +277,14 @@ export default function App() {
     if (typeof window === 'undefined' || isEmbed) return;
     const nextPath = mainView === 'gateway' ? '/' : `/${mainView}`;
     
-    // Clean up any legacy hash and push clean path
-    if (window.location.pathname !== nextPath || window.location.hash) {
+    // Only update history if there is an actual legacy hash or the path changed
+    if (window.location.hash) {
+      window.history.replaceState(null, '', nextPath);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else if (window.location.pathname !== nextPath) {
       window.history.pushState(null, '', nextPath);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [mainView, isEmbed]);
 
   // Handle browser Back / Forward buttons seamlessly
@@ -309,7 +317,12 @@ export default function App() {
   }, [brandMenuOpen]);
 
   // Dynamic navbar scroll listener
+  const isFirstLangMount = useRef(true);
   useEffect(() => {
+    if (isFirstLangMount.current) {
+      isFirstLangMount.current = false;
+      return;
+    }
     if (typeof window !== 'undefined') {
       localStorage.setItem('bliq_lang', lang);
     }
@@ -324,18 +337,22 @@ export default function App() {
   }, []);
 
   // Dark mode effect
+  const isFirstThemeMount = useRef(true);
   useEffect(() => {
     if (darkMode) {
       document.documentElement.classList.add('dark');
       document.documentElement.style.backgroundColor = '#080B11';
       document.body.style.backgroundColor = '#080B11';
-      localStorage.setItem('bliq_theme', 'dark');
     } else {
       document.documentElement.classList.remove('dark');
       document.documentElement.style.backgroundColor = '#FAFAF9';
       document.body.style.backgroundColor = '#FAFAF9';
-      localStorage.setItem('bliq_theme', 'light');
     }
+    if (isFirstThemeMount.current) {
+      isFirstThemeMount.current = false;
+      return;
+    }
+    localStorage.setItem('bliq_theme', darkMode ? 'dark' : 'light');
   }, [darkMode]);
 
   const [userContext, setUserContext] = useState<any>(() => {
@@ -486,12 +503,23 @@ export default function App() {
   };
 
   // Persist dual-chain wallet state & synchronize userContext seamlessly
+  const isFirstWalletMount = useRef(true);
   useEffect(() => {
-    localStorage.setItem('bliq_wallets_v2', JSON.stringify({ bchWallet, evmWallet }));
+    if (isFirstWalletMount.current) {
+      isFirstWalletMount.current = false;
+      if (!bchWallet && !evmWallet) {
+        return;
+      }
+    }
+    if (bchWallet || evmWallet) {
+      localStorage.setItem('bliq_wallets_v2', JSON.stringify({ bchWallet, evmWallet }));
+    }
     const primaryAddr = bchWallet?.tokenAddress || evmWallet?.address || '';
     if (!primaryAddr) {
       setUserContext(null);
-      localStorage.removeItem('bliq_user');
+      if (typeof window !== 'undefined' && localStorage.getItem('bliq_user')) {
+        localStorage.removeItem('bliq_user');
+      }
       return;
     }
     const nextCtx = {
