@@ -431,11 +431,21 @@ export default function LandingPage({ onLaunchApp, onOpenDocs, onOpenWhitepaper,
         </p>
 
         <div className="mt-8 flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3">
-          <button type="button" onClick={onLaunchApp} className="ui-btn-primary ui-btn-lg px-6">
+          <button 
+            type="button" 
+            onMouseEnter={() => import('./BridgeSwap')}
+            onClick={onLaunchApp} 
+            className="ui-btn-primary ui-btn-lg px-6 cursor-pointer"
+          >
             <span>{t.launchBtn}</span>
             <ArrowRight className="w-4 h-4" />
           </button>
-          <button type="button" onClick={onOpenDocs} className="ui-btn-secondary ui-btn-lg px-6">
+          <button 
+            type="button" 
+            onMouseEnter={() => import('./DocsView')}
+            onClick={onOpenDocs} 
+            className="ui-btn-secondary ui-btn-lg px-6 cursor-pointer"
+          >
             {t.docsBtn}
           </button>
         </div>

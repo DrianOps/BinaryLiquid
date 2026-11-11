@@ -38,7 +38,7 @@ import {
   Fingerprint
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import BridgeSwap from './components/BridgeSwap';
+const BridgeSwap = lazy(() => import('./components/BridgeSwap'));
 import LandingPage from './components/LandingPage';
 const PoolsView = lazy(() => import('./components/PoolsView'));
 const SdkView = lazy(() => import('./components/SdkView'));
@@ -48,6 +48,25 @@ const WhitepaperView = lazy(() => import('./components/WhitepaperView'));
 const PerpsView = lazy(() => import('./components/PerpsView'));
 const PortfolioView = lazy(() => import('./components/PortfolioView'));
 const IdentityView = lazy(() => import('./components/IdentityView'));
+
+// Intelligent Lazy-Preloader map
+const preloadMap: Record<string, () => Promise<any>> = {
+  bridge: () => import('./components/BridgeSwap'),
+  pools: () => import('./components/PoolsView'),
+  lend: () => import('./components/LendingView'),
+  perps: () => import('./components/PerpsView'),
+  portfolio: () => import('./components/PortfolioView'),
+  identity: () => import('./components/IdentityView'),
+  docs: () => import('./components/DocsView'),
+  whitepaper: () => import('./components/WhitepaperView'),
+  sdk: () => import('./components/SdkView'),
+};
+
+const preloadView = (view: string) => {
+  try {
+    preloadMap[view]?.();
+  } catch {}
+};
 import { useWizardConnect, AlphanumericQRCode } from '@wizardconnect/react';
 import {
   deriveCashAddressFromXpub,
@@ -334,6 +353,16 @@ export default function App() {
     };
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // Idle Preload: Silently fetch core modules while user views LandingPage
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      preloadView('bridge');
+      preloadView('pools');
+      preloadView('docs');
+    }, 1200);
+    return () => clearTimeout(timer);
   }, []);
 
   // Dark mode effect
@@ -1096,6 +1125,7 @@ export default function App() {
                       <button
                         key={item.id}
                         type="button"
+                        onMouseEnter={() => preloadView(item.id)}
                         onClick={() => {
                           setMainView(item.id as any);
                           setBrandMenuOpen(false);
@@ -1167,6 +1197,7 @@ export default function App() {
           {/* DESKTOP NAVIGATION TABS (Left-aligned next to logo, clean & borderless) */}
           <div className="hidden md:flex items-center gap-0.5 lg:gap-1 text-xs font-semibold ml-1 sm:ml-2">
             <button 
+              onMouseEnter={() => preloadView('bridge')}
               onClick={() => setMainView('bridge')} 
               className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
                 mainView === 'bridge' 
@@ -1178,6 +1209,7 @@ export default function App() {
             </button>
 
             <button 
+              onMouseEnter={() => preloadView('perps')}
               onClick={() => setMainView('perps')} 
               className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
                 mainView === 'perps' 
@@ -1189,6 +1221,7 @@ export default function App() {
             </button>
 
             <button 
+              onMouseEnter={() => preloadView('pools')}
               onClick={() => setMainView('pools')} 
               className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
                 mainView === 'pools' 
@@ -1200,6 +1233,7 @@ export default function App() {
             </button>
 
             <button 
+              onMouseEnter={() => preloadView('lend')}
               onClick={() => setMainView('lend')} 
               className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
                 mainView === 'lend' 
@@ -1211,6 +1245,7 @@ export default function App() {
             </button>
 
             <button 
+              onMouseEnter={() => preloadView('portfolio')}
               onClick={() => setMainView('portfolio')} 
               className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
                 mainView === 'portfolio' 
@@ -1227,6 +1262,7 @@ export default function App() {
         <div className="flex items-center gap-2 sm:gap-2.5">
           {/* UserLink Identity Pill (Placed next to Chipnet button) */}
           <button
+            onMouseEnter={() => preloadView('identity')}
             onClick={() => setMainView('identity')}
             className={`hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all cursor-pointer shadow-2xs ${
               mainView === 'identity'
@@ -1675,9 +1711,11 @@ export default function App() {
 
       {/* LAZY LOADED SUB-VIEWS WRAPPER */}
       <Suspense fallback={
-        <div className="flex-1 flex flex-col items-center justify-center min-h-[50vh] space-y-3">
-          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
-          <span className="text-xs font-bold text-ink-3">{lang === 'es' ? 'Cargando módulo...' : 'Loading module...'}</span>
+        <div className="flex-1 flex flex-col items-center justify-center min-h-[55vh] w-full">
+          <div className="heartbeat-wrapper scale-90">
+            <div className="heartbeat-glow"></div>
+            <div className="heartbeat-ring"></div>
+          </div>
         </div>
       }>
         {/* DOCUMENTATION VIEW */}

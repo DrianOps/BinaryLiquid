@@ -9,6 +9,7 @@ export default defineConfig({
   },
   build: {
     target: 'esnext',
+    modulePreload: false,
     rollupOptions: {
       output: {
         manualChunks(id) {
