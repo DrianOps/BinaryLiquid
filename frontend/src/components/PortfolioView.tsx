@@ -235,10 +235,51 @@ export default function PortfolioView({
   const primaryDisplayAddress = bchAddress || evmAddress || userAddress;
 
   const fetchPortfolio = async (isManual = false) => {
+    if (!isConnected || !primaryDisplayAddress) {
+      setPortfolio({
+        netWorthUsd: 0,
+        breakdown: {
+          walletTokensUsd: 0,
+          lpTotalValueUsd: 0,
+          lendingCollateralUsd: 0,
+          lendingSuppliedUsd: 0,
+          lendingDebtUsd: 0,
+          perpsMarginLockedUsd: 0,
+          perpsUnrealizedPnlUsd: 0
+        },
+        performance: {
+          unrealizedPnlUsd: 0,
+          realizedPnlUsd: 0,
+          totalYieldEarnedUsd: 0,
+          totalReturnUsd: 0
+        },
+        tokens: [
+          { symbol: 'PUSD', name: 'Paryon USD', chain: platformNetwork === 'testnet' ? 'BCH Chipnet' : 'Bitcoin Cash', chainType: 'BCH', balance: 0, priceUsd: 1.0, valueUsd: 0, change24h: 0, icon: '/PUSD.png', isCashToken: true },
+          { symbol: 'BCH', name: 'Bitcoin Cash', chain: platformNetwork === 'testnet' ? 'BCH Chipnet' : 'Bitcoin Cash', chainType: 'BCH', balance: 0, priceUsd: 230.5, valueUsd: 0, change24h: 1.85, icon: '/BCH.png', isNative: true },
+          { symbol: 'USDT', name: 'Tether USD', chain: platformNetwork === 'testnet' ? 'Polygon Amoy' : 'Polygon PoS', chainType: 'EVM', balance: 0, priceUsd: 1.0, valueUsd: 0, change24h: 0.01, icon: '/USDT.png' },
+          { symbol: 'USDC', name: 'USD Coin', chain: platformNetwork === 'testnet' ? 'Polygon Amoy' : 'Polygon PoS', chainType: 'EVM', balance: 0, priceUsd: 1.0, valueUsd: 0, change24h: 0, icon: '/USDC.png' },
+          { symbol: 'POL', name: 'Polygon Ecosystem Token', chain: platformNetwork === 'testnet' ? 'Polygon Amoy' : 'Polygon PoS', chainType: 'EVM', balance: 0, priceUsd: 0.09, valueUsd: 0, change24h: -0.45, icon: '/POL.png', isNative: true }
+        ],
+        pools: [],
+        lending: null,
+        perps: { positions: [], history: [] },
+        activity: [],
+        chart: {
+          '1h': [{ time: '00:00', value: 0 }, { time: '12:00', value: 0 }],
+          '1d': [{ time: '00:00', value: 0 }, { time: '12:00', value: 0 }],
+          '1w': [{ time: 'Mon', value: 0 }, { time: 'Sun', value: 0 }],
+          '1m': [{ time: 'W1', value: 0 }, { time: 'W4', value: 0 }],
+          '1y': [{ time: 'Jan', value: 0 }, { time: 'Dec', value: 0 }],
+          'all': [{ time: 'Start', value: 0 }, { time: 'Now', value: 0 }]
+        }
+      });
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
+
     if (isManual) setRefreshing(true);
     else setLoading(true);
-
-    const targetAddr = primaryDisplayAddress || '0x0000000000000000000000000000000000000000';
 
     try {
       const q = new URLSearchParams({
@@ -246,7 +287,7 @@ export default function PortfolioView({
         ...(bchAddress ? { bchAddress } : {}),
         ...(evmAddress ? { evmAddress } : {})
       });
-      const res = await fetch(`${backendUrl}/api/portfolio/${encodeURIComponent(targetAddr)}?${q.toString()}`);
+      const res = await fetch(`${backendUrl}/api/portfolio/${encodeURIComponent(primaryDisplayAddress)}?${q.toString()}`);
       const data = await res.json();
       if (data.success) {
         setPortfolio(data);

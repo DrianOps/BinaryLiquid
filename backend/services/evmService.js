@@ -400,6 +400,10 @@ class EvmService {
     }
 
     const cleanAddr = ethers.getAddress(evmAddress.trim().toLowerCase());
+    if (cleanAddr === ethers.ZeroAddress) {
+      return { POL: 0, USDT: 0, USDC: 0, network: isTestnet ? 'amoy' : 'polygon', address: cleanAddr };
+    }
+
     const provider = isTestnet ? this.amoyProvider : this.mainnetProvider;
     const tokenMap = isTestnet ? config.evm.amoyTokens : config.evm.tokens;
 

@@ -1632,9 +1632,10 @@ app.get('/api/portfolio/:address', async (req, res) => {
     const extraBch = req.query.bchAddress ? String(req.query.bchAddress) : null;
     const extraEvm = req.query.evmAddress ? String(req.query.evmAddress) : null;
 
+    const isZero = (a) => !a || a.toLowerCase() === '0x0000000000000000000000000000000000000000';
     const targetBch = extraBch || (address && !address.startsWith('0x') ? address : null);
-    const targetEvm = extraEvm || (address && address.startsWith('0x') ? address : null);
-    const primaryUser = targetBch || targetEvm || address;
+    const targetEvm = (!isZero(extraEvm) ? extraEvm : null) || (address && address.startsWith('0x') && !isZero(address) ? address : null);
+    const primaryUser = targetBch || targetEvm || null;
 
     // 1. Live Balances & Prices
     const [bchOnChain, evmOnChain, bchPrice, polPrice] = await Promise.all([

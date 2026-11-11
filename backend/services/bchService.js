@@ -588,7 +588,7 @@ class BchService {
       }
 
       let totalSats = 0n;
-      let totalPusdUnits = 0n;
+      let totalPusdFloating = 0.0;
       let totalUtxos = 0;
       const seenUtxoKeys = new Set();
 
@@ -603,7 +603,18 @@ class BchService {
 
             totalSats += BigInt(u.satoshis || 0);
             if (u.token && u.token.category === pusdCategory) {
-              totalPusdUnits += BigInt(u.token.amount || 0);
+              const rawAmt = Number(u.token.amount || 0);
+              if (isChipnet) {
+                // On Chipnet: UTXOs >= 50,000 are legacy 6-decimal units (e.g. 1,000,000 = 1 PUSD, 995,740 = 0.99574 PUSD)
+                // Clean integer tokens minted under new BCMR standard are < 50,000 units (e.g. 20, 50, 100, 500 PUSD)
+                if (rawAmt >= 50000) {
+                  totalPusdFloating += rawAmt / 1e6;
+                } else {
+                  totalPusdFloating += rawAmt;
+                }
+              } else {
+                totalPusdFloating += rawAmt / 1e6;
+              }
             }
           }
         } catch (e) {
@@ -611,17 +622,7 @@ class BchService {
         }
       }
 
-      // On Chipnet, normalize so both legacy 1e6 units and clean integer units display as solid tokens:
-      let pusdBalance = 0;
-      if (isChipnet) {
-        if (totalPusdUnits >= 1_000_000n) {
-          pusdBalance = Number(totalPusdUnits) / 1e6;
-        } else {
-          pusdBalance = Number(totalPusdUnits);
-        }
-      } else {
-        pusdBalance = Number(totalPusdUnits) / 1e6;
-      }
+      const pusdBalance = Number(totalPusdFloating.toFixed(4));
 
       return {
         BCH: Number(totalSats) / 1e8,
