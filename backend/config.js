@@ -63,7 +63,7 @@ export const config = {
     chainId: parseInt(process.env.EVM_CHAIN_ID || '137', 10),
     rpcUrl: process.env.EVM_RPC_URL || 'https://polygon-bor.publicnode.com',
     explorerUrl: process.env.EVM_EXPLORER_URL || 'https://polygonscan.com',
-    amoyRpcUrl: process.env.EVM_AMOY_RPC_URL || 'https://polygon-amoy-bor-rpc.publicnode.com',
+    amoyRpcUrl: process.env.EVM_AMOY_RPC_URL || 'https://80002.rpc.thirdweb.com',
     amoyExplorerUrl: process.env.EVM_AMOY_EXPLORER_URL || 'https://amoy.polygonscan.com',
     amoyChainId: 80002,
     watchmanPrivateKey: process.env.EVM_WATCHMAN_KEY || process.env.EVM_HOT_WALLET_KEY || '',

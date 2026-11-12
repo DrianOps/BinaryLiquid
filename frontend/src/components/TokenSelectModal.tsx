@@ -213,6 +213,8 @@ interface TokenSelectModalProps {
     USDT?: number;
     USDC?: number;
     POL?: number;
+    SOL?: number;
+    USDT_SOL?: number;
     [k: string]: number | undefined;
   };
 }
@@ -538,9 +540,21 @@ export default function TokenSelectModal({
                   // Retrieve live wallet balance if available
                   const tokenChain = token.chain || (token.isBch ? 'bch' : token.isSolana ? 'solana' : 'polygon');
                   const chainLogo = CHAIN_ICONS[tokenChain];
-                  const userBalance = walletBalances && typeof walletBalances[token.symbol] === 'number'
-                    ? walletBalances[token.symbol]
-                    : null;
+                  let userBalance: number | null = null;
+                  if (walletBalances) {
+                    if (token.isSolana || tokenChain === 'solana') {
+                      if (token.symbol === 'SOL') userBalance = typeof walletBalances.SOL === 'number' ? walletBalances.SOL : null;
+                      else if (token.symbol === 'USDT') userBalance = typeof walletBalances.USDT_SOL === 'number' ? walletBalances.USDT_SOL : null;
+                    } else if (token.isBch || tokenChain === 'bch') {
+                      if (token.symbol === 'PUSD') userBalance = typeof walletBalances.PUSD === 'number' ? walletBalances.PUSD : null;
+                      else if (token.symbol === 'BCH') userBalance = typeof walletBalances.BCH === 'number' ? walletBalances.BCH : null;
+                    } else {
+                      if (token.symbol === 'USDT') userBalance = typeof walletBalances.USDT === 'number' ? walletBalances.USDT : null;
+                      else if (token.symbol === 'USDC') userBalance = typeof walletBalances.USDC === 'number' ? walletBalances.USDC : null;
+                      else if (token.symbol === 'POL') userBalance = typeof walletBalances.POL === 'number' ? walletBalances.POL : null;
+                      else if (typeof walletBalances[token.symbol] === 'number') userBalance = walletBalances[token.symbol];
+                    }
+                  }
 
                   return (
                     <button

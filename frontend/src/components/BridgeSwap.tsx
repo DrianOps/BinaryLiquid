@@ -46,6 +46,9 @@ interface BridgeSwapProps {
     USDT: number;
     USDC: number;
     POL: number;
+    SOL?: number;
+    USDT_SOL?: number;
+    [k: string]: number | undefined;
   };
   onRefreshBalances?: () => void;
   onConnectWallet: () => void;
@@ -321,13 +324,36 @@ export default function BridgeSwap({
     : buyToken.isSolana
     ? connectedSolana
     : connectedEvm;
+  const isReceivingWalletConnected = Boolean(optionalReceiveWallet);
 
   // Live balance of the paying token
   const sellBalance = useMemo(() => {
     if (!isPayingWalletConnected || !walletBalances) return null;
+    if (sellToken.isSolana) {
+      if (sellToken.symbol.toUpperCase() === 'SOL') return walletBalances.SOL ?? 0;
+      return walletBalances.USDT_SOL ?? 0;
+    }
     const sym = sellToken.symbol.toUpperCase() as keyof typeof walletBalances;
-    return typeof walletBalances[sym] === 'number' ? walletBalances[sym] : 0;
-  }, [isPayingWalletConnected, walletBalances, sellToken.symbol]);
+    return typeof walletBalances[sym] === 'number' ? (walletBalances[sym] as number) : 0;
+  }, [isPayingWalletConnected, walletBalances, sellToken.symbol, sellToken.isSolana]);
+
+  // Live balance of the receiving token
+  const buyBalance = useMemo(() => {
+    if (!isReceivingWalletConnected || !walletBalances) return null;
+    if (buyToken.isSolana) {
+      if (buyToken.symbol.toUpperCase() === 'SOL') return walletBalances.SOL ?? 0;
+      return walletBalances.USDT_SOL ?? 0;
+    }
+    const sym = buyToken.symbol.toUpperCase() as keyof typeof walletBalances;
+    return typeof walletBalances[sym] === 'number' ? (walletBalances[sym] as number) : 0;
+  }, [isReceivingWalletConnected, walletBalances, buyToken.symbol, buyToken.isSolana]);
+
+  // Auto-fill recipient if empty and corresponding wallet is connected
+  useEffect(() => {
+    if (!recipientAddress && optionalReceiveWallet) {
+      setRecipientAddress(optionalReceiveWallet);
+    }
+  }, [optionalReceiveWallet, recipientAddress]);
 
   // Sync default faucet input with connected BCH wallet if empty
   useEffect(() => {
@@ -966,7 +992,7 @@ export default function BridgeSwap({
     if (!amount || isNaN(parsed) || parsed <= 0) {
       return { label: t.enterAmount, disabled: true, variant: 'muted' as const };
     }
-    if (!sellToken.isBch && !sellToken.isSolana && sellBalance !== null && parsed > sellBalance) {
+    if (!sellToken.isBch && sellBalance !== null && parsed > sellBalance) {
       return {
         label: lang === 'es' ? `Saldo ${sellToken.symbol} insuficiente` : `Insufficient ${sellToken.symbol}`,
         disabled: true,
@@ -1276,11 +1302,20 @@ export default function BridgeSwap({
             <div className="p-4 rounded-panel bg-surface-2 border border-transparent transition-colors">
               <div className="flex items-center justify-between text-xs text-ink-2 mb-2">
                 <span className="font-medium">{t.receive}</span>
-                {!isPairLiquid && (
-                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-500">
-                    {t.noLiquidity}
-                  </span>
-                )}
+                <div className="flex items-center gap-1.5">
+                  {!isPairLiquid ? (
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-500">
+                      {t.noLiquidity}
+                    </span>
+                  ) : isReceivingWalletConnected && buyBalance !== null ? (
+                    <span>
+                      {t.balance}:{' '}
+                      <strong className="text-ink font-semibold tabular-nums">
+                        {formatCryptoBalance(buyBalance, (buyToken.isBch && buyToken.symbol === 'BCH') || (buyToken.isSolana && buyToken.symbol === 'SOL'))}
+                      </strong>
+                    </span>
+                  ) : null}
+                </div>
               </div>
 
               <div className="flex items-center justify-between gap-3">

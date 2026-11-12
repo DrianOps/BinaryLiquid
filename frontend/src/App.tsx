@@ -144,6 +144,7 @@ const translations = {
     orManualAddress: "or paste manual address",
     connectBchNotice: "Connect BCH",
     connectEvmNotice: "Connect EVM",
+    connectSolanaNotice: "Connect Solana",
     addressUpdated: "Bitcoin Cash address updated",
     invalidAddress: "Invalid CashAddress"
   },
@@ -198,6 +199,7 @@ const translations = {
     orManualAddress: "o ingresar dirección manual",
     connectBchNotice: "Conecta BCH",
     connectEvmNotice: "Conecta EVM",
+    connectSolanaNotice: "Conecta Solana",
     addressUpdated: "Dirección de Bitcoin Cash actualizada",
     invalidAddress: "CashAddress no válida"
   }
@@ -519,7 +521,10 @@ export default function App() {
     USDT: number;
     USDC: number;
     POL: number;
-  }>({ PUSD: 0, BCH: 0, USDT: 0, USDC: 0, POL: 0 });
+    SOL?: number;
+    USDT_SOL?: number;
+    [k: string]: number | undefined;
+  }>({ PUSD: 0, BCH: 0, USDT: 0, USDC: 0, POL: 0, SOL: 0, USDT_SOL: 0 });
   const [balancesLoading, setBalancesLoading] = useState<boolean>(false);
   const [isSwitchingChain, setIsSwitchingChain] = useState<boolean>(false);
 
@@ -613,14 +618,16 @@ export default function App() {
     }
   }, [platformNetwork]);
 
-  // Fetch real live on-chain balances for connected BCH + EVM wallets
+  // Fetch real live on-chain balances for connected BCH + EVM + Solana wallets
   const refreshWalletBalances = async (
     overrideBch?: string | null,
-    overrideEvm?: string | null
+    overrideEvm?: string | null,
+    overrideSol?: string | null
   ) => {
     const targetBch = overrideBch !== undefined ? overrideBch : bchWallet?.queryAddress || bchWallet?.address || null;
     const targetEvm = overrideEvm !== undefined ? overrideEvm : evmWallet?.address || null;
-    const primary = targetBch || targetEvm;
+    const targetSol = overrideSol !== undefined ? overrideSol : solanaWallet?.address || null;
+    const primary = targetBch || targetEvm || targetSol;
     if (!primary) return;
 
     setBalancesLoading(true);
@@ -628,7 +635,8 @@ export default function App() {
       const qs = new URLSearchParams({
         network: platformNetwork,
         ...(targetBch ? { bchAddress: targetBch } : {}),
-        ...(targetEvm ? { evmAddress: targetEvm } : {})
+        ...(targetEvm ? { evmAddress: targetEvm } : {}),
+        ...(targetSol ? { solanaAddress: targetSol } : {})
       });
       const res = await fetch(`/api/wallet/balances/${encodeURIComponent(primary)}?${qs.toString()}`);
       const data = await res.json();
@@ -643,10 +651,10 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (bchWallet?.address || evmWallet?.address) {
+    if (bchWallet?.address || evmWallet?.address || solanaWallet?.address) {
       refreshWalletBalances();
     }
-  }, [bchWallet?.address, evmWallet?.address, platformNetwork, showAccountModal]);
+  }, [bchWallet?.address, evmWallet?.address, solanaWallet?.address, platformNetwork, showAccountModal]);
 
   // EVM live event callbacks (accountsChanged / chainChanged / disconnect)
   const evmEventCallbacks = {
@@ -2343,7 +2351,7 @@ export default function App() {
                   <div className="p-2 rounded-control bg-surface-2 border border-line flex items-center justify-between">
                     <div className="flex items-center gap-1.5">
                       <img src="/USDT.png" className="w-4 h-4 rounded-full object-contain" alt="USDT" />
-                      <span className="text-xs font-semibold text-ink">USDT</span>
+                      <span className="text-xs font-semibold text-ink">USDT (Polygon)</span>
                     </div>
                     {evmWallet ? (
                       <span className="text-xs font-mono font-semibold text-ink">
@@ -2355,6 +2363,25 @@ export default function App() {
                         className="text-[10px] text-ink-3 hover:text-primary transition-colors cursor-pointer font-medium"
                       >
                         -- ({t.connectEvmNotice})
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="p-2 rounded-control bg-surface-2 border border-line flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <img src="/USDT.png" className="w-4 h-4 rounded-full object-contain" alt="USDT" />
+                      <span className="text-xs font-semibold text-ink">USDT (Solana)</span>
+                    </div>
+                    {solanaWallet ? (
+                      <span className="text-xs font-mono font-semibold text-ink">
+                        {formatCryptoBalance(walletBalances.USDT_SOL ?? 0, false)}
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => { setShowAccountModal(false); setWalletModalTab('solana'); setShowWalletModal(true); }}
+                        className="text-[10px] text-ink-3 hover:text-primary transition-colors cursor-pointer font-medium"
+                      >
+                        -- ({t.connectSolanaNotice})
                       </button>
                     )}
                   </div>
@@ -2395,6 +2422,27 @@ export default function App() {
                         className="text-[10px] text-ink-3 hover:text-primary transition-colors cursor-pointer font-medium"
                       >
                         -- ({t.connectEvmNotice})
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="p-2 rounded-control bg-surface-2 border border-line flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <img src="/SOL.png" className="w-4 h-4 rounded-full object-contain" alt="SOL" />
+                      <span className="text-xs font-semibold text-ink">
+                        {platformNetwork === 'testnet' ? 'devSOL' : 'SOL'}
+                      </span>
+                    </div>
+                    {solanaWallet ? (
+                      <span className="text-xs font-mono font-semibold text-ink">
+                        {formatCryptoBalance(walletBalances.SOL ?? 0, true)}
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => { setShowAccountModal(false); setWalletModalTab('solana'); setShowWalletModal(true); }}
+                        className="text-[10px] text-ink-3 hover:text-primary transition-colors cursor-pointer font-medium"
+                      >
+                        -- ({t.connectSolanaNotice})
                       </button>
                     )}
                   </div>

@@ -58,7 +58,7 @@ class EvmService {
     // 2. Polygon Amoy (Testnet 80002) Provider & Watchman Gas Signer
     try {
       this.amoyProvider = new ethers.JsonRpcProvider(
-        config.evm.amoyRpcUrl || 'https://polygon-amoy-bor-rpc.publicnode.com'
+        config.evm.amoyRpcUrl || 'https://80002.rpc.thirdweb.com'
       );
       if (formattedKey) {
         this.amoySigner = new ethers.Wallet(formattedKey, this.amoyProvider);
