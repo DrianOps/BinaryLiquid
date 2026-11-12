@@ -12,7 +12,7 @@ export const AMOY_CHAIN_CONFIG = {
   chainId: 80002,
   chainName: 'Polygon Amoy Testnet',
   nativeCurrency: { name: 'POL', symbol: 'POL', decimals: 18 },
-  rpcUrls: ['https://polygon-amoy-bor-rpc.publicnode.com'],
+  rpcUrls: ['https://80002.rpc.thirdweb.com', 'https://polygon-amoy.drpc.org'],
   blockExplorerUrls: ['https://amoy.polygonscan.com']
 };
 

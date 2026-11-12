@@ -18,6 +18,12 @@ import {
 } from 'lucide-react';
 import TokenSelectModal, { SUPPORTED_TOKENS, TokenInfo } from './TokenSelectModal';
 import { convertCashAddressNetwork, formatAddress, formatCryptoBalance } from '../utils/bchAddress';
+import { Connection, PublicKey, Transaction } from '@solana/web3.js';
+import {
+  getAssociatedTokenAddress,
+  createTransferInstruction,
+  createAssociatedTokenAccountInstruction
+} from '@solana/spl-token';
 import {
   executeWeb3VaultDeposit,
   executeBchSwapDeposit,
@@ -593,19 +599,72 @@ export default function BridgeSwap({
       const createdSwap = createData.swap;
       setActiveSwap(createdSwap);
 
-      // 2A. Paying Solana SPL Token (`USDT` on Solana Devnet):
+      // 2A. Paying Solana SPL Token (`USDT` on Solana Devnet): 1-Click Phantom Direct Sign & Send
       if (sellToken.isSolana) {
-        setSigningStep(lang === 'es' ? 'Esperando firma en Solana Devnet...' : 'Waiting for Solana Devnet confirmation...');
+        setSigningStep(lang === 'es' ? 'Esperando firma en Phantom (Solana Devnet)...' : 'Waiting for Phantom signature on Solana Devnet...');
 
-        const promptMsg = lang === 'es'
-          ? `Envía ${createdSwap.fromAmount} ${createdSwap.fromToken} a la PDA del Vault Solana:\n${createdSwap.depositAddress}\n\nPega aquí la Firma / TxID de la transacción Solana:`
-          : `Send ${createdSwap.fromAmount} ${createdSwap.fromToken} to the Solana Vault PDA:\n${createdSwap.depositAddress}\n\nPaste Solana Transaction Signature / TxID:`;
-
-        const userSig = window.prompt(promptMsg, createdSwap.orderSeed);
-        if (!userSig || !userSig.trim()) {
-          throw new Error(lang === 'es' ? 'Depósito cancelado: se requiere la firma de transacción Solana' : 'Deposit cancelled: Solana transaction signature required');
+        const solanaProvider = (window as any)?.solana;
+        if (!solanaProvider) {
+          throw new Error(
+            lang === 'es'
+              ? 'Por favor instala y conecta la extensión Phantom Wallet para pagar desde Solana'
+              : 'Please install and connect Phantom Wallet extension to pay from Solana'
+          );
         }
-        const txSignature = userSig.trim();
+
+        if (!solanaProvider.publicKey) {
+          await solanaProvider.connect();
+        }
+        const userPubkey = solanaProvider.publicKey;
+        if (!userPubkey) {
+          throw new Error(lang === 'es' ? 'No se detectó cuenta activa en Phantom' : 'No active account in Phantom');
+        }
+
+        const devnetRpc = 'https://api.devnet.solana.com';
+        const connection = new Connection(devnetRpc, 'confirmed');
+
+        const mintAddress = createdSwap.tokenContractAddress || DEPLOYED_TESTNET_CONTRACTS.solanaDevnetUsdtMint;
+        const vaultAddress = createdSwap.depositAddress || DEPLOYED_TESTNET_CONTRACTS.solanaDevnetVaultAddress;
+
+        const mintPubkey = new PublicKey(mintAddress);
+        const vaultPubkey = new PublicKey(vaultAddress);
+
+        const sourceAta = await getAssociatedTokenAddress(mintPubkey, userPubkey);
+        const vaultAta = await getAssociatedTokenAddress(mintPubkey, vaultPubkey);
+
+        const decimals = sellToken.decimals || 6;
+        const rawAmount = BigInt(Math.round(Number(createdSwap.fromAmount) * 10 ** decimals));
+
+        const transaction = new Transaction();
+
+        // Ensure Vault ATA exists
+        const vaultAtaInfo = await connection.getAccountInfo(vaultAta);
+        if (!vaultAtaInfo) {
+          transaction.add(
+            createAssociatedTokenAccountInstruction(
+              userPubkey,
+              vaultAta,
+              vaultPubkey,
+              mintPubkey
+            )
+          );
+        }
+
+        transaction.add(
+          createTransferInstruction(
+            sourceAta,
+            vaultAta,
+            userPubkey,
+            rawAmount
+          )
+        );
+
+        const { blockhash } = await connection.getLatestBlockhash();
+        transaction.recentBlockhash = blockhash;
+        transaction.feePayer = userPubkey;
+
+        const { signature } = await solanaProvider.signAndSendTransaction(transaction);
+        const txSignature = signature;
 
         setProcessingStage('settling');
         setSigningStep(t.settling);
@@ -1177,7 +1236,13 @@ export default function BridgeSwap({
                   />
                   <span className="font-semibold text-sm text-ink flex items-center gap-1.5">
                     {sellToken.symbol}
-                    <span className="text-[10px] font-normal px-1.5 py-0.5 rounded bg-surface-3 text-ink-3">
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
+                      sellToken.isBch
+                        ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+                        : sellToken.isSolana
+                        ? 'bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 border-cyan-500/20'
+                        : 'bg-purple-500/15 text-purple-600 dark:text-purple-400 border-purple-500/20'
+                    }`}>
                       {sellToken.isBch ? 'BCH' : sellToken.isSolana ? 'Solana' : 'Polygon'}
                     </span>
                   </span>
@@ -1241,7 +1306,13 @@ export default function BridgeSwap({
                   />
                   <span className="font-semibold text-sm text-ink flex items-center gap-1.5">
                     {buyToken.symbol}
-                    <span className="text-[10px] font-normal px-1.5 py-0.5 rounded bg-surface-3 text-ink-3">
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
+                      buyToken.isBch
+                        ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+                        : buyToken.isSolana
+                        ? 'bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 border-cyan-500/20'
+                        : 'bg-purple-500/15 text-purple-600 dark:text-purple-400 border-purple-500/20'
+                    }`}>
                       {buyToken.isBch ? 'BCH' : buyToken.isSolana ? 'Solana' : 'Polygon'}
                     </span>
                   </span>
