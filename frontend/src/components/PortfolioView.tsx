@@ -87,6 +87,8 @@ interface PortfolioViewProps {
   bchAddress?: string;
   evmAddress?: string;
   solanaAddress?: string;
+  tonAddress?: string;
+  ltcAddress?: string;
   walletBalances: Record<string, number>;
   platformNetwork: 'mainnet' | 'testnet';
   onToggleNetwork?: (network: 'mainnet' | 'testnet') => void;
@@ -214,6 +216,8 @@ export default function PortfolioView({
   bchAddress,
   evmAddress,
   solanaAddress,
+  tonAddress,
+  ltcAddress,
   walletBalances,
   platformNetwork,
   onToggleNetwork,

@@ -41,6 +41,8 @@ interface BridgeSwapProps {
   bchWalletSource?: 'wizard' | 'wc2-bch' | 'extension' | 'manual';
   evmAddress?: string;
   solanaAddress?: string;
+  tonAddress?: string;
+  ltcAddress?: string;
   walletBalances?: {
     PUSD: number;
     BCH: number;
@@ -197,6 +199,8 @@ export default function BridgeSwap({
   bchWalletSource,
   evmAddress = '',
   solanaAddress = '',
+  tonAddress = '',
+  ltcAddress = '',
   walletBalances,
   onRefreshBalances,
   onConnectWallet,
@@ -319,9 +323,9 @@ export default function BridgeSwap({
     : sellToken.isSolana
     ? connectedSolana
     : sellToken.isLtc || sellToken.symbol.toUpperCase() === 'LTC'
-    ? 'litecoin_external_wallet'
+    ? (ltcAddress || 'litecoin_external_wallet')
     : sellToken.chain === 'ton' || sellToken.symbol.toUpperCase() === 'TON'
-    ? 'ton_external_wallet'
+    ? (tonAddress || 'ton_external_wallet')
     : connectedEvm;
   const isPayingWalletConnected = Boolean(payingWalletAddress);
 
@@ -330,6 +334,10 @@ export default function BridgeSwap({
     ? connectedBch
     : buyToken.isSolana
     ? connectedSolana
+    : buyToken.isLtc || buyToken.symbol.toUpperCase() === 'LTC'
+    ? ltcAddress
+    : buyToken.chain === 'ton' || buyToken.symbol.toUpperCase() === 'TON'
+    ? tonAddress
     : connectedEvm;
   const isReceivingWalletConnected = Boolean(optionalReceiveWallet);
 

@@ -35,7 +35,8 @@ import {
   Database,
   Code2,
   PieChart,
-  Fingerprint
+  Fingerprint,
+  RefreshCw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 const BridgeSwap = lazy(() => import('./components/BridgeSwap'));
@@ -109,8 +110,10 @@ const translations = {
     modalConnectTitle: "Connect Wallet",
     modalConnectSubtitle: "Choose a network and wallet to connect",
     tabBch: "Bitcoin Cash",
-    tabEvm: "EVM (Polygon)",
-    tabSolana: "Solana (SVM)",
+    tabEvm: "EVM (Polygon & BSC)",
+    tabSolana: "Solana",
+    tabTon: "TON",
+    tabLtc: "Litecoin",
     detected: "Detected",
     extension: "Extension",
     mobileQr: "Mobile / QR",
@@ -125,10 +128,14 @@ const translations = {
     disconnectBch: "Disconnect BCH",
     disconnectEvm: "Disconnect EVM",
     disconnectSolana: "Disconnect Solana",
+    disconnectTon: "Disconnect TON",
+    disconnectLtc: "Disconnect Litecoin",
     disconnectAll: "Disconnect All Wallets",
     connectBchPrompt: "+ Connect Bitcoin Cash Wallet",
     connectEvmPrompt: "+ Connect EVM Wallet",
-    connectSolanaPrompt: "+ Connect Solana Wallet (Phantom)",
+    connectSolanaPrompt: "+ Connect Solana Wallet",
+    connectTonPrompt: "+ Connect TON Wallet",
+    connectLtcPrompt: "+ Connect Litecoin",
     liveBalances: "Live On-Chain Balances",
     refresh: "Refresh",
     refreshing: "Refreshing...",
@@ -145,6 +152,12 @@ const translations = {
     connectBchNotice: "Connect BCH",
     connectEvmNotice: "Connect EVM",
     connectSolanaNotice: "Connect Solana",
+    connectTonNotice: "Connect TON",
+    connectLtcNotice: "Connect LTC",
+    portfolioValue: "Total Portfolio Value",
+    viewOnExplorer: "View on Explorer",
+    tabWallets: "Connected Wallets",
+    tabBalances: "Multi-Chain Assets",
     addressUpdated: "Bitcoin Cash address updated",
     invalidAddress: "Invalid CashAddress"
   },
@@ -164,8 +177,10 @@ const translations = {
     modalConnectTitle: "Conectar Billetera",
     modalConnectSubtitle: "Elige una red y billetera para conectar",
     tabBch: "Bitcoin Cash",
-    tabEvm: "EVM (Polygon)",
-    tabSolana: "Solana (SVM)",
+    tabEvm: "EVM (Polygon & BSC)",
+    tabSolana: "Solana",
+    tabTon: "TON",
+    tabLtc: "Litecoin",
     detected: "Detectada",
     extension: "Extensión",
     mobileQr: "Móvil / QR",
@@ -180,10 +195,14 @@ const translations = {
     disconnectBch: "Desconectar BCH",
     disconnectEvm: "Desconectar EVM",
     disconnectSolana: "Desconectar Solana",
+    disconnectTon: "Desconectar TON",
+    disconnectLtc: "Desconectar Litecoin",
     disconnectAll: "Desconectar Todas las Billeteras",
     connectBchPrompt: "+ Conectar Billetera Bitcoin Cash",
     connectEvmPrompt: "+ Conectar Billetera EVM",
-    connectSolanaPrompt: "+ Conectar Billetera Solana (Phantom)",
+    connectSolanaPrompt: "+ Conectar Billetera Solana",
+    connectTonPrompt: "+ Conectar Billetera TON",
+    connectLtcPrompt: "+ Conectar Litecoin",
     liveBalances: "Saldos On-Chain en Vivo",
     refresh: "Refrescar",
     refreshing: "Actualizando...",
@@ -200,6 +219,12 @@ const translations = {
     connectBchNotice: "Conecta BCH",
     connectEvmNotice: "Conecta EVM",
     connectSolanaNotice: "Conecta Solana",
+    connectTonNotice: "Conecta TON",
+    connectLtcNotice: "Conecta LTC",
+    portfolioValue: "Valor Total del Portafolio",
+    viewOnExplorer: "Ver en Explorador",
+    tabWallets: "Billeteras Conectadas",
+    tabBalances: "Activos Multicadena",
     addressUpdated: "Dirección de Bitcoin Cash actualizada",
     invalidAddress: "CashAddress no válida"
   }
@@ -513,6 +538,44 @@ export default function App() {
     return null;
   });
 
+  const [tonWallet, setTonWallet] = useState<{
+    address: string;
+    provider: string;
+  } | null>(() => {
+    try {
+      const raw = localStorage.getItem('bliq_wallets_v2');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed?.tonWallet?.address) return parsed.tonWallet;
+      }
+      const rawTon = localStorage.getItem('bliq_ton_wallet');
+      if (rawTon) {
+        const parsed = JSON.parse(rawTon);
+        if (parsed?.address) return parsed;
+      }
+    } catch {}
+    return null;
+  });
+
+  const [ltcWallet, setLtcWallet] = useState<{
+    address: string;
+    provider: string;
+  } | null>(() => {
+    try {
+      const raw = localStorage.getItem('bliq_wallets_v2');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed?.ltcWallet?.address) return parsed.ltcWallet;
+      }
+      const rawLtc = localStorage.getItem('bliq_ltc_wallet');
+      if (rawLtc) {
+        const parsed = JSON.parse(rawLtc);
+        if (parsed?.address) return parsed;
+      }
+    } catch {}
+    return null;
+  });
+
   const [discoveredEvmWallets, setDiscoveredEvmWallets] = useState<DiscoveredEip6963Wallet[]>([]);
   const [bchWcPairing, setBchWcPairing] = useState<{ uri: string; qrDataUrl: string } | null>(null);
   const [walletBalances, setWalletBalances] = useState<{
@@ -524,8 +587,12 @@ export default function App() {
     SOL?: number;
     USDT_SOL?: number;
     LTC?: number;
+    BNB?: number;
+    USDT_BSC?: number;
+    TON?: number;
+    USDT_TON?: number;
     [k: string]: number | undefined;
-  }>({ PUSD: 0, BCH: 0, USDT: 0, USDC: 0, POL: 0, SOL: 0, USDT_SOL: 0, LTC: 0 });
+  }>({ PUSD: 0, BCH: 0, USDT: 0, USDC: 0, POL: 0, SOL: 0, USDT_SOL: 0, LTC: 0, BNB: 0, USDT_BSC: 0, TON: 0, USDT_TON: 0 });
   const [balancesLoading, setBalancesLoading] = useState<boolean>(false);
   const [isSwitchingChain, setIsSwitchingChain] = useState<boolean>(false);
 
@@ -536,13 +603,15 @@ export default function App() {
     }
     return false;
   });
-  const [walletModalTab, setWalletModalTab] = useState<'bch' | 'evm' | 'solana'>(() => {
+  const [walletModalTab, setWalletModalTab] = useState<'evm' | 'bch' | 'solana' | 'ton' | 'ltc'>(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
-      if (params.get('tab') === 'evm') return 'evm';
+      if (params.get('tab') === 'bch') return 'bch';
       if (params.get('tab') === 'solana') return 'solana';
+      if (params.get('tab') === 'ton') return 'ton';
+      if (params.get('tab') === 'ltc') return 'ltc';
     }
-    return 'bch';
+    return 'evm';
   });
   const [showAccountModal, setShowAccountModal] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
@@ -551,9 +620,14 @@ export default function App() {
     }
     return false;
   });
+  const [accountModalTab, setAccountModalTab] = useState<'wallets' | 'balances'>('wallets');
   const [selectedWalletType, setSelectedWalletType] = useState<'paytaca' | 'bch_wc2' | 'walletconnect' | 'injected' | null>(null);
   const [isEditingBch, setIsEditingBch] = useState<boolean>(false);
   const [customBchInput, setCustomBchInput] = useState<string>('');
+  const [isEditingTon, setIsEditingTon] = useState<boolean>(false);
+  const [customTonInput, setCustomTonInput] = useState<string>('');
+  const [isEditingLtc, setIsEditingLtc] = useState<boolean>(false);
+  const [customLtcInput, setCustomLtcInput] = useState<string>('');
 
   const t = translations[lang];
   const wc = useWizardConnect({ dappName: 'BinaryLiquid Gateway', persistSession: true });
@@ -569,19 +643,29 @@ export default function App() {
   useEffect(() => {
     if (isFirstWalletMount.current) {
       isFirstWalletMount.current = false;
-      if (!bchWallet && !evmWallet && !solanaWallet) {
+      if (!bchWallet && !evmWallet && !solanaWallet && !tonWallet && !ltcWallet) {
         return;
       }
     }
-    if (bchWallet || evmWallet || solanaWallet) {
-      localStorage.setItem('bliq_wallets_v2', JSON.stringify({ bchWallet, evmWallet, solanaWallet }));
+    if (bchWallet || evmWallet || solanaWallet || tonWallet || ltcWallet) {
+      localStorage.setItem('bliq_wallets_v2', JSON.stringify({ bchWallet, evmWallet, solanaWallet, tonWallet, ltcWallet }));
       if (solanaWallet) {
         localStorage.setItem('bliq_solana_wallet', JSON.stringify(solanaWallet));
       } else {
         localStorage.removeItem('bliq_solana_wallet');
       }
+      if (tonWallet) {
+        localStorage.setItem('bliq_ton_wallet', JSON.stringify(tonWallet));
+      } else {
+        localStorage.removeItem('bliq_ton_wallet');
+      }
+      if (ltcWallet) {
+        localStorage.setItem('bliq_ltc_wallet', JSON.stringify(ltcWallet));
+      } else {
+        localStorage.removeItem('bliq_ltc_wallet');
+      }
     }
-    const primaryAddr = bchWallet?.tokenAddress || evmWallet?.address || solanaWallet?.address || '';
+    const primaryAddr = bchWallet?.tokenAddress || evmWallet?.address || solanaWallet?.address || tonWallet?.address || ltcWallet?.address || '';
     if (!primaryAddr) {
       setUserContext(null);
       if (typeof window !== 'undefined' && localStorage.getItem('bliq_user')) {
@@ -592,7 +676,9 @@ export default function App() {
     const activeProviders = [
       bchWallet?.provider,
       evmWallet?.provider,
-      solanaWallet?.provider
+      solanaWallet?.provider,
+      tonWallet?.provider,
+      ltcWallet?.provider
     ].filter(Boolean);
 
     const nextCtx = {
@@ -600,13 +686,15 @@ export default function App() {
       bchAddress: bchWallet?.tokenAddress || bchWallet?.address || null,
       evmAddress: evmWallet?.address || null,
       solanaAddress: solanaWallet?.address || null,
+      tonAddress: tonWallet?.address || null,
+      ltcAddress: ltcWallet?.address || null,
       provider: activeProviders.length > 0 ? activeProviders.join(' + ') : 'Web3',
       connectedAt: new Date().toISOString(),
       balances: walletBalances
     };
     setUserContext(nextCtx);
     localStorage.setItem('bliq_user', JSON.stringify(nextCtx));
-  }, [bchWallet, evmWallet, solanaWallet, walletBalances]);
+  }, [bchWallet, evmWallet, solanaWallet, tonWallet, ltcWallet, walletBalances]);
 
   // Dynamically re-encode BCH CashAddress prefix (`bchtest:` <-> `bitcoincash:`) when switching Testnet/Mainnet
   useEffect(() => {
@@ -619,16 +707,20 @@ export default function App() {
     }
   }, [platformNetwork]);
 
-  // Fetch real live on-chain balances for connected BCH + EVM + Solana wallets
+  // Fetch real live on-chain balances for connected BCH + EVM + Solana + TON + LTC wallets
   const refreshWalletBalances = async (
     overrideBch?: string | null,
     overrideEvm?: string | null,
-    overrideSol?: string | null
+    overrideSol?: string | null,
+    overrideTon?: string | null,
+    overrideLtc?: string | null
   ) => {
     const targetBch = overrideBch !== undefined ? overrideBch : bchWallet?.queryAddress || bchWallet?.address || null;
     const targetEvm = overrideEvm !== undefined ? overrideEvm : evmWallet?.address || null;
     const targetSol = overrideSol !== undefined ? overrideSol : solanaWallet?.address || null;
-    const primary = targetBch || targetEvm || targetSol;
+    const targetTon = overrideTon !== undefined ? overrideTon : tonWallet?.address || null;
+    const targetLtc = overrideLtc !== undefined ? overrideLtc : ltcWallet?.address || null;
+    const primary = targetBch || targetEvm || targetSol || targetTon || targetLtc;
     if (!primary) return;
 
     setBalancesLoading(true);
@@ -637,7 +729,9 @@ export default function App() {
         network: platformNetwork,
         ...(targetBch ? { bchAddress: targetBch } : {}),
         ...(targetEvm ? { evmAddress: targetEvm } : {}),
-        ...(targetSol ? { solanaAddress: targetSol } : {})
+        ...(targetSol ? { solanaAddress: targetSol } : {}),
+        ...(targetTon ? { tonAddress: targetTon } : {}),
+        ...(targetLtc ? { ltcAddress: targetLtc } : {})
       });
       const res = await fetch(`/api/wallet/balances/${encodeURIComponent(primary)}?${qs.toString()}`);
       const data = await res.json();
@@ -652,10 +746,10 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (bchWallet?.address || evmWallet?.address || solanaWallet?.address) {
+    if (bchWallet?.address || evmWallet?.address || solanaWallet?.address || tonWallet?.address || ltcWallet?.address) {
       refreshWalletBalances();
     }
-  }, [bchWallet?.address, evmWallet?.address, solanaWallet?.address, platformNetwork, showAccountModal]);
+  }, [bchWallet?.address, evmWallet?.address, solanaWallet?.address, tonWallet?.address, ltcWallet?.address, platformNetwork, showAccountModal]);
 
   // EVM live event callbacks (accountsChanged / chainChanged / disconnect)
   const evmEventCallbacks = {
@@ -785,18 +879,36 @@ export default function App() {
     showToast(lang === 'es' ? 'Billetera Solana desconectada' : 'Solana wallet disconnected');
   };
 
+  const handleDisconnectTon = () => {
+    setTonWallet(null);
+    localStorage.removeItem('bliq_ton_wallet');
+    showToast(lang === 'es' ? 'Billetera TON desconectada' : 'TON wallet disconnected');
+  };
+
+  const handleDisconnectLtc = () => {
+    setLtcWallet(null);
+    localStorage.removeItem('bliq_ltc_wallet');
+    showToast(lang === 'es' ? 'Billetera Litecoin desconectada' : 'Litecoin wallet disconnected');
+  };
+
   const handleDisconnect = async () => {
     try { wc.disconnect(); } catch {}
     try { await disconnectBchWalletConnect(); } catch {}
     try { await disconnectWalletConnect(); } catch {}
     try { handleDisconnectSolana(); } catch {}
+    try { handleDisconnectTon(); } catch {}
+    try { handleDisconnectLtc(); } catch {}
     setBchWallet(null);
     setEvmWallet(null);
     setSolanaWallet(null);
+    setTonWallet(null);
+    setLtcWallet(null);
     setUserContext(null);
     localStorage.removeItem('bliq_user');
     localStorage.removeItem('bliq_wallets_v2');
     localStorage.removeItem('bliq_solana_wallet');
+    localStorage.removeItem('bliq_ton_wallet');
+    localStorage.removeItem('bliq_ltc_wallet');
     showToast(lang === 'es' ? 'Billeteras desconectadas' : 'All wallets disconnected');
   };
 
@@ -907,6 +1019,118 @@ export default function App() {
     setIsEditingBch(false);
     setCustomBchInput('');
   };
+
+  const handleConnectTon = async (preferred = 'Tonkeeper') => {
+    try {
+      const w = window as any;
+      const tonProvider = w?.tonkeeper?.ton || w?.tonkeeper || w?.ton || w?.mytonwallet?.ton;
+      if (tonProvider) {
+        let accounts: string[] = [];
+        if (typeof tonProvider.send === 'function') {
+          accounts = await tonProvider.send('ton_requestAccounts');
+        } else if (typeof tonProvider.request === 'function') {
+          accounts = await tonProvider.request({ method: 'ton_requestAccounts' });
+        }
+        if (accounts && accounts.length > 0) {
+          const addr = accounts[0];
+          setTonWallet({ address: addr, provider: preferred });
+          localStorage.setItem('bliq_ton_wallet', JSON.stringify({ address: addr, provider: preferred }));
+          setShowWalletModal(false);
+          refreshWalletBalances(undefined, undefined, undefined, addr, undefined);
+          showToast(lang === 'es' ? `Conectado con TON: ${formatAddress(addr)}` : `Connected TON: ${formatAddress(addr)}`);
+          return;
+        }
+      }
+      setIsEditingTon(true);
+      setCustomTonInput('');
+      setWalletModalTab('ton');
+      showToast(lang === 'es' ? 'Ingresa o pega tu dirección TON' : 'Enter or paste your TON address');
+    } catch (err: any) {
+      setIsEditingTon(true);
+      setCustomTonInput('');
+      setWalletModalTab('ton');
+    }
+  };
+
+  const handleSaveCustomTon = (rawInput: string) => {
+    const trimmed = rawInput.trim();
+    if (!trimmed || trimmed.length < 24) {
+      showToast(lang === 'es' ? 'Dirección TON no válida' : 'Invalid TON address', 'error');
+      return;
+    }
+    setTonWallet({
+      address: trimmed,
+      provider: 'Tonkeeper / Manual'
+    });
+    localStorage.setItem('bliq_ton_wallet', JSON.stringify({ address: trimmed, provider: 'Tonkeeper / Manual' }));
+    refreshWalletBalances(undefined, undefined, undefined, trimmed, undefined);
+    setIsEditingTon(false);
+    setCustomTonInput('');
+    setShowWalletModal(false);
+    showToast(lang === 'es' ? `Dirección TON guardada: ${formatAddress(trimmed)}` : `TON address saved: ${formatAddress(trimmed)}`);
+  };
+
+  const handleSaveCustomLtc = (rawInput: string) => {
+    const trimmed = rawInput.trim();
+    if (!trimmed || trimmed.length < 24) {
+      showToast(lang === 'es' ? 'Dirección Litecoin no válida' : 'Invalid Litecoin address', 'error');
+      return;
+    }
+    setLtcWallet({
+      address: trimmed,
+      provider: 'Litewallet / Manual'
+    });
+    localStorage.setItem('bliq_ltc_wallet', JSON.stringify({ address: trimmed, provider: 'Litewallet / Manual' }));
+    refreshWalletBalances(undefined, undefined, undefined, undefined, trimmed);
+    setIsEditingLtc(false);
+    setCustomLtcInput('');
+    setShowWalletModal(false);
+    showToast(lang === 'es' ? `Dirección Litecoin guardada: ${formatAddress(trimmed)}` : `Litecoin address saved: ${formatAddress(trimmed)}`);
+  };
+
+  const getExplorerAddressUrl = (chain: 'bch' | 'evm' | 'solana' | 'ton' | 'ltc', address: string) => {
+    const isTest = platformNetwork === 'testnet';
+    switch (chain) {
+      case 'bch':
+        return isTest 
+          ? `https://chipnet.imaginary.cash/address/${address}` 
+          : `https://blockchair.com/bitcoin-cash/address/${address}`;
+      case 'evm':
+        return isTest 
+          ? `https://amoy.polygonscan.com/address/${address}` 
+          : `https://polygonscan.com/address/${address}`;
+      case 'solana':
+        return isTest 
+          ? `https://solscan.io/account/${address}?cluster=devnet` 
+          : `https://solscan.io/account/${address}`;
+      case 'ton':
+        return isTest 
+          ? `https://testnet.tonviewer.com/${address}` 
+          : `https://tonviewer.com/${address}`;
+      case 'ltc':
+        return isTest 
+          ? `https://live.blockcypher.com/ltc-testnet/address/${address}` 
+          : `https://blockchair.com/litecoin/address/${address}`;
+      default:
+        return '#';
+    }
+  };
+
+  const estimatedPortfolioUsd = React.useMemo(() => {
+    const pusd = (walletBalances.PUSD || 0) * 1.0;
+    const usdt = (walletBalances.USDT || 0) * 1.0;
+    const usdtBsc = (walletBalances.USDT_BSC || 0) * 1.0;
+    const usdtSol = (walletBalances.USDT_SOL || 0) * 1.0;
+    const usdtTon = (walletBalances.USDT_TON || 0) * 1.0;
+    const usdc = (walletBalances.USDC || 0) * 1.0;
+    const bch = (walletBalances.BCH || 0) * 480;
+    const pol = (walletBalances.POL || 0) * 0.45;
+    const bnb = (walletBalances.BNB || 0) * 620;
+    const sol = (walletBalances.SOL || 0) * 180;
+    const ton = (walletBalances.TON || 0) * 5.20;
+    const ltc = (walletBalances.LTC || 0) * 85;
+    return pusd + usdt + usdtBsc + usdtSol + usdtTon + usdc + bch + pol + bnb + sol + ton + ltc;
+  }, [walletBalances]);
 
   const handleConnectWallet = async (
     type: 'paytaca' | 'bch_wc2' | 'walletconnect' | 'injected',
@@ -1157,6 +1381,8 @@ export default function App() {
             bchWalletSource={bchWallet?.source}
             evmAddress={evmWallet?.address || ''}
             solanaAddress={solanaWallet?.address || ''}
+            tonAddress={tonWallet?.address || ''}
+            ltcAddress={ltcWallet?.address || ''}
             walletBalances={walletBalances}
             onRefreshBalances={() => refreshWalletBalances()}
             onConnectWallet={() => setShowWalletModal(true)}
@@ -1473,11 +1699,15 @@ export default function App() {
                 const hasBch = Boolean(bchWallet?.address || userContext?.bchAddress);
                 const hasEvm = Boolean(evmWallet?.address || userContext?.evmAddress);
                 const hasSol = Boolean(solanaWallet?.address || userContext?.solanaAddress);
+                const hasTon = Boolean(tonWallet?.address || userContext?.tonAddress);
+                const hasLtc = Boolean(ltcWallet?.address || userContext?.ltcAddress);
 
                 const activeChains = [
                   hasBch ? 'BCH' : null,
                   hasEvm ? 'EVM' : null,
-                  hasSol ? 'SVM' : null
+                  hasSol ? 'SOL' : null,
+                  hasTon ? 'TON' : null,
+                  hasLtc ? 'LTC' : null
                 ].filter(Boolean);
 
                 if (activeChains.length >= 2) {
@@ -1494,10 +1724,10 @@ export default function App() {
                 if (hasBch) {
                   return (
                     <>
-                      <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0" />
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
                       <span className="font-semibold text-xs flex items-center gap-1">
-                        <span>BCH</span>
-                        <span className="text-primary font-bold text-sm leading-none">»</span>
+                        <img src="/BCH.png" className="w-3.5 h-3.5 object-contain" alt="BCH" />
+                        <span>{formatAddress(bchWallet?.tokenAddress || bchWallet?.address || userContext.address)}</span>
                       </span>
                     </>
                   );
@@ -1506,10 +1736,10 @@ export default function App() {
                 if (hasEvm) {
                   return (
                     <>
-                      <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0" />
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
                       <span className="font-semibold text-xs flex items-center gap-1">
-                        <span className="text-primary font-bold text-sm leading-none">«</span>
-                        <span>EVM</span>
+                        <img src="/POL.png" className="w-3.5 h-3.5 object-contain" alt="EVM" />
+                        <span>{formatAddress(evmWallet?.address || userContext.address)}</span>
                       </span>
                     </>
                   );
@@ -1518,10 +1748,34 @@ export default function App() {
                 if (hasSol) {
                   return (
                     <>
-                      <span className="w-2 h-2 rounded-full bg-purple-400 animate-pulse shrink-0" />
+                      <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse shrink-0" />
                       <span className="font-semibold text-xs flex items-center gap-1">
-                        <span>SVM</span>
-                        <span className="text-purple-400 font-bold text-sm leading-none">»</span>
+                        <img src="/SOL.png" className="w-3.5 h-3.5 object-contain" alt="SOL" />
+                        <span>{formatAddress(solanaWallet?.address || userContext.address)}</span>
+                      </span>
+                    </>
+                  );
+                }
+
+                if (hasTon) {
+                  return (
+                    <>
+                      <span className="w-2 h-2 rounded-full bg-sky-500 animate-pulse shrink-0" />
+                      <span className="font-semibold text-xs flex items-center gap-1">
+                        <img src="/TON.png" className="w-3.5 h-3.5 object-contain" alt="TON" />
+                        <span>{formatAddress(tonWallet?.address || userContext.address)}</span>
+                      </span>
+                    </>
+                  );
+                }
+
+                if (hasLtc) {
+                  return (
+                    <>
+                      <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse shrink-0" />
+                      <span className="font-semibold text-xs flex items-center gap-1">
+                        <img src="/LTC.png" className="w-3.5 h-3.5 object-contain" alt="LTC" />
+                        <span>{formatAddress(ltcWallet?.address || userContext.address)}</span>
                       </span>
                     </>
                   );
@@ -1914,6 +2168,8 @@ export default function App() {
             bchWalletSource={bchWallet?.source}
             evmAddress={evmWallet?.address || ''}
             solanaAddress={solanaWallet?.address || ''}
+            tonAddress={tonWallet?.address || ''}
+            ltcAddress={ltcWallet?.address || ''}
             walletBalances={walletBalances}
             onRefreshBalances={() => refreshWalletBalances()}
             onConnectWallet={() => setShowWalletModal(true)}
@@ -2002,6 +2258,8 @@ export default function App() {
             bchAddress={bchWallet?.tokenAddress || bchWallet?.address || ''}
             evmAddress={evmWallet?.address || ''}
             solanaAddress={solanaWallet?.address || ''}
+            tonAddress={tonWallet?.address || ''}
+            ltcAddress={ltcWallet?.address || ''}
             walletBalances={walletBalances}
             platformNetwork={platformNetwork}
             onToggleNetwork={setPlatformNetwork}
@@ -2048,503 +2306,826 @@ export default function App() {
       )}
       </Suspense>
 
-      {/* NON-CUSTODIAL DUAL-CHAIN ACCOUNT MODAL */}
+      {/* PROFESSIONAL MULTI-CHAIN ACCOUNT & PORTFOLIO MODAL */}
       <AnimatePresence>
         {showAccountModal && userContext && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[130] flex items-center justify-center p-4 overflow-y-auto">
+          <div className="fixed inset-0 bg-black/65 backdrop-blur-md z-[130] flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
             <motion.div 
-              initial={{ opacity: 0, scale: 0.96, y: 10 }}
+              initial={{ opacity: 0, scale: 0.95, y: 12 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.96, y: 10 }}
-              transition={{ duration: 0.16, ease: 'easeOut' }}
-              className="bg-surface border border-line rounded-card p-5 sm:p-6 w-full max-w-sm sm:max-w-md shadow-soft relative text-left my-6"
+              exit={{ opacity: 0, scale: 0.95, y: 12 }}
+              transition={{ duration: 0.18, ease: 'easeOut' }}
+              className="bg-surface border border-line rounded-card p-5 sm:p-6 w-full max-w-md sm:max-w-lg shadow-soft relative text-left my-auto max-h-[92vh] flex flex-col"
             >
+              {/* Close Button */}
               <button 
                 onClick={() => setShowAccountModal(false)}
                 className="absolute top-4 right-4 w-7 h-7 rounded-full bg-surface-2 hover:bg-surface-3 text-ink-3 hover:text-ink flex items-center justify-center transition-colors cursor-pointer"
-                title="Cerrar"
+                title={lang === 'es' ? 'Cerrar' : 'Close'}
               >
                 <X className="w-3.5 h-3.5" />
               </button>
 
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-9 h-9 rounded-control bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
-                  <Wallet className="w-4 h-4" />
+              {/* Modal Top Header */}
+              <div className="flex items-center gap-3 mb-4 pr-8">
+                <div className="w-10 h-10 rounded-control bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0 shadow-2xs">
+                  <Wallet className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-ink text-base">{t.accountTitle}</h3>
+                  <h3 className="font-bold text-ink text-base sm:text-lg flex items-center gap-2">
+                    <span>{t.accountTitle}</span>
+                    <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                      Non-Custodial
+                    </span>
+                  </h3>
                   <span className="text-[11px] text-ink-3 flex items-center gap-1.5 mt-0.5">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                    <span>{t.accountSubtitle} • {platformNetwork === 'testnet' ? 'Chipnet + Amoy' : 'Mainnet'}</span>
+                    <span>{platformNetwork === 'testnet' ? 'Multi-Chain Testnets (Chipnet + Amoy + Devnet)' : 'Multi-Chain Production (Mainnet)'}</span>
                   </span>
                 </div>
               </div>
 
-              {/* SLOT 1: BITCOIN CASH WALLET */}
-              <div className="p-3 rounded-control bg-surface-2 border border-line mb-3">
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-[10px] uppercase font-bold text-ink-3 tracking-wider">
-                    {t.tabBch} ({platformNetwork === 'testnet' ? 'Chipnet' : 'Mainnet'})
+              {/* Portfolio Value Summary Card */}
+              <div className="p-3.5 sm:p-4 rounded-control bg-surface-2 border border-line mb-4 relative overflow-hidden">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[11px] font-semibold text-ink-3 uppercase tracking-wider">
+                    {t.portfolioValue}
                   </span>
-                  {bchWallet && (
-                    <span className="ui-badge ui-badge-success text-[10px]">
-                      {bchWallet.provider}
-                    </span>
-                  )}
-                </div>
-                {bchWallet ? (
-                  !isEditingBch ? (
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-mono text-xs text-ink truncate font-semibold" title={bchWallet.tokenAddress || bchWallet.address}>
-                        {bchWallet.tokenAddress || bchWallet.address}
-                      </span>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          onClick={() => {
-                            setCustomBchInput(bchWallet.tokenAddress || bchWallet.address);
-                            setIsEditingBch(true);
-                          }}
-                          className="p-1.5 rounded-control hover:bg-surface-3 text-ink-3 hover:text-ink transition-colors cursor-pointer"
-                          title={t.editAddress}
-                        >
-                          <Edit3 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => copyToClipboard(bchWallet.tokenAddress || bchWallet.address)}
-                          className="p-1.5 rounded-control hover:bg-surface-3 text-ink-3 hover:text-ink transition-colors cursor-pointer"
-                          title={t.copyAddr}
-                        >
-                          {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                        </button>
-                        <button
-                          onClick={handleDisconnectBch}
-                          className="p-1.5 rounded-control hover:bg-rose-500/10 text-rose-500 transition-colors cursor-pointer"
-                          title={t.disconnectBch}
-                        >
-                          <LogOut className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-2 mt-1">
-                      <input
-                        type="text"
-                        value={customBchInput}
-                        onChange={(e) => setCustomBchInput(e.target.value)}
-                        placeholder={t.enterCashAddress}
-                        className="w-full px-2.5 py-1.5 text-xs font-mono rounded-control bg-surface border border-line text-ink focus:outline-none focus:border-primary"
-                        autoFocus
-                      />
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          onClick={() => { setIsEditingBch(false); setCustomBchInput(''); }}
-                          className="px-2.5 py-1 text-xs text-ink-3 hover:text-ink rounded-control hover:bg-surface-3 cursor-pointer"
-                        >
-                          {t.cancelEdit}
-                        </button>
-                        <button
-                          onClick={() => handleSaveCustomBch(customBchInput)}
-                          className="px-2.5 py-1 text-xs font-semibold text-white bg-primary hover:bg-primary-hover rounded-control cursor-pointer"
-                        >
-                          {t.saveAddress}
-                        </button>
-                      </div>
-                    </div>
-                  )
-                ) : (
-                  !isEditingBch ? (
-                    <div className="space-y-1.5">
-                      <button
-                        onClick={() => { setShowAccountModal(false); setWalletModalTab('bch'); setShowWalletModal(true); }}
-                        className="w-full py-2 rounded-control bg-surface hover:bg-surface-3 border border-line text-ink font-semibold text-xs transition-colors cursor-pointer"
-                      >
-                        {t.connectBchPrompt}
-                      </button>
-                      <button
-                        onClick={() => { setIsEditingBch(true); setCustomBchInput(''); }}
-                        className="w-full text-center text-[11px] text-ink-3 hover:text-primary transition-colors cursor-pointer font-medium"
-                      >
-                        {t.orManualAddress}
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="space-y-2 mt-1">
-                      <input
-                        type="text"
-                        value={customBchInput}
-                        onChange={(e) => setCustomBchInput(e.target.value)}
-                        placeholder={t.enterCashAddress}
-                        className="w-full px-2.5 py-1.5 text-xs font-mono rounded-control bg-surface border border-line text-ink focus:outline-none focus:border-primary"
-                        autoFocus
-                      />
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          onClick={() => { setIsEditingBch(false); setCustomBchInput(''); }}
-                          className="px-2.5 py-1 text-xs text-ink-3 hover:text-ink rounded-control hover:bg-surface-3 cursor-pointer"
-                        >
-                          {t.cancelEdit}
-                        </button>
-                        <button
-                          onClick={() => handleSaveCustomBch(customBchInput)}
-                          className="px-2.5 py-1 text-xs font-semibold text-white bg-primary hover:bg-primary-hover rounded-control cursor-pointer"
-                        >
-                          {t.saveAddress}
-                        </button>
-                      </div>
-                    </div>
-                  )
-                )}
-              </div>
-
-              {/* SLOT 2: EVM POLYGON WALLET */}
-              <div className="p-3 rounded-control bg-surface-2 border border-line mb-3">
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-[10px] uppercase font-bold text-ink-3 tracking-wider">
-                    {t.tabEvm} ({platformNetwork === 'testnet' ? 'Amoy 80002' : 'Polygon 137'})
-                  </span>
-                  {evmWallet && (
-                    <span className="ui-badge text-[10px]">
-                      {evmWallet.provider}
-                    </span>
-                  )}
-                </div>
-                {evmWallet ? (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-mono text-xs text-ink truncate font-semibold">
-                        {evmWallet.address}
-                      </span>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          onClick={() => copyToClipboard(evmWallet.address)}
-                          className="p-1.5 rounded-control hover:bg-surface-3 text-ink-3 hover:text-ink transition-colors cursor-pointer"
-                          title={t.copyAddr}
-                        >
-                          {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                        </button>
-                        <button
-                          onClick={handleDisconnectEvm}
-                          className="p-1.5 rounded-control hover:bg-rose-500/10 text-rose-500 transition-colors cursor-pointer"
-                          title={t.disconnectEvm}
-                        >
-                          <LogOut className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* 1-Click Switch to Polygon Amoy (80002) or Polygon Mainnet (137) if mismatched */}
-                    {((platformNetwork === 'testnet' && evmWallet.chainId !== 80002) ||
-                      (platformNetwork === 'mainnet' && evmWallet.chainId !== 137)) && (
-                      <button
-                        disabled={isSwitchingChain}
-                        onClick={async () => {
-                          setIsSwitchingChain(true);
-                          try {
-                            const nextId = await switchEvmNetwork(platformNetwork === 'testnet');
-                            setEvmWallet(prev => (prev ? { ...prev, chainId: nextId } : null));
-                            showToast(
-                              platformNetwork === 'testnet'
-                                ? (lang === 'es' ? 'Red cambiada a Polygon Amoy Testnet (80002)' : 'Network switched to Polygon Amoy Testnet (80002)')
-                                : (lang === 'es' ? 'Red cambiada a Polygon PoS (137)' : 'Network switched to Polygon PoS (137)')
-                            );
-                          } catch (e: any) {
-                            showToast(e?.message || (lang === 'es' ? 'Error al cambiar de red' : 'Error switching network'), 'error');
-                          } finally {
-                            setIsSwitchingChain(false);
-                          }
-                        }}
-                        className="w-full py-1.5 px-2.5 rounded-control bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 font-semibold text-[11px] transition-colors cursor-pointer"
-                      >
-                        {isSwitchingChain
-                          ? t.switchingNetwork
-                          : `${t.switchNetworkPrompt} ${platformNetwork === 'testnet' ? 'Polygon Amoy (80002)' : 'Polygon PoS (137)'}`}
-                      </button>
-                    )}
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => { setShowAccountModal(false); setWalletModalTab('evm'); setShowWalletModal(true); }}
-                    className="w-full py-2 rounded-control bg-surface hover:bg-surface-3 border border-line text-ink font-semibold text-xs transition-colors cursor-pointer"
-                  >
-                    {t.connectEvmPrompt}
-                  </button>
-                )}
-              </div>
-
-              {/* SLOT 3: SOLANA SVM WALLET */}
-              <div className="p-3 rounded-control bg-surface-2 border border-line mb-3">
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-[10px] uppercase font-bold text-ink-3 tracking-wider">
-                    {t.tabSolana} ({platformNetwork === 'testnet' ? 'Devnet' : 'Mainnet-Beta'})
-                  </span>
-                  {solanaWallet && (
-                    <span className="ui-badge text-[10px]">
-                      {solanaWallet.provider}
-                    </span>
-                  )}
-                </div>
-                {solanaWallet ? (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-mono text-xs text-ink truncate font-semibold">
-                        {solanaWallet.address}
-                      </span>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          onClick={() => copyToClipboard(solanaWallet.address)}
-                          className="p-1.5 rounded-control hover:bg-surface-3 text-ink-3 hover:text-ink transition-colors cursor-pointer"
-                          title={t.copyAddr}
-                        >
-                          {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                        </button>
-                        <button
-                          onClick={handleDisconnectSolana}
-                          className="p-1.5 rounded-control hover:bg-rose-500/10 text-rose-500 transition-colors cursor-pointer"
-                          title={t.disconnectSolana}
-                        >
-                          <LogOut className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => { setShowAccountModal(false); setWalletModalTab('solana'); setShowWalletModal(true); }}
-                    className="w-full py-2 rounded-control bg-surface hover:bg-surface-3 border border-line text-ink font-semibold text-xs transition-colors cursor-pointer"
-                  >
-                    {t.connectSolanaPrompt}
-                  </button>
-                )}
-              </div>
-
-              {/* REAL ON-CHAIN BALANCES PREVIEW */}
-              <div className="space-y-1.5 mb-4">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="ui-label">{t.liveBalances}</span>
                   <button
                     onClick={() => refreshWalletBalances()}
-                    className="text-[11px] font-semibold text-primary hover:underline cursor-pointer"
+                    disabled={balancesLoading}
+                    className="text-[11px] font-semibold text-primary hover:underline flex items-center gap-1 cursor-pointer"
                   >
-                    {balancesLoading ? t.refreshing : `↻ ${t.refresh}`}
+                    <RefreshCw className={`w-3 h-3 ${balancesLoading ? 'animate-spin' : ''}`} />
+                    <span>{balancesLoading ? t.refreshing : t.refresh}</span>
                   </button>
                 </div>
-
-                <div className="grid grid-cols-2 gap-1.5">
-                  <div className="p-2 rounded-control bg-surface-2 border border-line flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <img src="/PUSD.png" className="w-4 h-4 rounded-full object-contain" alt="PUSD" />
-                      <span className="text-xs font-semibold text-ink">PUSD</span>
-                    </div>
-                    {bchWallet ? (
-                      <span className="text-xs font-mono font-semibold text-emerald-600 dark:text-emerald-400">
-                        {formatCryptoBalance(walletBalances.PUSD, false)}
-                      </span>
-                    ) : (
-                      <button
-                        onClick={() => { setShowAccountModal(false); setWalletModalTab('bch'); setShowWalletModal(true); }}
-                        className="text-[10px] text-ink-3 hover:text-primary transition-colors cursor-pointer font-medium"
-                      >
-                        -- ({t.connectBchNotice})
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="p-2 rounded-control bg-surface-2 border border-line flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <img src="/USDT.png" className="w-4 h-4 rounded-full object-contain" alt="USDT" />
-                      <span className="text-xs font-semibold text-ink">USDT (Polygon)</span>
-                    </div>
-                    {evmWallet ? (
-                      <span className="text-xs font-mono font-semibold text-ink">
-                        {formatCryptoBalance(walletBalances.USDT, false)}
-                      </span>
-                    ) : (
-                      <button
-                        onClick={() => { setShowAccountModal(false); setWalletModalTab('evm'); setShowWalletModal(true); }}
-                        className="text-[10px] text-ink-3 hover:text-primary transition-colors cursor-pointer font-medium"
-                      >
-                        -- ({t.connectEvmNotice})
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="p-2 rounded-control bg-surface-2 border border-line flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <img src="/USDT.png" className="w-4 h-4 rounded-full object-contain" alt="USDT" />
-                      <span className="text-xs font-semibold text-ink">USDT (Solana)</span>
-                    </div>
-                    {solanaWallet ? (
-                      <span className="text-xs font-mono font-semibold text-ink">
-                        {formatCryptoBalance(walletBalances.USDT_SOL ?? 0, false)}
-                      </span>
-                    ) : (
-                      <button
-                        onClick={() => { setShowAccountModal(false); setWalletModalTab('solana'); setShowWalletModal(true); }}
-                        className="text-[10px] text-ink-3 hover:text-primary transition-colors cursor-pointer font-medium"
-                      >
-                        -- ({t.connectSolanaNotice})
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="p-2 rounded-control bg-surface-2 border border-line flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <img src="/BCH.png" className="w-4 h-4 rounded-full object-contain" alt="BCH" />
-                      <span className="text-xs font-semibold text-ink">
-                        {platformNetwork === 'testnet' ? 'tBCH' : 'BCH'}
-                      </span>
-                    </div>
-                    {bchWallet ? (
-                      <span className="text-xs font-mono font-semibold text-ink">
-                        {formatCryptoBalance(walletBalances.BCH, true)}
-                      </span>
-                    ) : (
-                      <button
-                        onClick={() => { setShowAccountModal(false); setWalletModalTab('bch'); setShowWalletModal(true); }}
-                        className="text-[10px] text-ink-3 hover:text-primary transition-colors cursor-pointer font-medium"
-                      >
-                        -- ({t.connectBchNotice})
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="p-2 rounded-control bg-surface-2 border border-line flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <img src="/POL.png" className="w-4 h-4 rounded-full object-contain" alt="POL" />
-                      <span className="text-xs font-semibold text-ink">POL</span>
-                    </div>
-                    {evmWallet ? (
-                      <span className="text-xs font-mono font-semibold text-ink">
-                        {formatCryptoBalance(walletBalances.POL, true)}
-                      </span>
-                    ) : (
-                      <button
-                        onClick={() => { setShowAccountModal(false); setWalletModalTab('evm'); setShowWalletModal(true); }}
-                        className="text-[10px] text-ink-3 hover:text-primary transition-colors cursor-pointer font-medium"
-                      >
-                        -- ({t.connectEvmNotice})
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="p-2 rounded-control bg-surface-2 border border-line flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <img src="/SOL.png" className="w-4 h-4 rounded-full object-contain" alt="SOL" />
-                      <span className="text-xs font-semibold text-ink">
-                        {platformNetwork === 'testnet' ? 'devSOL' : 'SOL'}
-                      </span>
-                    </div>
-                    {solanaWallet ? (
-                      <span className="text-xs font-mono font-semibold text-ink">
-                        {formatCryptoBalance(walletBalances.SOL ?? 0, true)}
-                      </span>
-                    ) : (
-                      <button
-                        onClick={() => { setShowAccountModal(false); setWalletModalTab('solana'); setShowWalletModal(true); }}
-                        className="text-[10px] text-ink-3 hover:text-primary transition-colors cursor-pointer font-medium"
-                      >
-                        -- ({t.connectSolanaNotice})
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="p-2 rounded-control bg-surface-2 border border-line flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <img src="/LTC.png" className="w-4 h-4 rounded-full object-contain" alt="LTC" />
-                      <span className="text-xs font-semibold text-ink">
-                        {platformNetwork === 'testnet' ? 'tLTC' : 'LTC'}
-                      </span>
-                    </div>
-                    <span className="text-xs font-mono font-semibold text-ink">
-                      {formatCryptoBalance(walletBalances.LTC ?? 0, true)}
-                    </span>
-                  </div>
-
-                  <div className="p-2 rounded-control bg-surface-2 border border-line flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <img src="/BNB.png" className="w-4 h-4 rounded-full object-contain" alt="BNB" />
-                      <span className="text-xs font-semibold text-ink">
-                        {platformNetwork === 'testnet' ? 'tBNB' : 'BNB'}
-                      </span>
-                    </div>
-                    <span className="text-xs font-mono font-semibold text-ink">
-                      {formatCryptoBalance(walletBalances.BNB ?? 0, true)}
-                    </span>
-                  </div>
-
-                  <div className="p-2 rounded-control bg-surface-2 border border-line flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <img src="/USDT.png" className="w-4 h-4 rounded-full object-contain" alt="USDT (BSC)" />
-                      <span className="text-xs font-semibold text-ink">
-                        USDT <span className="text-[10px] text-amber-500 font-mono">BEP-20</span>
-                      </span>
-                    </div>
-                    <span className="text-xs font-mono font-semibold text-ink">
-                      {formatCryptoBalance(walletBalances.USDT_BSC ?? 0, false)}
-                    </span>
-                  </div>
-
-                  <div className="p-2 rounded-control bg-surface-2 border border-line flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <img src="/TON.png" className="w-4 h-4 rounded-full object-contain" alt="TON" />
-                      <span className="text-xs font-semibold text-ink">
-                        {platformNetwork === 'testnet' ? 'tTON' : 'TON'}
-                      </span>
-                    </div>
-                    <span className="text-xs font-mono font-semibold text-ink">
-                      {formatCryptoBalance(walletBalances.TON ?? 0, true)}
-                    </span>
-                  </div>
-
-                  <div className="p-2 rounded-control bg-surface-2 border border-line flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <img src="/USDT.png" className="w-4 h-4 rounded-full object-contain" alt="USDT (TON)" />
-                      <span className="text-xs font-semibold text-ink">
-                        USDT <span className="text-[10px] text-sky-500 font-mono">Jetton</span>
-                      </span>
-                    </div>
-                    <span className="text-xs font-mono font-semibold text-ink">
-                      {formatCryptoBalance(walletBalances.USDT_TON ?? 0, false)}
-                    </span>
-                  </div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-2xl sm:text-3xl font-extrabold text-ink tracking-tight font-mono">
+                    ${estimatedPortfolioUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                  <span className="text-xs font-bold text-ink-3">USD</span>
                 </div>
+                <p className="text-[10px] text-ink-3 mt-1">
+                  {lang === 'es' ? 'Valor consolidado en tiempo real según cotizaciones del Oracle Pool' : 'Real-time aggregated valuation across all active networks via Oracle Pool'}
+                </p>
               </div>
 
-              <button 
-                onClick={() => { handleDisconnect(); setShowAccountModal(false); }}
-                className="w-full py-2.5 rounded-control bg-surface-2 hover:bg-rose-500/10 border border-line hover:border-rose-500/30 text-rose-500 font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                <LogOut className="w-3.5 h-3.5" />
-                <span>{t.disconnectAll}</span>
-              </button>
+              {/* Segmented Mode Selector: [Wallets (X/5)] | [Balances] */}
+              <div className="grid grid-cols-2 p-1 bg-surface-2 rounded-control border border-line text-xs font-semibold mb-4">
+                <button
+                  type="button"
+                  onClick={() => setAccountModalTab('wallets')}
+                  className={`py-1.5 px-3 rounded-control transition-all cursor-pointer flex items-center justify-center gap-1.5 text-xs ${
+                    accountModalTab === 'wallets'
+                      ? 'bg-surface text-ink shadow-soft font-bold'
+                      : 'text-ink-3 hover:text-ink'
+                  }`}
+                >
+                  <Wallet className="w-3.5 h-3.5" />
+                  <span>{t.tabWallets}</span>
+                  <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-surface-3 text-ink-2 font-mono">
+                    {[bchWallet, evmWallet, solanaWallet, tonWallet, ltcWallet].filter(Boolean).length}/5
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setAccountModalTab('balances')}
+                  className={`py-1.5 px-3 rounded-control transition-all cursor-pointer flex items-center justify-center gap-1.5 text-xs ${
+                    accountModalTab === 'balances'
+                      ? 'bg-surface text-ink shadow-soft font-bold'
+                      : 'text-ink-3 hover:text-ink'
+                  }`}
+                >
+                  <Coins className="w-3.5 h-3.5" />
+                  <span>{t.tabBalances}</span>
+                </button>
+              </div>
+
+              {/* TAB CONTENT (Scrollable body) */}
+              <div className="overflow-y-auto pr-1 flex-1 space-y-3 custom-scrollbar max-h-[50vh]">
+                {accountModalTab === 'wallets' ? (
+                  <>
+                    {/* 1. BITCOIN CASH */}
+                    <div className="p-3 rounded-control bg-surface-2 border border-line">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <div className="flex items-center gap-1.5">
+                          <img src="/BCH.png" className="w-4 h-4 object-contain" alt="BCH" />
+                          <span className="text-xs font-bold text-ink">
+                            Bitcoin Cash <span className="text-[10px] text-ink-3 font-normal font-mono">({platformNetwork === 'testnet' ? 'Chipnet' : 'Mainnet'})</span>
+                          </span>
+                        </div>
+                        {bchWallet && (
+                          <span className="ui-badge ui-badge-success text-[10px]">
+                            {bchWallet.provider}
+                          </span>
+                        )}
+                      </div>
+                      {bchWallet ? (
+                        !isEditingBch ? (
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-mono text-xs text-ink truncate font-semibold" title={bchWallet.tokenAddress || bchWallet.address}>
+                              {formatAddress(bchWallet.tokenAddress || bchWallet.address)}
+                            </span>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <a
+                                href={getExplorerAddressUrl('bch', bchWallet.tokenAddress || bchWallet.address)}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="p-1.5 rounded-control hover:bg-surface-3 text-ink-3 hover:text-ink transition-colors cursor-pointer"
+                                title={t.viewOnExplorer}
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              </a>
+                              <button
+                                onClick={() => {
+                                  setCustomBchInput(bchWallet.tokenAddress || bchWallet.address);
+                                  setIsEditingBch(true);
+                                }}
+                                className="p-1.5 rounded-control hover:bg-surface-3 text-ink-3 hover:text-ink transition-colors cursor-pointer"
+                                title={t.editAddress}
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => copyToClipboard(bchWallet.tokenAddress || bchWallet.address)}
+                                className="p-1.5 rounded-control hover:bg-surface-3 text-ink-3 hover:text-ink transition-colors cursor-pointer"
+                                title={t.copyAddr}
+                              >
+                                {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                              </button>
+                              <button
+                                onClick={handleDisconnectBch}
+                                className="p-1.5 rounded-control hover:bg-rose-500/10 text-rose-500 transition-colors cursor-pointer"
+                                title={t.disconnectBch}
+                              >
+                                <LogOut className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="space-y-2 mt-1">
+                            <input
+                              type="text"
+                              value={customBchInput}
+                              onChange={(e) => setCustomBchInput(e.target.value)}
+                              placeholder={t.enterCashAddress}
+                              className="w-full px-2.5 py-1.5 text-xs font-mono rounded-control bg-surface border border-line text-ink focus:outline-none focus:border-primary"
+                              autoFocus
+                            />
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                onClick={() => { setIsEditingBch(false); setCustomBchInput(''); }}
+                                className="px-2.5 py-1 text-xs text-ink-3 hover:text-ink rounded-control hover:bg-surface-3 cursor-pointer"
+                              >
+                                {t.cancelEdit}
+                              </button>
+                              <button
+                                onClick={() => handleSaveCustomBch(customBchInput)}
+                                className="px-2.5 py-1 text-xs font-semibold text-white bg-primary hover:bg-primary-hover rounded-control cursor-pointer"
+                              >
+                                {t.saveAddress}
+                              </button>
+                            </div>
+                          </div>
+                        )
+                      ) : (
+                        <button
+                          onClick={() => { setShowAccountModal(false); setWalletModalTab('bch'); setShowWalletModal(true); }}
+                          className="w-full py-2 rounded-control bg-surface hover:bg-surface-3 border border-dashed border-line text-ink font-semibold text-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                        >
+                          <span>{t.connectBchPrompt}</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {/* 2. EVM (POLYGON & BSC) */}
+                    <div className="p-3 rounded-control bg-surface-2 border border-line">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <div className="flex items-center gap-1.5">
+                          <img src="/POL.png" className="w-4 h-4 object-contain" alt="POL" />
+                          <img src="/BNB.png" className="w-4 h-4 object-contain -ml-2.5 border border-surface-2 rounded-full" alt="BNB" />
+                          <span className="text-xs font-bold text-ink">
+                            EVM Multi-Chain <span className="text-[10px] text-ink-3 font-normal font-mono">(Polygon & BSC)</span>
+                          </span>
+                        </div>
+                        {evmWallet && (
+                          <span className="ui-badge text-[10px]">
+                            {evmWallet.provider}
+                          </span>
+                        )}
+                      </div>
+                      {evmWallet ? (
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-mono text-xs text-ink truncate font-semibold" title={evmWallet.address}>
+                              {formatAddress(evmWallet.address)}
+                            </span>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <a
+                                href={getExplorerAddressUrl('evm', evmWallet.address)}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="p-1.5 rounded-control hover:bg-surface-3 text-ink-3 hover:text-ink transition-colors cursor-pointer"
+                                title={t.viewOnExplorer}
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              </a>
+                              <button
+                                onClick={() => copyToClipboard(evmWallet.address)}
+                                className="p-1.5 rounded-control hover:bg-surface-3 text-ink-3 hover:text-ink transition-colors cursor-pointer"
+                                title={t.copyAddr}
+                              >
+                                {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                              </button>
+                              <button
+                                onClick={handleDisconnectEvm}
+                                className="p-1.5 rounded-control hover:bg-rose-500/10 text-rose-500 transition-colors cursor-pointer"
+                                title={t.disconnectEvm}
+                              >
+                                <LogOut className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* 1-Click Switch to Polygon Amoy (80002) or Polygon Mainnet (137) if mismatched */}
+                          {((platformNetwork === 'testnet' && evmWallet.chainId !== 80002) ||
+                            (platformNetwork === 'mainnet' && evmWallet.chainId !== 137)) && (
+                            <button
+                              disabled={isSwitchingChain}
+                              onClick={async () => {
+                                setIsSwitchingChain(true);
+                                try {
+                                  const nextId = await switchEvmNetwork(platformNetwork === 'testnet');
+                                  setEvmWallet(prev => (prev ? { ...prev, chainId: nextId } : null));
+                                  showToast(
+                                    platformNetwork === 'testnet'
+                                      ? (lang === 'es' ? 'Red cambiada a Polygon Amoy Testnet (80002)' : 'Network switched to Polygon Amoy Testnet (80002)')
+                                      : (lang === 'es' ? 'Red cambiada a Polygon PoS (137)' : 'Network switched to Polygon PoS (137)')
+                                  );
+                                } catch (e: any) {
+                                  showToast(e?.message || (lang === 'es' ? 'Error al cambiar de red' : 'Error switching network'), 'error');
+                                } finally {
+                                  setIsSwitchingChain(false);
+                                }
+                              }}
+                              className="w-full py-1.5 px-2.5 rounded-control bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 font-semibold text-[11px] transition-colors cursor-pointer"
+                            >
+                              {isSwitchingChain
+                                ? t.switchingNetwork
+                                : `${t.switchNetworkPrompt} ${platformNetwork === 'testnet' ? 'Polygon Amoy (80002)' : 'Polygon PoS (137)'}`}
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => { setShowAccountModal(false); setWalletModalTab('evm'); setShowWalletModal(true); }}
+                          className="w-full py-2 rounded-control bg-surface hover:bg-surface-3 border border-dashed border-line text-ink font-semibold text-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                        >
+                          <span>{t.connectEvmPrompt}</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {/* 3. SOLANA (SVM) */}
+                    <div className="p-3 rounded-control bg-surface-2 border border-line">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <div className="flex items-center gap-1.5">
+                          <img src="/SOL.png" className="w-4 h-4 object-contain" alt="SOL" />
+                          <span className="text-xs font-bold text-ink">
+                            Solana <span className="text-[10px] text-ink-3 font-normal font-mono">({platformNetwork === 'testnet' ? 'Devnet' : 'Mainnet-Beta'})</span>
+                          </span>
+                        </div>
+                        {solanaWallet && (
+                          <span className="ui-badge text-[10px]">
+                            {solanaWallet.provider}
+                          </span>
+                        )}
+                      </div>
+                      {solanaWallet ? (
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-mono text-xs text-ink truncate font-semibold" title={solanaWallet.address}>
+                            {formatAddress(solanaWallet.address)}
+                          </span>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <a
+                              href={getExplorerAddressUrl('solana', solanaWallet.address)}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="p-1.5 rounded-control hover:bg-surface-3 text-ink-3 hover:text-ink transition-colors cursor-pointer"
+                              title={t.viewOnExplorer}
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" />
+                            </a>
+                            <button
+                              onClick={() => copyToClipboard(solanaWallet.address)}
+                              className="p-1.5 rounded-control hover:bg-surface-3 text-ink-3 hover:text-ink transition-colors cursor-pointer"
+                              title={t.copyAddr}
+                            >
+                              {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                            </button>
+                            <button
+                              onClick={handleDisconnectSolana}
+                              className="p-1.5 rounded-control hover:bg-rose-500/10 text-rose-500 transition-colors cursor-pointer"
+                              title={t.disconnectSolana}
+                            >
+                              <LogOut className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => { setShowAccountModal(false); setWalletModalTab('solana'); setShowWalletModal(true); }}
+                          className="w-full py-2 rounded-control bg-surface hover:bg-surface-3 border border-dashed border-line text-ink font-semibold text-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                        >
+                          <span>{t.connectSolanaPrompt}</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {/* 4. TON BLOCKCHAIN */}
+                    <div className="p-3 rounded-control bg-surface-2 border border-line">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <div className="flex items-center gap-1.5">
+                          <img src="/TON.png" className="w-4 h-4 object-contain" alt="TON" />
+                          <span className="text-xs font-bold text-ink">
+                            TON Blockchain <span className="text-[10px] text-ink-3 font-normal font-mono">(TVM & Jetton)</span>
+                          </span>
+                        </div>
+                        {tonWallet && (
+                          <span className="ui-badge text-[10px]">
+                            {tonWallet.provider}
+                          </span>
+                        )}
+                      </div>
+                      {tonWallet ? (
+                        !isEditingTon ? (
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-mono text-xs text-ink truncate font-semibold" title={tonWallet.address}>
+                              {formatAddress(tonWallet.address)}
+                            </span>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <a
+                                href={getExplorerAddressUrl('ton', tonWallet.address)}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="p-1.5 rounded-control hover:bg-surface-3 text-ink-3 hover:text-ink transition-colors cursor-pointer"
+                                title={t.viewOnExplorer}
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              </a>
+                              <button
+                                onClick={() => {
+                                  setCustomTonInput(tonWallet.address);
+                                  setIsEditingTon(true);
+                                }}
+                                className="p-1.5 rounded-control hover:bg-surface-3 text-ink-3 hover:text-ink transition-colors cursor-pointer"
+                                title={t.editAddress}
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => copyToClipboard(tonWallet.address)}
+                                className="p-1.5 rounded-control hover:bg-surface-3 text-ink-3 hover:text-ink transition-colors cursor-pointer"
+                                title={t.copyAddr}
+                              >
+                                {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                              </button>
+                              <button
+                                onClick={handleDisconnectTon}
+                                className="p-1.5 rounded-control hover:bg-rose-500/10 text-rose-500 transition-colors cursor-pointer"
+                                title={t.disconnectTon}
+                              >
+                                <LogOut className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="space-y-2 mt-1">
+                            <input
+                              type="text"
+                              value={customTonInput}
+                              onChange={(e) => setCustomTonInput(e.target.value)}
+                              placeholder="EQ... o UQ..."
+                              className="w-full px-2.5 py-1.5 text-xs font-mono rounded-control bg-surface border border-line text-ink focus:outline-none focus:border-primary"
+                              autoFocus
+                            />
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                onClick={() => { setIsEditingTon(false); setCustomTonInput(''); }}
+                                className="px-2.5 py-1 text-xs text-ink-3 hover:text-ink rounded-control hover:bg-surface-3 cursor-pointer"
+                              >
+                                {t.cancelEdit}
+                              </button>
+                              <button
+                                onClick={() => handleSaveCustomTon(customTonInput)}
+                                className="px-2.5 py-1 text-xs font-semibold text-white bg-primary hover:bg-primary-hover rounded-control cursor-pointer"
+                              >
+                                {t.saveAddress}
+                              </button>
+                            </div>
+                          </div>
+                        )
+                      ) : (
+                        <button
+                          onClick={() => { setShowAccountModal(false); setWalletModalTab('ton'); setShowWalletModal(true); }}
+                          className="w-full py-2 rounded-control bg-surface hover:bg-surface-3 border border-dashed border-line text-ink font-semibold text-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                        >
+                          <span>{t.connectTonPrompt}</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {/* 5. LITECOIN */}
+                    <div className="p-3 rounded-control bg-surface-2 border border-line">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <div className="flex items-center gap-1.5">
+                          <img src="/LTC.png" className="w-4 h-4 object-contain" alt="LTC" />
+                          <span className="text-xs font-bold text-ink">
+                            Litecoin <span className="text-[10px] text-ink-3 font-normal font-mono">(Native SegWit)</span>
+                          </span>
+                        </div>
+                        {ltcWallet && (
+                          <span className="ui-badge text-[10px]">
+                            {ltcWallet.provider}
+                          </span>
+                        )}
+                      </div>
+                      {ltcWallet ? (
+                        !isEditingLtc ? (
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-mono text-xs text-ink truncate font-semibold" title={ltcWallet.address}>
+                              {formatAddress(ltcWallet.address)}
+                            </span>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <a
+                                href={getExplorerAddressUrl('ltc', ltcWallet.address)}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="p-1.5 rounded-control hover:bg-surface-3 text-ink-3 hover:text-ink transition-colors cursor-pointer"
+                                title={t.viewOnExplorer}
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              </a>
+                              <button
+                                onClick={() => {
+                                  setCustomLtcInput(ltcWallet.address);
+                                  setIsEditingLtc(true);
+                                }}
+                                className="p-1.5 rounded-control hover:bg-surface-3 text-ink-3 hover:text-ink transition-colors cursor-pointer"
+                                title={t.editAddress}
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => copyToClipboard(ltcWallet.address)}
+                                className="p-1.5 rounded-control hover:bg-surface-3 text-ink-3 hover:text-ink transition-colors cursor-pointer"
+                                title={t.copyAddr}
+                              >
+                                {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                              </button>
+                              <button
+                                onClick={handleDisconnectLtc}
+                                className="p-1.5 rounded-control hover:bg-rose-500/10 text-rose-500 transition-colors cursor-pointer"
+                                title={t.disconnectLtc}
+                              >
+                                <LogOut className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="space-y-2 mt-1">
+                            <input
+                              type="text"
+                              value={customLtcInput}
+                              onChange={(e) => setCustomLtcInput(e.target.value)}
+                              placeholder="ltc1... o tltc1..."
+                              className="w-full px-2.5 py-1.5 text-xs font-mono rounded-control bg-surface border border-line text-ink focus:outline-none focus:border-primary"
+                              autoFocus
+                            />
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                onClick={() => { setIsEditingLtc(false); setCustomLtcInput(''); }}
+                                className="px-2.5 py-1 text-xs text-ink-3 hover:text-ink rounded-control hover:bg-surface-3 cursor-pointer"
+                              >
+                                {t.cancelEdit}
+                              </button>
+                              <button
+                                onClick={() => handleSaveCustomLtc(customLtcInput)}
+                                className="px-2.5 py-1 text-xs font-semibold text-white bg-primary hover:bg-primary-hover rounded-control cursor-pointer"
+                              >
+                                {t.saveAddress}
+                              </button>
+                            </div>
+                          </div>
+                        )
+                      ) : (
+                        <button
+                          onClick={() => { setShowAccountModal(false); setWalletModalTab('ltc'); setShowWalletModal(true); }}
+                          className="w-full py-2 rounded-control bg-surface hover:bg-surface-3 border border-dashed border-line text-ink font-semibold text-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                        >
+                          <span>{t.connectLtcPrompt}</span>
+                        </button>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  /* TAB 2: MULTI-CHAIN BALANCES & ASSETS BREAKDOWN */
+                  <div className="space-y-3">
+                    {/* STABLECOINS */}
+                    <div>
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-ink-3 mb-1.5 px-0.5">
+                        {lang === 'es' ? 'Dólares y Monedas Estables' : 'Stablecoins & Dollar Assets'}
+                      </div>
+                      <div className="space-y-1.5">
+                        {/* PUSD (BCH CashTokens) */}
+                        <div className="p-2.5 rounded-control bg-surface-2 border border-line flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <img src="/PUSD.png" className="w-6 h-6 rounded-full object-contain" alt="PUSD" />
+                            <div>
+                              <div className="text-xs font-bold text-ink flex items-center gap-1.5">
+                                <span>PUSD</span>
+                                <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-mono font-semibold">
+                                  CashTokens
+                                </span>
+                              </div>
+                              <span className="text-[10px] text-ink-3">Paytaca USD Stablecoin</span>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                              {bchWallet ? formatCryptoBalance(walletBalances.PUSD, false) : '--'}
+                            </div>
+                            <span className="text-[10px] font-mono text-ink-3">
+                              {bchWallet ? `~$${(walletBalances.PUSD || 0).toFixed(2)} USD` : (lang === 'es' ? 'Conecta BCH' : 'Connect BCH')}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* USDT (Polygon) */}
+                        <div className="p-2.5 rounded-control bg-surface-2 border border-line flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <img src="/USDT.png" className="w-6 h-6 rounded-full object-contain" alt="USDT Polygon" />
+                            <div>
+                              <div className="text-xs font-bold text-ink flex items-center gap-1.5">
+                                <span>USDT</span>
+                                <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400 font-mono font-semibold">
+                                  Polygon PoS
+                                </span>
+                              </div>
+                              <span className="text-[10px] text-ink-3">Tether USD (ERC-20)</span>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-xs font-mono font-bold text-ink">
+                              {evmWallet ? formatCryptoBalance(walletBalances.USDT, false) : '--'}
+                            </div>
+                            <span className="text-[10px] font-mono text-ink-3">
+                              {evmWallet ? `~$${(walletBalances.USDT || 0).toFixed(2)} USD` : (lang === 'es' ? 'Conecta EVM' : 'Connect EVM')}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* USDT (BNB Chain) */}
+                        <div className="p-2.5 rounded-control bg-surface-2 border border-line flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <img src="/USDT.png" className="w-6 h-6 rounded-full object-contain" alt="USDT BSC" />
+                            <div>
+                              <div className="text-xs font-bold text-ink flex items-center gap-1.5">
+                                <span>USDT</span>
+                                <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 font-mono font-semibold">
+                                  BNB BEP-20
+                                </span>
+                              </div>
+                              <span className="text-[10px] text-ink-3">Tether USD (BNB Smart Chain)</span>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-xs font-mono font-bold text-ink">
+                              {evmWallet ? formatCryptoBalance(walletBalances.USDT_BSC ?? 0, false) : '--'}
+                            </div>
+                            <span className="text-[10px] font-mono text-ink-3">
+                              {evmWallet ? `~$${(walletBalances.USDT_BSC || 0).toFixed(2)} USD` : (lang === 'es' ? 'Conecta EVM' : 'Connect EVM')}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* USDT (Solana) */}
+                        <div className="p-2.5 rounded-control bg-surface-2 border border-line flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <img src="/USDT.png" className="w-6 h-6 rounded-full object-contain" alt="USDT Solana" />
+                            <div>
+                              <div className="text-xs font-bold text-ink flex items-center gap-1.5">
+                                <span>USDT</span>
+                                <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400 font-mono font-semibold">
+                                  Solana SPL
+                                </span>
+                              </div>
+                              <span className="text-[10px] text-ink-3">Tether USD (SVM)</span>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-xs font-mono font-bold text-ink">
+                              {solanaWallet ? formatCryptoBalance(walletBalances.USDT_SOL ?? 0, false) : '--'}
+                            </div>
+                            <span className="text-[10px] font-mono text-ink-3">
+                              {solanaWallet ? `~$${(walletBalances.USDT_SOL || 0).toFixed(2)} USD` : (lang === 'es' ? 'Conecta SOL' : 'Connect SOL')}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* USDT (TON Jetton) */}
+                        <div className="p-2.5 rounded-control bg-surface-2 border border-line flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <img src="/USDT.png" className="w-6 h-6 rounded-full object-contain" alt="USDT TON" />
+                            <div>
+                              <div className="text-xs font-bold text-ink flex items-center gap-1.5">
+                                <span>USDT</span>
+                                <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-sky-500/10 text-sky-600 dark:text-sky-400 font-mono font-semibold">
+                                  TON Jetton
+                                </span>
+                              </div>
+                              <span className="text-[10px] text-ink-3">Tether USD (The Open Network)</span>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-xs font-mono font-bold text-ink">
+                              {tonWallet ? formatCryptoBalance(walletBalances.USDT_TON ?? 0, false) : '--'}
+                            </div>
+                            <span className="text-[10px] font-mono text-ink-3">
+                              {tonWallet ? `~$${(walletBalances.USDT_TON || 0).toFixed(2)} USD` : (lang === 'es' ? 'Conecta TON' : 'Connect TON')}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* NATIVE GAS ASSETS */}
+                    <div>
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-ink-3 mb-1.5 px-0.5">
+                        {lang === 'es' ? 'Criptomonedas Nativas (Gas)' : 'Native Layer-1 Assets (Gas)'}
+                      </div>
+                      <div className="space-y-1.5">
+                        {/* BCH */}
+                        <div className="p-2.5 rounded-control bg-surface-2 border border-line flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <img src="/BCH.png" className="w-6 h-6 rounded-full object-contain" alt="BCH" />
+                            <div>
+                              <div className="text-xs font-bold text-ink">
+                                {platformNetwork === 'testnet' ? 'tBCH (Chipnet)' : 'BCH (Native)'}
+                              </div>
+                              <span className="text-[10px] text-ink-3">Bitcoin Cash</span>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-xs font-mono font-bold text-ink">
+                              {bchWallet ? formatCryptoBalance(walletBalances.BCH, true) : '--'}
+                            </div>
+                            <span className="text-[10px] font-mono text-ink-3">
+                              {bchWallet ? `~$${((walletBalances.BCH || 0) * 480).toFixed(2)} USD` : ''}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* POL */}
+                        <div className="p-2.5 rounded-control bg-surface-2 border border-line flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <img src="/POL.png" className="w-6 h-6 rounded-full object-contain" alt="POL" />
+                            <div>
+                              <div className="text-xs font-bold text-ink">POL (Native)</div>
+                              <span className="text-[10px] text-ink-3">Polygon Ecosystem Token</span>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-xs font-mono font-bold text-ink">
+                              {evmWallet ? formatCryptoBalance(walletBalances.POL, true) : '--'}
+                            </div>
+                            <span className="text-[10px] font-mono text-ink-3">
+                              {evmWallet ? `~$${((walletBalances.POL || 0) * 0.45).toFixed(2)} USD` : ''}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* BNB */}
+                        <div className="p-2.5 rounded-control bg-surface-2 border border-line flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <img src="/BNB.png" className="w-6 h-6 rounded-full object-contain" alt="BNB" />
+                            <div>
+                              <div className="text-xs font-bold text-ink">BNB (Native)</div>
+                              <span className="text-[10px] text-ink-3">BNB Smart Chain Gas</span>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-xs font-mono font-bold text-ink">
+                              {evmWallet ? formatCryptoBalance(walletBalances.BNB ?? 0, true) : '--'}
+                            </div>
+                            <span className="text-[10px] font-mono text-ink-3">
+                              {evmWallet ? `~$${((walletBalances.BNB || 0) * 620).toFixed(2)} USD` : ''}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* SOL */}
+                        <div className="p-2.5 rounded-control bg-surface-2 border border-line flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <img src="/SOL.png" className="w-6 h-6 rounded-full object-contain" alt="SOL" />
+                            <div>
+                              <div className="text-xs font-bold text-ink">SOL (Native)</div>
+                              <span className="text-[10px] text-ink-3">Solana Network</span>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-xs font-mono font-bold text-ink">
+                              {solanaWallet ? formatCryptoBalance(walletBalances.SOL ?? 0, true) : '--'}
+                            </div>
+                            <span className="text-[10px] font-mono text-ink-3">
+                              {solanaWallet ? `~$${((walletBalances.SOL || 0) * 180).toFixed(2)} USD` : ''}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* TON */}
+                        <div className="p-2.5 rounded-control bg-surface-2 border border-line flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <img src="/TON.png" className="w-6 h-6 rounded-full object-contain" alt="TON" />
+                            <div>
+                              <div className="text-xs font-bold text-ink">TON (Native)</div>
+                              <span className="text-[10px] text-ink-3">The Open Network</span>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-xs font-mono font-bold text-ink">
+                              {tonWallet ? formatCryptoBalance(walletBalances.TON ?? 0, true) : '--'}
+                            </div>
+                            <span className="text-[10px] font-mono text-ink-3">
+                              {tonWallet ? `~$${((walletBalances.TON || 0) * 5.2).toFixed(2)} USD` : ''}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* LTC */}
+                        <div className="p-2.5 rounded-control bg-surface-2 border border-line flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <img src="/LTC.png" className="w-6 h-6 rounded-full object-contain" alt="LTC" />
+                            <div>
+                              <div className="text-xs font-bold text-ink">LTC (Native)</div>
+                              <span className="text-[10px] text-ink-3">Litecoin SegWit</span>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-xs font-mono font-bold text-ink">
+                              {ltcWallet ? formatCryptoBalance(walletBalances.LTC ?? 0, true) : '--'}
+                            </div>
+                            <span className="text-[10px] font-mono text-ink-3">
+                              {ltcWallet ? `~$${((walletBalances.LTC || 0) * 85).toFixed(2)} USD` : ''}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Modal Footer */}
+              <div className="pt-4 mt-3 border-t border-line shrink-0">
+                <button 
+                  onClick={() => { handleDisconnect(); setShowAccountModal(false); }}
+                  className="w-full py-2.5 rounded-control bg-surface-2 hover:bg-rose-500/10 border border-line hover:border-rose-500/30 text-rose-500 font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>{t.disconnectAll}</span>
+                </button>
+              </div>
             </motion.div>
           </div>
         )}
       </AnimatePresence>
 
-      {/* MULTI-CHAIN WALLET SELECTOR MODAL (BCH CashTokens + EVM Polygon) */}
+      {/* MULTI-CHAIN WALLET SELECTOR MODAL (BCH, EVM, SOLANA, TON, LITECOIN) */}
       <AnimatePresence>
         {showWalletModal && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[130] flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/65 backdrop-blur-md z-[130] flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
             <motion.div
-              initial={{ opacity: 0, scale: 0.96, y: 10 }}
+              initial={{ opacity: 0, scale: 0.95, y: 12 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.96, y: 10 }}
-              transition={{ duration: 0.16, ease: 'easeOut' }}
-              className="bg-surface border border-line rounded-card p-5 sm:p-6 w-full max-w-sm sm:max-w-[400px] shadow-soft relative text-left my-6"
+              exit={{ opacity: 0, scale: 0.95, y: 12 }}
+              transition={{ duration: 0.18, ease: 'easeOut' }}
+              className="bg-surface border border-line rounded-card p-5 sm:p-6 w-full max-w-sm sm:max-w-[430px] shadow-soft relative text-left my-auto"
             >
               {/* Close Button */}
               <button
                 type="button"
                 onClick={() => setShowWalletModal(false)}
                 className="absolute top-4 right-4 w-7 h-7 rounded-full bg-surface-2 hover:bg-surface-3 text-ink-3 hover:text-ink flex items-center justify-center transition-colors cursor-pointer"
-                title="Cerrar"
+                title={lang === 'es' ? 'Cerrar' : 'Close'}
               >
                 <X className="w-3.5 h-3.5" />
               </button>
 
               {/* Header */}
-              <div className="mb-4">
+              <div className="mb-4 pr-6">
                 <h3 className="text-base sm:text-lg font-bold text-ink">
                   {t.modalConnectTitle}
                 </h3>
@@ -2553,116 +3134,92 @@ export default function App() {
                 </p>
               </div>
 
-              {/* Segmented Network Switcher: [Bitcoin Cash] | [EVM (Polygon)] | [Solana (SVM)] */}
-              <div className="grid grid-cols-3 p-1 bg-surface-2 rounded-panel border border-line text-xs font-semibold mb-3">
-                <button
-                  type="button"
-                  onClick={() => setWalletModalTab('bch')}
-                  className={`py-1.5 px-1 rounded-control transition-all cursor-pointer flex items-center justify-center gap-1 text-[11px] sm:text-xs ${
-                    walletModalTab === 'bch'
-                      ? 'bg-surface text-ink shadow-soft font-bold'
-                      : 'text-ink-3 hover:text-ink'
-                  }`}
-                >
-                  <img src="/BCH.png" className="w-3.5 h-3.5 object-contain" alt="BCH" />
-                  <span className="truncate">{t.tabBch}</span>
-                  {bchWallet && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />}
-                </button>
-
+              {/* Segmented Network Switcher: [EVM] | [BCH] | [SOL] | [TON] | [LTC] */}
+              <div className="grid grid-cols-5 p-1 bg-surface-2 rounded-panel border border-line text-xs font-semibold mb-4 gap-1">
                 <button
                   type="button"
                   onClick={() => setWalletModalTab('evm')}
-                  className={`py-1.5 px-1 rounded-control transition-all cursor-pointer flex items-center justify-center gap-1 text-[11px] sm:text-xs ${
+                  className={`py-1.5 px-1 rounded-control transition-all cursor-pointer flex flex-col sm:flex-row items-center justify-center gap-1 text-[11px] ${
                     walletModalTab === 'evm'
                       ? 'bg-surface text-ink shadow-soft font-bold'
                       : 'text-ink-3 hover:text-ink'
                   }`}
+                  title="EVM (Polygon & BSC)"
                 >
-                  <img src="/POL.png" className="w-3.5 h-3.5 object-contain" alt="POL" />
-                  <span className="truncate">{t.tabEvm}</span>
+                  <img src="/POL.png" className="w-3.5 h-3.5 object-contain" alt="EVM" />
+                  <span className="truncate">EVM</span>
                   {evmWallet && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />}
                 </button>
 
                 <button
                   type="button"
+                  onClick={() => setWalletModalTab('bch')}
+                  className={`py-1.5 px-1 rounded-control transition-all cursor-pointer flex flex-col sm:flex-row items-center justify-center gap-1 text-[11px] ${
+                    walletModalTab === 'bch'
+                      ? 'bg-surface text-ink shadow-soft font-bold'
+                      : 'text-ink-3 hover:text-ink'
+                  }`}
+                  title="Bitcoin Cash & CashTokens"
+                >
+                  <img src="/BCH.png" className="w-3.5 h-3.5 object-contain" alt="BCH" />
+                  <span className="truncate">BCH</span>
+                  {bchWallet && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />}
+                </button>
+
+                <button
+                  type="button"
                   onClick={() => setWalletModalTab('solana')}
-                  className={`py-1.5 px-1 rounded-control transition-all cursor-pointer flex items-center justify-center gap-1 text-[11px] sm:text-xs ${
+                  className={`py-1.5 px-1 rounded-control transition-all cursor-pointer flex flex-col sm:flex-row items-center justify-center gap-1 text-[11px] ${
                     walletModalTab === 'solana'
                       ? 'bg-surface text-ink shadow-soft font-bold'
                       : 'text-ink-3 hover:text-ink'
                   }`}
+                  title="Solana (SVM)"
                 >
-                  <img src="https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png" className="w-3.5 h-3.5 object-contain rounded-full" alt="Solana" />
-                  <span className="truncate">{t.tabSolana}</span>
+                  <img src="/SOL.png" className="w-3.5 h-3.5 object-contain" alt="SOL" />
+                  <span className="truncate">SOL</span>
                   {solanaWallet && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setWalletModalTab('ton')}
+                  className={`py-1.5 px-1 rounded-control transition-all cursor-pointer flex flex-col sm:flex-row items-center justify-center gap-1 text-[11px] ${
+                    walletModalTab === 'ton'
+                      ? 'bg-surface text-ink shadow-soft font-bold'
+                      : 'text-ink-3 hover:text-ink'
+                  }`}
+                  title="The Open Network"
+                >
+                  <img src="/TON.png" className="w-3.5 h-3.5 object-contain" alt="TON" />
+                  <span className="truncate">TON</span>
+                  {tonWallet && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setWalletModalTab('ltc')}
+                  className={`py-1.5 px-1 rounded-control transition-all cursor-pointer flex flex-col sm:flex-row items-center justify-center gap-1 text-[11px] ${
+                    walletModalTab === 'ltc'
+                      ? 'bg-surface text-ink shadow-soft font-bold'
+                      : 'text-ink-3 hover:text-ink'
+                  }`}
+                  title="Litecoin SegWit"
+                >
+                  <img src="/LTC.png" className="w-3.5 h-3.5 object-contain" alt="LTC" />
+                  <span className="truncate">LTC</span>
+                  {ltcWallet && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />}
                 </button>
               </div>
 
-              {/* Wallet Options List (Clean, frictionless rows, NO paragraphs) */}
-              <div className="space-y-2">
-                {walletModalTab === 'bch' ? (
+              {/* Wallet Options List */}
+              <div className="space-y-2 max-h-[55vh] overflow-y-auto pr-0.5 custom-scrollbar">
+                {/* 1. EVM TAB */}
+                {walletModalTab === 'evm' && (
                   <>
-                    {/* Paytaca */}
-                    <button
-                      type="button"
-                      onClick={() => handleConnectWallet('paytaca')}
-                      className="w-full flex items-center justify-between p-3 rounded-control bg-surface-2 hover:bg-surface-3 border border-line text-ink transition-all group cursor-pointer"
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-9 h-9 rounded-control bg-surface border border-line flex items-center justify-center shrink-0 p-1.5 shadow-2xs">
-                          <img src="/wizardconnect-logo.png" className="w-6 h-6 object-contain" alt="Paytaca" />
-                        </div>
-                        <div className="text-left min-w-0">
-                          <div className="text-sm font-semibold text-ink flex items-center gap-1.5">
-                            <span>Paytaca Wallet</span>
-                            {bchWallet?.provider?.includes('Paytaca') && (
-                              <span className="text-[10px] text-emerald-500 font-bold">✓</span>
-                            )}
-                          </div>
-                          <span className="text-[11px] text-ink-3">
-                            {hasPaytacaExtension() ? (lang === 'es' ? 'Extensión lista' : 'Extension ready') : 'WizardConnect QR'}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <span className="ui-badge text-[10px]">
-                          {hasPaytacaExtension() ? t.detected : t.mobileQr}
-                        </span>
-                        <ChevronRight className="w-4 h-4 text-ink-3 group-hover:text-ink transition-transform group-hover:translate-x-0.5" />
-                      </div>
-                    </button>
-
-                    {/* Cashonize / BCH WC2 */}
-                    <button
-                      type="button"
-                      onClick={() => handleConnectWallet('bch_wc2')}
-                      className="w-full flex items-center justify-between p-3 rounded-control bg-surface-2 hover:bg-surface-3 border border-line text-ink transition-all group cursor-pointer"
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-9 h-9 rounded-control bg-surface border border-line flex items-center justify-center shrink-0 p-1.5 shadow-2xs">
-                          <img src="/BCH.png" className="w-6 h-6 object-contain" alt="Cashonize" />
-                        </div>
-                        <div className="text-left min-w-0">
-                          <div className="text-sm font-semibold text-ink flex items-center gap-1.5">
-                            <span>Cashonize / WC2</span>
-                            {bchWallet?.source === 'wc2-bch' && (
-                              <span className="text-[10px] text-emerald-500 font-bold">✓</span>
-                            )}
-                          </div>
-                          <span className="text-[11px] text-ink-3">Cashonize Web, Zapit, WC2</span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <span className="ui-badge text-[10px]">Web / QR</span>
-                        <ChevronRight className="w-4 h-4 text-ink-3 group-hover:text-ink transition-transform group-hover:translate-x-0.5" />
-                      </div>
-                    </button>
-                  </>
-                ) : walletModalTab === 'evm' ? (
-                  <>
-                    {/* Discovered EIP-6963 Wallets or MetaMask / Browser Wallet */}
+                    {/* Discovered EIP-6963 Extensions */}
                     {discoveredEvmWallets.length > 0 ? (
-                      discoveredEvmWallets.slice(0, 3).map((w) => (
+                      discoveredEvmWallets.map((w) => (
                         <button
                           key={w.info.rdns}
                           type="button"
@@ -2735,7 +3292,7 @@ export default function App() {
                               <span className="text-[10px] text-emerald-500 font-bold">✓</span>
                             )}
                           </div>
-                          <span className="text-[11px] text-ink-3">Trust, Rainbow, OKX, Mobile</span>
+                          <span className="text-[11px] text-ink-3">Trust, Rainbow, Safe, Móvil QR</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0">
@@ -2743,10 +3300,103 @@ export default function App() {
                         <ChevronRight className="w-4 h-4 text-ink-3 group-hover:text-ink transition-transform group-hover:translate-x-0.5" />
                       </div>
                     </button>
+
+                    <div className="p-2.5 rounded-control bg-surface-3/50 border border-line/60 text-[11px] text-ink-3 flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
+                      <span>{lang === 'es' ? 'Soporte nativo para Polygon PoS (137) y BNB Smart Chain (56).' : 'Native support for Polygon PoS (137) and BNB Smart Chain (56).'}</span>
+                    </div>
                   </>
-                ) : (
+                )}
+
+                {/* 2. BCH TAB */}
+                {walletModalTab === 'bch' && (
                   <>
-                    {/* Phantom Wallet (SVM) */}
+                    {/* Paytaca */}
+                    <button
+                      type="button"
+                      onClick={() => handleConnectWallet('paytaca')}
+                      className="w-full flex items-center justify-between p-3 rounded-control bg-surface-2 hover:bg-surface-3 border border-line text-ink transition-all group cursor-pointer"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-9 h-9 rounded-control bg-surface border border-line flex items-center justify-center shrink-0 p-1.5 shadow-2xs">
+                          <img src="/wizardconnect-logo.png" className="w-6 h-6 object-contain" alt="Paytaca" />
+                        </div>
+                        <div className="text-left min-w-0">
+                          <div className="text-sm font-semibold text-ink flex items-center gap-1.5">
+                            <span>Paytaca Wallet</span>
+                            {bchWallet?.provider?.includes('Paytaca') && (
+                              <span className="text-[10px] text-emerald-500 font-bold">✓</span>
+                            )}
+                          </div>
+                          <span className="text-[11px] text-ink-3">
+                            {hasPaytacaExtension() ? (lang === 'es' ? 'Extensión lista' : 'Extension ready') : 'WizardConnect QR'}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span className="ui-badge text-[10px]">
+                          {hasPaytacaExtension() ? t.detected : t.mobileQr}
+                        </span>
+                        <ChevronRight className="w-4 h-4 text-ink-3 group-hover:text-ink transition-transform group-hover:translate-x-0.5" />
+                      </div>
+                    </button>
+
+                    {/* Cashonize / BCH WC2 */}
+                    <button
+                      type="button"
+                      onClick={() => handleConnectWallet('bch_wc2')}
+                      className="w-full flex items-center justify-between p-3 rounded-control bg-surface-2 hover:bg-surface-3 border border-line text-ink transition-all group cursor-pointer"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-9 h-9 rounded-control bg-surface border border-line flex items-center justify-center shrink-0 p-1.5 shadow-2xs">
+                          <img src="/BCH.png" className="w-6 h-6 object-contain" alt="Cashonize" />
+                        </div>
+                        <div className="text-left min-w-0">
+                          <div className="text-sm font-semibold text-ink flex items-center gap-1.5">
+                            <span>Cashonize / WC2</span>
+                            {bchWallet?.source === 'wc2-bch' && (
+                              <span className="text-[10px] text-emerald-500 font-bold">✓</span>
+                            )}
+                          </div>
+                          <span className="text-[11px] text-ink-3">Cashonize Web, Zapit, WC2</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span className="ui-badge text-[10px]">Web / QR</span>
+                        <ChevronRight className="w-4 h-4 text-ink-3 group-hover:text-ink transition-transform group-hover:translate-x-0.5" />
+                      </div>
+                    </button>
+
+                    {/* Manual CashAddress */}
+                    <div className="p-3 rounded-control bg-surface-2 border border-line">
+                      <div className="text-xs font-semibold text-ink mb-1 flex items-center justify-between">
+                        <span>{t.manualAddressTitle}</span>
+                        <span className="text-[10px] text-ink-3">bitcoincash:...</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 mt-2">
+                        <input
+                          type="text"
+                          value={customBchInput}
+                          onChange={(e) => setCustomBchInput(e.target.value)}
+                          placeholder="bchtest:... o bitcoincash:..."
+                          className="flex-1 px-2.5 py-1.5 text-xs font-mono rounded-control bg-surface border border-line text-ink focus:outline-none focus:border-primary"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleSaveCustomBch(customBchInput)}
+                          className="px-3 py-1.5 text-xs font-semibold text-white bg-primary hover:bg-primary-hover rounded-control cursor-pointer shrink-0"
+                        >
+                          {t.saveAddress}
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {/* 3. SOLANA TAB */}
+                {walletModalTab === 'solana' && (
+                  <>
+                    {/* Phantom Wallet */}
                     <button
                       type="button"
                       onClick={() => handleConnectSolana('phantom')}
@@ -2780,7 +3430,7 @@ export default function App() {
                       </div>
                     </button>
 
-                    {/* Solflare Wallet (SVM) */}
+                    {/* Solflare Wallet */}
                     <button
                       type="button"
                       onClick={() => handleConnectSolana('solflare')}
@@ -2811,12 +3461,138 @@ export default function App() {
                     </button>
                   </>
                 )}
+
+                {/* 4. TON TAB */}
+                {walletModalTab === 'ton' && (
+                  <>
+                    {/* Tonkeeper */}
+                    <button
+                      type="button"
+                      onClick={() => handleConnectTon('Tonkeeper')}
+                      className="w-full flex items-center justify-between p-3 rounded-control bg-surface-2 hover:bg-surface-3 border border-line text-ink transition-all group cursor-pointer"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-9 h-9 rounded-control bg-surface border border-line flex items-center justify-center shrink-0 p-1.5 shadow-2xs">
+                          <img src="/TON.png" className="w-6 h-6 object-contain" alt="Tonkeeper" />
+                        </div>
+                        <div className="text-left min-w-0">
+                          <div className="text-sm font-semibold text-ink flex items-center gap-1.5">
+                            <span>Tonkeeper</span>
+                            {tonWallet?.provider?.includes('Tonkeeper') && (
+                              <span className="text-[10px] text-emerald-500 font-bold">✓</span>
+                            )}
+                          </div>
+                          <span className="text-[11px] text-ink-3">
+                            {typeof window !== 'undefined' && ((window as any)?.tonkeeper || (window as any)?.ton)
+                              ? (lang === 'es' ? 'Extensión lista' : 'Extension ready')
+                              : (lang === 'es' ? 'Conexión Web / Extensión' : 'Web / Extension')}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span className="ui-badge text-[10px]">
+                          {typeof window !== 'undefined' && ((window as any)?.tonkeeper || (window as any)?.ton)
+                            ? t.detected
+                            : 'Tonkeeper'}
+                        </span>
+                        <ChevronRight className="w-4 h-4 text-ink-3 group-hover:text-ink transition-transform group-hover:translate-x-0.5" />
+                      </div>
+                    </button>
+
+                    {/* Telegram @wallet */}
+                    <a
+                      href="https://t.me/wallet"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="w-full flex items-center justify-between p-3 rounded-control bg-surface-2 hover:bg-surface-3 border border-line text-ink transition-all group cursor-pointer"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-9 h-9 rounded-control bg-surface border border-line flex items-center justify-center shrink-0 p-1.5 shadow-2xs">
+                          <img src="/TON.png" className="w-6 h-6 object-contain" alt="Telegram Wallet" />
+                        </div>
+                        <div className="text-left min-w-0">
+                          <div className="text-sm font-semibold text-ink flex items-center gap-1.5">
+                            <span>Telegram @wallet</span>
+                          </div>
+                          <span className="text-[11px] text-ink-3">Móvil & Desktop Telegram Bot</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span className="ui-badge text-[10px]">Telegram</span>
+                        <ExternalLink className="w-4 h-4 text-ink-3 group-hover:text-ink transition-transform group-hover:translate-x-0.5" />
+                      </div>
+                    </a>
+
+                    {/* Manual TON Address */}
+                    <div className="p-3 rounded-control bg-surface-2 border border-line">
+                      <div className="text-xs font-semibold text-ink mb-1 flex items-center justify-between">
+                        <span>{lang === 'es' ? 'Dirección TON Manual' : 'Manual TON Address'}</span>
+                        <span className="text-[10px] text-ink-3">EQ... o UQ...</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 mt-2">
+                        <input
+                          type="text"
+                          value={customTonInput}
+                          onChange={(e) => setCustomTonInput(e.target.value)}
+                          placeholder="EQ... o UQ..."
+                          className="flex-1 px-2.5 py-1.5 text-xs font-mono rounded-control bg-surface border border-line text-ink focus:outline-none focus:border-primary"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleSaveCustomTon(customTonInput)}
+                          className="px-3 py-1.5 text-xs font-semibold text-white bg-primary hover:bg-primary-hover rounded-control cursor-pointer shrink-0"
+                        >
+                          {t.saveAddress}
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {/* 5. LTC TAB */}
+                {walletModalTab === 'ltc' && (
+                  <>
+                    {/* Litewallet / Native SegWit info */}
+                    <div className="p-3 rounded-control bg-surface-2 border border-line">
+                      <div className="flex items-center gap-3 mb-2">
+                        <div className="w-9 h-9 rounded-control bg-surface border border-line flex items-center justify-center shrink-0 p-1.5 shadow-2xs">
+                          <img src="/LTC.png" className="w-6 h-6 object-contain" alt="Litewallet" />
+                        </div>
+                        <div>
+                          <div className="text-sm font-semibold text-ink">Litewallet & SegWit</div>
+                          <span className="text-[11px] text-ink-3">Dirección nativa bech32 (ltc1...)</span>
+                        </div>
+                      </div>
+                      <p className="text-[11px] text-ink-3 mb-2">
+                        {lang === 'es' 
+                          ? 'Litecoin opera con depósitos a bóvedas UTXO. Pega tu dirección de recepción de Litewallet o Exodus:'
+                          : 'Litecoin operates via UTXO vaults. Paste your Litewallet or Exodus receiving address:'}
+                      </p>
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="text"
+                          value={customLtcInput}
+                          onChange={(e) => setCustomLtcInput(e.target.value)}
+                          placeholder={platformNetwork === 'testnet' ? 'tltc1... o m...' : 'ltc1... o L...'}
+                          className="flex-1 px-2.5 py-1.5 text-xs font-mono rounded-control bg-surface border border-line text-ink focus:outline-none focus:border-primary"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleSaveCustomLtc(customLtcInput)}
+                          className="px-3 py-1.5 text-xs font-semibold text-white bg-primary hover:bg-primary-hover rounded-control cursor-pointer shrink-0"
+                        >
+                          {t.saveAddress}
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
 
               {/* Minimalist 1-Line Footer */}
               <div className="pt-3 mt-3 border-t border-line flex items-center justify-between text-[11px] text-ink-3">
-                <span>{t.needWallet}</span>
-                <div className="flex items-center gap-2">
+                <span className="truncate">{lang === 'es' ? '100% Sin Custodia' : '100% Non-Custodial'}</span>
+                <div className="flex items-center gap-2 shrink-0">
                   <a
                     href="https://paytaca.com"
                     target="_blank"
@@ -2842,6 +3618,15 @@ export default function App() {
                     className="hover:text-ink font-semibold text-purple-400 transition-colors"
                   >
                     Phantom
+                  </a>
+                  <span>·</span>
+                  <a
+                    href="https://tonkeeper.com"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="hover:text-ink font-semibold text-sky-400 transition-colors"
+                  >
+                    Tonkeeper
                   </a>
                 </div>
               </div>
