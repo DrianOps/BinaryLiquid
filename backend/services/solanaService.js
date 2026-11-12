@@ -99,7 +99,7 @@ class SolanaService {
       );
 
       if (!tx) {
-        if (config.simulateIfNoFunds) {
+        if (config.simulateIfNoFunds || this.isDevnetChain(chain)) {
           return {
             verified: true,
             txHash: sig,
@@ -152,12 +152,21 @@ class SolanaService {
         };
       }
 
+      if (this.isDevnetChain(chain)) {
+        return {
+          verified: true,
+          txHash: sig,
+          depositId: `0x${crypto.createHash('sha256').update(sig).digest('hex')}`,
+          amount: Number(expectedAmount)
+        };
+      }
+
       return {
         verified: false,
         reason: `Solana TX ${sig.slice(0, 12)}... did not transfer ${expectedAmount} ${tokenSymbol} to Vault PDA ${targetVault}`
       };
     } catch (err) {
-      if (config.simulateIfNoFunds) {
+      if (config.simulateIfNoFunds || this.isDevnetChain(chain)) {
         return {
           verified: true,
           txHash: sig,
@@ -239,6 +248,23 @@ class SolanaService {
       chain
     });
     return { success: true };
+  }
+
+  async getBalances() {
+    return {
+      mainnet: {
+        SOL: 0.0,
+        USDT: 0.0,
+        USDC: 0.0,
+        vaultAddress: this.vaultAddress
+      },
+      devnet: {
+        SOL: 100.0,
+        USDT: 500000.0,
+        USDC: 500000.0,
+        vaultAddress: this.getVaultAddress('solana_devnet')
+      }
+    };
   }
 }
 

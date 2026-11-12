@@ -11,6 +11,8 @@ export interface TokenInfo {
   icon: string;
   decimals: number;
   isBch: boolean;
+  isSolana?: boolean;
+  id?: string;
   isSponsor?: boolean;
   isVerified?: boolean;
   categoryOrAddress?: string;
@@ -20,6 +22,7 @@ export interface TokenInfo {
 
 export const SUPPORTED_TOKENS: TokenInfo[] = [
   {
+    id: 'pusd_bch',
     symbol: 'PUSD',
     name: 'ParyonUSD',
     network: 'Bitcoin Cash (Mainnet)',
@@ -32,17 +35,33 @@ export const SUPPORTED_TOKENS: TokenInfo[] = [
     categoryOrAddress: 'a5c0b1f900000000000000000000000000000000000000000000000000000000'
   },
   {
+    id: 'usdt_polygon',
     symbol: 'USDT',
-    name: 'Tether USD',
+    name: 'Tether USD (Polygon)',
     network: 'Polygon (Mainnet)',
     networkBadge: 'Polygon PoS',
     icon: '/USDT.png',
     decimals: 6,
     isBch: false,
+    isSolana: false,
     isVerified: true,
     categoryOrAddress: '0xc2132D05D31c914a87C6611C10748AEb04B58e8F'
   },
   {
+    id: 'usdt_solana',
+    symbol: 'USDT',
+    name: 'Tether USD (Solana)',
+    network: 'Solana (Mainnet)',
+    networkBadge: 'Solana SPL',
+    icon: '/USDT.png',
+    decimals: 6,
+    isBch: false,
+    isSolana: true,
+    isVerified: true,
+    categoryOrAddress: 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB'
+  },
+  {
+    id: 'usdc_polygon',
     symbol: 'USDC',
     name: 'USD Coin',
     network: 'Polygon (Mainnet)',
@@ -54,7 +73,8 @@ export const SUPPORTED_TOKENS: TokenInfo[] = [
     categoryOrAddress: '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359'
   },
   {
-    symbol: 'MUSD',
+    id: 'musd_bch',
+    symbol: 'MoriaUSD',
     name: 'MoriaUSD',
     network: 'Bitcoin Cash (Mainnet)',
     networkBadge: 'BCH CashTokens',
@@ -65,6 +85,7 @@ export const SUPPORTED_TOKENS: TokenInfo[] = [
     categoryOrAddress: 'b7d0c2e800000000000000000000000000000000000000000000000000000000'
   },
   {
+    id: 'lift_bch',
     symbol: 'LIFT',
     name: 'Paytaca LIFT',
     network: 'Bitcoin Cash (Mainnet)',
@@ -76,6 +97,7 @@ export const SUPPORTED_TOKENS: TokenInfo[] = [
     categoryOrAddress: '5932b2fd4915d6a75d3ec53282cd49118149a2176ee67ed68b1111ff0786f7fc'
   },
   {
+    id: 'bch_l1',
     symbol: 'BCH',
     name: 'Bitcoin Cash',
     network: 'Bitcoin Cash (Mainnet)',
@@ -86,6 +108,7 @@ export const SUPPORTED_TOKENS: TokenInfo[] = [
     isVerified: true
   },
   {
+    id: 'pol_l1',
     symbol: 'POL',
     name: 'Polygon Ecosystem Token',
     network: 'Polygon (Mainnet)',
@@ -96,6 +119,7 @@ export const SUPPORTED_TOKENS: TokenInfo[] = [
     isVerified: true
   },
   {
+    id: 'eth_l1',
     symbol: 'ETH',
     name: 'Ethereum',
     network: 'Ethereum (Mainnet)',
@@ -106,6 +130,7 @@ export const SUPPORTED_TOKENS: TokenInfo[] = [
     isVerified: true
   },
   {
+    id: 'sol_spl',
     symbol: 'SOL',
     name: 'Solana',
     network: 'Solana (Mainnet)',
@@ -113,9 +138,11 @@ export const SUPPORTED_TOKENS: TokenInfo[] = [
     icon: '/SOL.png',
     decimals: 9,
     isBch: false,
+    isSolana: true,
     isVerified: true
   },
   {
+    id: 'bnb_bsc',
     symbol: 'BNB',
     name: 'BNB Smart Chain',
     network: 'BNB Chain (Mainnet)',
@@ -132,6 +159,7 @@ interface TokenSelectModalProps {
   onClose: () => void;
   onSelect: (token: TokenInfo) => void;
   selectedTokenSymbol: string;
+  selectedTokenId?: string;
   title?: string;
   customTokens?: TokenInfo[];
   isTestnet?: boolean;
@@ -142,6 +170,7 @@ export default function TokenSelectModal({
   onClose,
   onSelect,
   selectedTokenSymbol,
+  selectedTokenId,
   title = 'Select a token',
   customTokens = [],
   isTestnet = false
@@ -153,22 +182,24 @@ export default function TokenSelectModal({
       const sym = t.symbol.toUpperCase();
 
       if (isTestnet) {
-        const isActiveInTestnet = sym === 'PUSD' || sym === 'USDT';
+        const isActiveInTestnet = sym === 'PUSD' || sym === 'USDT' || sym === 'SOL';
         return {
           ...t,
           network: t.isBch
             ? 'BCH Chipnet (Testnet4)'
-            : sym === 'SOL'
+            : t.isSolana || sym === 'SOL'
             ? 'Solana Devnet'
             : 'Polygon Amoy (Testnet)',
           networkBadge: t.isBch
             ? 'Chipnet CashTokens'
-            : sym === 'SOL'
-            ? 'Devnet SPL'
+            : t.isSolana || sym === 'SOL'
+            ? 'Solana Devnet'
             : 'Polygon Amoy',
           categoryOrAddress:
             sym === 'PUSD'
               ? DEPLOYED_TESTNET_CONTRACTS.chipnetPusdCategory
+              : t.isSolana
+              ? 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB'
               : sym === 'USDT'
               ? DEPLOYED_TESTNET_CONTRACTS.amoyUsdtAddress
               : sym === 'USDC'
@@ -261,7 +292,9 @@ export default function TokenSelectModal({
             <div className="text-center py-10 ui-muted">No tokens found</div>
           ) : (
             filtered.map(t => {
-              const isSelected = selectedTokenSymbol === t.symbol && !t.disabled;
+              const isSelected = selectedTokenId
+                ? t.id === selectedTokenId && !t.disabled
+                : selectedTokenSymbol === t.symbol && !t.disabled;
               return (
                 <button
                   key={t.symbol + t.network}

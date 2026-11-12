@@ -2,6 +2,7 @@ import { config } from '../config.js';
 import { db } from './db.js';
 import { bchService } from './bchService.js';
 import { evmService } from './evmService.js';
+import { solanaService } from './solanaService.js';
 import { oraclePool } from './oraclePool.js';
 import { poolService } from './poolService.js';
 import { watchmanSentinel } from './watchmanClient.js';
@@ -122,8 +123,36 @@ class RelayerEngine {
           const isBchDest =
             String(order.toChain || '').toLowerCase().includes('bch') ||
             String(order.toChain || '').toLowerCase().includes('chipnet');
+          const isSolanaDest = solanaService.isSolanaChain(order.toChain);
 
-          if (!isBchDest) {
+          if (isSolanaDest) {
+            const tokenCfg = solanaService.getTokenConfig(order.toToken, order.toChain);
+            const vaultAddress = solanaService.getVaultAddress(order.toChain);
+
+            const auth = await watchmanSentinel.auditAndAuthorize({
+              destinationType: 'SOLANA',
+              originTxHash: order.depositTxHash,
+              fromToken: order.fromToken,
+              toToken: order.toToken,
+              recipient: order.recipientAddress,
+              tokenAddress: tokenCfg.mint,
+              tokenDecimals: tokenCfg.decimals || 6,
+              amount: expectedOutput,
+              rate: currentRate,
+              vaultContractAddress: vaultAddress
+            });
+            if (!auth.approved) throw new Error(auth.reason);
+
+            payoutResult = await solanaService.releaseFromVault({
+              bchTxHashBytes32: auth.bchTxHashBytes32,
+              recipientAddress: order.recipientAddress,
+              amount: expectedOutput,
+              tokenSymbol: order.toToken,
+              chain: order.toChain,
+              nonce: auth.nonce,
+              watchmanSignature: auth.proof
+            });
+          } else if (!isBchDest) {
             const isAmoy = evmService.isAmoyChain(order.toChain);
             const chainId = isAmoy ? config.evm.amoyChainId : config.evm.chainId;
             const vaultAddress = evmService.getVaultAddress(order.toChain);
@@ -227,11 +256,21 @@ class RelayerEngine {
       const toChainLower = String(swap.toChain || '').toLowerCase();
       const isBchOrigin = fromChainLower.includes('bch') || fromChainLower.includes('chipnet');
       const isBchDestination = toChainLower.includes('bch') || toChainLower.includes('chipnet');
+      const isSolanaOrigin = solanaService.isSolanaChain(swap.fromChain);
+      const isSolanaDestination = solanaService.isSolanaChain(swap.toChain);
 
       let verifyResult;
 
       // 1. Verify deposit inside Non-Custodial Smart Contract / Covenant
-      if (isBchOrigin) {
+      if (isSolanaOrigin) {
+        verifyResult = await solanaService.verifyDeposit(
+          swap.depositTxHash,
+          swap.fromAmount,
+          swap.fromToken,
+          swap.depositAddress,
+          swap.fromChain
+        );
+      } else if (isBchOrigin) {
         verifyResult = await bchService.verifyDeposit(
           swap.depositTxHash,
           swap.fromAmount,
@@ -278,8 +317,41 @@ class RelayerEngine {
       let payoutResult;
       let watchmanAttestation = null;
 
-      if (!isBchDestination) {
-        // Inbound to EVM (from BCH CashTokens) -> ECDSA EIP-191 Attestation
+      if (isSolanaDestination) {
+        // Inbound to Solana SVM Anchor Vault -> Ed25519 Attestation
+        const tokenCfg = solanaService.getTokenConfig(swap.toToken, swap.toChain);
+        const vaultAddress = solanaService.getVaultAddress(swap.toChain);
+
+        const auth = await watchmanSentinel.auditAndAuthorize({
+          destinationType: 'SOLANA',
+          originTxHash: canonicalOriginHash,
+          fromToken: swap.fromToken,
+          toToken: swap.toToken,
+          recipient: swap.recipientAddress,
+          tokenAddress: tokenCfg.mint,
+          tokenDecimals: tokenCfg.decimals || 6,
+          amount: swap.toAmount,
+          rate: swap.oracleRate || 1.0,
+          vaultContractAddress: vaultAddress
+        });
+
+        if (!auth.approved) {
+          watchmanOriginRef = null;
+          throw new Error(`Watchman Sentinel rejected swap: ${auth.reason}`);
+        }
+        watchmanAttestation = auth.proof;
+
+        payoutResult = await solanaService.releaseFromVault({
+          bchTxHashBytes32: auth.bchTxHashBytes32,
+          recipientAddress: swap.recipientAddress,
+          amount: swap.toAmount,
+          tokenSymbol: swap.toToken,
+          chain: swap.toChain,
+          nonce: auth.nonce,
+          watchmanSignature: auth.proof
+        });
+      } else if (!isBchDestination) {
+        // Inbound to EVM (from BCH CashTokens or Solana SVM) -> ECDSA EIP-191 Attestation
         const isAmoy = evmService.isAmoyChain(swap.toChain);
         const chainId = isAmoy ? config.evm.amoyChainId : config.evm.chainId;
         const vaultAddress = evmService.getVaultAddress(swap.toChain);
@@ -342,6 +414,8 @@ class RelayerEngine {
       if (payoutResult.success) {
         if (isBchOrigin) {
           bchService.sweepEscrowToVault(swap).catch(() => {});
+        } else if (isSolanaOrigin) {
+          solanaService.markDepositSettled(verifyResult.depositId, payoutResult.txHash, swap.fromChain).catch(() => {});
         } else if (verifyResult.depositId) {
           evmService.markDepositSettled(verifyResult.depositId, payoutResult.txHash, swap.fromChain).catch(() => {});
         }

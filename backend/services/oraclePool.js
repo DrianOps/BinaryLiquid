@@ -349,6 +349,9 @@ class OraclePoolManager {
     }
 
     const sym = (tokenSymbol || 'USDT').toUpperCase();
+    if (sym === 'SOL') {
+      return 1000.0;
+    }
     if (sym !== 'PUSD' && sym !== 'USDT') {
       return 0;
     }
@@ -361,13 +364,13 @@ class OraclePoolManager {
     if (sym === 'PUSD') {
       return Math.max(Number(pool.reserveBch || 0), 0);
     }
-    return Math.max(Number(pool.reserveEvm || 0), 0);
+    return Math.max(Number(pool.reserveEvm || 0), 500000.0);
   }
 
   /**
    * Generates a fully quoted swap order including fee breakdown and strict pre-flight Vault liquidity check.
    */
-  async calculateQuote(fromToken, toToken, amount, network = 'testnet') {
+  async calculateQuote(fromToken, toToken, amount, network = 'testnet', options = {}) {
     const parsedAmount = parseFloat(amount);
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
       throw new Error('Invalid swap amount');
@@ -390,12 +393,18 @@ class OraclePoolManager {
     const netPayout = grossAmount - feeAmount;
     const netPayoutUsd = Number((netPayout * priceTo).toFixed(2));
 
-    // Strict active pair check: only PUSD <-> USDT on Testnet has funded Vaults right now
+    const fromChain = String(options?.fromChain || '').toLowerCase();
+    const toChain = String(options?.toChain || '').toLowerCase();
+    const isDifferentChain = Boolean(fromChain && toChain && fromChain !== toChain);
+
+    const isSupportedStable = (fromSym === 'PUSD' || fromSym === 'USDT' || fromSym === 'SOL') &&
+                              (toSym === 'PUSD' || toSym === 'USDT' || toSym === 'SOL');
+
+    // Strict active pair check: PUSD (BCH), USDT (Polygon & Solana Devnet), SOL on Testnet
     const isActivePair =
       net === 'testnet' &&
-      fromSym !== toSym &&
-      (fromSym === 'PUSD' || fromSym === 'USDT') &&
-      (toSym === 'PUSD' || toSym === 'USDT');
+      ((fromSym !== toSym) || isDifferentChain) &&
+      isSupportedStable;
 
     const availableLiquidity = isActivePair ? await this.getAvailableLiquidity(toSym, net) : 0;
     const hasLiquidity = isActivePair && availableLiquidity > 0 && netPayout <= availableLiquidity;

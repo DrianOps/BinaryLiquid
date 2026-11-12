@@ -8,6 +8,7 @@ import { oracle, oraclePool } from './services/oraclePool.js';
 import { rpcPool } from './services/rpcPool.js';
 import { bchService } from './services/bchService.js';
 import { evmService } from './services/evmService.js';
+import { solanaService } from './services/solanaService.js';
 import { relayerEngine } from './services/relayerEngine.js';
 import { poolService } from './services/poolService.js';
 import { lendingService } from './services/lendingService.js';
@@ -77,9 +78,10 @@ app.get('/health', (req, res) => res.json({ status: 'OK', timestamp: new Date().
 // Status & Protocol Config
 app.get('/api/status', async (req, res) => {
   try {
-    const [bchBalances, evmBalances] = await Promise.all([
+    const [bchBalances, evmBalances, solanaBalances] = await Promise.all([
       bchService.getBalances(),
-      evmService.getBalances()
+      evmService.getBalances(),
+      solanaService.getBalances()
     ]);
 
     const treasury = db.getTreasuryStats();
@@ -87,7 +89,7 @@ app.get('/api/status', async (req, res) => {
     res.json({
       status: 'OPERATIONAL',
       protocol: 'BinaryLiquid 100% Non-Custodial Cross-Chain Protocol',
-      architecture: 'Smart Contract Vaults (Solidity + CashScript P2SH32 Covenants) + The Watchman Sentinel',
+      architecture: 'Smart Contract Vaults (Solidity + CashScript P2SH32 Covenants + Solana SVM Anchor PDA) + The Watchman Sentinel',
       feePercentage: config.feePercentage * 100, // 0.3%
       networks: {
         bch: {
@@ -107,6 +109,13 @@ app.get('/api/status', async (req, res) => {
           tokens: config.evm.tokens,
           amoyTokens: config.evm.amoyTokens,
           balances: evmBalances
+        },
+        solana: {
+          cluster: config.solana?.cluster || 'devnet',
+          vaultAddress: solanaService.getVaultAddress('solana_mainnet'),
+          devnetVaultAddress: solanaService.getVaultAddress('solana_devnet'),
+          tokens: config.solana?.tokens,
+          balances: solanaBalances
         }
       },
       infrastructure: {
@@ -181,12 +190,12 @@ app.get('/api/contracts/manifest', (req, res) => {
 // Oracle Quote (Dynamic Multi-Source with Failover)
 app.get('/api/quote', async (req, res) => {
   try {
-    const { fromToken, toToken, amount, network } = req.query;
+    const { fromToken, toToken, amount, network, fromChain, toChain } = req.query;
     if (!fromToken || !toToken || !amount) {
       return res.status(400).json({ error: 'Missing required query parameters: fromToken, toToken, amount' });
     }
 
-    const quote = await oraclePool.calculateQuote(fromToken, toToken, amount, network || 'testnet');
+    const quote = await oraclePool.calculateQuote(fromToken, toToken, amount, network || 'testnet', { fromChain, toChain });
     res.json({ success: true, quote });
   } catch (err) {
     res.status(400).json({ success: false, error: err.message });
@@ -214,33 +223,42 @@ app.post('/api/swap/create', async (req, res) => {
       });
     }
 
+    const fromChainLower = fromChain.toLowerCase();
+    const toChainLower = toChain.toLowerCase();
+
     const isTestnetSwap =
-      fromChain.toLowerCase().includes('chipnet') ||
-      fromChain.toLowerCase().includes('amoy') ||
-      toChain.toLowerCase().includes('chipnet') ||
-      toChain.toLowerCase().includes('amoy');
+      fromChainLower.includes('chipnet') ||
+      fromChainLower.includes('amoy') ||
+      fromChainLower.includes('devnet') ||
+      fromChainLower.includes('solana') ||
+      toChainLower.includes('chipnet') ||
+      toChainLower.includes('amoy') ||
+      toChainLower.includes('devnet') ||
+      toChainLower.includes('solana');
 
     if (!isTestnetSwap) {
       return res.status(400).json({
         success: false,
-        error: 'Sin Liquidez en Mainnet actualmente. Cambia a la red Testnet para operar el par PUSD (BCH Chipnet) ⟷ USDT (Polygon Amoy).'
+        error: 'Sin Liquidez en Mainnet actualmente. Cambia a la red Testnet para operar en BCH Chipnet, Polygon Amoy o Solana Devnet.'
       });
     }
 
-    const allowedTestnet = ['PUSD', 'USDT'];
+    const allowedTestnet = ['PUSD', 'USDT', 'SOL'];
+    const isDifferentChain = fromChainLower !== toChainLower;
+
     if (
       !allowedTestnet.includes(fromToken.toUpperCase()) ||
       !allowedTestnet.includes(toToken.toUpperCase()) ||
-      fromToken.toUpperCase() === toToken.toUpperCase()
+      (fromToken.toUpperCase() === toToken.toUpperCase() && !isDifferentChain)
     ) {
       return res.status(400).json({
         success: false,
-        error: 'Sin Liquidez para este activo. En Testnet únicamente está habilitado con liquidez activa el par PUSD (BCH Chipnet) ⟷ USDT (Polygon Amoy).'
+        error: 'Sin Liquidez para este activo o par idéntico en la misma red. En Testnet están habilitados PUSD (BCH Chipnet), USDT (Polygon Amoy) y USDT (Solana Devnet).'
       });
     }
 
     // Calculate quotation with live oracle pool
-    const quote = await oraclePool.calculateQuote(fromToken, toToken, amount, 'testnet');
+    const quote = await oraclePool.calculateQuote(fromToken, toToken, amount, 'testnet', { fromChain, toChain });
 
     if (!quote.hasLiquidity) {
       return res.status(400).json({
@@ -263,8 +281,9 @@ app.post('/api/swap/create', async (req, res) => {
       });
     }
 
-    const isBchOrigin = fromChain.toLowerCase().includes('bch') || fromChain.toLowerCase().includes('chipnet');
-    const isChipnet = fromChain.toLowerCase().includes('chipnet');
+    const isBchOrigin = fromChainLower.includes('bch') || fromChainLower.includes('chipnet');
+    const isSolanaOrigin = solanaService.isSolanaChain(fromChain);
+    const isChipnet = fromChainLower.includes('chipnet');
     const orderSeed = `bliq_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
     let depositAddress;
@@ -274,7 +293,14 @@ app.post('/api/swap/create', async (req, res) => {
     let tokenContractAddress = null;
     let timelockExpiry = Math.floor(Date.now() / 1000) + 86400;
 
-    if (isBchOrigin) {
+    if (isSolanaOrigin) {
+      depositAddress = solanaService.getDepositAddress(fromChain);
+      contractName = 'binary_liquid_vault (Anchor SVM)';
+      contractType = 'Solana Non-Custodial Anchor PDA Vault (Ed25519 Watchman)';
+      const clusterParam = solanaService.isDevnetChain(fromChain) ? '?cluster=devnet' : '';
+      contractExplorerUrl = `${config.solana?.explorerUrl || 'https://solscan.io'}/account/${depositAddress}${clusterParam}`;
+      tokenContractAddress = solanaService.getTokenConfig(fromToken, fromChain)?.mint || null;
+    } else if (isBchOrigin) {
       const covenant = await bchService.createSwapEscrowCovenant({
         orderId: orderSeed,
         refundAddress: senderAddress || null,
@@ -497,6 +523,7 @@ app.post('/api/swap/:id/verify-tx', async (req, res) => {
 
     if (!finalTxHash) {
       const isBch = swap.fromChain.includes('bch') || swap.fromChain.includes('chipnet');
+      const isSolana = solanaService.isSolanaChain(swap.fromChain);
       if (isBch) {
         // Inspect UTXOs directly inside the isolated P2SH32 CashScript Covenant (`bchtest:r...`)
         const covenantCheck = await bchService.verifyDeposit(
@@ -516,6 +543,8 @@ app.post('/api/swap/:id/verify-tx', async (req, res) => {
           pending: true,
           error: isBch
             ? `Aún no se detectan CashTokens ${swap.fromToken} en el Smart Contract Covenant (${swap.depositAddress}). Envía los fondos o pega el TXID.`
+            : isSolana
+            ? `Aún no se detecta el depósito de ${swap.fromToken} en el Vault Anchor Solana (${swap.depositAddress}). Envía los fondos o pega la firma de transacción Base58.`
             : `Para depósitos en el Smart Contract EVM (${swap.depositAddress}), usa el botón "Depositar con Web3" o pega el Hash de Transacción (0x...).`
         });
       }

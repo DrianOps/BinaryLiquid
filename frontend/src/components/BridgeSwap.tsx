@@ -167,11 +167,11 @@ const UI_TEXT = {
   }
 };
 
-function getTokenChainId(symbol: string, isBch: boolean, isTestnet: boolean): string {
+function getTokenChainId(symbol: string, isBch: boolean, isTestnet: boolean, isSolana?: boolean): string {
   if (isBch) return isTestnet ? 'bch_chipnet' : 'bch_mainnet';
+  if (isSolana || symbol.toUpperCase() === 'SOL') return isTestnet ? 'solana_devnet' : 'solana_mainnet';
   const s = symbol.toUpperCase();
   if (s === 'ETH') return 'ethereum_mainnet';
-  if (s === 'SOL') return isTestnet ? 'solana_devnet' : 'solana_mainnet';
   if (s === 'BNB') return 'bsc_mainnet';
   return isTestnet ? 'polygon_amoy' : 'polygon_mainnet';
 }
@@ -244,6 +244,42 @@ export default function BridgeSwap({
   // ==========================================================================
   // STRICT PAY-WALLET vs RECEIVE-ADDRESS SEPARATION
   // ==========================================================================
+  const [connectedSolana, setConnectedSolana] = useState<string>('');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && (window as any)?.solana?.publicKey) {
+      setConnectedSolana((window as any).solana.publicKey.toString());
+    }
+  }, []);
+
+  const connectPhantomWallet = useCallback(async () => {
+    try {
+      if (typeof window === 'undefined' || !(window as any)?.solana) {
+        window.open('https://phantom.app/', '_blank');
+        showToast(
+          lang === 'es'
+            ? 'Instala la extensión Phantom Wallet para Solana'
+            : 'Please install Phantom Wallet extension for Solana',
+          'error'
+        );
+        return;
+      }
+      const resp = await (window as any).solana.connect();
+      const pubKey = resp.publicKey ? resp.publicKey.toString() : '';
+      if (pubKey) {
+        setConnectedSolana(pubKey);
+        showToast(
+          lang === 'es'
+            ? `Phantom conectada: ${pubKey.slice(0, 4)}...${pubKey.slice(-4)}`
+            : `Phantom connected: ${pubKey.slice(0, 4)}...${pubKey.slice(-4)}`,
+          'success'
+        );
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Error conectando Phantom', 'error');
+    }
+  }, [lang, showToast]);
+
   const connectedBch = useMemo(() => {
     const raw = bchAddress || (userAddress && !userAddress.startsWith('0x') ? userAddress : '');
     if (!raw) return '';
@@ -256,11 +292,19 @@ export default function BridgeSwap({
   }, [evmAddress, userAddress]);
 
   // Wallet that PAYS (`sellToken`)
-  const payingWalletAddress = sellToken.isBch ? connectedBch : connectedEvm;
+  const payingWalletAddress = sellToken.isBch
+    ? connectedBch
+    : sellToken.isSolana
+    ? connectedSolana
+    : connectedEvm;
   const isPayingWalletConnected = Boolean(payingWalletAddress);
 
   // Optional secondary wallet ONLY used if user taps "Mi wallet" chip
-  const optionalReceiveWallet = buyToken.isBch ? connectedBch : connectedEvm;
+  const optionalReceiveWallet = buyToken.isBch
+    ? connectedBch
+    : buyToken.isSolana
+    ? connectedSolana
+    : connectedEvm;
 
   // Live balance of the paying token
   const sellBalance = useMemo(() => {
@@ -281,8 +325,16 @@ export default function BridgeSwap({
     if (!isTestnet) return false;
     const a = sellToken.symbol.toUpperCase();
     const b = buyToken.symbol.toUpperCase();
-    return a !== b && (a === 'PUSD' || a === 'USDT') && (b === 'PUSD' || b === 'USDT');
-  }, [isTestnet, sellToken.symbol, buyToken.symbol]);
+    const sameToken = a === b;
+    const differentChains = Boolean(
+      sellToken.isBch !== buyToken.isBch ||
+      Boolean(sellToken.isSolana) !== Boolean(buyToken.isSolana)
+    );
+    if (sameToken && !differentChains) return false;
+
+    const allowed = ['PUSD', 'USDT', 'SOL'];
+    return allowed.includes(a) && allowed.includes(b);
+  }, [isTestnet, sellToken, buyToken]);
 
   // Validate manually entered destination address (`Recibir en`)
   const normalizedRecipient = useMemo(() => {
@@ -299,8 +351,12 @@ export default function BridgeSwap({
       if (!isTestnet && !converted.startsWith('bitcoincash:')) return '';
       return converted.length > 24 ? converted : '';
     }
+    if (buyToken.isSolana || buyToken.symbol.toUpperCase() === 'SOL') {
+      // Solana Base58 validation (32 to 44 characters)
+      return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(raw) ? raw : '';
+    }
     return /^0x[a-fA-F0-9]{40}$/.test(raw) ? raw : '';
-  }, [recipientAddress, buyToken.isBch, isTestnet]);
+  }, [recipientAddress, buyToken.isBch, buyToken.isSolana, buyToken.symbol, isTestnet]);
 
   const isRecipientValid = Boolean(normalizedRecipient);
 
@@ -316,8 +372,10 @@ export default function BridgeSwap({
 
     setLoadingQuote(true);
     try {
+      const fromChain = getTokenChainId(sellToken.symbol, sellToken.isBch, isTestnet, sellToken.isSolana);
+      const toChain = getTokenChainId(buyToken.symbol, buyToken.isBch, isTestnet, buyToken.isSolana);
       const res = await fetch(
-        `${backendUrl}/api/quote?fromToken=${sellToken.symbol}&toToken=${buyToken.symbol}&amount=${parsed}&network=${platformNetwork}`
+        `${backendUrl}/api/quote?fromToken=${sellToken.symbol}&toToken=${buyToken.symbol}&amount=${parsed}&network=${platformNetwork}&fromChain=${fromChain}&toChain=${toChain}`
       );
       const data = await res.json();
       if (data.success && data.quote) {
@@ -330,7 +388,7 @@ export default function BridgeSwap({
     } finally {
       setLoadingQuote(false);
     }
-  }, [amount, sellToken.symbol, buyToken.symbol, isPairLiquid, platformNetwork, backendUrl]);
+  }, [amount, sellToken, buyToken, isPairLiquid, isTestnet, platformNetwork, backendUrl]);
 
   useEffect(() => {
     const timer = setTimeout(fetchQuote, 220);
@@ -373,32 +431,39 @@ export default function BridgeSwap({
     setSellToken(prevBuy);
     setBuyToken(prevSell);
     setQuote(null);
-
-    // Clear recipientAddress if it belongs to the previous chain format
-    if (recipientAddress.trim()) {
-      const wasEvmAddr = recipientAddress.trim().startsWith('0x');
-      const nextNeedsBch = prevSell.isBch;
-      if ((nextNeedsBch && wasEvmAddr) || (!nextNeedsBch && !wasEvmAddr)) {
-        setRecipientAddress('');
-      }
-    }
+    setRecipientAddress('');
   };
 
   const handleSelectToken = (token: TokenInfo) => {
     if (tokenModalTarget === 'sell') {
-      if (token.symbol === buyToken.symbol) {
+      const isSameTokenAndChain =
+        token.symbol.toUpperCase() === buyToken.symbol.toUpperCase() &&
+        token.isBch === buyToken.isBch &&
+        Boolean(token.isSolana) === Boolean(buyToken.isSolana);
+
+      if (isSameTokenAndChain) {
         handleFlipTokens();
       } else {
         setSellToken(token);
       }
     } else if (tokenModalTarget === 'buy') {
-      if (token.symbol === sellToken.symbol) {
+      const isSameTokenAndChain =
+        token.symbol.toUpperCase() === sellToken.symbol.toUpperCase() &&
+        token.isBch === sellToken.isBch &&
+        Boolean(token.isSolana) === Boolean(sellToken.isSolana);
+
+      if (isSameTokenAndChain) {
         handleFlipTokens();
       } else {
         setBuyToken(token);
-        const wasEvm = recipientAddress.trim().startsWith('0x');
-        if ((token.isBch && wasEvm) || (!token.isBch && recipientAddress && !wasEvm)) {
-          setRecipientAddress('');
+        const raw = recipientAddress.trim();
+        if (raw) {
+          const isEvm = raw.startsWith('0x');
+          const isBch = raw.startsWith('bchtest:') || raw.startsWith('bitcoincash:');
+          const isSol = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(raw) && !isEvm;
+          if (token.isBch && !isBch) setRecipientAddress('');
+          else if (token.isSolana && !isSol) setRecipientAddress('');
+          else if (!token.isBch && !token.isSolana && !isEvm) setRecipientAddress('');
         }
       }
     }
@@ -466,7 +531,11 @@ export default function BridgeSwap({
   const handleSwap = async () => {
     if (!isPairLiquid) return;
     if (!isPayingWalletConnected) {
-      onConnectWallet();
+      if (sellToken.isSolana) {
+        connectPhantomWallet();
+      } else {
+        onConnectWallet();
+      }
       return;
     }
 
@@ -497,8 +566,8 @@ export default function BridgeSwap({
         body: JSON.stringify({
           fromToken: sellToken.symbol,
           toToken: buyToken.symbol,
-          fromChain: getTokenChainId(sellToken.symbol, sellToken.isBch, isTestnet),
-          toChain: getTokenChainId(buyToken.symbol, buyToken.isBch, isTestnet),
+          fromChain: getTokenChainId(sellToken.symbol, sellToken.isBch, isTestnet, sellToken.isSolana),
+          toChain: getTokenChainId(buyToken.symbol, buyToken.isBch, isTestnet, buyToken.isSolana),
           amount: parsedAmount,
           senderAddress: payingWalletAddress,
           recipientAddress: normalizedRecipient,
@@ -514,7 +583,42 @@ export default function BridgeSwap({
       const createdSwap = createData.swap;
       setActiveSwap(createdSwap);
 
-      // 2A. Paying EVM Token (`USDT` -> `PUSD`): Direct 1-Click MetaMask / WC2 Deposit + Instant Settlement
+      // 2A. Paying Solana SPL Token (`USDT` on Solana Devnet):
+      if (sellToken.isSolana) {
+        setSigningStep(lang === 'es' ? 'Esperando firma en Solana Devnet...' : 'Waiting for Solana Devnet confirmation...');
+
+        const promptMsg = lang === 'es'
+          ? `Envía ${createdSwap.fromAmount} ${createdSwap.fromToken} a la PDA del Vault Solana:\n${createdSwap.depositAddress}\n\nPega aquí la Firma / TxID de la transacción Solana:`
+          : `Send ${createdSwap.fromAmount} ${createdSwap.fromToken} to the Solana Vault PDA:\n${createdSwap.depositAddress}\n\nPaste Solana Transaction Signature / TxID:`;
+
+        const userSig = window.prompt(promptMsg, createdSwap.orderSeed);
+        if (!userSig || !userSig.trim()) {
+          throw new Error(lang === 'es' ? 'Depósito cancelado: se requiere la firma de transacción Solana' : 'Deposit cancelled: Solana transaction signature required');
+        }
+        const txSignature = userSig.trim();
+
+        setProcessingStage('settling');
+        setSigningStep(t.settling);
+
+        const verifyRes = await fetch(`${backendUrl}/api/swap/${createdSwap.id}/verify-tx`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ txHash: txSignature })
+        });
+        const verifyData = await verifyRes.json();
+        if (!verifyData.success) {
+          throw new Error(verifyData.error || 'Error liquidando swap en contrato destino');
+        }
+
+        setActiveSwap(verifyData.swap);
+        setCardState('success');
+        setAmount('');
+        onRefreshBalances?.();
+        showToast(t.completed, 'success');
+        return;
+      }
+
+      // 2B. Paying EVM Token (`USDT` on Polygon): Direct 1-Click MetaMask / WC2 Deposit + Instant Settlement
       if (!sellToken.isBch) {
         const tokenAddress =
           createdSwap.tokenContractAddress ||
@@ -550,7 +654,7 @@ export default function BridgeSwap({
         return;
       }
 
-      // 2B. Paying BCH CashToken (`PUSD` -> `USDT`):
+      // 2C. Paying BCH CashToken (`PUSD` -> `USDT` Polygon or Solana):
       // Always use 1-Click Direct Signing (Cashonize WC2 / Paytaca WizardConnect / Paytaca Extension)
       if (!hasActiveBchSigningCapability(wizardConnectManager, bchWalletSource)) {
         setCardState('form');
@@ -594,7 +698,7 @@ export default function BridgeSwap({
       }
 
       if (!verifyData?.success) {
-        throw new Error(verifyData?.error || 'Error liquidando USDT en Polygon');
+        throw new Error(verifyData?.error || 'Error liquidando en contrato destino');
       }
 
       setActiveSwap(verifyData.swap);
@@ -618,7 +722,11 @@ export default function BridgeSwap({
   const handleCreateLimitOrder = async () => {
     if (!isPairLiquid) return;
     if (!isPayingWalletConnected) {
-      onConnectWallet();
+      if (sellToken.isSolana) {
+        connectPhantomWallet();
+      } else {
+        onConnectWallet();
+      }
       return;
     }
 
@@ -645,8 +753,8 @@ export default function BridgeSwap({
           userAddress: payingWalletAddress,
           fromToken: sellToken.symbol,
           toToken: buyToken.symbol,
-          fromChain: getTokenChainId(sellToken.symbol, sellToken.isBch, isTestnet),
-          toChain: getTokenChainId(buyToken.symbol, buyToken.isBch, isTestnet),
+          fromChain: getTokenChainId(sellToken.symbol, sellToken.isBch, isTestnet, sellToken.isSolana),
+          toChain: getTokenChainId(buyToken.symbol, buyToken.isBch, isTestnet, buyToken.isSolana),
           fromAmount: parsedAmount,
           targetRate: parsedRate,
           recipientAddress: normalizedRecipient
@@ -776,7 +884,11 @@ export default function BridgeSwap({
     }
     if (!isPayingWalletConnected) {
       return {
-        label: sellToken.isBch ? t.connectBchToPay : t.connectEvmToPay,
+        label: sellToken.isBch
+          ? t.connectBchToPay
+          : sellToken.isSolana
+          ? (lang === 'es' ? 'Conectar Phantom para pagar' : 'Connect Phantom to Pay')
+          : t.connectEvmToPay,
         disabled: false,
         variant: 'connect' as const
       };
@@ -785,7 +897,7 @@ export default function BridgeSwap({
     if (!amount || isNaN(parsed) || parsed <= 0) {
       return { label: t.enterAmount, disabled: true, variant: 'muted' as const };
     }
-    if (!sellToken.isBch && sellBalance !== null && parsed > sellBalance) {
+    if (!sellToken.isBch && !sellToken.isSolana && sellBalance !== null && parsed > sellBalance) {
       return {
         label: lang === 'es' ? `Saldo ${sellToken.symbol} insuficiente` : `Insufficient ${sellToken.symbol}`,
         disabled: true,
@@ -816,6 +928,7 @@ export default function BridgeSwap({
     t,
     isPayingWalletConnected,
     sellToken.isBch,
+    sellToken.isSolana,
     sellToken.symbol,
     buyToken.symbol,
     amount,
@@ -1022,10 +1135,10 @@ export default function BridgeSwap({
                 ) : (
                   <button
                     type="button"
-                    onClick={onConnectWallet}
+                    onClick={sellToken.isSolana ? connectPhantomWallet : onConnectWallet}
                     className="text-[11px] font-semibold text-primary hover:underline cursor-pointer"
                   >
-                    + {sellToken.isBch ? 'Wallet BCH' : 'Wallet EVM'}
+                    + {sellToken.isBch ? 'Wallet BCH' : sellToken.isSolana ? 'Wallet Solana (Phantom)' : 'Wallet EVM'}
                   </button>
                 )}
               </div>
@@ -1052,8 +1165,11 @@ export default function BridgeSwap({
                     alt={sellToken.symbol}
                     className="w-6 h-6 rounded-full object-contain"
                   />
-                  <span className="font-semibold text-sm text-ink">
+                  <span className="font-semibold text-sm text-ink flex items-center gap-1.5">
                     {sellToken.symbol}
+                    <span className="text-[10px] font-normal px-1.5 py-0.5 rounded bg-surface-3 text-ink-3">
+                      {sellToken.isBch ? 'BCH' : sellToken.isSolana ? 'Solana' : 'Polygon'}
+                    </span>
                   </span>
                   <ChevronDown className="w-3.5 h-3.5 text-ink-3" />
                 </button>
@@ -1065,7 +1181,7 @@ export default function BridgeSwap({
                     ? `~$${(parseFloat(amount) * (quote?.priceFromUsd || 1)).toFixed(2)}`
                     : '$0.00'}
                 </span>
-                <span>{sellToken.isBch ? (isTestnet ? 'BCH Chipnet' : 'Bitcoin Cash') : isTestnet ? 'Polygon Amoy' : 'Polygon'}</span>
+                <span>{sellToken.isBch ? (isTestnet ? 'BCH Chipnet' : 'Bitcoin Cash') : sellToken.isSolana ? (isTestnet ? 'Solana Devnet' : 'Solana') : isTestnet ? 'Polygon Amoy' : 'Polygon'}</span>
               </div>
             </div>
 
@@ -1113,8 +1229,11 @@ export default function BridgeSwap({
                     alt={buyToken.symbol}
                     className="w-6 h-6 rounded-full object-contain"
                   />
-                  <span className="font-semibold text-sm text-ink">
+                  <span className="font-semibold text-sm text-ink flex items-center gap-1.5">
                     {buyToken.symbol}
+                    <span className="text-[10px] font-normal px-1.5 py-0.5 rounded bg-surface-3 text-ink-3">
+                      {buyToken.isBch ? 'BCH' : buyToken.isSolana ? 'Solana' : 'Polygon'}
+                    </span>
                   </span>
                   <ChevronDown className="w-3.5 h-3.5 text-ink-3" />
                 </button>
@@ -1128,7 +1247,7 @@ export default function BridgeSwap({
                     ? `~$${receiveDisplay}`
                     : '$0.00'}
                 </span>
-                <span>{buyToken.isBch ? (isTestnet ? 'BCH Chipnet' : 'Bitcoin Cash') : isTestnet ? 'Polygon Amoy' : 'Polygon'}</span>
+                <span>{buyToken.isBch ? (isTestnet ? 'BCH Chipnet' : 'Bitcoin Cash') : buyToken.isSolana ? (isTestnet ? 'Solana Devnet' : 'Solana') : isTestnet ? 'Polygon Amoy' : 'Polygon'}</span>
               </div>
             </div>
 
@@ -1202,6 +1321,8 @@ export default function BridgeSwap({
                     ? isTestnet
                       ? 'bchtest:q... / bchtest:z...'
                       : 'bitcoincash:q... / bitcoincash:z...'
+                    : buyToken.isSolana || buyToken.symbol === 'SOL'
+                    ? 'Dirección Solana Base58 (Phantom / Solflare)'
                     : '0x...'
                 }
                 spellCheck={false}
@@ -1565,6 +1686,7 @@ export default function BridgeSwap({
         onClose={() => setTokenModalTarget(null)}
         onSelect={handleSelectToken}
         selectedTokenSymbol={tokenModalTarget === 'sell' ? sellToken.symbol : buyToken.symbol}
+        selectedTokenId={tokenModalTarget === 'sell' ? sellToken.id : buyToken.id}
         title={tokenModalTarget === 'sell' ? t.selectPayToken : t.selectReceiveToken}
         isTestnet={isTestnet}
       />
