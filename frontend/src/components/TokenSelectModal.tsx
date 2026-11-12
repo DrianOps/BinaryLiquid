@@ -13,6 +13,7 @@ export interface TokenInfo {
   decimals: number;
   isBch: boolean;
   isSolana?: boolean;
+  isLtc?: boolean;
   id?: string;
   isSponsor?: boolean;
   isVerified?: boolean;
@@ -22,7 +23,7 @@ export interface TokenInfo {
 }
 
 export interface ChainOption {
-  id: string; // 'all' | 'bch' | 'polygon' | 'solana' | 'ethereum' | 'bnb'
+  id: string; // 'all' | 'bch' | 'polygon' | 'solana' | 'litecoin' | 'ethereum' | 'bnb'
   name: string;
   icon?: string;
   badge?: string;
@@ -33,6 +34,7 @@ export const SUPPORTED_CHAINS: ChainOption[] = [
   { id: 'bch', name: 'Bitcoin Cash', icon: '/BCH.png', badge: 'Chipnet / L1' },
   { id: 'polygon', name: 'Polygon', icon: '/POL.png', badge: 'Amoy / PoS' },
   { id: 'solana', name: 'Solana', icon: '/SOL.png', badge: 'Devnet / SVM' },
+  { id: 'litecoin', name: 'Litecoin', icon: '/LTC.png', badge: 'Testnet4 / L1' },
   { id: 'ethereum', name: 'Ethereum', icon: '/ETH.png', badge: 'Mainnet' },
   { id: 'bnb', name: 'BNB Chain', icon: '/BNB.png', badge: 'BEP-20' }
 ];
@@ -162,6 +164,22 @@ export const SUPPORTED_TOKENS: TokenInfo[] = [
     isVerified: true
   },
 
+  // --- LITECOIN (Testnet4 & Mainnet) ---
+  {
+    id: 'ltc_l1',
+    symbol: 'LTC',
+    name: 'Litecoin',
+    chain: 'litecoin',
+    network: 'Litecoin (Mainnet)',
+    networkBadge: 'Litecoin L1',
+    icon: '/LTC.png',
+    decimals: 8,
+    isBch: false,
+    isSolana: false,
+    isLtc: true,
+    isVerified: true
+  },
+
   // --- OTHERS ---
   {
     id: 'eth_l1',
@@ -193,6 +211,7 @@ const CHAIN_ICONS: Record<string, string> = {
   bch: '/BCH.png',
   polygon: '/POL.png',
   solana: '/SOL.png',
+  litecoin: '/LTC.png',
   ethereum: '/ETH.png',
   bnb: '/BNB.png'
 };
@@ -252,18 +271,22 @@ export default function TokenSelectModal({
       const sym = token.symbol.toUpperCase();
 
       if (isTestnet) {
-        const isActiveInTestnet = sym === 'PUSD' || sym === 'USDT' || sym === 'SOL';
+        const isActiveInTestnet = sym === 'PUSD' || sym === 'USDT' || sym === 'SOL' || sym === 'LTC';
         return {
           ...token,
           network: token.isBch
             ? 'BCH Chipnet (Testnet4)'
             : token.isSolana || sym === 'SOL'
             ? 'Solana Devnet'
+            : token.isLtc || sym === 'LTC'
+            ? 'Litecoin (Testnet4)'
             : 'Polygon Amoy (Testnet)',
           networkBadge: token.isBch
             ? 'Chipnet CashTokens'
             : token.isSolana || sym === 'SOL'
             ? 'Solana Devnet'
+            : token.isLtc || sym === 'LTC'
+            ? 'Litecoin Testnet4'
             : 'Polygon Amoy',
           categoryOrAddress:
             sym === 'PUSD'
@@ -542,7 +565,9 @@ export default function TokenSelectModal({
                   const chainLogo = CHAIN_ICONS[tokenChain];
                   let userBalance: number | null = null;
                   if (walletBalances) {
-                    if (token.isSolana || tokenChain === 'solana') {
+                    if (token.isLtc || tokenChain === 'litecoin') {
+                      userBalance = typeof walletBalances.LTC === 'number' ? walletBalances.LTC : null;
+                    } else if (token.isSolana || tokenChain === 'solana') {
                       if (token.symbol === 'SOL') userBalance = typeof walletBalances.SOL === 'number' ? walletBalances.SOL : null;
                       else if (token.symbol === 'USDT') userBalance = typeof walletBalances.USDT_SOL === 'number' ? walletBalances.USDT_SOL : null;
                     } else if (token.isBch || tokenChain === 'bch') {

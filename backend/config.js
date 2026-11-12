@@ -136,6 +136,25 @@ export const config = {
     }
   },
 
+  // Litecoin (Mainnet & Testnet4 Non-Custodial Vaults)
+  litecoin: {
+    network: process.env.LTC_NETWORK || 'testnet4',
+    testnetRpcUrl: process.env.LTC_TESTNET_RPC_URL || 'https://litecoinspace.org/testnet/api',
+    mainnetRpcUrl: process.env.LTC_MAINNET_RPC_URL || 'https://litecoinspace.org/api',
+    testnetExplorerUrl: 'https://litecoinspace.org/testnet',
+    mainnetExplorerUrl: 'https://litecoinspace.org',
+    testnetVaultAddress: process.env.LTC_TESTNET_VAULT_ADDRESS || 'tltc1qfjhru5y6lmjq542f7wkjn2ra5z0w2trfldj4ls',
+    testnetVaultLegacyAddress: process.env.LTC_TESTNET_VAULT_LEGACY_ADDRESS || 'mnWQPH5WoCSydxy8NJNRg7BsagUdwNAxNS',
+    coldTreasuryAddress: process.env.LTC_COLD_TREASURY_ADDRESS || 'tltc1q3qxwcdr6pgldmr3vsr0smr6ascarvsnr4c69ay',
+    tokens: {
+      LTC: {
+        name: 'Litecoin',
+        symbol: 'LTC',
+        decimals: 8
+      }
+    }
+  },
+
   // Strict on-chain mode: false forces genuine Smart Contract & Covenant execution
   simulateIfNoFunds: process.env.SIMULATE_IF_NO_FUNDS === 'true',
 

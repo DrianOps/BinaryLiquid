@@ -523,8 +523,9 @@ export default function App() {
     POL: number;
     SOL?: number;
     USDT_SOL?: number;
+    LTC?: number;
     [k: string]: number | undefined;
-  }>({ PUSD: 0, BCH: 0, USDT: 0, USDC: 0, POL: 0, SOL: 0, USDT_SOL: 0 });
+  }>({ PUSD: 0, BCH: 0, USDT: 0, USDC: 0, POL: 0, SOL: 0, USDT_SOL: 0, LTC: 0 });
   const [balancesLoading, setBalancesLoading] = useState<boolean>(false);
   const [isSwitchingChain, setIsSwitchingChain] = useState<boolean>(false);
 
@@ -2445,6 +2446,18 @@ export default function App() {
                         -- ({t.connectSolanaNotice})
                       </button>
                     )}
+                  </div>
+
+                  <div className="p-2 rounded-control bg-surface-2 border border-line flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <img src="/LTC.png" className="w-4 h-4 rounded-full object-contain" alt="LTC" />
+                      <span className="text-xs font-semibold text-ink">
+                        {platformNetwork === 'testnet' ? 'tLTC' : 'LTC'}
+                      </span>
+                    </div>
+                    <span className="text-xs font-mono font-semibold text-ink">
+                      {formatCryptoBalance(walletBalances.LTC ?? 0, true)}
+                    </span>
                   </div>
                 </div>
               </div>

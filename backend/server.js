@@ -9,6 +9,7 @@ import { rpcPool } from './services/rpcPool.js';
 import { bchService } from './services/bchService.js';
 import { evmService } from './services/evmService.js';
 import { solanaService } from './services/solanaService.js';
+import { ltcService } from './services/ltcService.js';
 import { relayerEngine } from './services/relayerEngine.js';
 import { poolService } from './services/poolService.js';
 import { lendingService } from './services/lendingService.js';
@@ -231,10 +232,14 @@ app.post('/api/swap/create', async (req, res) => {
       fromChainLower.includes('amoy') ||
       fromChainLower.includes('devnet') ||
       fromChainLower.includes('solana') ||
+      fromChainLower.includes('litecoin') ||
+      fromChainLower.includes('ltc') ||
       toChainLower.includes('chipnet') ||
       toChainLower.includes('amoy') ||
       toChainLower.includes('devnet') ||
-      toChainLower.includes('solana');
+      toChainLower.includes('solana') ||
+      toChainLower.includes('litecoin') ||
+      toChainLower.includes('ltc');
 
     if (!isTestnetSwap) {
       return res.status(400).json({
@@ -243,7 +248,7 @@ app.post('/api/swap/create', async (req, res) => {
       });
     }
 
-    const allowedTestnet = ['PUSD', 'USDT', 'SOL'];
+    const allowedTestnet = ['PUSD', 'USDT', 'SOL', 'LTC'];
     const isDifferentChain = fromChainLower !== toChainLower;
 
     if (
@@ -283,6 +288,7 @@ app.post('/api/swap/create', async (req, res) => {
 
     const isBchOrigin = fromChainLower.includes('bch') || fromChainLower.includes('chipnet');
     const isSolanaOrigin = solanaService.isSolanaChain(fromChain);
+    const isLtcOrigin = ltcService.isLtcChain(fromChain);
     const isChipnet = fromChainLower.includes('chipnet');
     const orderSeed = `bliq_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
@@ -293,7 +299,13 @@ app.post('/api/swap/create', async (req, res) => {
     let tokenContractAddress = null;
     let timelockExpiry = Math.floor(Date.now() / 1000) + 86400;
 
-    if (isSolanaOrigin) {
+    if (isLtcOrigin) {
+      depositAddress = ltcService.getVaultAddress(true);
+      contractName = 'Litecoin Vault Escrow';
+      contractType = 'Litecoin Native SegWit Escrow (Zero-Custody Watchman)';
+      contractExplorerUrl = `${ltcService.getExplorerUrl(true)}/address/${depositAddress}`;
+      tokenContractAddress = null;
+    } else if (isSolanaOrigin) {
       depositAddress = solanaService.getDepositAddress(fromChain);
       contractName = 'binary_liquid_vault (Anchor SVM)';
       contractType = 'Solana Non-Custodial Anchor PDA Vault (Ed25519 Watchman)';
@@ -524,6 +536,7 @@ app.post('/api/swap/:id/verify-tx', async (req, res) => {
     if (!finalTxHash) {
       const isBch = swap.fromChain.includes('bch') || swap.fromChain.includes('chipnet');
       const isSolana = solanaService.isSolanaChain(swap.fromChain);
+      const isLtc = ltcService.isLtcChain(swap.fromChain);
       if (isBch) {
         // Inspect UTXOs directly inside the isolated P2SH32 CashScript Covenant (`bchtest:r...`)
         const covenantCheck = await bchService.verifyDeposit(
@@ -534,6 +547,15 @@ app.post('/api/swap/:id/verify-tx', async (req, res) => {
         );
         if (covenantCheck.verified && covenantCheck.txHash) {
           finalTxHash = covenantCheck.txHash;
+        }
+      } else if (isLtc) {
+        const ltcCheck = await ltcService.verifyDeposit(
+          swap.depositAddress,
+          swap.fromAmount,
+          true
+        );
+        if (ltcCheck.verified && ltcCheck.txHash) {
+          finalTxHash = ltcCheck.txHash;
         }
       }
 
@@ -1584,15 +1606,18 @@ app.get('/api/wallet/balances/:address', async (req, res) => {
     const extraBch = req.query.bchAddress ? String(req.query.bchAddress) : null;
     const extraEvm = req.query.evmAddress ? String(req.query.evmAddress) : null;
     const extraSol = req.query.solanaAddress ? String(req.query.solanaAddress) : null;
+    const extraLtc = req.query.ltcAddress ? String(req.query.ltcAddress) : null;
 
     const targetBch = extraBch || (address && !address.startsWith('0x') && (address.includes(':') || address.startsWith('bitcoincash') || address.startsWith('bchtest') || address.startsWith('q')) ? address : null);
     const targetEvm = extraEvm || (address && address.startsWith('0x') ? address : null);
-    const targetSol = extraSol || (address && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address) && !address.includes(':') && !address.startsWith('0x') ? address : null);
+    const targetSol = extraSol || (address && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address) && !address.includes(':') && !address.startsWith('0x') && !address.startsWith('tltc') && !address.startsWith('ltc') ? address : null);
+    const targetLtc = extraLtc || (address && ltcService.isValidAddress(address, isTestnet) ? address : null);
 
-    const [bchOnChain, evmOnChain, solOnChain] = await Promise.all([
+    const [bchOnChain, evmOnChain, solOnChain, ltcOnChain] = await Promise.all([
       targetBch ? bchService.getAddressBalances(targetBch, isTestnet) : Promise.resolve({ BCH: 0, PUSD: 0 }),
       targetEvm ? evmService.getAddressBalances(targetEvm, isTestnet) : Promise.resolve({ POL: 0, USDT: 0, USDC: 0 }),
-      targetSol ? solanaService.getAddressBalances(targetSol, isTestnet) : Promise.resolve({ SOL: 0, USDT: 0, USDC: 0 })
+      targetSol ? solanaService.getAddressBalances(targetSol, isTestnet) : Promise.resolve({ SOL: 0, USDT: 0, USDC: 0 }),
+      targetLtc ? ltcService.getBalance(targetLtc, isTestnet) : Promise.resolve({ ltc: 0, litoshis: 0 })
     ]);
 
     const balances = {
@@ -1602,7 +1627,8 @@ app.get('/api/wallet/balances/:address', async (req, res) => {
       USDC: evmOnChain.USDC || 0,
       POL: evmOnChain.POL || 0,
       SOL: solOnChain.SOL || 0,
-      USDT_SOL: solOnChain.USDT || 0
+      USDT_SOL: solOnChain.USDT || 0,
+      LTC: ltcOnChain.ltc || 0
     };
 
     res.json({
@@ -1613,6 +1639,7 @@ app.get('/api/wallet/balances/:address', async (req, res) => {
       bchAddress: targetBch,
       evmAddress: targetEvm,
       solanaAddress: targetSol,
+      ltcAddress: targetLtc,
       balances
     });
   } catch (err) {

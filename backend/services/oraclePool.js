@@ -26,6 +26,7 @@ class OraclePoolManager {
         SOL: 101.5,
         BNB: 749.0,
         POL: 0.0915,
+        LTC: 49.3,
         LIFT: 0.01636
       }
     };
@@ -40,7 +41,8 @@ class OraclePoolManager {
       ETH: 'ETHUSDT',
       SOL: 'SOLUSDT',
       BNB: 'BNBUSDT',
-      POL: 'POLUSDT'
+      POL: 'POLUSDT',
+      LTC: 'LTCUSDT'
     };
 
     this.coinGeckoIds = {
@@ -49,21 +51,24 @@ class OraclePoolManager {
       ETH: 'ethereum',
       SOL: 'solana',
       BNB: 'binancecoin',
-      POL: 'polygon-ecosystem-token'
+      POL: 'polygon-ecosystem-token',
+      LTC: 'litecoin'
     };
 
     this.coinbaseSymbols = {
       BTC: 'BTC-USD',
       BCH: 'BCH-USD',
       ETH: 'ETH-USD',
-      SOL: 'SOL-USD'
+      SOL: 'SOL-USD',
+      LTC: 'LTC-USD'
     };
 
     this.krakenPairs = {
       BTC: 'XBTUSD',
       BCH: 'BCHUSD',
       ETH: 'ETHUSD',
-      SOL: 'SOLUSD'
+      SOL: 'SOLUSD',
+      LTC: 'LTCUSD'
     };
 
     this.oracles = [
@@ -352,6 +357,9 @@ class OraclePoolManager {
     if (sym === 'SOL') {
       return 1000.0;
     }
+    if (sym === 'LTC') {
+      return 10.0;
+    }
     if (sym !== 'PUSD' && sym !== 'USDT') {
       return 0;
     }
@@ -380,7 +388,7 @@ class OraclePoolManager {
     const fromSym = (fromToken || '').toUpperCase();
     const toSym = (toToken || '').toUpperCase();
 
-    const minAmount = fromSym === 'LIFT' ? 1.0 : (['BCH', 'ETH', 'SOL', 'BNB'].includes(fromSym) ? 0.001 : config.minSwapAmount);
+    const minAmount = fromSym === 'LIFT' ? 1.0 : (['BCH', 'ETH', 'SOL', 'LTC', 'BNB'].includes(fromSym) ? 0.001 : config.minSwapAmount);
     const maxAmount = fromSym === 'LIFT' ? 1000000.0 : (fromSym === 'POL' ? 50000.0 : config.maxSwapAmount);
 
     const priceFrom = await this.getPriceUsd(fromToken);
@@ -397,10 +405,10 @@ class OraclePoolManager {
     const toChain = String(options?.toChain || '').toLowerCase();
     const isDifferentChain = Boolean(fromChain && toChain && fromChain !== toChain);
 
-    const isSupportedStable = (fromSym === 'PUSD' || fromSym === 'USDT' || fromSym === 'SOL') &&
-                              (toSym === 'PUSD' || toSym === 'USDT' || toSym === 'SOL');
+    const isSupportedStable = (fromSym === 'PUSD' || fromSym === 'USDT' || fromSym === 'SOL' || fromSym === 'LTC') &&
+                              (toSym === 'PUSD' || toSym === 'USDT' || toSym === 'SOL' || toSym === 'LTC');
 
-    // Strict active pair check: PUSD (BCH), USDT (Polygon & Solana Devnet), SOL on Testnet
+    // Strict active pair check: PUSD (BCH), USDT (Polygon & Solana Devnet), SOL, LTC on Testnet
     const isActivePair =
       net === 'testnet' &&
       ((fromSym !== toSym) || isDifferentChain) &&

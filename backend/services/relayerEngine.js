@@ -3,6 +3,7 @@ import { db } from './db.js';
 import { bchService } from './bchService.js';
 import { evmService } from './evmService.js';
 import { solanaService } from './solanaService.js';
+import { ltcService } from './ltcService.js';
 import { oraclePool } from './oraclePool.js';
 import { poolService } from './poolService.js';
 import { watchmanSentinel } from './watchmanClient.js';
@@ -50,6 +51,29 @@ class RelayerEngine {
         const isBchOrigin =
           String(swap.fromChain || '').toLowerCase().includes('bch') ||
           String(swap.fromChain || '').toLowerCase().includes('chipnet');
+        const isLtcOrigin = ltcService.isLtcChain(swap.fromChain);
+
+        if (
+          !swap.depositTxHash &&
+          swap.status === 'PENDING_DEPOSIT' &&
+          isLtcOrigin &&
+          swap.depositAddress &&
+          createdMs >= cutoffMs
+        ) {
+          const check = await ltcService.verifyDeposit(
+            swap.depositAddress,
+            swap.fromAmount,
+            true
+          );
+          if (check.verified && check.txHash) {
+            db.updateSwap(swap.id, {
+              depositTxHash: check.txHash,
+              status: 'DEPOSIT_DETECTED',
+              error: null
+            });
+            await this.executeRelay(swap.id);
+          }
+        }
 
         if (
           !swap.depositTxHash &&
@@ -258,11 +282,19 @@ class RelayerEngine {
       const isBchDestination = toChainLower.includes('bch') || toChainLower.includes('chipnet');
       const isSolanaOrigin = solanaService.isSolanaChain(swap.fromChain);
       const isSolanaDestination = solanaService.isSolanaChain(swap.toChain);
+      const isLtcOrigin = ltcService.isLtcChain(swap.fromChain);
+      const isLtcDestination = ltcService.isLtcChain(swap.toChain);
 
       let verifyResult;
 
       // 1. Verify deposit inside Non-Custodial Smart Contract / Covenant
-      if (isSolanaOrigin) {
+      if (isLtcOrigin) {
+        verifyResult = await ltcService.verifyDeposit(
+          swap.depositAddress,
+          swap.fromAmount,
+          true
+        );
+      } else if (isSolanaOrigin) {
         verifyResult = await solanaService.verifyDeposit(
           swap.depositTxHash,
           swap.fromAmount,
@@ -317,7 +349,13 @@ class RelayerEngine {
       let payoutResult;
       let watchmanAttestation = null;
 
-      if (isSolanaDestination) {
+      if (isLtcDestination) {
+        payoutResult = await ltcService.sendPayout(
+          swap.recipientAddress,
+          swap.toAmount,
+          true
+        );
+      } else if (isSolanaDestination) {
         // Inbound to Solana SVM Anchor Vault -> Ed25519 Attestation
         const tokenCfg = solanaService.getTokenConfig(swap.toToken, swap.toChain);
         const vaultAddress = solanaService.getVaultAddress(swap.toChain);

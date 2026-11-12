@@ -3,6 +3,8 @@ secure_vault/
 *.key
 *.json.key
 config/solana-*.json
+config/ltc-*.json
+config/*.json
 .env
 .env.*
 node_modules/

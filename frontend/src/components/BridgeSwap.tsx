@@ -17,6 +17,7 @@ import {
   ArrowLeftRight
 } from 'lucide-react';
 import TokenSelectModal, { SUPPORTED_TOKENS, TokenInfo } from './TokenSelectModal';
+import qrcode from 'qrcode-generator';
 import { convertCashAddressNetwork, formatAddress, formatCryptoBalance } from '../utils/bchAddress';
 import { Connection, PublicKey, Transaction } from '@solana/web3.js';
 import {
@@ -177,9 +178,10 @@ const UI_TEXT = {
   }
 };
 
-function getTokenChainId(symbol: string, isBch: boolean, isTestnet: boolean, isSolana?: boolean): string {
+function getTokenChainId(symbol: string, isBch: boolean, isTestnet: boolean, isSolana?: boolean, isLtc?: boolean): string {
   if (isBch) return isTestnet ? 'bch_chipnet' : 'bch_mainnet';
   if (isSolana || symbol.toUpperCase() === 'SOL') return isTestnet ? 'solana_devnet' : 'solana_mainnet';
+  if (isLtc || symbol.toUpperCase() === 'LTC') return isTestnet ? 'litecoin_testnet4' : 'litecoin_mainnet';
   const s = symbol.toUpperCase();
   if (s === 'ETH') return 'ethereum_mainnet';
   if (s === 'BNB') return 'bsc_mainnet';
@@ -315,6 +317,8 @@ export default function BridgeSwap({
     ? connectedBch
     : sellToken.isSolana
     ? connectedSolana
+    : sellToken.isLtc || sellToken.symbol.toUpperCase() === 'LTC'
+    ? 'litecoin_external_wallet'
     : connectedEvm;
   const isPayingWalletConnected = Boolean(payingWalletAddress);
 
@@ -329,24 +333,30 @@ export default function BridgeSwap({
   // Live balance of the paying token
   const sellBalance = useMemo(() => {
     if (!isPayingWalletConnected || !walletBalances) return null;
+    if (sellToken.isLtc || sellToken.symbol.toUpperCase() === 'LTC') {
+      return typeof walletBalances.LTC === 'number' ? walletBalances.LTC : null;
+    }
     if (sellToken.isSolana) {
       if (sellToken.symbol.toUpperCase() === 'SOL') return walletBalances.SOL ?? 0;
       return walletBalances.USDT_SOL ?? 0;
     }
     const sym = sellToken.symbol.toUpperCase() as keyof typeof walletBalances;
     return typeof walletBalances[sym] === 'number' ? (walletBalances[sym] as number) : 0;
-  }, [isPayingWalletConnected, walletBalances, sellToken.symbol, sellToken.isSolana]);
+  }, [isPayingWalletConnected, walletBalances, sellToken.symbol, sellToken.isSolana, sellToken.isLtc]);
 
   // Live balance of the receiving token
   const buyBalance = useMemo(() => {
     if (!isReceivingWalletConnected || !walletBalances) return null;
+    if (buyToken.isLtc || buyToken.symbol.toUpperCase() === 'LTC') {
+      return typeof walletBalances.LTC === 'number' ? walletBalances.LTC : null;
+    }
     if (buyToken.isSolana) {
       if (buyToken.symbol.toUpperCase() === 'SOL') return walletBalances.SOL ?? 0;
       return walletBalances.USDT_SOL ?? 0;
     }
     const sym = buyToken.symbol.toUpperCase() as keyof typeof walletBalances;
     return typeof walletBalances[sym] === 'number' ? (walletBalances[sym] as number) : 0;
-  }, [isReceivingWalletConnected, walletBalances, buyToken.symbol, buyToken.isSolana]);
+  }, [isReceivingWalletConnected, walletBalances, buyToken.symbol, buyToken.isSolana, buyToken.isLtc]);
 
   // Auto-fill recipient if empty and corresponding wallet is connected
   useEffect(() => {
@@ -370,11 +380,12 @@ export default function BridgeSwap({
     const sameToken = a === b;
     const differentChains = Boolean(
       sellToken.isBch !== buyToken.isBch ||
-      Boolean(sellToken.isSolana) !== Boolean(buyToken.isSolana)
+      Boolean(sellToken.isSolana) !== Boolean(buyToken.isSolana) ||
+      Boolean(sellToken.isLtc) !== Boolean(buyToken.isLtc)
     );
     if (sameToken && !differentChains) return false;
 
-    const allowed = ['PUSD', 'USDT', 'SOL'];
+    const allowed = ['PUSD', 'USDT', 'SOL', 'LTC'];
     return allowed.includes(a) && allowed.includes(b);
   }, [isTestnet, sellToken, buyToken]);
 
@@ -397,8 +408,18 @@ export default function BridgeSwap({
       // Solana Base58 validation (32 to 44 characters)
       return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(raw) ? raw : '';
     }
+    if (buyToken.isLtc || buyToken.symbol.toUpperCase() === 'LTC') {
+      if (isTestnet) {
+        if (raw.toLowerCase().startsWith('tltc1') && raw.length >= 42 && raw.length <= 62) return raw;
+        if (/^[mn2Q][a-km-zA-HJ-NP-Z1-9]{26,35}$/.test(raw)) return raw;
+        return '';
+      }
+      if (raw.toLowerCase().startsWith('ltc1') && raw.length >= 42 && raw.length <= 62) return raw;
+      if (/^[LM3][a-km-zA-HJ-NP-Z1-9]{26,35}$/.test(raw)) return raw;
+      return '';
+    }
     return /^0x[a-fA-F0-9]{40}$/.test(raw) ? raw : '';
-  }, [recipientAddress, buyToken.isBch, buyToken.isSolana, buyToken.symbol, isTestnet]);
+  }, [recipientAddress, buyToken.isBch, buyToken.isSolana, buyToken.isLtc, buyToken.symbol, isTestnet]);
 
   const isRecipientValid = Boolean(normalizedRecipient);
 
@@ -414,8 +435,8 @@ export default function BridgeSwap({
 
     setLoadingQuote(true);
     try {
-      const fromChain = getTokenChainId(sellToken.symbol, sellToken.isBch, isTestnet, sellToken.isSolana);
-      const toChain = getTokenChainId(buyToken.symbol, buyToken.isBch, isTestnet, buyToken.isSolana);
+      const fromChain = getTokenChainId(sellToken.symbol, sellToken.isBch, isTestnet, sellToken.isSolana, sellToken.isLtc);
+      const toChain = getTokenChainId(buyToken.symbol, buyToken.isBch, isTestnet, buyToken.isSolana, buyToken.isLtc);
       const res = await fetch(
         `${backendUrl}/api/quote?fromToken=${sellToken.symbol}&toToken=${buyToken.symbol}&amount=${parsed}&network=${platformNetwork}&fromChain=${fromChain}&toChain=${toChain}`
       );
@@ -608,8 +629,8 @@ export default function BridgeSwap({
         body: JSON.stringify({
           fromToken: sellToken.symbol,
           toToken: buyToken.symbol,
-          fromChain: getTokenChainId(sellToken.symbol, sellToken.isBch, isTestnet, sellToken.isSolana),
-          toChain: getTokenChainId(buyToken.symbol, buyToken.isBch, isTestnet, buyToken.isSolana),
+          fromChain: getTokenChainId(sellToken.symbol, sellToken.isBch, isTestnet, sellToken.isSolana, sellToken.isLtc),
+          toChain: getTokenChainId(buyToken.symbol, buyToken.isBch, isTestnet, buyToken.isSolana, buyToken.isLtc),
           amount: parsedAmount,
           senderAddress: payingWalletAddress,
           recipientAddress: normalizedRecipient,
@@ -625,7 +646,43 @@ export default function BridgeSwap({
       const createdSwap = createData.swap;
       setActiveSwap(createdSwap);
 
-      // 2A. Paying Solana SPL Token (`USDT` on Solana Devnet): 1-Click Phantom Direct Sign & Send
+      // 2A. Paying Litecoin (tLTC / LTC): Show QR & Auto-poll for on-chain mempool detection
+      if (sellToken.isLtc || sellToken.symbol.toUpperCase() === 'LTC') {
+        setProcessingStage('settling');
+        setSigningStep(
+          lang === 'es'
+            ? 'Esperando depósito de Litecoin en la red...'
+            : 'Waiting for Litecoin deposit on network...'
+        );
+
+        const pollInterval = setInterval(async () => {
+          try {
+            const checkRes = await fetch(`${backendUrl}/api/swap/${createdSwap.id}`);
+            const checkData = await checkRes.json();
+            if (checkData.success && checkData.swap) {
+              if (checkData.swap.status === 'DEPOSIT_DETECTED' || checkData.swap.status === 'CONFIRMING') {
+                setSigningStep(
+                  lang === 'es'
+                    ? '¡Depósito detectado en Litecoin! Confirmando y liquidando...'
+                    : 'Litecoin deposit detected! Confirming and settling...'
+                );
+              } else if (checkData.swap.status === 'COMPLETED') {
+                clearInterval(pollInterval);
+                setActiveSwap(checkData.swap);
+                setCardState('success');
+                setAmount('');
+                onRefreshBalances?.();
+                showToast(t.completed, 'success');
+              }
+            }
+          } catch (_) {}
+        }, 3000);
+
+        setTimeout(() => clearInterval(pollInterval), 15 * 60 * 1000);
+        return;
+      }
+
+      // 2B. Paying Solana SPL Token (`USDT` on Solana Devnet): 1-Click Phantom Direct Sign & Send
       if (sellToken.isSolana) {
         setSigningStep(lang === 'es' ? 'Esperando firma en Phantom (Solana Devnet)...' : 'Waiting for Phantom signature on Solana Devnet...');
 
@@ -1267,9 +1324,11 @@ export default function BridgeSwap({
                         ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
                         : sellToken.isSolana
                         ? 'bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 border-cyan-500/20'
+                        : sellToken.isLtc || sellToken.symbol === 'LTC'
+                        ? 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/20'
                         : 'bg-purple-500/15 text-purple-600 dark:text-purple-400 border-purple-500/20'
                     }`}>
-                      {sellToken.isBch ? 'BCH' : sellToken.isSolana ? 'Solana' : 'Polygon'}
+                      {sellToken.isBch ? 'BCH' : sellToken.isSolana ? 'Solana' : sellToken.isLtc || sellToken.symbol === 'LTC' ? 'Litecoin' : 'Polygon'}
                     </span>
                   </span>
                   <ChevronDown className="w-3.5 h-3.5 text-ink-3" />
@@ -1282,7 +1341,7 @@ export default function BridgeSwap({
                     ? `~$${(parseFloat(amount) * (quote?.priceFromUsd || 1)).toFixed(2)}`
                     : '$0.00'}
                 </span>
-                <span>{sellToken.isBch ? (isTestnet ? 'BCH Chipnet' : 'Bitcoin Cash') : sellToken.isSolana ? (isTestnet ? 'Solana Devnet' : 'Solana') : isTestnet ? 'Polygon Amoy' : 'Polygon'}</span>
+                <span>{sellToken.isBch ? (isTestnet ? 'BCH Chipnet' : 'Bitcoin Cash') : sellToken.isSolana ? (isTestnet ? 'Solana Devnet' : 'Solana') : sellToken.isLtc || sellToken.symbol === 'LTC' ? (isTestnet ? 'Litecoin Testnet4' : 'Litecoin') : isTestnet ? 'Polygon Amoy' : 'Polygon'}</span>
               </div>
             </div>
 
@@ -1346,9 +1405,11 @@ export default function BridgeSwap({
                         ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
                         : buyToken.isSolana
                         ? 'bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 border-cyan-500/20'
+                        : buyToken.isLtc || buyToken.symbol === 'LTC'
+                        ? 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/20'
                         : 'bg-purple-500/15 text-purple-600 dark:text-purple-400 border-purple-500/20'
                     }`}>
-                      {buyToken.isBch ? 'BCH' : buyToken.isSolana ? 'Solana' : 'Polygon'}
+                      {buyToken.isBch ? 'BCH' : buyToken.isSolana ? 'Solana' : buyToken.isLtc || buyToken.symbol === 'LTC' ? 'Litecoin' : 'Polygon'}
                     </span>
                   </span>
                   <ChevronDown className="w-3.5 h-3.5 text-ink-3" />
@@ -1363,7 +1424,7 @@ export default function BridgeSwap({
                     ? `~$${receiveDisplay}`
                     : '$0.00'}
                 </span>
-                <span>{buyToken.isBch ? (isTestnet ? 'BCH Chipnet' : 'Bitcoin Cash') : buyToken.isSolana ? (isTestnet ? 'Solana Devnet' : 'Solana') : isTestnet ? 'Polygon Amoy' : 'Polygon'}</span>
+                <span>{buyToken.isBch ? (isTestnet ? 'BCH Chipnet' : 'Bitcoin Cash') : buyToken.isSolana ? (isTestnet ? 'Solana Devnet' : 'Solana') : buyToken.isLtc || buyToken.symbol === 'LTC' ? (isTestnet ? 'Litecoin Testnet4' : 'Litecoin') : isTestnet ? 'Polygon Amoy' : 'Polygon'}</span>
               </div>
             </div>
 
@@ -1619,36 +1680,79 @@ export default function BridgeSwap({
               </div>
             </div>
 
-            {/* Stage Title, Explanation & Animated Progress Bar */}
-            <div className="text-center space-y-2 pt-1">
-              <h3 className="text-base font-semibold text-ink">
-                {processingStage === 'authorizing'
-                  ? t.confirmInWallet
-                  : t.settlingTitle}
-              </h3>
-              <p className="text-xs text-ink-3 max-w-xs mx-auto leading-relaxed">
-                {processingStage === 'authorizing'
-                  ? sellToken.isBch
-                    ? lang === 'es'
-                      ? `Revisa tu billetera BCH (${activeBchWalletLabel}) para autorizar el intercambio.`
-                      : `Check your BCH wallet (${activeBchWalletLabel}) to authorize the swap.`
-                    : t.confirmInWalletSubEvm
-                  : sellToken.isBch
-                  ? t.settlingSubBch
-                  : t.settlingSubEvm}
-              </p>
-
-              {/* Minimal Progress Bar */}
-              <div className="w-full max-w-xs mx-auto h-1.5 bg-surface-2 rounded-full overflow-hidden mt-3">
-                <div
-                  className={`h-full bg-primary transition-all duration-700 ease-out rounded-full ${
-                    processingStage === 'authorizing'
-                      ? 'w-1/2 animate-pulse'
-                      : 'w-full'
-                  }`}
-                />
+            {/* Stage Title, Explanation & Animated Progress Bar / QR Deposit */}
+            {(sellToken.isLtc || sellToken.symbol === 'LTC') && activeSwap?.depositAddress ? (
+              <div className="p-4 rounded-panel bg-surface border border-line text-center space-y-3 shadow-soft">
+                <div className="text-xs font-semibold text-ink">
+                  {lang === 'es' ? 'Escanea para pagar desde tu billetera Litecoin' : 'Scan to pay from your Litecoin wallet'}
+                </div>
+                <div className="flex justify-center p-2.5 bg-white rounded-xl w-fit mx-auto shadow-sm border border-line">
+                  {(() => {
+                    try {
+                      const qr = qrcode(0, 'M');
+                      qr.addData(activeSwap.depositAddress);
+                      qr.make();
+                      return <img src={qr.createDataURL(4)} alt="LTC Deposit QR" className="w-40 h-40 object-contain" />;
+                    } catch {
+                      return null;
+                    }
+                  })()}
+                </div>
+                <div className="space-y-1.5">
+                  <div className="text-xs text-ink-2 font-medium">
+                    {lang === 'es' ? 'Envía exactamente:' : 'Send exactly:'}{' '}
+                    <strong className="text-ink font-mono font-bold text-sm">{activeSwap.fromAmount} LTC</strong>
+                  </div>
+                  <div className="flex items-center justify-between gap-1.5 p-2 rounded-lg bg-surface-2 border border-line max-w-sm mx-auto">
+                    <span className="font-mono text-xs text-ink truncate select-all">{activeSwap.depositAddress}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(activeSwap.depositAddress);
+                        showToast(lang === 'es' ? 'Dirección copiada' : 'Address copied', 'success');
+                      }}
+                      className="p-1.5 hover:bg-surface-3 rounded text-ink-3 hover:text-ink transition cursor-pointer shrink-0"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+                <div className="flex items-center justify-center gap-2 text-xs text-amber-500 font-medium pt-1">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>{signingStep || (lang === 'es' ? 'Monitoreando mempool de Litecoin en vivo...' : 'Monitoring Litecoin mempool live...')}</span>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="text-center space-y-2 pt-1">
+                <h3 className="text-base font-semibold text-ink">
+                  {processingStage === 'authorizing'
+                    ? t.confirmInWallet
+                    : t.settlingTitle}
+                </h3>
+                <p className="text-xs text-ink-3 max-w-xs mx-auto leading-relaxed">
+                  {processingStage === 'authorizing'
+                    ? sellToken.isBch
+                      ? lang === 'es'
+                        ? `Revisa tu billetera BCH (${activeBchWalletLabel}) para autorizar el intercambio.`
+                        : `Check your BCH wallet (${activeBchWalletLabel}) to authorize the swap.`
+                      : t.confirmInWalletSubEvm
+                    : sellToken.isBch
+                    ? t.settlingSubBch
+                    : t.settlingSubEvm}
+                </p>
+
+                {/* Minimal Progress Bar */}
+                <div className="w-full max-w-xs mx-auto h-1.5 bg-surface-2 rounded-full overflow-hidden mt-3">
+                  <div
+                    className={`h-full bg-primary transition-all duration-700 ease-out rounded-full ${
+                      processingStage === 'authorizing'
+                        ? 'w-1/2 animate-pulse'
+                        : 'w-full'
+                    }`}
+                  />
+                </div>
+              </div>
+            )}
 
             {/* Recipient Preview & Non-Custodial Protocol Badge */}
             <div className="p-3 rounded-control bg-surface-2 border border-line space-y-2 text-xs">
