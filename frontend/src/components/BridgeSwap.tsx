@@ -1690,7 +1690,7 @@ export default function BridgeSwap({
         </div>
       )}
 
-      {/* TOKEN SELECTOR MODAL */}
+      {/* TOKEN SELECTOR MODAL (THORChain style split-view with chain filters) */}
       <TokenSelectModal
         isOpen={tokenModalTarget !== null}
         onClose={() => setTokenModalTarget(null)}
@@ -1699,6 +1699,8 @@ export default function BridgeSwap({
         selectedTokenId={tokenModalTarget === 'sell' ? sellToken.id : buyToken.id}
         title={tokenModalTarget === 'sell' ? t.selectPayToken : t.selectReceiveToken}
         isTestnet={isTestnet}
+        lang={lang}
+        walletBalances={walletBalances}
       />
     </div>
   );

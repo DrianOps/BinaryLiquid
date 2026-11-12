@@ -239,3 +239,12 @@ html.dark .glass-panel {
 .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: #3B4861;
 }
+
+/* Hide scrollbar for clean horizontal tab strips */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
