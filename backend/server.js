@@ -1583,13 +1583,16 @@ app.get('/api/wallet/balances/:address', async (req, res) => {
     const isTestnet = (req.query.network || 'testnet') === 'testnet';
     const extraBch = req.query.bchAddress ? String(req.query.bchAddress) : null;
     const extraEvm = req.query.evmAddress ? String(req.query.evmAddress) : null;
+    const extraSol = req.query.solanaAddress ? String(req.query.solanaAddress) : null;
 
-    const targetBch = extraBch || (address && !address.startsWith('0x') ? address : null);
+    const targetBch = extraBch || (address && !address.startsWith('0x') && (address.includes(':') || address.startsWith('bitcoincash') || address.startsWith('bchtest') || address.startsWith('q')) ? address : null);
     const targetEvm = extraEvm || (address && address.startsWith('0x') ? address : null);
+    const targetSol = extraSol || (address && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address) && !address.includes(':') && !address.startsWith('0x') ? address : null);
 
-    const [bchOnChain, evmOnChain] = await Promise.all([
+    const [bchOnChain, evmOnChain, solOnChain] = await Promise.all([
       targetBch ? bchService.getAddressBalances(targetBch, isTestnet) : Promise.resolve({ BCH: 0, PUSD: 0 }),
-      targetEvm ? evmService.getAddressBalances(targetEvm, isTestnet) : Promise.resolve({ POL: 0, USDT: 0, USDC: 0 })
+      targetEvm ? evmService.getAddressBalances(targetEvm, isTestnet) : Promise.resolve({ POL: 0, USDT: 0, USDC: 0 }),
+      targetSol ? solanaService.getAddressBalances(targetSol, isTestnet) : Promise.resolve({ SOL: 0, USDT: 0, USDC: 0 })
     ]);
 
     const balances = {
@@ -1597,7 +1600,9 @@ app.get('/api/wallet/balances/:address', async (req, res) => {
       BCH: bchOnChain.BCH || 0,
       USDT: evmOnChain.USDT || 0,
       USDC: evmOnChain.USDC || 0,
-      POL: evmOnChain.POL || 0
+      POL: evmOnChain.POL || 0,
+      SOL: solOnChain.SOL || 0,
+      USDT_SOL: solOnChain.USDT || 0
     };
 
     res.json({
@@ -1607,6 +1612,7 @@ app.get('/api/wallet/balances/:address', async (req, res) => {
       address,
       bchAddress: targetBch,
       evmAddress: targetEvm,
+      solanaAddress: targetSol,
       balances
     });
   } catch (err) {
@@ -1967,16 +1973,22 @@ const faucetLimiter = rateLimit({
   message: { success: false, error: 'Límite del Faucet Testnet alcanzado (máx 4 reclamos cada 10 min). Intenta más tarde.' }
 });
 
-// Real On-Chain Testnet Faucet (Polygon Amoy USDT + BCH Chipnet PUSD CashTokens)
+// Real On-Chain Testnet Faucet (Polygon Amoy USDT, BCH Chipnet PUSD CashTokens & Solana Devnet USDT)
 app.post(['/api/faucet/testnet', '/api/testnet/faucet'], faucetLimiter, async (req, res) => {
   try {
-    const { token, amount } = req.body;
+    const { token, amount, chain } = req.body;
     const recipient = req.body.recipient || req.body.recipientAddress;
     const sym = (token || 'PUSD').toUpperCase();
     if (!recipient) {
       return res.status(400).json({ success: false, error: 'Por favor ingresa tu dirección de billetera de destino.' });
     }
 
+    const isSolana = (chain && chain.includes('solana')) || (!recipient.startsWith('0x') && !recipient.startsWith('bch'));
+
+    if (sym === 'USDT' && isSolana) {
+      const result = await solanaService.dispenseTestnetUsdt(recipient, parseFloat(amount || '100'));
+      return res.json(result);
+    }
     if (sym === 'USDT') {
       const result = await evmService.dispenseTestnetUsdt(recipient, parseFloat(amount || '100'));
       return res.json(result);
@@ -1988,7 +2000,7 @@ app.post(['/api/faucet/testnet', '/api/testnet/faucet'], faucetLimiter, async (r
 
     return res.status(400).json({
       success: false,
-      error: 'En Testnet únicamente tienen liquidez PUSD (BCH Chipnet) y USDT (Polygon Amoy).'
+      error: 'En Testnet tienen liquidez PUSD (BCH Chipnet), USDT (Polygon Amoy) y USDT (Solana Devnet).'
     });
   } catch (err) {
     res.status(400).json({ success: false, error: err.message });
@@ -1998,8 +2010,14 @@ app.post(['/api/faucet/testnet', '/api/testnet/faucet'], faucetLimiter, async (r
 // Backwards-compatible Demo Faucet Endpoint -> Routes to Real On-Chain Testnet Faucet!
 app.post('/api/faucet/demo-funds', faucetLimiter, async (req, res) => {
   try {
-    const { token, amount, recipient } = req.body;
+    const { token, amount, recipient, chain } = req.body;
     const sym = (token || 'PUSD').toUpperCase();
+    const isSolana = (chain && chain.includes('solana')) || (recipient && !recipient.startsWith('0x') && !recipient.startsWith('bch'));
+
+    if (recipient && sym === 'USDT' && isSolana) {
+      const result = await solanaService.dispenseTestnetUsdt(recipient, parseFloat(amount || '100'));
+      return res.json(result);
+    }
     if (recipient && sym === 'USDT' && recipient.startsWith('0x')) {
       const result = await evmService.dispenseTestnetUsdt(recipient, parseFloat(amount || '100'));
       return res.json(result);
@@ -2010,7 +2028,7 @@ app.post('/api/faucet/demo-funds', faucetLimiter, async (req, res) => {
     }
     return res.status(400).json({
       success: false,
-      error: 'Proporciona una dirección válida de Testnet (bchtest:... para PUSD o 0x... para USDT en Amoy).'
+      error: 'Proporciona una dirección válida de Testnet (bchtest:... para PUSD, 0x... para USDT en Amoy o Solana Base58).'
     });
   } catch (err) {
     res.status(400).json({ success: false, error: err.message });

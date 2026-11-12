@@ -1,4 +1,8 @@
-
 # Security Vault
 secure_vault/
 *.key
+*.json.key
+config/solana-*.json
+.env
+.env.*
+node_modules/

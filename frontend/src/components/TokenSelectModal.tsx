@@ -267,7 +267,7 @@ export default function TokenSelectModal({
             sym === 'PUSD'
               ? DEPLOYED_TESTNET_CONTRACTS.chipnetPusdCategory
               : token.isSolana
-              ? 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB'
+              ? DEPLOYED_TESTNET_CONTRACTS.solanaDevnetUsdtMint
               : sym === 'USDT'
               ? DEPLOYED_TESTNET_CONTRACTS.amoyUsdtAddress
               : sym === 'USDC'

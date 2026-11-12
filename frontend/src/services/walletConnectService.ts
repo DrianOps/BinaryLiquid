@@ -30,7 +30,9 @@ export const DEPLOYED_TESTNET_CONTRACTS = {
   amoyUsdtAddress: '0x1a29793F2a64424D09f56AD045827dF1F0Fa1A75',
   amoyUsdcAddress: '0x08d7CF325c44af76602922cBA6D37E4b267CDa71',
   chipnetVaultTokenAddress: 'bchtest:rvqse7cr2ptah2e34sl53r5utqwxl28fk84grvf5ufzd6n5tclme29g2zzvuj',
-  chipnetPusdCategory: '6b6cf8de5963d67594a4565d49a7bcf3e668a18a7328828de16bd393ac00dcad'
+  chipnetPusdCategory: '6b6cf8de5963d67594a4565d49a7bcf3e668a18a7328828de16bd393ac00dcad',
+  solanaDevnetUsdtMint: 'CMYCfg6aEDAvQCvR7Vb2hjRScfDn76rpiBdrnzPrWVnL',
+  solanaDevnetVaultAddress: '2VGPfWsD8KU1mddNCrMsxiqK4eqgZV2cW38dLRYvHzYN'
 };
 
 const WC_METADATA = {

@@ -22,7 +22,8 @@
   "author": "Drian Stack Labs <@drianops>",
   "license": "MIT",
   "dependencies": {
-    "@solana/web3.js": "^3.1.1",
+    "@solana/spl-token": "^0.4.9",
+    "@solana/web3.js": "^1.95.8",
     "bip39": "^3.1.2",
     "bs58": "^6.0.0",
     "cashc": "^0.14.0",

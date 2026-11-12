@@ -1,13 +1,19 @@
 import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { Connection, Keypair, PublicKey } from '@solana/web3.js';
+import { getAccount, getAssociatedTokenAddress, getOrCreateAssociatedTokenAccount, mintTo } from '@solana/spl-token';
 import { config } from '../config.js';
 import { db } from './db.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 /**
  * @file solanaService.js
  * @description Non-Custodial Solana SVM Service for BinaryLiquid Protocol.
- * Interfaces with the Anchor program `binary_liquid_vault` (`contracts/solana/programs/binary_liquid_vault/src/lib.rs`)
- * to verify inbound SPL Token deposits (Solana -> BCH and Solana -> EVM) and execute Ed25519-attested
- * PDA Vault releases (BCH -> Solana and EVM -> Solana).
+ * Handles on-chain SPL Token operations on Solana Devnet and Anchor PDA attestation.
  */
 class SolanaService {
   constructor() {
@@ -15,9 +21,28 @@ class SolanaService {
     this.mainnetRpcUrl = config.solana?.rpcUrl || 'https://api.mainnet-beta.solana.com';
     this.devnetRpcUrl = config.solana?.devnetRpcUrl || 'https://api.devnet.solana.com';
     this.vaultAddress = config.solana?.vaultAddress || '7QRhmj6TeGXbPKDD4otBJ23kTv6F2wydkuvtRQ6RRWfT';
+    this.devnetVaultAddress = config.solana?.devnetVaultAddress || '2VGPfWsD8KU1mddNCrMsxiqK4eqgZV2cW38dLRYvHzYN';
+    this.coldTreasuryAddress = config.solana?.coldTreasuryAddress || '5V41TxyvJcuXAqEsUMWuQZVy2zAWGHU4xfq6GCXribY2';
+    this.authorityKeypair = null;
+
+    this.initAuthority();
+
     console.log(
-      `[Solana SVM] 🛡️ Non-Custodial Anchor Vault PDA: ${this.vaultAddress} (Program: ${this.programId})`
+      `[Solana SVM] 🛡️ Non-Custodial Anchor Vault: ${this.vaultAddress} | Devnet: ${this.devnetVaultAddress} (Cold Treasury: ${this.coldTreasuryAddress})`
     );
+  }
+
+  initAuthority() {
+    try {
+      const keypairPath = path.resolve(__dirname, '../config/solana-authority.json');
+      if (fs.existsSync(keypairPath)) {
+        const raw = JSON.parse(fs.readFileSync(keypairPath, 'utf8'));
+        this.authorityKeypair = Keypair.fromSecretKey(Uint8Array.from(raw));
+        console.log(`[Solana SVM] 🔑 Loaded Authority/Vault Keypair: ${this.authorityKeypair.publicKey.toBase58()}`);
+      }
+    } catch (e) {
+      console.warn('[Solana SVM] Could not load authority keypair:', e.message);
+    }
   }
 
   isSolanaChain(chain = '') {
@@ -27,7 +52,7 @@ class SolanaService {
 
   isDevnetChain(chain = '') {
     const c = String(chain || '').toLowerCase();
-    return c.includes('devnet') || c.includes('testnet');
+    return c.includes('devnet') || c.includes('testnet') || c.includes('solana_devnet');
   }
 
   getRpcUrl(chain = 'solana-mainnet') {
@@ -36,7 +61,7 @@ class SolanaService {
 
   getVaultAddress(chain = 'solana-mainnet') {
     if (this.isDevnetChain(chain)) {
-      return config.solana?.devnetVaultAddress || this.vaultAddress;
+      return this.devnetVaultAddress;
     }
     return this.vaultAddress;
   }
@@ -45,17 +70,22 @@ class SolanaService {
     return this.getVaultAddress(chain);
   }
 
-  getTokenConfig(tokenSymbol = 'USDC', _chain = 'solana-mainnet') {
+  getTokenConfig(tokenSymbol = 'USDC', chain = 'solana-mainnet') {
     const sym = String(tokenSymbol || 'USDC').toUpperCase();
+    const isDev = this.isDevnetChain(chain);
     const tok = config.solana?.tokens?.[sym] || config.solana?.tokens?.USDC || {
       name: 'USD Coin (Solana SPL)',
       symbol: 'USDC',
       mint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+      devnetMint: '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU',
       decimals: 6
     };
+
+    const activeMint = isDev && tok.devnetMint ? tok.devnetMint : tok.mint;
     return {
       ...tok,
-      address: tok.mint
+      mint: activeMint,
+      address: activeMint
     };
   }
 
@@ -79,8 +109,7 @@ class SolanaService {
   }
 
   /**
-   * Verifies an inbound SPL Token or SOL deposit into the Non-Custodial Solana Anchor Vault PDA
-   * Supports both Solana -> BCH (CashTokens) and Solana -> EVM (Polygon/ETH/Arbitrum) routes.
+   * Verifies an inbound SPL Token or SOL deposit into the Non-Custodial Solana Vault
    */
   async verifyDeposit(txSignature, expectedAmount, tokenSymbol = 'USDC', expectedVault = null, chain = 'solana-mainnet') {
     if (!txSignature) {
@@ -114,7 +143,6 @@ class SolanaService {
         return { verified: false, reason: `Solana transaction failed on-chain: ${JSON.stringify(tx.meta.err)}` };
       }
 
-      // Check postTokenBalances / preTokenBalances for SPL token credit to Vault PDA or Program invocation
       const postBalances = tx.meta?.postTokenBalances || [];
       const preBalances = tx.meta?.preTokenBalances || [];
 
@@ -137,7 +165,6 @@ class SolanaService {
         }
       }
 
-      // Fallback check: verify program log emitted `BridgeDepositInitiatedEvent` from `binary_liquid_vault`
       const logs = tx.meta?.logMessages || [];
       const invokedVault = logs.some(
         (l) => l.includes(this.programId) || l.includes('Instruction: Deposit')
@@ -163,7 +190,7 @@ class SolanaService {
 
       return {
         verified: false,
-        reason: `Solana TX ${sig.slice(0, 12)}... did not transfer ${expectedAmount} ${tokenSymbol} to Vault PDA ${targetVault}`
+        reason: `Solana TX ${sig.slice(0, 12)}... did not transfer ${expectedAmount} ${tokenSymbol} to Vault ${targetVault}`
       };
     } catch (err) {
       if (config.simulateIfNoFunds || this.isDevnetChain(chain)) {
@@ -179,34 +206,83 @@ class SolanaService {
   }
 
   /**
-   * Releases SPL Tokens from the Solana Anchor Vault PDA (`binary_liquid_vault::release`)
-   * using the Ed25519 attestation signed by The Watchman Sentinel.
-   * Supports both BCH -> Solana and EVM -> Solana inbound swaps.
+   * Releases SPL Tokens from the Solana Vault:
+   * On Devnet, executes a REAL on-chain mint / SPL transfer to recipient's ATA!
    */
   async releaseFromVault({
     bchTxHashBytes32,
     recipientAddress,
     amount,
-    tokenSymbol = 'USDC',
-    chain = 'solana-mainnet',
+    tokenSymbol = 'USDT',
+    chain = 'solana-devnet',
     nonce,
     watchmanSignature
   }) {
+    const isDev = this.isDevnetChain(chain);
     const tokenCfg = this.getTokenConfig(tokenSymbol, chain);
-    const clusterParam = this.isDevnetChain(chain) ? '?cluster=devnet' : '';
+    const clusterParam = isDev ? '?cluster=devnet' : '';
 
     try {
+      if (!recipientAddress) {
+        throw new Error('Missing recipient address for Solana release');
+      }
+
+      // 1. Real on-chain Devnet SPL Token release
+      if (isDev && this.authorityKeypair && tokenCfg.mint) {
+        console.log(
+          `[Solana Devnet] 🚀 Releasing real on-chain ${amount} ${tokenSymbol} (${tokenCfg.mint}) -> ${recipientAddress}...`
+        );
+        const connection = new Connection(this.devnetRpcUrl, 'confirmed');
+        const mintPubkey = new PublicKey(tokenCfg.mint);
+        const recipientPubkey = new PublicKey(recipientAddress);
+
+        const recipientAta = await getOrCreateAssociatedTokenAccount(
+          connection,
+          this.authorityKeypair,
+          mintPubkey,
+          recipientPubkey
+        );
+
+        const decimals = tokenCfg.decimals || 6;
+        const rawAmount = BigInt(Math.round(Number(amount) * 10 ** decimals));
+
+        const txSig = await mintTo(
+          connection,
+          this.authorityKeypair,
+          mintPubkey,
+          recipientAta.address,
+          this.authorityKeypair,
+          rawAmount
+        );
+
+        console.log(`[Solana Devnet] ✅ Real SPL token release confirmed! TX: ${txSig}`);
+        const explorerUrl = `https://solscan.io/tx/${txSig}${clusterParam}`;
+
+        db.logEvent('SOLANA_VAULT_RELEASE', `Released on-chain ${amount} ${tokenSymbol} to ${recipientAddress}`, {
+          txSignature: txSig,
+          recipient: recipientAddress,
+          mint: tokenCfg.mint,
+          amount
+        });
+
+        return {
+          success: true,
+          onChain: true,
+          txHash: txSig,
+          explorerUrl
+        };
+      }
+
+      // 2. Attestation proof fallback
       if (!watchmanSignature) {
         throw new Error('Missing Watchman Ed25519 cryptographic attestation');
       }
 
-      // Deterministic Solana transaction signature derived from Watchman Ed25519 proof when relayer broadcasts
       const rawHash = crypto
         .createHash('sha256')
         .update(`SOLANA_RELEASE:${bchTxHashBytes32}:${recipientAddress}:${amount}:${nonce}:${watchmanSignature}`)
         .digest();
 
-      // Encode deterministic 64-byte identifier in Base58 format for Solscan tracking
       const base58Alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
       const combined = Buffer.concat([rawHash, crypto.createHash('sha256').update(rawHash).digest()]);
       let sigBase58 = '';
@@ -250,6 +326,9 @@ class SolanaService {
     return { success: true };
   }
 
+  /**
+   * Queries real on-chain SOL and Devnet USDT balances for a Solana address
+   */
   async getAddressBalances(solanaAddress, isTestnet = true) {
     if (!solanaAddress || typeof solanaAddress !== 'string' || solanaAddress.length < 32) {
       return { SOL: 0, USDT: 0, USDC: 0 };
@@ -257,19 +336,83 @@ class SolanaService {
     const cleanAddr = solanaAddress.trim();
     const chain = isTestnet ? 'solana-devnet' : 'solana-mainnet';
 
+    let solBalance = 0;
+    let usdtBalance = 0;
+    let usdcBalance = 0;
+
     try {
       const lamportsRes = await this.rpcCall('getBalance', [cleanAddr], chain);
       const lamports = Number(lamportsRes?.value || 0);
-      const solBalance = lamports / 1e9;
-
-      return {
-        SOL: Number(solBalance.toFixed(4)),
-        USDT: 0,
-        USDC: 0
-      };
-    } catch {
-      return { SOL: 0, USDT: 0, USDC: 0 };
+      solBalance = lamports / 1e9;
+    } catch (e) {
+      console.warn('[Solana RPC] SOL getBalance error:', e.message);
     }
+
+    if (isTestnet) {
+      try {
+        const usdtCfg = this.getTokenConfig('USDT', 'solana-devnet');
+        if (usdtCfg?.mint) {
+          const connection = new Connection(this.devnetRpcUrl, 'confirmed');
+          const userPubkey = new PublicKey(cleanAddr);
+          const mintPubkey = new PublicKey(usdtCfg.mint);
+          const ata = await getAssociatedTokenAddress(mintPubkey, userPubkey);
+          const acc = await getAccount(connection, ata);
+          usdtBalance = Number(acc.amount) / 10 ** (usdtCfg.decimals || 6);
+        }
+      } catch {
+        // ATA may not exist yet, 0 balance
+      }
+    }
+
+    return {
+      SOL: Number(solBalance.toFixed(4)),
+      USDT: Number(usdtBalance.toFixed(4)),
+      USDC: Number(usdcBalance.toFixed(4))
+    };
+  }
+
+  /**
+   * Real On-Chain Faucet: Dispenses Testnet SPL USDT to any Solana Devnet wallet!
+   */
+  async dispenseTestnetUsdt(recipientAddress, amount = 100) {
+    if (!this.authorityKeypair) {
+      throw new Error('Solana Devnet authority wallet not initialized');
+    }
+    const tokenCfg = this.getTokenConfig('USDT', 'solana-devnet');
+    const connection = new Connection(this.devnetRpcUrl, 'confirmed');
+    const mintPubkey = new PublicKey(tokenCfg.mint);
+    const recipientPubkey = new PublicKey(recipientAddress);
+
+    const recipientAta = await getOrCreateAssociatedTokenAccount(
+      connection,
+      this.authorityKeypair,
+      mintPubkey,
+      recipientPubkey
+    );
+
+    const cappedAmount = Math.min(Math.max(Number(amount) || 100, 1), 1000);
+    const rawAmount = BigInt(Math.round(cappedAmount * 10 ** (tokenCfg.decimals || 6)));
+
+    const txSig = await mintTo(
+      connection,
+      this.authorityKeypair,
+      mintPubkey,
+      recipientAta.address,
+      this.authorityKeypair,
+      rawAmount
+    );
+
+    return {
+      success: true,
+      onChain: true,
+      token: 'USDT',
+      network: 'Solana Devnet',
+      amount: cappedAmount,
+      recipient: recipientAddress,
+      tokenAddress: tokenCfg.mint,
+      txHash: txSig,
+      explorerUrl: `https://solscan.io/tx/${txSig}?cluster=devnet`
+    };
   }
 
   async getBalances() {
@@ -281,8 +424,8 @@ class SolanaService {
         vaultAddress: this.vaultAddress
       },
       devnet: {
-        SOL: 100.0,
-        USDT: 500000.0,
+        SOL: 2.0,
+        USDT: 1000000.0,
         USDC: 500000.0,
         vaultAddress: this.getVaultAddress('solana_devnet')
       }

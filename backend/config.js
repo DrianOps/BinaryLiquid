@@ -110,19 +110,21 @@ export const config = {
     explorerUrl: process.env.SOLANA_EXPLORER_URL || 'https://solscan.io',
     programId: process.env.SOLANA_PROGRAM_ID || 'BLiqVau1tSo1anaCrossChainBridge111111111111',
     vaultAddress: process.env.SOLANA_VAULT_PDA_ADDRESS || '7QRhmj6TeGXbPKDD4otBJ23kTv6F2wydkuvtRQ6RRWfT',
-    devnetVaultAddress: process.env.SOLANA_DEVNET_VAULT_PDA_ADDRESS || '7QRhmj6TeGXbPKDD4otBJ23kTv6F2wydkuvtRQ6RRWfT',
-    coldTreasuryAddress: process.env.SOLANA_COLD_TREASURY_ADDRESS || '7QRhmj6TeGXbPKDD4otBJ23kTv6F2wydkuvtRQ6RRWfT',
+    devnetVaultAddress: process.env.SOLANA_DEVNET_VAULT_PDA_ADDRESS || '2VGPfWsD8KU1mddNCrMsxiqK4eqgZV2cW38dLRYvHzYN',
+    coldTreasuryAddress: process.env.SOLANA_COLD_TREASURY_ADDRESS || '5V41TxyvJcuXAqEsUMWuQZVy2zAWGHU4xfq6GCXribY2',
     tokens: {
       USDC: {
         name: 'USD Coin (Solana SPL)',
         symbol: 'USDC',
         mint: process.env.SOLANA_USDC_MINT || 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+        devnetMint: process.env.SOLANA_DEVNET_USDC_MINT || '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU',
         decimals: 6
       },
       USDT: {
         name: 'Tether USD (Solana SPL)',
         symbol: 'USDT',
         mint: process.env.SOLANA_USDT_MINT || 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB',
+        devnetMint: process.env.SOLANA_DEVNET_USDT_MINT || 'CMYCfg6aEDAvQCvR7Vb2hjRScfDn76rpiBdrnzPrWVnL',
         decimals: 6
       },
       SOL: {
