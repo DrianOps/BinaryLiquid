@@ -195,6 +195,46 @@ export const config = {
     }
   },
 
+  // TON (The Open Network - Jettons & TVM Smart Contracts)
+  ton: {
+    network: process.env.TON_NETWORK || 'mainnet',
+    rpcUrl: process.env.TON_RPC_URL || 'https://toncenter.com/api/v2/jsonRPC',
+    testnetRpcUrl: process.env.TON_TESTNET_RPC_URL || 'https://testnet.toncenter.com/api/v2/jsonRPC',
+    tonApiUrl: process.env.TON_API_URL || 'https://tonapi.io/v2',
+    testnetTonApiUrl: process.env.TON_TESTNET_API_URL || 'https://testnet.tonapi.io/v2',
+    explorerUrl: 'https://tonviewer.com',
+    testnetExplorerUrl: 'https://testnet.tonviewer.com',
+    vaultAddress: process.env.TON_VAULT_ADDRESS || 'EQB_BLiquidVaultTONCrossChainBridge111111111111111',
+    testnetVaultAddress: process.env.TON_TESTNET_VAULT_ADDRESS || 'kQB_BLiquidVaultTONCrossChainBridge111111111111111',
+    coldTreasuryAddress: process.env.TON_COLD_TREASURY_ADDRESS || 'EQCD39VS5jcptHL8vMjEXrzGaRcCVYto7HUn4bpAOg8xqB2N',
+    tokens: {
+      USDT: {
+        name: 'Tether USD (TON Jetton)',
+        symbol: 'USDT',
+        masterAddress: process.env.TON_USDT_MASTER || 'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs',
+        decimals: 6
+      },
+      TON: {
+        name: 'Toncoin',
+        symbol: 'TON',
+        decimals: 9
+      }
+    },
+    testnetTokens: {
+      USDT: {
+        name: 'Tether USD (TON Testnet)',
+        symbol: 'USDT',
+        masterAddress: process.env.TON_TESTNET_USDT_MASTER || 'kQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs',
+        decimals: 6
+      },
+      TON: {
+        name: 'Toncoin (Testnet)',
+        symbol: 'TON',
+        decimals: 9
+      }
+    }
+  },
+
   // Strict on-chain mode: false forces genuine Smart Contract & Covenant execution
   simulateIfNoFunds: process.env.SIMULATE_IF_NO_FUNDS === 'true',
 

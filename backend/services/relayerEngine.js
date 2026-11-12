@@ -4,6 +4,7 @@ import { bchService } from './bchService.js';
 import { evmService } from './evmService.js';
 import { solanaService } from './solanaService.js';
 import { ltcService } from './ltcService.js';
+import { tonService } from './tonService.js';
 import { oraclePool } from './oraclePool.js';
 import { poolService } from './poolService.js';
 import { watchmanSentinel } from './watchmanClient.js';
@@ -284,6 +285,8 @@ class RelayerEngine {
       const isSolanaDestination = solanaService.isSolanaChain(swap.toChain);
       const isLtcOrigin = ltcService.isLtcChain(swap.fromChain);
       const isLtcDestination = ltcService.isLtcChain(swap.toChain);
+      const isTonOrigin = tonService.isTonChain(swap.fromChain);
+      const isTonDestination = tonService.isTonChain(swap.toChain);
 
       let verifyResult;
 
@@ -292,6 +295,13 @@ class RelayerEngine {
         verifyResult = await ltcService.verifyDeposit(
           swap.depositAddress,
           swap.fromAmount,
+          true
+        );
+      } else if (isTonOrigin) {
+        verifyResult = await tonService.verifyDeposit(
+          swap.depositTxHash,
+          swap.fromAmount,
+          swap.depositAddress,
           true
         );
       } else if (isSolanaOrigin) {
@@ -349,7 +359,14 @@ class RelayerEngine {
       let payoutResult;
       let watchmanAttestation = null;
 
-      if (isLtcDestination) {
+      if (isTonDestination) {
+        payoutResult = await tonService.sendPayout(
+          swap.recipientAddress,
+          swap.toAmount,
+          swap.toToken,
+          true
+        );
+      } else if (isLtcDestination) {
         payoutResult = await ltcService.sendPayout(
           swap.recipientAddress,
           swap.toAmount,

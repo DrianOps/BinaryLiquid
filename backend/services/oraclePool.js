@@ -27,6 +27,7 @@ class OraclePoolManager {
         BNB: 749.0,
         POL: 0.0915,
         LTC: 49.3,
+        TON: 5.25,
         LIFT: 0.01636
       }
     };
@@ -42,7 +43,8 @@ class OraclePoolManager {
       SOL: 'SOLUSDT',
       BNB: 'BNBUSDT',
       POL: 'POLUSDT',
-      LTC: 'LTCUSDT'
+      LTC: 'LTCUSDT',
+      TON: 'TONUSDT'
     };
 
     this.coinGeckoIds = {
@@ -52,7 +54,8 @@ class OraclePoolManager {
       SOL: 'solana',
       BNB: 'binancecoin',
       POL: 'polygon-ecosystem-token',
-      LTC: 'litecoin'
+      LTC: 'litecoin',
+      TON: 'the-open-network'
     };
 
     this.coinbaseSymbols = {
@@ -68,7 +71,8 @@ class OraclePoolManager {
       BCH: 'BCHUSD',
       ETH: 'ETHUSD',
       SOL: 'SOLUSD',
-      LTC: 'LTCUSD'
+      LTC: 'LTCUSD',
+      TON: 'TONUSD'
     };
 
     this.oracles = [

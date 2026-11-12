@@ -2483,6 +2483,30 @@ export default function App() {
                       {formatCryptoBalance(walletBalances.USDT_BSC ?? 0, false)}
                     </span>
                   </div>
+
+                  <div className="p-2 rounded-control bg-surface-2 border border-line flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <img src="/TON.png" className="w-4 h-4 rounded-full object-contain" alt="TON" />
+                      <span className="text-xs font-semibold text-ink">
+                        {platformNetwork === 'testnet' ? 'tTON' : 'TON'}
+                      </span>
+                    </div>
+                    <span className="text-xs font-mono font-semibold text-ink">
+                      {formatCryptoBalance(walletBalances.TON ?? 0, true)}
+                    </span>
+                  </div>
+
+                  <div className="p-2 rounded-control bg-surface-2 border border-line flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <img src="/USDT.png" className="w-4 h-4 rounded-full object-contain" alt="USDT (TON)" />
+                      <span className="text-xs font-semibold text-ink">
+                        USDT <span className="text-[10px] text-sky-500 font-mono">Jetton</span>
+                      </span>
+                    </div>
+                    <span className="text-xs font-mono font-semibold text-ink">
+                      {formatCryptoBalance(walletBalances.USDT_TON ?? 0, false)}
+                    </span>
+                  </div>
                 </div>
               </div>
 

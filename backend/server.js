@@ -10,6 +10,7 @@ import { bchService } from './services/bchService.js';
 import { evmService } from './services/evmService.js';
 import { solanaService } from './services/solanaService.js';
 import { ltcService } from './services/ltcService.js';
+import { tonService } from './services/tonService.js';
 import { relayerEngine } from './services/relayerEngine.js';
 import { poolService } from './services/poolService.js';
 import { lendingService } from './services/lendingService.js';
@@ -1607,17 +1608,20 @@ app.get('/api/wallet/balances/:address', async (req, res) => {
     const extraEvm = req.query.evmAddress ? String(req.query.evmAddress) : null;
     const extraSol = req.query.solanaAddress ? String(req.query.solanaAddress) : null;
     const extraLtc = req.query.ltcAddress ? String(req.query.ltcAddress) : null;
+    const extraTon = req.query.tonAddress ? String(req.query.tonAddress) : null;
 
     const targetBch = extraBch || (address && !address.startsWith('0x') && (address.includes(':') || address.startsWith('bitcoincash') || address.startsWith('bchtest') || address.startsWith('q')) ? address : null);
     const targetEvm = extraEvm || (address && address.startsWith('0x') ? address : null);
     const targetSol = extraSol || (address && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address) && !address.includes(':') && !address.startsWith('0x') && !address.startsWith('tltc') && !address.startsWith('ltc') ? address : null);
     const targetLtc = extraLtc || (address && ltcService.isValidAddress(address, isTestnet) ? address : null);
+    const targetTon = extraTon || (address && tonService.isValidAddress(address) && !address.startsWith('0x') && !address.startsWith('tltc') && !address.startsWith('ltc') ? address : null);
 
-    const [bchOnChain, evmOnChain, solOnChain, ltcOnChain] = await Promise.all([
+    const [bchOnChain, evmOnChain, solOnChain, ltcOnChain, tonOnChain] = await Promise.all([
       targetBch ? bchService.getAddressBalances(targetBch, isTestnet) : Promise.resolve({ BCH: 0, PUSD: 0 }),
       targetEvm ? evmService.getAddressBalances(targetEvm, isTestnet) : Promise.resolve({ POL: 0, USDT: 0, USDC: 0 }),
       targetSol ? solanaService.getAddressBalances(targetSol, isTestnet) : Promise.resolve({ SOL: 0, USDT: 0, USDC: 0 }),
-      targetLtc ? ltcService.getBalance(targetLtc, isTestnet) : Promise.resolve({ ltc: 0, litoshis: 0 })
+      targetLtc ? ltcService.getBalance(targetLtc, isTestnet) : Promise.resolve({ ltc: 0, litoshis: 0 }),
+      targetTon ? tonService.getAddressBalances(targetTon, isTestnet) : Promise.resolve({ TON: 0, USDT: 0 })
     ]);
 
     const balances = {
@@ -1630,7 +1634,9 @@ app.get('/api/wallet/balances/:address', async (req, res) => {
       USDT_SOL: solOnChain.USDT || 0,
       LTC: ltcOnChain.ltc || 0,
       BNB: evmOnChain.BNB || 0,
-      USDT_BSC: evmOnChain.USDT_BSC || 0
+      USDT_BSC: evmOnChain.USDT_BSC || 0,
+      TON: tonOnChain.TON || 0,
+      USDT_TON: tonOnChain.USDT || 0
     };
 
     res.json({
@@ -1642,6 +1648,7 @@ app.get('/api/wallet/balances/:address', async (req, res) => {
       evmAddress: targetEvm,
       solanaAddress: targetSol,
       ltcAddress: targetLtc,
+      tonAddress: targetTon,
       balances
     });
   } catch (err) {

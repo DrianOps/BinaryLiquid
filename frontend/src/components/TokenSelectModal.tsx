@@ -14,6 +14,7 @@ export interface TokenInfo {
   isBch: boolean;
   isSolana?: boolean;
   isLtc?: boolean;
+  isTon?: boolean;
   id?: string;
   isSponsor?: boolean;
   isVerified?: boolean;
@@ -23,7 +24,7 @@ export interface TokenInfo {
 }
 
 export interface ChainOption {
-  id: string; // 'all' | 'bch' | 'polygon' | 'solana' | 'litecoin' | 'ethereum' | 'bnb'
+  id: string; // 'all' | 'bch' | 'polygon' | 'solana' | 'litecoin' | 'ethereum' | 'bnb' | 'ton'
   name: string;
   icon?: string;
   badge?: string;
@@ -34,6 +35,7 @@ export const SUPPORTED_CHAINS: ChainOption[] = [
   { id: 'bch', name: 'Bitcoin Cash', icon: '/BCH.png', badge: 'Chipnet / L1' },
   { id: 'polygon', name: 'Polygon', icon: '/POL.png', badge: 'Amoy / PoS' },
   { id: 'solana', name: 'Solana', icon: '/SOL.png', badge: 'Devnet / SVM' },
+  { id: 'ton', name: 'TON Blockchain', icon: '/TON.png', badge: 'TVM / Jettons' },
   { id: 'litecoin', name: 'Litecoin', icon: '/LTC.png', badge: 'Testnet4 / L1' },
   { id: 'ethereum', name: 'Ethereum', icon: '/ETH.png', badge: 'Mainnet' },
   { id: 'bnb', name: 'BNB Chain', icon: '/BNB.png', badge: 'BEP-20' }
@@ -193,6 +195,37 @@ export const SUPPORTED_TOKENS: TokenInfo[] = [
     isBch: false,
     isVerified: true
   },
+  // --- TON BLOCKCHAIN (Jettons & TVM) ---
+  {
+    id: 'usdt_ton',
+    symbol: 'USDT',
+    name: 'Tether USD (TON Jetton)',
+    chain: 'ton',
+    network: 'TON Blockchain (Mainnet)',
+    networkBadge: 'TON Jetton',
+    icon: '/USDT.png',
+    decimals: 6,
+    isBch: false,
+    isSolana: false,
+    isTon: true,
+    isVerified: true,
+    categoryOrAddress: 'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs'
+  },
+  {
+    id: 'ton_l1',
+    symbol: 'TON',
+    name: 'Toncoin',
+    chain: 'ton',
+    network: 'TON Blockchain (Mainnet)',
+    networkBadge: 'TON L1',
+    icon: '/TON.png',
+    decimals: 9,
+    isBch: false,
+    isSolana: false,
+    isTon: true,
+    isVerified: true
+  },
+
   // --- BNB SMART CHAIN (BEP-20) ---
   {
     id: 'usdt_bsc',
@@ -226,6 +259,7 @@ const CHAIN_ICONS: Record<string, string> = {
   bch: '/BCH.png',
   polygon: '/POL.png',
   solana: '/SOL.png',
+  ton: '/TON.png',
   litecoin: '/LTC.png',
   ethereum: '/ETH.png',
   bnb: '/BNB.png'
