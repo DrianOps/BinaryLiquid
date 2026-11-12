@@ -110,6 +110,7 @@ const translations = {
     modalConnectSubtitle: "Choose a network and wallet to connect",
     tabBch: "Bitcoin Cash",
     tabEvm: "EVM (Polygon)",
+    tabSolana: "Solana (SVM)",
     detected: "Detected",
     extension: "Extension",
     mobileQr: "Mobile / QR",
@@ -123,9 +124,11 @@ const translations = {
     copyAddr: "Copy Address",
     disconnectBch: "Disconnect BCH",
     disconnectEvm: "Disconnect EVM",
+    disconnectSolana: "Disconnect Solana",
     disconnectAll: "Disconnect All Wallets",
     connectBchPrompt: "+ Connect Bitcoin Cash Wallet",
     connectEvmPrompt: "+ Connect EVM Wallet",
+    connectSolanaPrompt: "+ Connect Solana Wallet (Phantom)",
     liveBalances: "Live On-Chain Balances",
     refresh: "Refresh",
     refreshing: "Refreshing...",
@@ -161,6 +164,7 @@ const translations = {
     modalConnectSubtitle: "Elige una red y billetera para conectar",
     tabBch: "Bitcoin Cash",
     tabEvm: "EVM (Polygon)",
+    tabSolana: "Solana (SVM)",
     detected: "Detectada",
     extension: "Extensión",
     mobileQr: "Móvil / QR",
@@ -174,9 +178,11 @@ const translations = {
     copyAddr: "Copiar Dirección",
     disconnectBch: "Desconectar BCH",
     disconnectEvm: "Desconectar EVM",
+    disconnectSolana: "Desconectar Solana",
     disconnectAll: "Desconectar Todas las Billeteras",
     connectBchPrompt: "+ Conectar Billetera Bitcoin Cash",
     connectEvmPrompt: "+ Conectar Billetera EVM",
+    connectSolanaPrompt: "+ Conectar Billetera Solana (Phantom)",
     liveBalances: "Saldos On-Chain en Vivo",
     refresh: "Refrescar",
     refreshing: "Actualizando...",
@@ -485,6 +491,26 @@ export default function App() {
     return null;
   });
 
+  const [solanaWallet, setSolanaWallet] = useState<{
+    address: string;
+    provider: string;
+    source: 'phantom' | 'solflare' | 'injected';
+  } | null>(() => {
+    try {
+      const raw = localStorage.getItem('bliq_wallets_v2');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed?.solanaWallet?.address) return parsed.solanaWallet;
+      }
+      const rawSol = localStorage.getItem('bliq_solana_wallet');
+      if (rawSol) {
+        const parsed = JSON.parse(rawSol);
+        if (parsed?.address) return parsed;
+      }
+    } catch {}
+    return null;
+  });
+
   const [discoveredEvmWallets, setDiscoveredEvmWallets] = useState<DiscoveredEip6963Wallet[]>([]);
   const [bchWcPairing, setBchWcPairing] = useState<{ uri: string; qrDataUrl: string } | null>(null);
   const [walletBalances, setWalletBalances] = useState<{
@@ -504,10 +530,11 @@ export default function App() {
     }
     return false;
   });
-  const [walletModalTab, setWalletModalTab] = useState<'bch' | 'evm'>(() => {
+  const [walletModalTab, setWalletModalTab] = useState<'bch' | 'evm' | 'solana'>(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       if (params.get('tab') === 'evm') return 'evm';
+      if (params.get('tab') === 'solana') return 'solana';
     }
     return 'bch';
   });
@@ -531,19 +558,24 @@ export default function App() {
     setTimeout(() => setToast(null), 3200);
   };
 
-  // Persist dual-chain wallet state & synchronize userContext seamlessly
+  // Persist multi-chain wallet state & synchronize userContext seamlessly
   const isFirstWalletMount = useRef(true);
   useEffect(() => {
     if (isFirstWalletMount.current) {
       isFirstWalletMount.current = false;
-      if (!bchWallet && !evmWallet) {
+      if (!bchWallet && !evmWallet && !solanaWallet) {
         return;
       }
     }
-    if (bchWallet || evmWallet) {
-      localStorage.setItem('bliq_wallets_v2', JSON.stringify({ bchWallet, evmWallet }));
+    if (bchWallet || evmWallet || solanaWallet) {
+      localStorage.setItem('bliq_wallets_v2', JSON.stringify({ bchWallet, evmWallet, solanaWallet }));
+      if (solanaWallet) {
+        localStorage.setItem('bliq_solana_wallet', JSON.stringify(solanaWallet));
+      } else {
+        localStorage.removeItem('bliq_solana_wallet');
+      }
     }
-    const primaryAddr = bchWallet?.tokenAddress || evmWallet?.address || '';
+    const primaryAddr = bchWallet?.tokenAddress || evmWallet?.address || solanaWallet?.address || '';
     if (!primaryAddr) {
       setUserContext(null);
       if (typeof window !== 'undefined' && localStorage.getItem('bliq_user')) {
@@ -551,20 +583,24 @@ export default function App() {
       }
       return;
     }
+    const activeProviders = [
+      bchWallet?.provider,
+      evmWallet?.provider,
+      solanaWallet?.provider
+    ].filter(Boolean);
+
     const nextCtx = {
       address: primaryAddr,
       bchAddress: bchWallet?.tokenAddress || bchWallet?.address || null,
       evmAddress: evmWallet?.address || null,
-      provider:
-        bchWallet && evmWallet
-          ? `${bchWallet.provider} + ${evmWallet.provider}`
-          : bchWallet?.provider || evmWallet?.provider || 'Web3',
+      solanaAddress: solanaWallet?.address || null,
+      provider: activeProviders.length > 0 ? activeProviders.join(' + ') : 'Web3',
       connectedAt: new Date().toISOString(),
       balances: walletBalances
     };
     setUserContext(nextCtx);
     localStorage.setItem('bliq_user', JSON.stringify(nextCtx));
-  }, [bchWallet, evmWallet, walletBalances]);
+  }, [bchWallet, evmWallet, solanaWallet, walletBalances]);
 
   // Dynamically re-encode BCH CashAddress prefix (`bchtest:` <-> `bitcoincash:`) when switching Testnet/Mainnet
   useEffect(() => {
@@ -685,6 +721,30 @@ export default function App() {
         });
       }
     });
+
+    // 3. Restore Solana (Phantom / Solflare) session if already trusted
+    if (typeof window !== 'undefined') {
+      const solProvider = (window as any).phantom?.solana || (window as any).solana;
+      if (solProvider && solProvider.isPhantom && solProvider.publicKey) {
+        setSolanaWallet({
+          address: solProvider.publicKey.toString(),
+          provider: 'Phantom',
+          source: 'phantom'
+        });
+      } else if (solProvider && solProvider.isPhantom && !solanaWallet) {
+        solProvider.connect({ onlyIfTrusted: true })
+          .then((res: any) => {
+            if (res?.publicKey) {
+              setSolanaWallet({
+                address: res.publicKey.toString(),
+                provider: 'Phantom',
+                source: 'phantom'
+              });
+            }
+          })
+          .catch(() => {});
+      }
+    }
   }, []);
 
   const handleDisconnectBch = async () => {
@@ -700,16 +760,92 @@ export default function App() {
     showToast(lang === 'es' ? 'Billetera EVM desconectada' : 'EVM wallet disconnected');
   };
 
+  const handleDisconnectSolana = () => {
+    try {
+      if ((window as any)?.phantom?.solana?.disconnect) {
+        (window as any).phantom.solana.disconnect();
+      } else if ((window as any)?.solana?.disconnect) {
+        (window as any).solana.disconnect();
+      }
+      if ((window as any)?.solflare?.disconnect) {
+        (window as any).solflare.disconnect();
+      }
+    } catch {}
+    setSolanaWallet(null);
+    localStorage.removeItem('bliq_solana_wallet');
+    showToast(lang === 'es' ? 'Billetera Solana desconectada' : 'Solana wallet disconnected');
+  };
+
   const handleDisconnect = async () => {
     try { wc.disconnect(); } catch {}
     try { await disconnectBchWalletConnect(); } catch {}
     try { await disconnectWalletConnect(); } catch {}
+    try { handleDisconnectSolana(); } catch {}
     setBchWallet(null);
     setEvmWallet(null);
+    setSolanaWallet(null);
     setUserContext(null);
     localStorage.removeItem('bliq_user');
     localStorage.removeItem('bliq_wallets_v2');
+    localStorage.removeItem('bliq_solana_wallet');
     showToast(lang === 'es' ? 'Billeteras desconectadas' : 'All wallets disconnected');
+  };
+
+  const handleConnectSolana = async (preferred: 'phantom' | 'solflare' = 'phantom') => {
+    setShowWalletModal(false);
+    try {
+      let providerObj: any = null;
+      if (typeof window !== 'undefined') {
+        if (preferred === 'phantom') {
+          providerObj = (window as any).phantom?.solana || (window as any).solana;
+          if (!providerObj?.isPhantom) {
+            if (!(window as any).solana) {
+              window.open('https://phantom.app/', '_blank');
+              showToast(lang === 'es' ? 'Instala Phantom Wallet para Solana' : 'Please install Phantom Wallet for Solana', 'error');
+              return;
+            }
+            providerObj = (window as any).solana;
+          }
+        } else if (preferred === 'solflare') {
+          providerObj = (window as any).solflare;
+          if (!providerObj) {
+            window.open('https://solflare.com/', '_blank');
+            showToast(lang === 'es' ? 'Instala Solflare para Solana' : 'Please install Solflare for Solana', 'error');
+            return;
+          }
+        } else {
+          providerObj = (window as any).solana;
+        }
+      }
+
+      if (!providerObj) {
+        showToast(lang === 'es' ? 'No se detectó billetera Solana' : 'No Solana wallet detected', 'error');
+        return;
+      }
+
+      const resp = await providerObj.connect();
+      const pubkey = resp?.publicKey ? resp.publicKey.toString() : providerObj.publicKey?.toString();
+      if (!pubkey) {
+        throw new Error('No se obtuvo llave pública');
+      }
+
+      const pName = preferred === 'solflare' ? 'Solflare' : (providerObj.isPhantom ? 'Phantom' : 'Solana Wallet');
+      setSolanaWallet({
+        address: pubkey,
+        provider: pName,
+        source: preferred
+      });
+      showToast(
+        lang === 'es'
+          ? `Conectado con ${pName}: ${formatAddress(pubkey)}`
+          : `Connected with ${pName}: ${formatAddress(pubkey)}`
+      );
+    } catch (err: any) {
+      const msg = err?.message || '';
+      if (!msg.includes('User rejected') && !msg.includes('4001')) {
+        showToast(msg || (lang === 'es' ? 'Error conectando billetera Solana' : 'Error connecting Solana wallet'), 'error');
+      }
+    }
   };
 
   const registerBackendSession = async (
@@ -1011,6 +1147,7 @@ export default function App() {
             bchWalletName={bchWallet?.provider || ''}
             bchWalletSource={bchWallet?.source}
             evmAddress={evmWallet?.address || ''}
+            solanaAddress={solanaWallet?.address || ''}
             walletBalances={walletBalances}
             onRefreshBalances={() => refreshWalletBalances()}
             onConnectWallet={() => setShowWalletModal(true)}
@@ -1316,38 +1453,39 @@ export default function App() {
             <span className="text-[11px]">{lang.toUpperCase()}</span>
           </button>
 
-          {/* Non-Custodial Wallet Action Button (Shows Dual BCH+EVM Status) */}
+          {/* Non-Custodial Wallet Action Button (Shows Multi-Chain BCH+EVM+SVM Status) */}
           {userContext ? (
             <button 
               onClick={() => setShowAccountModal(true)} 
               className="bg-surface hover:bg-surface-2 text-ink px-2.5 sm:px-3.5 py-1.5 rounded-full font-semibold text-xs transition-all border border-line shadow-2xs flex items-center gap-1.5 sm:gap-2 hover:border-line-strong cursor-pointer shrink-0"
-              title={
-                ((bchWallet?.address || userContext?.bchAddress) && (evmWallet?.address || userContext?.evmAddress))
-                  ? (lang === 'es' ? 'Puente Dual Conectado: BCH ⇄ EVM' : 'Dual Bridge Connected: BCH ⇄ EVM')
-                  : (bchWallet?.address || userContext?.bchAddress)
-                  ? (lang === 'es' ? 'BCH conectado » Esperando conexión EVM' : 'BCH connected » Awaiting EVM connection')
-                  : (lang === 'es' ? 'EVM conectado « Esperando conexión BCH' : 'EVM connected « Awaiting BCH connection')
-              }
+              title={lang === 'es' ? 'Billeteras conectadas' : 'Connected wallets'}
             >
               {(() => {
                 const hasBch = Boolean(bchWallet?.address || userContext?.bchAddress);
                 const hasEvm = Boolean(evmWallet?.address || userContext?.evmAddress);
+                const hasSol = Boolean(solanaWallet?.address || userContext?.solanaAddress);
 
-                if (hasBch && hasEvm) {
+                const activeChains = [
+                  hasBch ? 'BCH' : null,
+                  hasEvm ? 'EVM' : null,
+                  hasSol ? 'SVM' : null
+                ].filter(Boolean);
+
+                if (activeChains.length >= 2) {
                   return (
                     <>
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
                       <span className="font-semibold text-xs flex items-center gap-1">
-                        BCH ⇄ EVM
+                        {activeChains.join(' ⇄ ')}
                       </span>
                     </>
                   );
                 }
 
-                if (hasBch && !hasEvm) {
+                if (hasBch) {
                   return (
                     <>
-                      <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                      <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0" />
                       <span className="font-semibold text-xs flex items-center gap-1">
                         <span>BCH</span>
                         <span className="text-primary font-bold text-sm leading-none">»</span>
@@ -1356,10 +1494,10 @@ export default function App() {
                   );
                 }
 
-                if (!hasBch && hasEvm) {
+                if (hasEvm) {
                   return (
                     <>
-                      <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                      <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0" />
                       <span className="font-semibold text-xs flex items-center gap-1">
                         <span className="text-primary font-bold text-sm leading-none">«</span>
                         <span>EVM</span>
@@ -1368,9 +1506,21 @@ export default function App() {
                   );
                 }
 
+                if (hasSol) {
+                  return (
+                    <>
+                      <span className="w-2 h-2 rounded-full bg-purple-400 animate-pulse shrink-0" />
+                      <span className="font-semibold text-xs flex items-center gap-1">
+                        <span>SVM</span>
+                        <span className="text-purple-400 font-bold text-sm leading-none">»</span>
+                      </span>
+                    </>
+                  );
+                }
+
                 return (
                   <>
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
                     <span className="font-semibold text-xs">
                       {userContext?.address ? formatAddress(userContext.address) : 'Connected'}
                     </span>
@@ -1754,6 +1904,7 @@ export default function App() {
             bchWalletName={bchWallet?.provider || ''}
             bchWalletSource={bchWallet?.source}
             evmAddress={evmWallet?.address || ''}
+            solanaAddress={solanaWallet?.address || ''}
             walletBalances={walletBalances}
             onRefreshBalances={() => refreshWalletBalances()}
             onConnectWallet={() => setShowWalletModal(true)}
@@ -2110,6 +2261,52 @@ export default function App() {
                 )}
               </div>
 
+              {/* SLOT 3: SOLANA SVM WALLET */}
+              <div className="p-3 rounded-control bg-surface-2 border border-line mb-3">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[10px] uppercase font-bold text-ink-3 tracking-wider">
+                    {t.tabSolana} ({platformNetwork === 'testnet' ? 'Devnet' : 'Mainnet-Beta'})
+                  </span>
+                  {solanaWallet && (
+                    <span className="ui-badge text-[10px]">
+                      {solanaWallet.provider}
+                    </span>
+                  )}
+                </div>
+                {solanaWallet ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono text-xs text-ink truncate font-semibold">
+                        {solanaWallet.address}
+                      </span>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={() => copyToClipboard(solanaWallet.address)}
+                          className="p-1.5 rounded-control hover:bg-surface-3 text-ink-3 hover:text-ink transition-colors cursor-pointer"
+                          title={t.copyAddr}
+                        >
+                          {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                        </button>
+                        <button
+                          onClick={handleDisconnectSolana}
+                          className="p-1.5 rounded-control hover:bg-rose-500/10 text-rose-500 transition-colors cursor-pointer"
+                          title={t.disconnectSolana}
+                        >
+                          <LogOut className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => { setShowAccountModal(false); setWalletModalTab('solana'); setShowWalletModal(true); }}
+                    className="w-full py-2 rounded-control bg-surface hover:bg-surface-3 border border-line text-ink font-semibold text-xs transition-colors cursor-pointer"
+                  >
+                    {t.connectSolanaPrompt}
+                  </button>
+                )}
+              </div>
+
               {/* REAL ON-CHAIN BALANCES PREVIEW */}
               <div className="space-y-1.5 mb-4">
                 <div className="flex items-center justify-between text-xs">
@@ -2246,34 +2443,48 @@ export default function App() {
                 </p>
               </div>
 
-              {/* Segmented Network Switcher: [Bitcoin Cash] | [EVM (Polygon)] */}
-              <div className="grid grid-cols-2 p-1 bg-surface-2 rounded-panel border border-line text-xs font-semibold mb-3">
+              {/* Segmented Network Switcher: [Bitcoin Cash] | [EVM (Polygon)] | [Solana (SVM)] */}
+              <div className="grid grid-cols-3 p-1 bg-surface-2 rounded-panel border border-line text-xs font-semibold mb-3">
                 <button
                   type="button"
                   onClick={() => setWalletModalTab('bch')}
-                  className={`py-1.5 px-2 rounded-control transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                  className={`py-1.5 px-1 rounded-control transition-all cursor-pointer flex items-center justify-center gap-1 text-[11px] sm:text-xs ${
                     walletModalTab === 'bch'
                       ? 'bg-surface text-ink shadow-soft font-bold'
                       : 'text-ink-3 hover:text-ink'
                   }`}
                 >
                   <img src="/BCH.png" className="w-3.5 h-3.5 object-contain" alt="BCH" />
-                  <span>{t.tabBch}</span>
-                  {bchWallet && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />}
+                  <span className="truncate">{t.tabBch}</span>
+                  {bchWallet && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />}
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setWalletModalTab('evm')}
-                  className={`py-1.5 px-2 rounded-control transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                  className={`py-1.5 px-1 rounded-control transition-all cursor-pointer flex items-center justify-center gap-1 text-[11px] sm:text-xs ${
                     walletModalTab === 'evm'
                       ? 'bg-surface text-ink shadow-soft font-bold'
                       : 'text-ink-3 hover:text-ink'
                   }`}
                 >
                   <img src="/POL.png" className="w-3.5 h-3.5 object-contain" alt="POL" />
-                  <span>{t.tabEvm}</span>
-                  {evmWallet && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />}
+                  <span className="truncate">{t.tabEvm}</span>
+                  {evmWallet && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setWalletModalTab('solana')}
+                  className={`py-1.5 px-1 rounded-control transition-all cursor-pointer flex items-center justify-center gap-1 text-[11px] sm:text-xs ${
+                    walletModalTab === 'solana'
+                      ? 'bg-surface text-ink shadow-soft font-bold'
+                      : 'text-ink-3 hover:text-ink'
+                  }`}
+                >
+                  <img src="https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png" className="w-3.5 h-3.5 object-contain rounded-full" alt="Solana" />
+                  <span className="truncate">{t.tabSolana}</span>
+                  {solanaWallet && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />}
                 </button>
               </div>
 
@@ -2337,7 +2548,7 @@ export default function App() {
                       </div>
                     </button>
                   </>
-                ) : (
+                ) : walletModalTab === 'evm' ? (
                   <>
                     {/* Discovered EIP-6963 Wallets or MetaMask / Browser Wallet */}
                     {discoveredEvmWallets.length > 0 ? (
@@ -2423,6 +2634,72 @@ export default function App() {
                       </div>
                     </button>
                   </>
+                ) : (
+                  <>
+                    {/* Phantom Wallet (SVM) */}
+                    <button
+                      type="button"
+                      onClick={() => handleConnectSolana('phantom')}
+                      className="w-full flex items-center justify-between p-3 rounded-control bg-surface-2 hover:bg-surface-3 border border-line text-ink transition-all group cursor-pointer"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-9 h-9 rounded-control bg-surface border border-line flex items-center justify-center shrink-0 p-1.5 shadow-2xs">
+                          <img src="https://phantom.app/favicon.ico" className="w-6 h-6 object-contain rounded-full" alt="Phantom" />
+                        </div>
+                        <div className="text-left min-w-0">
+                          <div className="text-sm font-semibold text-ink flex items-center gap-1.5">
+                            <span>Phantom Wallet</span>
+                            {solanaWallet?.provider === 'Phantom' && (
+                              <span className="text-[10px] text-emerald-500 font-bold">✓</span>
+                            )}
+                          </div>
+                          <span className="text-[11px] text-ink-3">
+                            {typeof window !== 'undefined' && ((window as any)?.phantom?.solana || (window as any)?.solana?.isPhantom)
+                              ? (lang === 'es' ? 'Extensión lista' : 'Extension ready')
+                              : (lang === 'es' ? 'Phantom Browser / App' : 'Phantom Browser / App')}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span className="ui-badge ui-badge-success text-[10px]">
+                          {typeof window !== 'undefined' && ((window as any)?.phantom?.solana || (window as any)?.solana?.isPhantom)
+                            ? t.detected
+                            : 'Install / Web'}
+                        </span>
+                        <ChevronRight className="w-4 h-4 text-ink-3 group-hover:text-ink transition-transform group-hover:translate-x-0.5" />
+                      </div>
+                    </button>
+
+                    {/* Solflare Wallet (SVM) */}
+                    <button
+                      type="button"
+                      onClick={() => handleConnectSolana('solflare')}
+                      className="w-full flex items-center justify-between p-3 rounded-control bg-surface-2 hover:bg-surface-3 border border-line text-ink transition-all group cursor-pointer"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-9 h-9 rounded-control bg-surface border border-line flex items-center justify-center shrink-0 p-1.5 shadow-2xs">
+                          <img src="https://solflare.com/favicon.ico" className="w-6 h-6 object-contain rounded-full" alt="Solflare" />
+                        </div>
+                        <div className="text-left min-w-0">
+                          <div className="text-sm font-semibold text-ink flex items-center gap-1.5">
+                            <span>Solflare</span>
+                            {solanaWallet?.provider === 'Solflare' && (
+                              <span className="text-[10px] text-emerald-500 font-bold">✓</span>
+                            )}
+                          </div>
+                          <span className="text-[11px] text-ink-3">Solflare Web / Extension</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span className="ui-badge text-[10px]">
+                          {typeof window !== 'undefined' && (window as any)?.solflare
+                            ? t.detected
+                            : 'Install / Web'}
+                        </span>
+                        <ChevronRight className="w-4 h-4 text-ink-3 group-hover:text-ink transition-transform group-hover:translate-x-0.5" />
+                      </div>
+                    </button>
+                  </>
                 )}
               </div>
 
@@ -2446,6 +2723,15 @@ export default function App() {
                     className="hover:text-ink font-semibold transition-colors"
                   >
                     Cashonize
+                  </a>
+                  <span>·</span>
+                  <a
+                    href="https://phantom.app"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="hover:text-ink font-semibold text-purple-400 transition-colors"
+                  >
+                    Phantom
                   </a>
                 </div>
               </div>

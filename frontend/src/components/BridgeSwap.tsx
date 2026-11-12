@@ -33,6 +33,7 @@ interface BridgeSwapProps {
   bchWalletName?: string;
   bchWalletSource?: 'wizard' | 'wc2-bch' | 'extension' | 'manual';
   evmAddress?: string;
+  solanaAddress?: string;
   walletBalances?: {
     PUSD: number;
     BCH: number;
@@ -183,6 +184,7 @@ export default function BridgeSwap({
   bchWalletName = '',
   bchWalletSource,
   evmAddress = '',
+  solanaAddress = '',
   walletBalances,
   onRefreshBalances,
   onConnectWallet,
@@ -244,13 +246,21 @@ export default function BridgeSwap({
   // ==========================================================================
   // STRICT PAY-WALLET vs RECEIVE-ADDRESS SEPARATION
   // ==========================================================================
-  const [connectedSolana, setConnectedSolana] = useState<string>('');
+  const [connectedSolana, setConnectedSolana] = useState<string>(() => {
+    if (solanaAddress) return solanaAddress;
+    if (typeof window !== 'undefined' && (window as any)?.solana?.publicKey) {
+      return (window as any).solana.publicKey.toString();
+    }
+    return '';
+  });
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && (window as any)?.solana?.publicKey) {
+    if (solanaAddress) {
+      setConnectedSolana(solanaAddress);
+    } else if (typeof window !== 'undefined' && (window as any)?.solana?.publicKey) {
       setConnectedSolana((window as any).solana.publicKey.toString());
     }
-  }, []);
+  }, [solanaAddress]);
 
   const connectPhantomWallet = useCallback(async () => {
     try {
