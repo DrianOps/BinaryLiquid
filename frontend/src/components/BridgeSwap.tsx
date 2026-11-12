@@ -178,13 +178,13 @@ const UI_TEXT = {
   }
 };
 
-function getTokenChainId(symbol: string, isBch: boolean, isTestnet: boolean, isSolana?: boolean, isLtc?: boolean): string {
+function getTokenChainId(symbol: string, isBch: boolean, isTestnet: boolean, isSolana?: boolean, isLtc?: boolean, chain?: string): string {
+  if (chain === 'bnb' || symbol.toUpperCase() === 'BNB') return isTestnet ? 'bsc_testnet' : 'bsc_mainnet';
   if (isBch) return isTestnet ? 'bch_chipnet' : 'bch_mainnet';
   if (isSolana || symbol.toUpperCase() === 'SOL') return isTestnet ? 'solana_devnet' : 'solana_mainnet';
   if (isLtc || symbol.toUpperCase() === 'LTC') return isTestnet ? 'litecoin_testnet4' : 'litecoin_mainnet';
   const s = symbol.toUpperCase();
   if (s === 'ETH') return 'ethereum_mainnet';
-  if (s === 'BNB') return 'bsc_mainnet';
   return isTestnet ? 'polygon_amoy' : 'polygon_mainnet';
 }
 
@@ -333,6 +333,10 @@ export default function BridgeSwap({
   // Live balance of the paying token
   const sellBalance = useMemo(() => {
     if (!isPayingWalletConnected || !walletBalances) return null;
+    if (sellToken.chain === 'bnb') {
+      if (sellToken.symbol.toUpperCase() === 'BNB') return walletBalances.BNB ?? 0;
+      return walletBalances.USDT_BSC ?? 0;
+    }
     if (sellToken.isLtc || sellToken.symbol.toUpperCase() === 'LTC') {
       return typeof walletBalances.LTC === 'number' ? walletBalances.LTC : null;
     }
@@ -342,11 +346,15 @@ export default function BridgeSwap({
     }
     const sym = sellToken.symbol.toUpperCase() as keyof typeof walletBalances;
     return typeof walletBalances[sym] === 'number' ? (walletBalances[sym] as number) : 0;
-  }, [isPayingWalletConnected, walletBalances, sellToken.symbol, sellToken.isSolana, sellToken.isLtc]);
+  }, [isPayingWalletConnected, walletBalances, sellToken.symbol, sellToken.isSolana, sellToken.isLtc, sellToken.chain]);
 
   // Live balance of the receiving token
   const buyBalance = useMemo(() => {
     if (!isReceivingWalletConnected || !walletBalances) return null;
+    if (buyToken.chain === 'bnb') {
+      if (buyToken.symbol.toUpperCase() === 'BNB') return walletBalances.BNB ?? 0;
+      return walletBalances.USDT_BSC ?? 0;
+    }
     if (buyToken.isLtc || buyToken.symbol.toUpperCase() === 'LTC') {
       return typeof walletBalances.LTC === 'number' ? walletBalances.LTC : null;
     }
@@ -356,7 +364,7 @@ export default function BridgeSwap({
     }
     const sym = buyToken.symbol.toUpperCase() as keyof typeof walletBalances;
     return typeof walletBalances[sym] === 'number' ? (walletBalances[sym] as number) : 0;
-  }, [isReceivingWalletConnected, walletBalances, buyToken.symbol, buyToken.isSolana, buyToken.isLtc]);
+  }, [isReceivingWalletConnected, walletBalances, buyToken.symbol, buyToken.isSolana, buyToken.isLtc, buyToken.chain]);
 
   // Auto-fill recipient if empty and corresponding wallet is connected
   useEffect(() => {
@@ -435,8 +443,8 @@ export default function BridgeSwap({
 
     setLoadingQuote(true);
     try {
-      const fromChain = getTokenChainId(sellToken.symbol, sellToken.isBch, isTestnet, sellToken.isSolana, sellToken.isLtc);
-      const toChain = getTokenChainId(buyToken.symbol, buyToken.isBch, isTestnet, buyToken.isSolana, buyToken.isLtc);
+      const fromChain = getTokenChainId(sellToken.symbol, sellToken.isBch, isTestnet, sellToken.isSolana, sellToken.isLtc, sellToken.chain);
+      const toChain = getTokenChainId(buyToken.symbol, buyToken.isBch, isTestnet, buyToken.isSolana, buyToken.isLtc, buyToken.chain);
       const res = await fetch(
         `${backendUrl}/api/quote?fromToken=${sellToken.symbol}&toToken=${buyToken.symbol}&amount=${parsed}&network=${platformNetwork}&fromChain=${fromChain}&toChain=${toChain}`
       );
@@ -629,8 +637,8 @@ export default function BridgeSwap({
         body: JSON.stringify({
           fromToken: sellToken.symbol,
           toToken: buyToken.symbol,
-          fromChain: getTokenChainId(sellToken.symbol, sellToken.isBch, isTestnet, sellToken.isSolana, sellToken.isLtc),
-          toChain: getTokenChainId(buyToken.symbol, buyToken.isBch, isTestnet, buyToken.isSolana, buyToken.isLtc),
+          fromChain: getTokenChainId(sellToken.symbol, sellToken.isBch, isTestnet, sellToken.isSolana, sellToken.isLtc, sellToken.chain),
+          toChain: getTokenChainId(buyToken.symbol, buyToken.isBch, isTestnet, buyToken.isSolana, buyToken.isLtc, buyToken.chain),
           amount: parsedAmount,
           senderAddress: payingWalletAddress,
           recipientAddress: normalizedRecipient,
@@ -905,8 +913,8 @@ export default function BridgeSwap({
           userAddress: payingWalletAddress,
           fromToken: sellToken.symbol,
           toToken: buyToken.symbol,
-          fromChain: getTokenChainId(sellToken.symbol, sellToken.isBch, isTestnet, sellToken.isSolana),
-          toChain: getTokenChainId(buyToken.symbol, buyToken.isBch, isTestnet, buyToken.isSolana),
+          fromChain: getTokenChainId(sellToken.symbol, sellToken.isBch, isTestnet, sellToken.isSolana, sellToken.isLtc, sellToken.chain),
+          toChain: getTokenChainId(buyToken.symbol, buyToken.isBch, isTestnet, buyToken.isSolana, buyToken.isLtc, buyToken.chain),
           fromAmount: parsedAmount,
           targetRate: parsedRate,
           recipientAddress: normalizedRecipient
@@ -1320,7 +1328,9 @@ export default function BridgeSwap({
                   <span className="font-semibold text-sm text-ink flex items-center gap-1.5">
                     {sellToken.symbol}
                     <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
-                      sellToken.isBch
+                      sellToken.chain === 'bnb'
+                        ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/20'
+                        : sellToken.isBch
                         ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
                         : sellToken.isSolana
                         ? 'bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 border-cyan-500/20'
@@ -1328,7 +1338,7 @@ export default function BridgeSwap({
                         ? 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/20'
                         : 'bg-purple-500/15 text-purple-600 dark:text-purple-400 border-purple-500/20'
                     }`}>
-                      {sellToken.isBch ? 'BCH' : sellToken.isSolana ? 'Solana' : sellToken.isLtc || sellToken.symbol === 'LTC' ? 'Litecoin' : 'Polygon'}
+                      {sellToken.chain === 'bnb' ? 'BNB Chain' : sellToken.isBch ? 'BCH' : sellToken.isSolana ? 'Solana' : sellToken.isLtc || sellToken.symbol === 'LTC' ? 'Litecoin' : 'Polygon'}
                     </span>
                   </span>
                   <ChevronDown className="w-3.5 h-3.5 text-ink-3" />
@@ -1341,7 +1351,7 @@ export default function BridgeSwap({
                     ? `~$${(parseFloat(amount) * (quote?.priceFromUsd || 1)).toFixed(2)}`
                     : '$0.00'}
                 </span>
-                <span>{sellToken.isBch ? (isTestnet ? 'BCH Chipnet' : 'Bitcoin Cash') : sellToken.isSolana ? (isTestnet ? 'Solana Devnet' : 'Solana') : sellToken.isLtc || sellToken.symbol === 'LTC' ? (isTestnet ? 'Litecoin Testnet4' : 'Litecoin') : isTestnet ? 'Polygon Amoy' : 'Polygon'}</span>
+                <span>{sellToken.chain === 'bnb' ? (isTestnet ? 'BNB Testnet' : 'BNB Chain') : sellToken.isBch ? (isTestnet ? 'BCH Chipnet' : 'Bitcoin Cash') : sellToken.isSolana ? (isTestnet ? 'Solana Devnet' : 'Solana') : sellToken.isLtc || sellToken.symbol === 'LTC' ? (isTestnet ? 'Litecoin Testnet4' : 'Litecoin') : isTestnet ? 'Polygon Amoy' : 'Polygon'}</span>
               </div>
             </div>
 
@@ -1401,7 +1411,9 @@ export default function BridgeSwap({
                   <span className="font-semibold text-sm text-ink flex items-center gap-1.5">
                     {buyToken.symbol}
                     <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
-                      buyToken.isBch
+                      buyToken.chain === 'bnb'
+                        ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/20'
+                        : buyToken.isBch
                         ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
                         : buyToken.isSolana
                         ? 'bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 border-cyan-500/20'
@@ -1409,7 +1421,7 @@ export default function BridgeSwap({
                         ? 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/20'
                         : 'bg-purple-500/15 text-purple-600 dark:text-purple-400 border-purple-500/20'
                     }`}>
-                      {buyToken.isBch ? 'BCH' : buyToken.isSolana ? 'Solana' : buyToken.isLtc || buyToken.symbol === 'LTC' ? 'Litecoin' : 'Polygon'}
+                      {buyToken.chain === 'bnb' ? 'BNB Chain' : buyToken.isBch ? 'BCH' : buyToken.isSolana ? 'Solana' : buyToken.isLtc || buyToken.symbol === 'LTC' ? 'Litecoin' : 'Polygon'}
                     </span>
                   </span>
                   <ChevronDown className="w-3.5 h-3.5 text-ink-3" />
@@ -1424,7 +1436,7 @@ export default function BridgeSwap({
                     ? `~$${receiveDisplay}`
                     : '$0.00'}
                 </span>
-                <span>{buyToken.isBch ? (isTestnet ? 'BCH Chipnet' : 'Bitcoin Cash') : buyToken.isSolana ? (isTestnet ? 'Solana Devnet' : 'Solana') : buyToken.isLtc || buyToken.symbol === 'LTC' ? (isTestnet ? 'Litecoin Testnet4' : 'Litecoin') : isTestnet ? 'Polygon Amoy' : 'Polygon'}</span>
+                <span>{buyToken.chain === 'bnb' ? (isTestnet ? 'BNB Testnet' : 'BNB Chain') : buyToken.isBch ? (isTestnet ? 'BCH Chipnet' : 'Bitcoin Cash') : buyToken.isSolana ? (isTestnet ? 'Solana Devnet' : 'Solana') : buyToken.isLtc || buyToken.symbol === 'LTC' ? (isTestnet ? 'Litecoin Testnet4' : 'Litecoin') : isTestnet ? 'Polygon Amoy' : 'Polygon'}</span>
               </div>
             </div>
 

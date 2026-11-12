@@ -1628,7 +1628,9 @@ app.get('/api/wallet/balances/:address', async (req, res) => {
       POL: evmOnChain.POL || 0,
       SOL: solOnChain.SOL || 0,
       USDT_SOL: solOnChain.USDT || 0,
-      LTC: ltcOnChain.ltc || 0
+      LTC: ltcOnChain.ltc || 0,
+      BNB: evmOnChain.BNB || 0,
+      USDT_BSC: evmOnChain.USDT_BSC || 0
     };
 
     res.json({

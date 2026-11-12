@@ -155,6 +155,46 @@ export const config = {
     }
   },
 
+  // BNB Smart Chain (BSC BEP-20)
+  bsc: {
+    chainName: process.env.BSC_CHAIN_NAME || 'BNB Smart Chain',
+    chainId: parseInt(process.env.BSC_CHAIN_ID || '56', 10),
+    rpcUrl: process.env.BSC_RPC_URL || 'https://bsc-dataseed.binance.org',
+    explorerUrl: process.env.BSC_EXPLORER_URL || 'https://bscscan.com',
+    testnetRpcUrl: process.env.BSC_TESTNET_RPC_URL || 'https://data-seed-prebsc-1-s1.binance.org:8545',
+    testnetExplorerUrl: 'https://testnet.bscscan.com',
+    testnetChainId: 97,
+    vaultAddress: process.env.BSC_VAULT_ADDRESS || '0x143cA3A5116835d94573C700320B9FEdFf846eF9',
+    tokens: {
+      USDT: {
+        name: 'Tether USD (BNB Chain)',
+        symbol: 'USDT',
+        address: process.env.BSC_USDT_ADDRESS || '0x55d398326f99059fF775485246999027B3197955',
+        decimals: 18
+      },
+      BNB: {
+        name: 'BNB',
+        symbol: 'BNB',
+        address: '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c',
+        decimals: 18
+      }
+    },
+    testnetTokens: {
+      USDT: {
+        name: 'Tether USD (BSC Testnet)',
+        symbol: 'USDT',
+        address: process.env.BSC_TESTNET_USDT_ADDRESS || '0x337610d27c682E347C9cD60BD4b3b107C9d34dDd',
+        decimals: 18
+      },
+      BNB: {
+        name: 'BNB (Testnet)',
+        symbol: 'BNB',
+        address: '0xae13d989daC2f0dEbFf460aC112a837C89BAa7cd',
+        decimals: 18
+      }
+    }
+  },
+
   // Strict on-chain mode: false forces genuine Smart Contract & Covenant execution
   simulateIfNoFunds: process.env.SIMULATE_IF_NO_FUNDS === 'true',
 

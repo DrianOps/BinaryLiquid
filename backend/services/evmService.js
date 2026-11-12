@@ -16,8 +16,12 @@ class EvmService {
   constructor() {
     this.mainnetProvider = null;
     this.amoyProvider = null;
+    this.bscMainnetProvider = null;
+    this.bscTestnetProvider = null;
     this.mainnetSigner = null;
     this.amoySigner = null;
+    this.bscMainnetSigner = null;
+    this.bscTestnetSigner = null;
     this.watchmanAddress = config.evm.watchmanAddress || '0x143cA3A5116835d94573C700320B9FEdFf846eF9';
     this.vaultAbi = null;
     this.testnetUsdcAbi = null;
@@ -69,14 +73,47 @@ class EvmService {
     } catch (err) {
       console.warn('[EVM Amoy] Init warning:', err.message);
     }
+
+    // 3. BNB Smart Chain (BSC Mainnet) Provider
+    try {
+      this.bscMainnetProvider = new ethers.JsonRpcProvider(config.bsc?.rpcUrl || 'https://bsc-dataseed.binance.org');
+      if (formattedKey) {
+        this.bscMainnetSigner = new ethers.Wallet(formattedKey, this.bscMainnetProvider);
+      }
+    } catch (err) {
+      console.warn('[BSC Mainnet] Init warning:', err.message);
+    }
+
+    // 4. BNB Smart Chain Testnet (Chapel) Provider
+    try {
+      this.bscTestnetProvider = new ethers.JsonRpcProvider(
+        config.bsc?.testnetRpcUrl || 'https://data-seed-prebsc-1-s1.binance.org:8545'
+      );
+      if (formattedKey) {
+        this.bscTestnetSigner = new ethers.Wallet(formattedKey, this.bscTestnetProvider);
+        console.log(
+          `[BSC Testnet] 🛡️ Vault: ${config.bsc?.vaultAddress || this.watchmanAddress} (Signer: ${this.bscTestnetSigner.address})`
+        );
+      }
+    } catch (err) {
+      console.warn('[BSC Testnet] Init warning:', err.message);
+    }
   }
 
   isAmoyChain(chain = '') {
     const c = (chain || '').toLowerCase();
-    return c.includes('amoy') || c.includes('testnet') || c.includes('80002');
+    return c.includes('amoy') || c.includes('testnet') || c.includes('80002') || c.includes('chapel') || c === '97';
+  }
+
+  isBscChain(chain = '') {
+    const c = (chain || '').toLowerCase();
+    return c.includes('bsc') || c.includes('bnb') || c.includes('binance') || c === '56' || c === '97' || c.includes('chapel');
   }
 
   getVaultAddress(chain = 'polygon_amoy') {
+    if (this.isBscChain(chain)) {
+      return config.bsc?.vaultAddress || this.watchmanAddress;
+    }
     if (this.isAmoyChain(chain)) {
       return config.evm.amoyVaultAddress;
     }
@@ -89,6 +126,12 @@ class EvmService {
 
   getTokenConfig(tokenSymbol = 'USDC', chain = 'polygon_amoy') {
     const sym = (tokenSymbol || 'USDC').toUpperCase();
+    if (this.isBscChain(chain)) {
+      const isTest = this.isAmoyChain(chain);
+      return isTest
+        ? (config.bsc?.testnetTokens?.[sym] || config.bsc?.tokens?.[sym])
+        : config.bsc?.tokens?.[sym];
+    }
     if (this.isAmoyChain(chain)) {
       return config.evm.amoyTokens?.[sym] || config.evm.tokens[sym];
     }
@@ -159,12 +202,17 @@ class EvmService {
    * Accepts either `BridgeDepositInitiated` event OR direct ERC-20 `Transfer(user -> vaultAddress)` log!
    */
   async verifyDeposit(txHash, expectedAmount, tokenSymbol = 'USDC', depositAddress = null, chain = 'polygon_amoy') {
+    const isBsc = this.isBscChain(chain);
     const isAmoy = this.isAmoyChain(chain);
-    const activeProvider = isAmoy ? this.amoyProvider : this.mainnetProvider;
-    const networkName = isAmoy ? 'Polygon Amoy (Testnet)' : 'Polygon Mainnet';
+    const activeProvider = isBsc
+      ? (isAmoy ? this.bscTestnetProvider : this.bscMainnetProvider)
+      : (isAmoy ? this.amoyProvider : this.mainnetProvider);
+    const networkName = isBsc
+      ? (isAmoy ? 'BNB Smart Chain (Testnet)' : 'BNB Smart Chain (Mainnet)')
+      : (isAmoy ? 'Polygon Amoy (Testnet)' : 'Polygon Mainnet');
     const targetVault = (depositAddress || this.getVaultAddress(chain)).toLowerCase();
     const tokenCfg = this.getTokenConfig(tokenSymbol, chain);
-    const decimals = tokenCfg?.decimals || 6;
+    const decimals = tokenCfg?.decimals || (isBsc ? 18 : 6);
 
     if (!txHash || txHash.trim().length < 20) {
       return {
@@ -269,6 +317,42 @@ class EvmService {
       throw new Error(`Dirección EVM de destino inválida: ${recipientAddress}`);
     }
     const cleanRecipient = ethers.getAddress(rawRecipient);
+
+    // Direct payout for BNB Smart Chain (BEP-20)
+    if (this.isBscChain(chain)) {
+      const isTest = this.isAmoyChain(chain);
+      const activeSigner = isTest ? this.bscTestnetSigner : this.bscMainnetSigner;
+      const activeExplorer = isTest ? 'https://testnet.bscscan.com' : 'https://bscscan.com';
+      const networkName = isTest ? 'BNB Smart Chain (Testnet)' : 'BNB Smart Chain (Mainnet)';
+      const tokenConfig = this.getTokenConfig(tokenSymbol, chain);
+      const decimals = tokenConfig?.decimals || 18;
+
+      if (!activeSigner) {
+        throw new Error(`[BSC Payout] Signer no inicializado para ${networkName}`);
+      }
+      if (!tokenConfig?.address) {
+        throw new Error(`Token ${tokenSymbol} no configurado en ${networkName}`);
+      }
+
+      const parsedAmount = ethers.parseUnits(Number(amount).toFixed(Math.min(decimals, 6)), decimals);
+      console.log(`[BSC Vault] 🛡️ Transferring ${amount} ${tokenSymbol} directly -> ${cleanRecipient} on ${networkName}...`);
+      const tokenContract = new ethers.Contract(tokenConfig.address, ERC20_ABI, activeSigner);
+      const tx = await tokenContract.transfer(cleanRecipient, parsedAmount);
+      const txReceipt = await tx.wait(1);
+
+      console.log(`[BSC Vault] ✅ BEP-20 transfer confirmed! TX: ${txReceipt.hash}`);
+      db.updateLiquidity(`bsc_${tokenSymbol.toLowerCase()}`, -Number(amount));
+
+      return {
+        success: true,
+        onChain: true,
+        nonCustodial: true,
+        vaultAddress: this.getVaultAddress(chain),
+        txHash: txReceipt.hash,
+        explorerUrl: `${activeExplorer}/tx/${txReceipt.hash}`,
+        blockNumber: txReceipt.blockNumber
+      };
+    }
 
     const isAmoy = this.isAmoyChain(chain);
     const activeSigner = isAmoy ? this.amoySigner : this.mainnetSigner;
@@ -415,6 +499,8 @@ class EvmService {
       POL: 0,
       USDT: 0,
       USDC: 0,
+      BNB: 0,
+      USDT_BSC: 0,
       network: isTestnet ? 'amoy' : 'polygon',
       chainId: isTestnet ? 80002 : 137,
       address: cleanAddr
@@ -443,6 +529,25 @@ class EvmService {
             result.USDC = parseFloat(ethers.formatUnits(raw, tokenMap.USDC.decimals || 6)) || 0;
           }).catch(() => {})
         );
+      }
+
+      // Query BNB and USDT on BNB Smart Chain (BSC)
+      const bscProvider = isTestnet ? this.bscTestnetProvider : this.bscMainnetProvider;
+      const bscTokens = isTestnet ? config.bsc?.testnetTokens : config.bsc?.tokens;
+      if (bscProvider) {
+        promises.push(
+          bscProvider.getBalance(cleanAddr).then(w => {
+            result.BNB = parseFloat(ethers.formatEther(w)) || 0;
+          }).catch(() => {})
+        );
+        if (bscTokens?.USDT?.address) {
+          const bscUsdtContract = new ethers.Contract(bscTokens.USDT.address, ERC20_ABI, bscProvider);
+          promises.push(
+            bscUsdtContract.balanceOf(cleanAddr).then(raw => {
+              result.USDT_BSC = parseFloat(ethers.formatUnits(raw, bscTokens.USDT.decimals || 18)) || 0;
+            }).catch(() => {})
+          );
+        }
       }
 
       await Promise.all(promises);

@@ -193,6 +193,21 @@ export const SUPPORTED_TOKENS: TokenInfo[] = [
     isBch: false,
     isVerified: true
   },
+  // --- BNB SMART CHAIN (BEP-20) ---
+  {
+    id: 'usdt_bsc',
+    symbol: 'USDT',
+    name: 'Tether USD (BNB Chain)',
+    chain: 'bnb',
+    network: 'BNB Chain (Mainnet)',
+    networkBadge: 'BNB BEP-20',
+    icon: '/USDT.png',
+    decimals: 18,
+    isBch: false,
+    isSolana: false,
+    isVerified: true,
+    categoryOrAddress: '0x55d398326f99059fF775485246999027B3197955'
+  },
   {
     id: 'bnb_bsc',
     symbol: 'BNB',

@@ -2459,6 +2459,30 @@ export default function App() {
                       {formatCryptoBalance(walletBalances.LTC ?? 0, true)}
                     </span>
                   </div>
+
+                  <div className="p-2 rounded-control bg-surface-2 border border-line flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <img src="/BNB.png" className="w-4 h-4 rounded-full object-contain" alt="BNB" />
+                      <span className="text-xs font-semibold text-ink">
+                        {platformNetwork === 'testnet' ? 'tBNB' : 'BNB'}
+                      </span>
+                    </div>
+                    <span className="text-xs font-mono font-semibold text-ink">
+                      {formatCryptoBalance(walletBalances.BNB ?? 0, true)}
+                    </span>
+                  </div>
+
+                  <div className="p-2 rounded-control bg-surface-2 border border-line flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <img src="/USDT.png" className="w-4 h-4 rounded-full object-contain" alt="USDT (BSC)" />
+                      <span className="text-xs font-semibold text-ink">
+                        USDT <span className="text-[10px] text-amber-500 font-mono">BEP-20</span>
+                      </span>
+                    </div>
+                    <span className="text-xs font-mono font-semibold text-ink">
+                      {formatCryptoBalance(walletBalances.USDT_BSC ?? 0, false)}
+                    </span>
+                  </div>
                 </div>
               </div>
 
