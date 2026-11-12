@@ -33,7 +33,8 @@ interface PortfolioToken {
   symbol: string;
   name: string;
   chain: string;
-  chainType: 'BCH' | 'EVM';
+  chainType: 'BCH' | 'EVM' | 'SVM';
+  chainBadge?: string;
   balance: number;
   priceUsd: number;
   valueUsd: number;
@@ -85,6 +86,7 @@ interface PortfolioViewProps {
   userAddress: string;
   bchAddress?: string;
   evmAddress?: string;
+  solanaAddress?: string;
   walletBalances: Record<string, number>;
   platformNetwork: 'mainnet' | 'testnet';
   onToggleNetwork?: (network: 'mainnet' | 'testnet') => void;
@@ -125,6 +127,7 @@ const tMap = {
     allChains: "All Networks",
     bchOnly: "Bitcoin Cash",
     evmOnly: "Polygon Amoy",
+    solanaOnly: "Solana Devnet",
     noTokens: "No tokens found in connected wallet.",
     noPools: "No active Liquidity Pool positions.",
     explorePools: "Explore Pools",
@@ -142,7 +145,7 @@ const tMap = {
     copyAddress: "Copy Address",
     copied: "Copied!",
     share: "Share Portfolio",
-    connectPrompt: "Connect your Bitcoin Cash or EVM wallet to view real live on-chain portfolio balances, yields, and vault covenants.",
+    connectPrompt: "Connect your Bitcoin Cash, EVM, or Solana wallet to view real live on-chain portfolio balances, yields, and vault covenants.",
     connectBtn: "Connect Wallet",
     refreshing: "Refreshing on-chain metrics...",
     updatedJustNow: "Updated just now",
@@ -178,6 +181,7 @@ const tMap = {
     allChains: "Todas las redes",
     bchOnly: "Bitcoin Cash",
     evmOnly: "Polygon Amoy",
+    solanaOnly: "Solana Devnet",
     noTokens: "No se detectaron tokens en la billetera conectada.",
     noPools: "No tienes posiciones activas en Pools de Liquidez.",
     explorePools: "Explorar Pools",
@@ -209,6 +213,7 @@ export default function PortfolioView({
   userAddress,
   bchAddress,
   evmAddress,
+  solanaAddress,
   walletBalances,
   platformNetwork,
   onToggleNetwork,
@@ -222,7 +227,7 @@ export default function PortfolioView({
 
   const [activeTab, setActiveTab] = useState<'overview' | 'tokens' | 'pools' | 'defi' | 'activity'>('overview');
   const [timeframe, setTimeframe] = useState<'1h' | '1d' | '1w' | '1m' | '1y' | 'all'>('1d');
-  const [networkFilter, setNetworkFilter] = useState<'all' | 'bch' | 'evm'>('all');
+  const [networkFilter, setNetworkFilter] = useState<'all' | 'bch' | 'evm' | 'solana'>('all');
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [copied, setCopied] = useState<boolean>(false);
@@ -231,8 +236,8 @@ export default function PortfolioView({
 
   const [portfolio, setPortfolio] = useState<PortfolioData | null>(null);
 
-  const isConnected = Boolean(userAddress || bchAddress || evmAddress);
-  const primaryDisplayAddress = bchAddress || evmAddress || userAddress;
+  const isConnected = Boolean(userAddress || bchAddress || evmAddress || solanaAddress);
+  const primaryDisplayAddress = bchAddress || evmAddress || solanaAddress || userAddress;
 
   const fetchPortfolio = async (isManual = false) => {
     if (!isConnected || !primaryDisplayAddress) {
@@ -254,11 +259,13 @@ export default function PortfolioView({
           totalReturnUsd: 0
         },
         tokens: [
-          { symbol: 'PUSD', name: 'Paryon USD', chain: platformNetwork === 'testnet' ? 'BCH Chipnet' : 'Bitcoin Cash', chainType: 'BCH', balance: 0, priceUsd: 1.0, valueUsd: 0, change24h: 0, icon: '/PUSD.png', isCashToken: true },
-          { symbol: 'BCH', name: 'Bitcoin Cash', chain: platformNetwork === 'testnet' ? 'BCH Chipnet' : 'Bitcoin Cash', chainType: 'BCH', balance: 0, priceUsd: 230.5, valueUsd: 0, change24h: 1.85, icon: '/BCH.png', isNative: true },
-          { symbol: 'USDT', name: 'Tether USD', chain: platformNetwork === 'testnet' ? 'Polygon Amoy' : 'Polygon PoS', chainType: 'EVM', balance: 0, priceUsd: 1.0, valueUsd: 0, change24h: 0.01, icon: '/USDT.png' },
-          { symbol: 'USDC', name: 'USD Coin', chain: platformNetwork === 'testnet' ? 'Polygon Amoy' : 'Polygon PoS', chainType: 'EVM', balance: 0, priceUsd: 1.0, valueUsd: 0, change24h: 0, icon: '/USDC.png' },
-          { symbol: 'POL', name: 'Polygon Ecosystem Token', chain: platformNetwork === 'testnet' ? 'Polygon Amoy' : 'Polygon PoS', chainType: 'EVM', balance: 0, priceUsd: 0.09, valueUsd: 0, change24h: -0.45, icon: '/POL.png', isNative: true }
+          { symbol: 'PUSD', name: 'Paryon USD', chain: platformNetwork === 'testnet' ? 'BCH Chipnet' : 'Bitcoin Cash', chainType: 'BCH', chainBadge: 'BCH CashTokens', balance: 0, priceUsd: 1.0, valueUsd: 0, change24h: 0, icon: '/PUSD.png', isCashToken: true },
+          { symbol: 'BCH', name: 'Bitcoin Cash', chain: platformNetwork === 'testnet' ? 'BCH Chipnet' : 'Bitcoin Cash', chainType: 'BCH', chainBadge: 'BCH Native', balance: 0, priceUsd: 230.5, valueUsd: 0, change24h: 1.85, icon: '/BCH.png', isNative: true },
+          { symbol: 'USDT', name: 'Tether USD (Polygon)', chain: platformNetwork === 'testnet' ? 'Polygon Amoy' : 'Polygon PoS', chainType: 'EVM', chainBadge: 'Polygon PoS', balance: 0, priceUsd: 1.0, valueUsd: 0, change24h: 0.01, icon: '/USDT.png' },
+          { symbol: 'USDC', name: 'USD Coin (Polygon)', chain: platformNetwork === 'testnet' ? 'Polygon Amoy' : 'Polygon PoS', chainType: 'EVM', chainBadge: 'Polygon PoS', balance: 0, priceUsd: 1.0, valueUsd: 0, change24h: 0, icon: '/USDC.png' },
+          { symbol: 'POL', name: 'Polygon Ecosystem Token', chain: platformNetwork === 'testnet' ? 'Polygon Amoy' : 'Polygon PoS', chainType: 'EVM', chainBadge: 'Polygon Native', balance: 0, priceUsd: 0.09, valueUsd: 0, change24h: -0.45, icon: '/POL.png', isNative: true },
+          { symbol: 'USDT', name: 'Tether USD (Solana)', chain: platformNetwork === 'testnet' ? 'Solana Devnet' : 'Solana Mainnet', chainType: 'SVM', chainBadge: 'Solana SPL', balance: 0, priceUsd: 1.0, valueUsd: 0, change24h: 0.01, icon: '/USDT.png' },
+          { symbol: 'SOL', name: 'Solana', chain: platformNetwork === 'testnet' ? 'Solana Devnet' : 'Solana Mainnet', chainType: 'SVM', chainBadge: 'Solana Native', balance: 0, priceUsd: 101.5, valueUsd: 0, change24h: 3.2, icon: '/SOL.png', isNative: true }
         ],
         pools: [],
         lending: null,
@@ -285,7 +292,8 @@ export default function PortfolioView({
       const q = new URLSearchParams({
         network: platformNetwork,
         ...(bchAddress ? { bchAddress } : {}),
-        ...(evmAddress ? { evmAddress } : {})
+        ...(evmAddress ? { evmAddress } : {}),
+        ...(solanaAddress ? { solanaAddress } : {})
       });
       const res = await fetch(`${backendUrl}/api/portfolio/${encodeURIComponent(primaryDisplayAddress)}?${q.toString()}`);
       const data = await res.json();
@@ -306,7 +314,7 @@ export default function PortfolioView({
       fetchPortfolio(true);
     }, 25000);
     return () => clearInterval(interval);
-  }, [userAddress, bchAddress, evmAddress, platformNetwork]);
+  }, [userAddress, bchAddress, evmAddress, solanaAddress, platformNetwork]);
 
   const handleCopy = (text: string) => {
     if (!text) return;
@@ -321,8 +329,13 @@ export default function PortfolioView({
     if (!portfolio?.tokens) return [];
     if (networkFilter === 'bch') return portfolio.tokens.filter(tk => tk.chainType === 'BCH');
     if (networkFilter === 'evm') return portfolio.tokens.filter(tk => tk.chainType === 'EVM');
+    if (networkFilter === 'solana') return portfolio.tokens.filter(tk => tk.chainType === 'SVM');
     return portfolio.tokens;
   }, [portfolio?.tokens, networkFilter]);
+
+  const filteredTokensUsd = useMemo(() => {
+    return filteredTokens.reduce((acc, tk) => acc + (tk.valueUsd || 0), 0);
+  }, [filteredTokens]);
 
   // Chart data calculation
   const chartPoints = useMemo(() => {
@@ -410,7 +423,7 @@ export default function PortfolioView({
             <div className="flex items-center gap-2 text-xs text-ink-3 mt-0.5">
               <span className="inline-flex items-center gap-1">
                 <span className={`w-1.5 h-1.5 rounded-full ${platformNetwork === 'mainnet' ? 'bg-emerald-500' : 'bg-amber-400 animate-pulse'}`} />
-                {platformNetwork === 'mainnet' ? 'BCH Mainnet + Polygon' : 'BCH Chipnet + Amoy'}
+                {platformNetwork === 'mainnet' ? 'BCH Mainnet + Polygon + Solana' : 'BCH Chipnet + Amoy + Devnet'}
               </span>
               <span>•</span>
               <span>{t.liveOnChain}</span>
@@ -432,19 +445,30 @@ export default function PortfolioView({
             </button>
             <button
               onClick={() => setNetworkFilter('bch')}
-              className={`px-2.5 py-1 rounded-full transition-all cursor-pointer font-medium ${
+              className={`px-2.5 py-1 rounded-full transition-all cursor-pointer font-medium flex items-center gap-1 ${
                 networkFilter === 'bch' ? 'bg-surface text-ink shadow-2xs font-bold' : 'text-ink-3 hover:text-ink'
               }`}
             >
-              BCH
+              <img src="/BCH.png" className="w-3 h-3 object-contain" alt="BCH" />
+              <span>BCH</span>
             </button>
             <button
               onClick={() => setNetworkFilter('evm')}
-              className={`px-2.5 py-1 rounded-full transition-all cursor-pointer font-medium ${
+              className={`px-2.5 py-1 rounded-full transition-all cursor-pointer font-medium flex items-center gap-1 ${
                 networkFilter === 'evm' ? 'bg-surface text-ink shadow-2xs font-bold' : 'text-ink-3 hover:text-ink'
               }`}
             >
-              Polygon
+              <img src="/POL.png" className="w-3 h-3 object-contain" alt="Polygon" />
+              <span>Polygon</span>
+            </button>
+            <button
+              onClick={() => setNetworkFilter('solana')}
+              className={`px-2.5 py-1 rounded-full transition-all cursor-pointer font-medium flex items-center gap-1 ${
+                networkFilter === 'solana' ? 'bg-surface text-ink shadow-2xs font-bold' : 'text-ink-3 hover:text-ink'
+              }`}
+            >
+              <img src="/SOL.png" className="w-3 h-3 object-contain rounded-full" alt="Solana" />
+              <span>Solana</span>
             </button>
           </div>
 
@@ -720,15 +744,68 @@ export default function PortfolioView({
                 
                 {/* Left (8 cols): Tokens Table */}
                 <div className="lg:col-span-8 bg-surface border border-line rounded-3xl p-5 sm:p-6 shadow-soft space-y-4">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1 border-b border-line/60">
                     <div>
-                      <h4 className="text-base font-bold text-ink">{t.tokens}</h4>
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-base font-bold text-ink">{t.tokens}</h4>
+                        <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-full bg-surface-2 text-ink-3 border border-line">
+                          {filteredTokens.length} {lang === 'es' ? 'activos' : 'assets'}
+                        </span>
+                      </div>
                       <p className="text-xs text-ink-3 mt-0.5">
-                        {filteredTokens.length} {lang === 'es' ? 'activos detectados' : 'assets detected'}
+                        {networkFilter === 'all'
+                          ? (lang === 'es' ? 'Saldos consolidados en todas las redes' : 'Consolidated balances across all networks')
+                          : networkFilter === 'bch'
+                          ? (lang === 'es' ? 'Activos en Bitcoin Cash (CashTokens & Nativo)' : 'Bitcoin Cash assets (CashTokens & Native)')
+                          : networkFilter === 'evm'
+                          ? (lang === 'es' ? 'Activos en Polygon (Amoy / PoS)' : 'Polygon assets (Amoy / PoS)')
+                          : (lang === 'es' ? 'Activos en Solana (Devnet / SVM)' : 'Solana assets (Devnet / SVM)')}
                       </p>
                     </div>
-                    <div className="text-sm font-bold text-ink tabular-nums">
-                      USD ${(portfolio?.breakdown?.walletTokensUsd ?? 0).toFixed(2)}
+
+                    <div className="flex items-center gap-3">
+                      {/* Segmented Network Switcher */}
+                      <div className="flex items-center p-0.5 rounded-full bg-surface-2 border border-line text-xs font-semibold shrink-0 overflow-x-auto no-scrollbar">
+                        <button
+                          onClick={() => setNetworkFilter('all')}
+                          className={`px-2.5 py-1 rounded-full transition-all cursor-pointer text-xs ${
+                            networkFilter === 'all' ? 'bg-surface text-ink shadow-2xs font-bold' : 'text-ink-3 hover:text-ink'
+                          }`}
+                        >
+                          {t.allChains}
+                        </button>
+                        <button
+                          onClick={() => setNetworkFilter('bch')}
+                          className={`px-2.5 py-1 rounded-full transition-all cursor-pointer flex items-center gap-1.5 text-xs ${
+                            networkFilter === 'bch' ? 'bg-surface text-ink shadow-2xs font-bold' : 'text-ink-3 hover:text-ink'
+                          }`}
+                        >
+                          <img src="/BCH.png" className="w-3.5 h-3.5 object-contain" alt="BCH" />
+                          <span>BCH</span>
+                        </button>
+                        <button
+                          onClick={() => setNetworkFilter('evm')}
+                          className={`px-2.5 py-1 rounded-full transition-all cursor-pointer flex items-center gap-1.5 text-xs ${
+                            networkFilter === 'evm' ? 'bg-surface text-ink shadow-2xs font-bold' : 'text-ink-3 hover:text-ink'
+                          }`}
+                        >
+                          <img src="/POL.png" className="w-3.5 h-3.5 object-contain" alt="Polygon" />
+                          <span>Polygon</span>
+                        </button>
+                        <button
+                          onClick={() => setNetworkFilter('solana')}
+                          className={`px-2.5 py-1 rounded-full transition-all cursor-pointer flex items-center gap-1.5 text-xs ${
+                            networkFilter === 'solana' ? 'bg-surface text-ink shadow-2xs font-bold' : 'text-ink-3 hover:text-ink'
+                          }`}
+                        >
+                          <img src="/SOL.png" className="w-3.5 h-3.5 object-contain rounded-full" alt="Solana" />
+                          <span>Solana</span>
+                        </button>
+                      </div>
+
+                      <div className="text-sm font-bold text-ink font-mono tabular-nums text-right shrink-0 hidden sm:block">
+                        USD ${filteredTokensUsd.toFixed(2)}
+                      </div>
                     </div>
                   </div>
 
@@ -745,12 +822,35 @@ export default function PortfolioView({
                       </thead>
                       <tbody className="divide-y divide-line/60">
                         {filteredTokens.map(tk => (
-                          <tr key={`${tk.chainType}_${tk.symbol}`} className="hover:bg-surface-2/60 transition-colors">
+                          <tr key={`${tk.chainType}_${tk.symbol}_${tk.name}`} className="hover:bg-surface-2/60 transition-colors">
                             <td className="py-3 flex items-center gap-2.5">
-                              <img src={tk.icon} alt={tk.symbol} className="w-7 h-7 rounded-full object-contain shrink-0" />
-                              <div>
-                                <div className="font-bold text-ink">{tk.symbol}</div>
-                                <div className="text-[11px] text-ink-3">{tk.chain}</div>
+                              {/* Token icon with mini-network badge overlay on corner */}
+                              <div className="relative shrink-0">
+                                <img src={tk.icon} alt={tk.symbol} className="w-8 h-8 rounded-full object-contain bg-surface border border-line p-0.5 shadow-2xs" />
+                                <img
+                                  src={tk.chainType === 'BCH' ? '/BCH.png' : tk.chainType === 'EVM' ? '/POL.png' : '/SOL.png'}
+                                  alt={tk.chainType}
+                                  className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full object-contain bg-surface border border-line shadow-2xs p-0.2"
+                                  title={tk.chain}
+                                />
+                              </div>
+
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="font-bold text-ink">{tk.symbol}</span>
+                                  <span className={`text-[9px] font-semibold px-1.5 py-0.2 rounded-full border ${
+                                    tk.chainType === 'BCH'
+                                      ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+                                      : tk.chainType === 'EVM'
+                                      ? 'bg-indigo-500/10 text-indigo-500 border-indigo-500/20'
+                                      : 'bg-purple-500/10 text-purple-400 border-purple-500/20'
+                                  }`}>
+                                    {tk.chainType === 'BCH' ? 'BCH' : tk.chainType === 'EVM' ? 'Polygon' : 'Solana'}
+                                  </span>
+                                </div>
+                                <div className="text-[11px] text-ink-3 truncate">
+                                  {tk.name}
+                                </div>
                               </div>
                             </td>
                             <td className="py-3 font-mono text-ink tabular-nums">
@@ -839,15 +939,68 @@ export default function PortfolioView({
           {/* TAB 2: TOKENS ONLY */}
           {activeTab === 'tokens' && (
             <div className="bg-surface border border-line rounded-3xl p-6 shadow-soft space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-line/60">
                 <div>
-                  <h3 className="text-lg font-bold text-ink">{t.tokens}</h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-lg font-bold text-ink">{t.tokens}</h3>
+                    <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-full bg-surface-2 text-ink-3 border border-line">
+                      {filteredTokens.length} {lang === 'es' ? 'activos' : 'assets'}
+                    </span>
+                  </div>
                   <p className="text-xs text-ink-3 mt-0.5">
-                    {lang === 'es' ? 'Saldos disponibles en tus billeteras conectadas de Bitcoin Cash y Polygon' : 'Available balances in connected Bitcoin Cash & Polygon wallets'}
+                    {networkFilter === 'all'
+                      ? (lang === 'es' ? 'Saldos on-chain consolidados en tus billeteras de Bitcoin Cash, Polygon y Solana' : 'Consolidated on-chain balances across your Bitcoin Cash, Polygon & Solana wallets')
+                      : networkFilter === 'bch'
+                      ? (lang === 'es' ? 'Mostrando únicamente activos de Bitcoin Cash (CashTokens & L1)' : 'Showing Bitcoin Cash assets only (CashTokens & L1)')
+                      : networkFilter === 'evm'
+                      ? (lang === 'es' ? 'Mostrando únicamente activos de Polygon (Amoy / PoS)' : 'Showing Polygon assets only (Amoy / PoS)')
+                      : (lang === 'es' ? 'Mostrando únicamente activos de Solana (Devnet / SVM)' : 'Showing Solana assets only (Devnet / SVM)')}
                   </p>
                 </div>
-                <div className="text-lg font-black text-ink font-mono tabular-nums">
-                  USD ${(portfolio?.breakdown?.walletTokensUsd ?? 0).toFixed(2)}
+
+                <div className="flex items-center gap-3">
+                  {/* Dedicated Network Switcher */}
+                  <div className="flex items-center p-0.5 rounded-full bg-surface-2 border border-line text-xs font-semibold shrink-0 overflow-x-auto no-scrollbar">
+                    <button
+                      onClick={() => setNetworkFilter('all')}
+                      className={`px-3 py-1.5 rounded-full transition-all cursor-pointer text-xs ${
+                        networkFilter === 'all' ? 'bg-surface text-ink shadow-2xs font-bold' : 'text-ink-3 hover:text-ink'
+                      }`}
+                    >
+                      {t.allChains}
+                    </button>
+                    <button
+                      onClick={() => setNetworkFilter('bch')}
+                      className={`px-3 py-1.5 rounded-full transition-all cursor-pointer flex items-center gap-1.5 text-xs ${
+                        networkFilter === 'bch' ? 'bg-surface text-ink shadow-2xs font-bold' : 'text-ink-3 hover:text-ink'
+                      }`}
+                    >
+                      <img src="/BCH.png" className="w-3.5 h-3.5 object-contain" alt="BCH" />
+                      <span>BCH</span>
+                    </button>
+                    <button
+                      onClick={() => setNetworkFilter('evm')}
+                      className={`px-3 py-1.5 rounded-full transition-all cursor-pointer flex items-center gap-1.5 text-xs ${
+                        networkFilter === 'evm' ? 'bg-surface text-ink shadow-2xs font-bold' : 'text-ink-3 hover:text-ink'
+                      }`}
+                    >
+                      <img src="/POL.png" className="w-3.5 h-3.5 object-contain" alt="Polygon" />
+                      <span>Polygon</span>
+                    </button>
+                    <button
+                      onClick={() => setNetworkFilter('solana')}
+                      className={`px-3 py-1.5 rounded-full transition-all cursor-pointer flex items-center gap-1.5 text-xs ${
+                        networkFilter === 'solana' ? 'bg-surface text-ink shadow-2xs font-bold' : 'text-ink-3 hover:text-ink'
+                      }`}
+                    >
+                      <img src="/SOL.png" className="w-3.5 h-3.5 object-contain rounded-full" alt="Solana" />
+                      <span>Solana</span>
+                    </button>
+                  </div>
+
+                  <div className="text-lg font-black text-ink font-mono tabular-nums text-right shrink-0">
+                    USD ${filteredTokensUsd.toFixed(2)}
+                  </div>
                 </div>
               </div>
 
@@ -864,12 +1017,35 @@ export default function PortfolioView({
                   </thead>
                   <tbody className="divide-y divide-line/60">
                     {filteredTokens.map(tk => (
-                      <tr key={`${tk.chainType}_${tk.symbol}`} className="hover:bg-surface-2/60 transition-colors">
+                      <tr key={`${tk.chainType}_${tk.symbol}_${tk.name}`} className="hover:bg-surface-2/60 transition-colors">
                         <td className="py-3.5 flex items-center gap-3">
-                          <img src={tk.icon} alt={tk.symbol} className="w-8 h-8 rounded-full object-contain shrink-0" />
-                          <div>
-                            <div className="font-bold text-sm text-ink">{tk.symbol}</div>
-                            <div className="text-xs text-ink-3">{tk.name} • <span className="font-semibold">{tk.chain}</span></div>
+                          {/* Token icon with mini-network badge overlay on corner */}
+                          <div className="relative shrink-0">
+                            <img src={tk.icon} alt={tk.symbol} className="w-9 h-9 rounded-full object-contain bg-surface border border-line p-0.5 shadow-2xs" />
+                            <img
+                              src={tk.chainType === 'BCH' ? '/BCH.png' : tk.chainType === 'EVM' ? '/POL.png' : '/SOL.png'}
+                              alt={tk.chainType}
+                              className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full object-contain bg-surface border border-line shadow-2xs p-0.2"
+                              title={tk.chain}
+                            />
+                          </div>
+
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-sm text-ink">{tk.symbol}</span>
+                              <span className={`text-[10px] font-semibold px-2 py-0.2 rounded-full border ${
+                                tk.chainType === 'BCH'
+                                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+                                  : tk.chainType === 'EVM'
+                                  ? 'bg-indigo-500/10 text-indigo-500 border-indigo-500/20'
+                                  : 'bg-purple-500/10 text-purple-400 border-purple-500/20'
+                              }`}>
+                                {tk.chainType === 'BCH' ? 'BCH' : tk.chainType === 'EVM' ? 'Polygon' : 'Solana'}
+                              </span>
+                            </div>
+                            <div className="text-xs text-ink-3 mt-0.5">
+                              {tk.name} • <span className="font-semibold text-ink-3/90">{tk.chain}</span>
+                            </div>
                           </div>
                         </td>
                         <td className="py-3.5 font-mono text-ink text-sm tabular-nums">
@@ -1152,6 +1328,20 @@ export default function PortfolioView({
                     </div>
                     <div className="font-mono text-[11px] text-ink-2 break-all bg-surface p-2 rounded-lg border border-line/60">
                       {evmAddress}
+                    </div>
+                  </div>
+                )}
+
+                {solanaAddress && (
+                  <div className="p-3.5 rounded-2xl bg-surface-2 border border-line space-y-1.5">
+                    <div className="font-bold text-ink flex items-center justify-between">
+                      <span>Solana (Devnet / SVM)</span>
+                      <button onClick={() => handleCopy(solanaAddress)} className="text-primary hover:underline cursor-pointer">
+                        {copied ? t.copied : t.copyAddress}
+                      </button>
+                    </div>
+                    <div className="font-mono text-[11px] text-ink-2 break-all bg-surface p-2 rounded-lg border border-line/60">
+                      {solanaAddress}
                     </div>
                   </div>
                 )}

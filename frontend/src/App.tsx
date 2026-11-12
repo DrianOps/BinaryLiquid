@@ -1992,6 +1992,7 @@ export default function App() {
             userAddress={userContext?.address || ''}
             bchAddress={bchWallet?.tokenAddress || bchWallet?.address || ''}
             evmAddress={evmWallet?.address || ''}
+            solanaAddress={solanaWallet?.address || ''}
             walletBalances={walletBalances}
             platformNetwork={platformNetwork}
             onToggleNetwork={setPlatformNetwork}

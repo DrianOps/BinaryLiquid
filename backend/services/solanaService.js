@@ -250,6 +250,28 @@ class SolanaService {
     return { success: true };
   }
 
+  async getAddressBalances(solanaAddress, isTestnet = true) {
+    if (!solanaAddress || typeof solanaAddress !== 'string' || solanaAddress.length < 32) {
+      return { SOL: 0, USDT: 0, USDC: 0 };
+    }
+    const cleanAddr = solanaAddress.trim();
+    const chain = isTestnet ? 'solana-devnet' : 'solana-mainnet';
+
+    try {
+      const lamportsRes = await this.rpcCall('getBalance', [cleanAddr], chain);
+      const lamports = Number(lamportsRes?.value || 0);
+      const solBalance = lamports / 1e9;
+
+      return {
+        SOL: Number(solBalance.toFixed(4)),
+        USDT: 0,
+        USDC: 0
+      };
+    } catch {
+      return { SOL: 0, USDT: 0, USDC: 0 };
+    }
+  }
+
   async getBalances() {
     return {
       mainnet: {

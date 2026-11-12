@@ -1660,18 +1660,22 @@ app.get('/api/portfolio/:address', async (req, res) => {
     const isTestnet = network === 'testnet';
     const extraBch = req.query.bchAddress ? String(req.query.bchAddress) : null;
     const extraEvm = req.query.evmAddress ? String(req.query.evmAddress) : null;
+    const extraSol = req.query.solanaAddress ? String(req.query.solanaAddress) : null;
 
     const isZero = (a) => !a || a.toLowerCase() === '0x0000000000000000000000000000000000000000';
-    const targetBch = extraBch || (address && !address.startsWith('0x') ? address : null);
+    const targetBch = extraBch || (address && !address.startsWith('0x') && (address.includes(':') || address.startsWith('bitcoincash') || address.startsWith('bchtest') || address.startsWith('q')) ? address : null);
     const targetEvm = (!isZero(extraEvm) ? extraEvm : null) || (address && address.startsWith('0x') && !isZero(address) ? address : null);
-    const primaryUser = targetBch || targetEvm || null;
+    const targetSol = extraSol || (address && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address) && !address.includes(':') && !address.startsWith('0x') ? address : null);
+    const primaryUser = targetBch || targetEvm || targetSol || null;
 
     // 1. Live Balances & Prices
-    const [bchOnChain, evmOnChain, bchPrice, polPrice] = await Promise.all([
+    const [bchOnChain, evmOnChain, solOnChain, bchPrice, polPrice, solPrice] = await Promise.all([
       targetBch ? bchService.getAddressBalances(targetBch, isTestnet) : Promise.resolve({ BCH: 0, PUSD: 0 }),
       targetEvm ? evmService.getAddressBalances(targetEvm, isTestnet) : Promise.resolve({ POL: 0, USDT: 0, USDC: 0 }),
+      targetSol ? solanaService.getAddressBalances(targetSol, isTestnet) : Promise.resolve({ SOL: 0, USDT: 0, USDC: 0 }),
       oraclePool.getPriceUsd('BCH').catch(() => 450.0),
-      oraclePool.getPriceUsd('POL').catch(() => 0.40)
+      oraclePool.getPriceUsd('POL').catch(() => 0.40),
+      oraclePool.getPriceUsd('SOL').catch(() => 101.5)
     ]);
 
     const tokenList = [
@@ -1680,6 +1684,7 @@ app.get('/api/portfolio/:address', async (req, res) => {
         name: 'Paryon USD',
         chain: isTestnet ? 'BCH Chipnet' : 'Bitcoin Cash',
         chainType: 'BCH',
+        chainBadge: 'BCH CashTokens',
         balance: bchOnChain.PUSD || 0,
         priceUsd: 1.0,
         valueUsd: Number(((bchOnChain.PUSD || 0) * 1.0).toFixed(2)),
@@ -1692,6 +1697,7 @@ app.get('/api/portfolio/:address', async (req, res) => {
         name: 'Bitcoin Cash',
         chain: isTestnet ? 'BCH Chipnet' : 'Bitcoin Cash',
         chainType: 'BCH',
+        chainBadge: 'BCH Native',
         balance: bchOnChain.BCH || 0,
         priceUsd: Number(bchPrice.toFixed(2)),
         valueUsd: Number(((bchOnChain.BCH || 0) * bchPrice).toFixed(2)),
@@ -1701,9 +1707,10 @@ app.get('/api/portfolio/:address', async (req, res) => {
       },
       {
         symbol: 'USDT',
-        name: 'Tether USD',
+        name: 'Tether USD (Polygon)',
         chain: isTestnet ? 'Polygon Amoy' : 'Polygon PoS',
         chainType: 'EVM',
+        chainBadge: 'Polygon PoS',
         balance: evmOnChain.USDT || 0,
         priceUsd: 1.0,
         valueUsd: Number(((evmOnChain.USDT || 0) * 1.0).toFixed(2)),
@@ -1712,9 +1719,10 @@ app.get('/api/portfolio/:address', async (req, res) => {
       },
       {
         symbol: 'USDC',
-        name: 'USD Coin',
+        name: 'USD Coin (Polygon)',
         chain: isTestnet ? 'Polygon Amoy' : 'Polygon PoS',
         chainType: 'EVM',
+        chainBadge: 'Polygon PoS',
         balance: evmOnChain.USDC || 0,
         priceUsd: 1.0,
         valueUsd: Number(((evmOnChain.USDC || 0) * 1.0).toFixed(2)),
@@ -1726,11 +1734,37 @@ app.get('/api/portfolio/:address', async (req, res) => {
         name: 'Polygon Ecosystem Token',
         chain: isTestnet ? 'Polygon Amoy' : 'Polygon PoS',
         chainType: 'EVM',
+        chainBadge: 'Polygon Native',
         balance: evmOnChain.POL || 0,
         priceUsd: Number(polPrice.toFixed(3)),
         valueUsd: Number(((evmOnChain.POL || 0) * polPrice).toFixed(2)),
         change24h: -0.45,
         icon: '/POL.png',
+        isNative: true
+      },
+      {
+        symbol: 'USDT',
+        name: 'Tether USD (Solana)',
+        chain: isTestnet ? 'Solana Devnet' : 'Solana Mainnet',
+        chainType: 'SVM',
+        chainBadge: 'Solana SPL',
+        balance: solOnChain.USDT || 0,
+        priceUsd: 1.0,
+        valueUsd: Number(((solOnChain.USDT || 0) * 1.0).toFixed(2)),
+        change24h: 0.01,
+        icon: '/USDT.png'
+      },
+      {
+        symbol: 'SOL',
+        name: 'Solana',
+        chain: isTestnet ? 'Solana Devnet' : 'Solana Mainnet',
+        chainType: 'SVM',
+        chainBadge: 'Solana Native',
+        balance: solOnChain.SOL || 0,
+        priceUsd: Number(solPrice.toFixed(2)),
+        valueUsd: Number(((solOnChain.SOL || 0) * solPrice).toFixed(2)),
+        change24h: 3.2,
+        icon: '/SOL.png',
         isNative: true
       }
     ];
