@@ -1,109 +1,68 @@
 # 🌊 BinaryLiquid Protocol
-### Next-Gen Non-Custodial Cross-Chain Stablecoin Bridge & AMM Factory for Bitcoin Cash CashTokens
+### Institutional Non-Custodial Cross-Chain Liquidity Gateway & AMM for Bitcoin Cash CashTokens
 
-[![BCH Blaze Hackathon](https://img.shields.io/badge/BCH%20BLAZE-Hackathon%20Track%20%24750%20PUSD-00b894.svg)](https://bliquid.xyz)
-[![Live Demo](https://img.shields.io/badge/Live%20Demo-bliquid.xyz-0984e3.svg)](https://bliquid.xyz)
-[![Network](https://img.shields.io/badge/Networks-BCH%20%7C%20Polygon%20%7C%20Solana-6c5ce7.svg)](https://bliquid.xyz)
+[![BCH Blaze Hackathon](https://img.shields.io/badge/BCH%20BLAZE-Stablecoin%20Track%20%24750%20PUSD-00b894.svg)](https://bliquid.xyz)
+[![Paytaca Bounty](https://img.shields.io/badge/Paytaca%20Bounty-UserLink%20%24500%20PUSD-8c7ae6.svg)](https://bliquid.xyz)
+[![Live Demo](https://img.shields.io/badge/Live%20Production-bliquid.xyz-0984e3.svg)](https://bliquid.xyz)
+[![Chains](https://img.shields.io/badge/5%20Chains-BCH%20%7C%20EVM%20%7C%20SOL%20%7C%20TON%20%7C%20LTC-6c5ce7.svg)](https://bliquid.xyz)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 > **Live Production Deployment**: [https://bliquid.xyz](https://bliquid.xyz)  
 > **Engineering & Research**: **Drian Stack Labs** ([@drianops](https://t.me/drianops))  
-> **Target Track**: BLAZE BCH Hackathon — `$750 PUSD (ParyonUSD) Stablecoin Ecosystem`  
-> **Smart Contract Security Audit**: [`SECURITY_AUDIT.md`](./SECURITY_AUDIT.md) | [`contracts/README.md`](./contracts/README.md)
+> **Target DoraHacks Tracks**:
+> 1. **BLAZE BCH Hackathon** — `$750 PUSD (ParyonUSD) Stablecoin Ecosystem Track`
+> 2. **Paytaca Bounty** — `$500 PUSD Sovereign Identity (UserLink BCH ↔ Nostr NIP-05)`  
+> **Total Hackathon Focus**: **$1,250 PUSD**  
+> **Smart Contract Security Audits**: [`SECURITY_AUDIT.md`](./SECURITY_AUDIT.md) | [`contracts/README.md`](./contracts/README.md)
 
 ---
 
 ## 📌 Executive Summary
 
-**BinaryLiquid Protocol** is a high-speed, non-custodial cross-chain bridge and liquidity protocol connecting **Bitcoin Cash (BCH CashTokens)** with **EVM networks (Polygon PoS)** and **Solana**.
+**BinaryLiquid Protocol** is a high-speed, 100% non-custodial cross-chain bridge and liquidity protocol that seamlessly connects **Bitcoin Cash (BCH CashTokens & native BCH)** with the world's leading high-throughput blockchains:
+- **Bitcoin Cash (BCH & CashTokens)**: Native `PUSD` (ParyonUSD), `MUSD` (MonetizeUSD), and `BCH`
+- **EVM Networks**: **Polygon PoS** (`USDC`, `USDT`, `POL`) and **BNB Smart Chain** (`USDT BEP-20`, `BNB`)
+- **Solana (SVM)**: Native `SOL` and `USDT (SPL)`
+- **TON Blockchain (The Open Network)**: Native `TON` and `USDT (Jetton)`
+- **Litecoin (LTC)**: Native SegWit UTXO vaults
 
-Specifically tailored for the **BCH BLAZE Hackathon**, BinaryLiquid establishes direct liquidity conduits for native BCH stablecoins:
-- **ParyonUSD (`PUSD`)** — Primary BLAZE Hackathon Sponsor Token
-- **MonetizeUSD (`MUSD`)** — CashTokens Stablecoin
-- **Cross-chain pairings**: Polygon `USDC`, `USDT`, `POL`, and Solana assets.
+Specifically built for the **DoraHacks BLAZE BCH Hackathon**, BinaryLiquid establishes immediate, deep liquidity conduits for native Bitcoin Cash stablecoins without relying on centralized, custodial swap brokers with invasive KYC or arbitrary fund freezing risks.
 
 ---
 
-## ⚡ Core Technical Innovations
+## ⚡ Core Technical Innovations & 5-Chain Architecture
 
 ### 1. Deterministic BIP-44 HD Wallet Derivation (Zero Collision Architecture)
 Traditional custodial or centralized bridges route all incoming user deposits into a single hot address, causing transaction collisions, UTXO contention, and reconciliation errors.
 
 BinaryLiquid implements **per-order isolated BIP-44 HD wallet derivation**:
 - **Bitcoin Cash**: `m/44'/145'/0'/0/{orderIndex}`
-- **EVM (Polygon)**: `m/44'/60'/0'/0/{orderIndex}`
-- **Solana**: `m/44'/501'/{orderIndex}'/0'`
+- **EVM (Polygon & BSC)**: `m/44'/60'/0'/0/{orderIndex}`
+- **Solana (SVM)**: `m/44'/501'/{orderIndex}'/0'`
+- **TON (TVM)**: Isolated smart-contract message payloads with autonomous refunds
+- **Litecoin**: `m/44'/2'/0'/0/{orderIndex}`
 
 Every single swap order automatically derives a cryptographically unique deposit sub-address. The relayer monitors incoming UTXOs/events specifically mapped to that isolated derivation index, providing:
 - **100% Deterministic Tracking**: No order mixing or overlapping.
 - **Enhanced User Privacy**: No public reuse of the primary hot wallet address.
 - **Automated Sweeping**: Background engine sweeps funds from derived child addresses directly to cold treasury storage.
 
-### 2. Permissionless Cross-Chain Liquidity Pool Factory
-BinaryLiquid breaks the isolation of BCH CashTokens by allowing **anyone** to create custom liquidity pairs with CashTokens and cross-chain tokens, offering two distinct AMM architectures:
+### 2. Multi-Chain Smart Contract Security Matrix
+BinaryLiquid enforces non-custodial guarantees using tailored smart contracts native to each ecosystem:
+- **Bitcoin Cash (`contracts/bch/BinaryLiquidVault.cash`)**: CashScript P2SH32 smart covenant with deterministic 24-hour autonomous user refund timelocks.
+- **EVM (`contracts/evm/BinaryLiquidVault.sol`)**: Solidity ERC-20 vault with circuit breakers, replay prevention, and signature attestation.
+- **Solana (`contracts/solana/programs/binaryliquid-vault/src/lib.rs`)**: Rust/Anchor zero-custody program with PDA (Program Derived Address) vaults.
+- **TON (`contracts/ton/BinaryLiquidVault.tact`)**: 100% non-custodial TVM contract in Tact with native Ed25519 `checkSignature`, Jetton wallet routing, and $50,000 circuit breaker.
 
-```
-                  ┌────────────────────────────────────────┐
-                  │ Permissionless Pool Factory (POST API) │
-                  └───────────────────┬────────────────────┘
-                                      │
-            ┌─────────────────────────┴─────────────────────────┐
-            ▼                                                   ▼
-┌───────────────────────────────┐               ┌───────────────────────────────┐
-│ Option 1: Bootstrapping /     │               │ Option 2: Standard AMM Pair   │
-│ Anti-Rug Protection (Fair)    │               │ (Uniswap V2 Style)            │
-├───────────────────────────────┤               ├───────────────────────────────┤
-│ • Creator deposits Token A    │               │ • Creator provides 100% of    │
-│ • Liquidity PERMANENTLY LOCKED│               │   both Token A & Token B      │
-│ • Creator earns 0.05% perpetual│              │ • 100% instant ACTIVE trading │
-│   swap fees                   │               │ • Standard LP shares minted   │
-│ • Community completes TVL     │               │ • Standard 0.20% LP fees      │
-└───────────────────────────────┘               └───────────────────────────────┘
-```
+### 3. UserLink: Sovereign Identity (Paytaca $500 PUSD Bounty PoC)
+Integrated directly into the protocol, **UserLink** bridges Bitcoin Cash CashAddress identity with the decentralized Nostr social protocol:
+- Encodes verifiable Nostr NIP-05 human-readable handles (`alice@bliquid.xyz`).
+- Cryptographically binds Bitcoin Cash addresses to Nostr `npub` public keys.
+- Allows 1-click tipping and microtransactions in CashTokens `PUSD`.
 
-- **Option 1: Recaudo de Fondo (Bootstrapping / Anti-Rug Lock)**:
-  - The creator launches a new CashToken pair by seeding the initial token reserve.
-  - Base liquidity is **cryptographically locked** against removal (Anti-Rug Protection), guaranteeing buyers that the creator cannot drain liquidity.
-  - The creator earns a **0.05% continuous creator fee** on every swap executed across the lifetime of the pool.
-- **Option 2: Par Estándar AMM (Uniswap V2 Style)**:
-  - Full two-sided liquidity deposit upfront with instant active AMM trading.
-  - Traditional LP shares with 0.20% proportional fee distribution.
-
-### 3. Zero-Simulation Guarantee & Real On-Chain Connection
-BinaryLiquid operates with **zero mock balances, zero fake TXIDs, and zero simulated responses**:
-- Real-time UTXO balance verification via `mainnet-js` on Bitcoin Cash.
-- Native RPC queries on Polygon Bor RPC (`https://polygon-bor-rpc.publicnode.com`, Chain ID 137).
-- Real transaction hash broadcasting verified on block explorers ([3xpl.com](https://3xpl.com), [polygonscan.com](https://polygonscan.com)).
-
-### 4. Automated Cold Treasury Sweeper Engine
-To minimize hot wallet vulnerability:
-- A daemon periodically calculates hot wallet reserves against configurable risk thresholds (`HOT_WALLET_MAX_PUSD`, `HOT_WALLET_MAX_BCH`, `HOT_WALLET_MAX_USDC`).
-- Excess funds are swept directly into multi-sig Cold Treasury storage.
-
----
-
-## 🏗️ Architecture & Flow
-
-```
-[User Browser]
-      │
-      │ 1. Connects Wallet (Paytaca / Electron Cash / MetaMask / WalletConnect)
-      │ 2. Initiates Swap: PUSD (BCH) -> USDC (Polygon)
-      ▼
-[BinaryLiquid Backend API :3001]
-      │
-      ├─► Generates isolated BIP-44 address (e.g. m/44'/145'/0'/0/42)
-      ├─► Persists order state in PostgreSQL + Redis PubSub
-      └─► Returns deposit address & QR code to User
-      │
-      ▼ (User transfers PUSD on Bitcoin Cash)
-[Relayer Engine Monitor]
-      │
-      ├─► Detects confirmed UTXO on child address
-      ├─► Computes AMM price via Dynamic Constant Product Pool (x * y = k)
-      ├─► Dispatches USDC from EVM Hot Wallet to User's Polygon address
-      └─► Sweeper engine queues surplus to Cold Vault
-```
+### 4. Institutional 5-Chain Wallet & Portfolio Terminal
+- **Connect Wallet Modal**: Segmented 5-chain connector supporting EIP-6963 (MetaMask, Rabby, Coinbase, Binance Web3), Paytaca (Extension & WizardConnect QR), Cashonize / WC2, Phantom, Solflare, Tonkeeper, Telegram @wallet, and Litewallet.
+- **Connected Portfolio Modal**: Real-time aggregated USD net worth calculated from our Oracle Pool, block explorer links per chain, inline address editing, and categorized asset breakdown.
 
 ---
 
@@ -112,94 +71,57 @@ To minimize hot wallet vulnerability:
 ```
 BinaryLiquid_swap/
 ├── backend/
-│   ├── config.js                 # Network RPCs, contract addresses, fee economics
+│   ├── config.js                 # 5-chain RPCs, contract addresses, token decimals
 │   ├── server.js                 # Express API (swaps, pools, stats, faucet, orders)
-│   ├── .env.example              # Sanitized environment template
 │   ├── services/
 │   │   ├── bchService.js         # Bitcoin Cash CashTokens UTXO & token management
-│   │   ├── evmService.js         # Polygon EVM contract interactions (ERC-20 transfers)
-│   │   ├── poolService.js        # Constant product AMM, custom pool factory, Anti-Rug
-│   │   ├── lendingService.js     # Non-custodial lending vaults & borrow engine
-│   │   ├── perpsService.js       # Perpetual Futures & synthetic settlement
-│   │   ├── relayerEngine.js      # Autonomous order state machine & executor
-│   │   ├── oraclePool.js         # Multi-source live price feeds
-│   │   └── db.js                 # PostgreSQL + Redis store with memory fallback
+│   │   ├── evmService.js         # Polygon & BSC EVM contract interactions
+│   │   ├── solanaService.js      # Solana SVM token transfers & balance verification
+│   │   ├── tonService.js         # TON TVM Jetton balance queries & payout dispatch
+│   │   ├── ltcService.js         # Litecoin SegWit UTXO balance tracking & relayer
+│   │   ├── relayerEngine.js      # Multi-chain state machine & autonomous execution
+│   │   ├── oraclePool.js         # Multi-source live price feeds (Binance, CoinGecko, Kraken)
+│   │   └── poolService.js        # Constant product AMM, custom pool factory
 │
 ├── frontend/
 │   ├── src/
-│   │   ├── App.tsx               # Main application container, wallet state & routing
+│   │   ├── App.tsx               # Main terminal, multi-chain wallet state & routing
 │   │   ├── components/
-│   │   │   ├── BridgeSwap.tsx    # Swap interface with BIP-44 badge & on-chain verification
+│   │   │   ├── BridgeSwap.tsx    # 5-Chain Bridge swap with live quotes & verification
+│   │   │   ├── IdentityView.tsx  # UserLink (BCH ↔ Nostr NIP-05 Paytaca Bounty)
+│   │   │   ├── PortfolioView.tsx # Multi-chain portfolio dashboard & analytics
 │   │   │   ├── PoolsView.tsx     # Liquidity pools list & Custom Pair Creator Modal
-│   │   │   ├── TokenSelectModal.tsx # Multi-chain token selector (supports CashTokens)
-│   │   │   ├── LiveOrderbook.tsx # Real-time limit orders & trade feed
-│   │   │   ├── NativeChart.tsx   # Lightweight TradingView charts
-│   │   │   └── FaucetModal.tsx   # Testnet faucet dispenser for testing
-│   │   └── services/
-│   │       └── walletConnectService.ts # Multi-wallet abstraction (Reown / Web3Modal)
-│   ├── vite.config.ts
-│   └── tailwind.config.js
+│   │   │   ├── SdkView.tsx       # Interactive SDK playground & code generators
+│   │   │   ├── DocsView.tsx      # Comprehensive developer documentation
+│   │   │   └── WhitepaperView.tsx # BinaryLiquid Protocol Whitepaper
+│
+├── contracts/
+│   ├── bch/BinaryLiquidVault.cash     # CashScript P2SH32 timelock contract
+│   ├── evm/BinaryLiquidVault.sol      # Solidity EVM non-custodial vault
+│   ├── solana/                        # Solana Anchor Rust program
+│   └── ton/BinaryLiquidVault.tact     # TON Blockchain Tact TVM contract
 │
 └── README.md
 ```
 
 ---
 
-## 🚀 Quickstart Guide (Local Development)
+## 🏆 DoraHacks Hackathon Submission Alignment
 
-### Prerequisites
-- Node.js >= 18.0.0
-- npm >= 9.0.0
-- Optional: PostgreSQL & Redis (falls back to memory store if not running)
-
-### 1. Clone & Setup Backend
-```bash
-cd backend
-cp .env.example .env
-# Fill in your RPC endpoints or test keys in .env
-npm install
-npm run dev
-# Backend starts on http://localhost:3001
-```
-
-### 2. Setup Frontend
-```bash
-cd ../frontend
-npm install
-npm run dev
-# Frontend starts on http://localhost:5173
-```
-
-### 3. Production Build
-```bash
-cd frontend
-npm run build
-# Outputs optimized SPA to frontend/dist/
-```
-
----
-
-## 🛡️ Security & Non-Custodial Principles
-
-1. **Zero-Custody Covenants**: User deposits are locked inside CashScript P2SH32 smart contracts with an immutable, unilateral 24-hour timelock refund mechanism.
-2. **Attestation-Only Watchman**: The Sentinel relayer holds zero user funds; it only signs cryptographic proofs confirming origin deposits.
-3. **Anti-Rug Pool Lock**: In Bootstrapping mode, the contract logic enforces permanent locking of initial LP shares, eliminating the risk of sudden liquidity drain while rewarding creators with perpetual swap fee revenue.
-4. **Environment Isolation**: Operational relayer keys are stored exclusively in secure server keystores and never exposed to public repositories or client builds.
-
----
-
-## 🏆 BLAZE Hackathon Alignment
-
-- **Category**: Stablecoin Track — `$750 PUSD (ParyonUSD) Prize Pool`
-- **Impact**: Provides instant cross-chain liquidity and accessibility for `PUSD` and `MUSD`, enabling seamless swaps between Bitcoin Cash CashTokens and multi-billion-dollar EVM stablecoin liquidity.
+- **Event**: DoraHacks BLAZE BCH Hackathon
+- **Target Tracks**:
+  1. **BLAZE Stablecoin Track ($750 PUSD)**: Instant on-chain liquidity & swapping for ParyonUSD (`PUSD`) and MonetizeUSD (`MUSD`).
+  2. **Paytaca Bounty Track ($500 PUSD)**: Sovereign Identity (UserLink BCH ↔ Nostr NIP-05).
+- **Total Prize Focus**: **$1,250 PUSD**
 - **Production URL**: [https://bliquid.xyz](https://bliquid.xyz)
+- **GitHub Repository**: [https://github.com/DrianOps/BinaryLiquid](https://github.com/DrianOps/BinaryLiquid)
 
 ---
 
 ## 👥 Engineering & Authorship
 
-Developed with ⚡ by **Drian Stack Labs**  
-- **Lead Architect**: Adrian ([@drianops](https://t.me/drianops))  
+Developed by **Drian Stack Labs**  
+- **Lead Architect & Developer**: Adrian ([@drianops](https://t.me/drianops))  
 - **Telegram Contact**: [@drianops](https://t.me/drianops)  
 - **Live dApp**: [https://bliquid.xyz](https://bliquid.xyz)  
 
