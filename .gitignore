@@ -21,6 +21,9 @@ dist-ssr
 secure_vault/
 vault/
 *.wif
+*authority.json
+*vault.json
+backend/config/*.json
 
 # Database runtime files
 *.sqlite
