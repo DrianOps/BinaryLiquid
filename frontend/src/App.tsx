@@ -2280,6 +2280,7 @@ export default function App() {
             onConnectBch={() => { setWalletModalTab('bch'); setShowWalletModal(true); }}
             lang={lang}
             platformNetwork={platformNetwork}
+            onToggleNetwork={setPlatformNetwork}
           />
         </main>
       )}

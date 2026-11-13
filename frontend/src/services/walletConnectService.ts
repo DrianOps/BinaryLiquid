@@ -623,6 +623,105 @@ export async function disconnectBchWalletConnect(): Promise<void> {
   }
 }
 
+function resolveHydratedBchSession() {
+  if (bchSignClient && !activeBchSession) {
+    try {
+      const sessions = bchSignClient.session.getAll();
+      const latest = [...sessions].reverse().find(s => Boolean(s.namespaces?.bch?.accounts?.length));
+      if (latest) activeBchSession = latest;
+    } catch {}
+  }
+  return bchSignClient && activeBchSession && activeBchSession.namespaces?.bch?.accounts?.length
+    ? activeBchSession
+    : null;
+}
+
+/**
+ * Checks whether the currently active BCH wallet supports arbitrary off-chain `bch_signMessage`
+ * (`wc2-bch-bcr` Cashonize / Paytaca WC2 / Zapit, or browser extension exposing `signMessage`).
+ * Note: WizardConnect (`hdwalletv1`) exposes `signTransaction` only and does not support `signMessage`.
+ */
+export function hasActiveBchMessageSigningCapability(
+  preferredSource?: 'wizard' | 'wc2-bch' | 'extension' | 'manual'
+): boolean {
+  if (preferredSource === 'manual' || preferredSource === 'wizard') {
+    return false;
+  }
+  const session = resolveHydratedBchSession();
+  if (session) {
+    const methods = session.namespaces?.bch?.methods || [];
+    if (methods.length === 0 || methods.includes('bch_signMessage')) {
+      return true;
+    }
+  }
+  if (typeof window !== 'undefined') {
+    const ext = (window as any).paytaca || (window as any).bitcoinCash;
+    if (ext && typeof ext.signMessage === 'function') {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Requests an authentic Bitcoin Signed Message signature from a connected BCH wallet
+ * (`bch_signMessage` via WalletConnect V2 BCH or injected extension).
+ */
+export async function signBchMessage(params: {
+  message: string;
+  userPrompt?: string;
+  isTestnet: boolean;
+  preferredSource?: 'wizard' | 'wc2-bch' | 'extension' | 'manual';
+}): Promise<{ signature: string; walletName: string }> {
+  const { message, userPrompt, isTestnet, preferredSource } = params;
+  const session = resolveHydratedBchSession();
+
+  if (preferredSource !== 'extension' && preferredSource !== 'wizard' && session && bchSignClient) {
+    const desiredChain = isTestnet ? 'bch:bchtest' : 'bch:bitcoincash';
+    const allowedChains = session.namespaces?.bch?.chains || [];
+    const chainIdToUse = allowedChains.includes(desiredChain) ? desiredChain : allowedChains[0] || desiredChain;
+    const peerName = session.peer?.metadata?.name || 'Cashonize / WalletConnect';
+
+    const result: any = await bchSignClient.request({
+      topic: session.topic,
+      chainId: chainIdToUse,
+      request: {
+        method: 'bch_signMessage',
+        params: {
+          message,
+          ...(userPrompt ? { userPrompt } : {})
+        }
+      }
+    });
+
+    const sig =
+      typeof result === 'string'
+        ? result
+        : result?.signature || result?.signedMessage || '';
+    if (!sig) {
+      throw new Error(`La billetera ${peerName} canceló o no devolvió una firma válida.`);
+    }
+    return { signature: sig.trim(), walletName: peerName };
+  }
+
+  if (typeof window !== 'undefined' && preferredSource !== 'wizard' && preferredSource !== 'manual') {
+    const ext = (window as any).paytaca || (window as any).bitcoinCash;
+    if (ext && typeof ext.signMessage === 'function') {
+      const result: any = await ext.signMessage({ message, userPrompt });
+      const sig =
+        typeof result === 'string'
+          ? result
+          : result?.signature || result?.signedMessage || '';
+      if (!sig) {
+        throw new Error('La extensión BCH canceló la firma del mensaje.');
+      }
+      return { signature: sig.trim(), walletName: 'Paytaca Extension' };
+    }
+  }
+
+  throw new Error('La billetera BCH activa no soporta firma de mensajes (bch_signMessage).');
+}
+
 // ============================================================================
 // 6. PAYTACA BROWSER EXTENSION DETECTION (`window.paytaca`)
 // ============================================================================

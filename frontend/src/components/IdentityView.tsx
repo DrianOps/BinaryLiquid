@@ -1,122 +1,167 @@
-import React, { useState, useMemo } from 'react';
-import { 
-  ShieldCheck, 
-  CheckCircle2, 
-  ExternalLink, 
-  Copy, 
-  Check, 
-  RefreshCw, 
-  Sparkles, 
-  Key, 
-  Wallet, 
-  Send, 
-  ArrowRight,
+import React, { useState, useMemo, useEffect } from 'react';
+import {
+  ShieldCheck,
+  CheckCircle2,
+  ExternalLink,
+  Copy,
+  Check,
+  RefreshCw,
+  Sparkles,
+  Key,
+  Wallet,
+  Send,
   AlertCircle,
+  AlertTriangle,
   Globe,
   CheckCheck,
   Code2,
-  Share2,
   QrCode,
   User,
   Zap,
   AtSign,
   Flame,
-  CheckSquare,
-  ArrowUpRight,
   X,
-  Layers,
-  Radio
+  ShieldAlert
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
-import { SimplePool, generateSecretKey, getPublicKey, finalizeEvent, verifyEvent, nip19 } from 'nostr-tools';
+import {
+  SimplePool,
+  generateSecretKey,
+  getPublicKey,
+  finalizeEvent,
+  verifyEvent,
+  nip19,
+  type Event as NostrEvent
+} from 'nostr-tools';
 import { secp256k1, schnorr } from '@noble/curves/secp256k1.js';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
-import { pubkeyToCashAddress, generateQrDataUrl, formatAddress } from '../utils/bchAddress';
+import {
+  pubkeyToCashAddress,
+  convertCashAddressNetwork,
+  generateQrDataUrl,
+  formatAddress
+} from '../utils/bchAddress';
+import {
+  hasActiveBchMessageSigningCapability,
+  signBchMessage
+} from '../services/walletConnectService';
+import {
+  USERLINK_RELAYS,
+  USERLINK_D_TAG,
+  signBitcoinMessage,
+  verifyUserLinkEvent,
+  resolveUserLinkFromRelays,
+  publishUserLinkToRelay,
+  type VerifiedUserLinkResult
+} from '../utils/userlinkCrypto';
 
 interface IdentityViewProps {
   bchWallet: {
     address: string;
+    tokenAddress?: string;
     publicKey?: string;
     provider?: string;
+    source?: 'wizard' | 'wc2-bch' | 'extension' | 'manual';
   } | null;
   onConnectBch: () => void;
   lang?: 'en' | 'es';
   platformNetwork?: 'mainnet' | 'testnet';
+  onToggleNetwork?: (net: 'mainnet' | 'testnet') => void;
 }
-
-// 4 High-availability public Nostr relays accepting direct browser WebSocket connections
-const PUBLIC_RELAYS = [
-  'wss://nos.lol',
-  'wss://relay.primal.net',
-  'wss://nostr.mom',
-  'wss://purplerelay.com'
-];
 
 export default function IdentityView({
   bchWallet,
   onConnectBch,
   lang = 'en',
-  platformNetwork = 'mainnet'
+  platformNetwork = 'mainnet',
+  onToggleNetwork
 }: IdentityViewProps) {
   const isEs = lang === 'es';
 
-  // Network Selection: Mainnet or Testnet (Chipnet) - Mainnet active by default!
-  const [selectedNetwork, setSelectedNetwork] = useState<'mainnet' | 'testnet'>('mainnet');
+  // Sync network cleanly with top-level platformNetwork
+  const [selectedNetwork, setSelectedNetwork] = useState<'mainnet' | 'testnet'>(platformNetwork);
+  useEffect(() => {
+    setSelectedNetwork(platformNetwork);
+  }, [platformNetwork]);
   const isMainnet = selectedNetwork === 'mainnet';
 
   // Navigation tab
   const [activeTab, setActiveTab] = useState<'card' | 'pay' | 'verify' | 'auth' | 'spec'>('card');
 
-  // Custom Human Username Handle (defaults to "myuser" -> @myuser / myuser@bliquid.xyz)
+  // Custom Human Username Handle
   const [userHandle, setUserHandle] = useState<string>(() => {
-    return localStorage.getItem('userlink_custom_handle') || 'myuser';
+    try {
+      return localStorage.getItem('userlink_custom_handle') || 'myuser';
+    } catch {
+      return 'myuser';
+    }
   });
   const [isEditingHandle, setIsEditingHandle] = useState<boolean>(false);
   const [tempHandleInput, setTempHandleInput] = useState<string>(userHandle);
 
-  const cleanHandle = (userHandle || 'myuser').toLowerCase().replace(/[^a-z0-9_-]/g, '');
+  const cleanHandle = (userHandle || 'myuser').toLowerCase().replace(/[^a-z0-9_-]/g, '') || 'myuser';
   const nip05Address = `${cleanHandle}@bliquid.xyz`;
 
-  // Nostr secret key management
+  // Nostr identity: Local BIP-340 keypair OR optional NIP-07 browser extension
+  const [useNip07, setUseNip07] = useState<boolean>(false);
+  const [nip07PubkeyHex, setNip07PubkeyHex] = useState<string>('');
+  const [hasNip07Extension, setHasNip07Extension] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && (window as any).nostr) {
+      setHasNip07Extension(true);
+    }
+  }, []);
+
   const [nostrSkHex, setNostrSkHex] = useState<string>(() => {
     try {
       const saved = localStorage.getItem('sovereign_nostr_sk');
-      if (saved) return saved;
+      if (saved && /^[0-9a-fA-F]{64}$/.test(saved)) return saved;
       const sk = generateSecretKey();
       const hex = bytesToHex(sk);
       localStorage.setItem('sovereign_nostr_sk', hex);
       return hex;
     } catch {
-      return '';
+      return bytesToHex(generateSecretKey());
     }
   });
 
-  // Derived Nostr keys
   const nostrKeys = useMemo(() => {
+    if (useNip07 && nip07PubkeyHex) {
+      try {
+        return {
+          skBytes: null as Uint8Array | null,
+          pk: nip07PubkeyHex,
+          npub: nip19.npubEncode(nip07PubkeyHex),
+          isExtension: true
+        };
+      } catch {
+        return null;
+      }
+    }
     try {
       if (!nostrSkHex) return null;
       const skBytes = hexToBytes(nostrSkHex);
       const pk = getPublicKey(skBytes);
       const npub = nip19.npubEncode(pk);
-      const nsec = nip19.nsecEncode(skBytes);
-      return { skBytes, pk, npub, nsec };
+      return { skBytes, pk, npub, isExtension: false };
     } catch {
       return null;
     }
-  }, [nostrSkHex]);
+  }, [nostrSkHex, useNip07, nip07PubkeyHex]);
 
-  // Dedicated demo verifiable BCH keypair
+  // Ephemeral / local verifiable BCH secp256k1 keypair
   const [demoBchSkHex, setDemoBchSkHex] = useState<string>(() => {
     try {
       const saved = localStorage.getItem('sovereign_demo_bch_sk');
-      if (saved) return saved;
+      if (saved && /^[0-9a-fA-F]{64}$/.test(saved)) return saved;
       const sk = bytesToHex(crypto.getRandomValues(new Uint8Array(32)));
       localStorage.setItem('sovereign_demo_bch_sk', sk);
       return sk;
     } catch {
-      return '';
+      return bytesToHex(crypto.getRandomValues(new Uint8Array(32)));
     }
   });
 
@@ -133,13 +178,96 @@ export default function IdentityView({
     }
   }, [demoBchSkHex, isMainnet]);
 
-  // Effective BCH address
-  const effectiveBchAddress = bchWallet?.address || demoBchData?.address || '';
+  // Wallet message signing capability (`bch_signMessage` via WC2 Cashonize/Paytaca WC2 or Extension)
+  const walletCanSignMessage = useMemo(
+    () => Boolean(bchWallet?.address) && hasActiveBchMessageSigningCapability(bchWallet?.source),
+    [bchWallet?.address, bchWallet?.source]
+  );
 
-  // Linking state
+  // Signing source: never silently mismatch wallet address with demo key!
+  const [bchSigningMode, setBchSigningMode] = useState<'wallet' | 'local'>(() =>
+    walletCanSignMessage ? 'wallet' : 'local'
+  );
+
+  useEffect(() => {
+    if (walletCanSignMessage) {
+      setBchSigningMode('wallet');
+    } else {
+      setBchSigningMode('local');
+    }
+  }, [walletCanSignMessage]);
+
+  const effectiveBchAddress = useMemo(() => {
+    if (bchSigningMode === 'wallet' && bchWallet?.address) {
+      return convertCashAddressNetwork(bchWallet.address, !isMainnet, false);
+    }
+    return demoBchData?.address || '';
+  }, [bchSigningMode, bchWallet?.address, demoBchData?.address, isMainnet]);
+
+  // Linking & Relay state
   const [isPublishing, setIsPublishing] = useState<boolean>(false);
-  const [publishLogs, setPublishLogs] = useState<Array<{ relay: string; status: 'pending' | 'ok' | 'error'; latency?: number }>>([]);
-  const [publishedEvent, setPublishedEvent] = useState<any>(null);
+  const [publishError, setPublishError] = useState<string | null>(null);
+  const [publishLogs, setPublishLogs] = useState<
+    Array<{ relay: string; status: 'pending' | 'ok' | 'error'; latency?: number; error?: string }>
+  >([]);
+  const [publishedEvent, setPublishedEvent] = useState<{
+    event: NostrEvent;
+    verified: VerifiedUserLinkResult;
+    indexedCount: number;
+  } | null>(null);
+
+  // Live relay online summary (from real connection probe or last publish)
+  const [onlineRelayCount, setOnlineRelayCount] = useState<number | null>(null);
+  useEffect(() => {
+    if (publishLogs.length > 0 && publishLogs.every(l => l.status !== 'pending')) {
+      setOnlineRelayCount(publishLogs.filter(l => l.status === 'ok').length);
+    }
+  }, [publishLogs]);
+
+  // Probe relays lazily once on mount so the header indicator reflects reality without blocking
+  useEffect(() => {
+    let cancelled = false;
+    const sockets: WebSocket[] = [];
+    let okCount = 0;
+    let settled = 0;
+
+    USERLINK_RELAYS.forEach((url) => {
+      try {
+        const ws = new WebSocket(url);
+        sockets.push(ws);
+        const timer = setTimeout(() => {
+          try { ws.close(); } catch {}
+          settled++;
+          if (!cancelled && settled === USERLINK_RELAYS.length) {
+            setOnlineRelayCount(okCount);
+          }
+        }, 3500);
+        ws.onopen = () => {
+          clearTimeout(timer);
+          okCount++;
+          settled++;
+          try { ws.close(); } catch {}
+          if (!cancelled) setOnlineRelayCount(okCount);
+        };
+        ws.onerror = () => {
+          clearTimeout(timer);
+          settled++;
+          if (!cancelled && settled === USERLINK_RELAYS.length) {
+            setOnlineRelayCount(okCount);
+          }
+        };
+      } catch {
+        settled++;
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      sockets.forEach(ws => {
+        try { ws.close(); } catch {}
+      });
+    };
+  }, []);
 
   // QR Modal state
   const [showQrModal, setShowQrModal] = useState<boolean>(false);
@@ -152,16 +280,18 @@ export default function IdentityView({
     setTimeout(() => setCopiedKey(null), 2000);
   };
 
-  // Payment Simulator state
+  // Payment Resolver & Demo State (Tab 2)
   const [payTarget, setPayTarget] = useState<string>(`@${cleanHandle}`);
-  const [payAmount, setPayAmount] = useState<string>('0.05');
+  const [payAmount, setPayAmount] = useState<string>('0.01');
   const [isResolvingPay, setIsResolvingPay] = useState<boolean>(false);
+  const [resolvePayError, setResolvePayError] = useState<string | null>(null);
   const [resolvedPayData, setResolvedPayData] = useState<{
     handle: string;
     bchAddress: string;
     npub: string;
     nip05: string;
     isVerified: boolean;
+    sourceLabel: string;
   } | null>(null);
   const [isSendingPay, setIsSendingPay] = useState<boolean>(false);
   const [paySuccessData, setPaySuccessData] = useState<{
@@ -169,312 +299,467 @@ export default function IdentityView({
     amount: string;
     recipient: string;
     bchAddress: string;
+    isDemoSimulation: boolean;
   } | null>(null);
 
-  // Verification state
+  // Verification State (Tab 3)
   const [verifyInput, setVerifyInput] = useState<string>('');
   const [isVerifying, setIsVerifying] = useState<boolean>(false);
-  const [verificationResult, setVerificationResult] = useState<any>(null);
+  const [verificationResult, setVerificationResult] = useState<VerifiedUserLinkResult | null>(null);
+  const [authenticEventBackup, setAuthenticEventBackup] = useState<NostrEvent | null>(null);
   const [verifyError, setVerifyError] = useState<string | null>(null);
+  const [isTamperedPreview, setIsTamperedPreview] = useState<boolean>(false);
 
-  // Challenge Auth state
+  // Challenge Auth State (Tab 4)
   const [authChallenge, setAuthChallenge] = useState<string>('');
   const [authSignature, setAuthSignature] = useState<string>('');
-  const [authSuccess, setAuthSuccess] = useState<boolean>(false);
+  const [authResult, setAuthResult] = useState<{
+    isChallengeSigValid: boolean;
+    linkedBchAddress: string | null;
+    isIdentityBound: boolean;
+    signerNpub: string;
+  } | null>(null);
+  const [isAuthenticating, setIsAuthenticating] = useState<boolean>(false);
 
-  // Handle Save
-  const handleSaveHandle = () => {
-    const formatted = tempHandleInput.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '') || 'myuser';
-    setUserHandle(formatted);
-    localStorage.setItem('userlink_custom_handle', formatted);
-    setIsEditingHandle(false);
+  const resetActiveProofs = () => {
+    setPublishedEvent(null);
+    setPublishLogs([]);
+    setPublishError(null);
+    setAuthResult(null);
+    setAuthSignature('');
   };
 
-  // 1-Click Regenerate Nostr
+  const handleSelectNetwork = (net: 'mainnet' | 'testnet') => {
+    if (net === selectedNetwork) return;
+    setSelectedNetwork(net);
+    onToggleNetwork?.(net);
+    resetActiveProofs();
+    setResolvedPayData(null);
+    setPaySuccessData(null);
+  };
+
+  const handleSaveHandle = () => {
+    const formatted =
+      tempHandleInput.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '') || 'myuser';
+    setUserHandle(formatted);
+    try {
+      localStorage.setItem('userlink_custom_handle', formatted);
+    } catch {}
+    setPayTarget(`@${formatted}`);
+    setIsEditingHandle(false);
+    resetActiveProofs();
+  };
+
+  const handleConnectNip07 = async () => {
+    const win = window as any;
+    if (!win?.nostr?.getPublicKey) return;
+    try {
+      const pk: string = await win.nostr.getPublicKey();
+      if (pk && /^[0-9a-fA-F]{64}$/.test(pk)) {
+        setNip07PubkeyHex(pk.toLowerCase());
+        setUseNip07(true);
+        resetActiveProofs();
+      }
+    } catch (err: any) {
+      setPublishError(
+        err?.message ||
+          (isEs ? 'No se pudo obtener la clave pública de tu extensión Nostr.' : 'Failed to connect Nostr NIP-07 extension.')
+      );
+    }
+  };
+
   const handleRegenerateNostr = () => {
     const sk = generateSecretKey();
     const hex = bytesToHex(sk);
+    setUseNip07(false);
     setNostrSkHex(hex);
     try {
       localStorage.setItem('sovereign_nostr_sk', hex);
     } catch {}
+    resetActiveProofs();
   };
 
-  // 1-Click Regenerate Demo BCH
   const handleRegenerateBchDemo = () => {
     const sk = bytesToHex(crypto.getRandomValues(new Uint8Array(32)));
     setDemoBchSkHex(sk);
     try {
       localStorage.setItem('sovereign_demo_bch_sk', sk);
     } catch {}
+    resetActiveProofs();
   };
 
-  // PUBLISH BINDING TO NOSTR RELAYS
+  // PUBLISH REAL CRYPTOGRAPHIC BINDING TO NOSTR RELAYS
   const handleCreateBinding = async () => {
-    if (!nostrKeys || !effectiveBchAddress || !demoBchData) return;
+    if (!nostrKeys || !effectiveBchAddress) return;
     setIsPublishing(true);
-    setPublishLogs(PUBLIC_RELAYS.map(r => ({ relay: r, status: 'pending', latency: 0 })));
+    setPublishError(null);
+    setPublishLogs(USERLINK_RELAYS.map(r => ({ relay: r, status: 'pending', latency: 0 })));
 
     try {
       const now = Math.floor(Date.now() / 1000);
 
-      // 1. Canonical Identity Statement
+      // 1. Canonical Bidirectional Identity Statement
       const statementObject = {
         protocol: 'bch-nostr-userlink-id-v1',
         issuer: 'Drian Stack Labs UserLink',
         username: `@${cleanHandle}`,
         nip05: nip05Address,
         bchAddress: effectiveBchAddress,
-        bchPubkeyHex: demoBchData.pubkeyHex,
+        bchSignerMode: bchSigningMode,
         nostrPubkey: nostrKeys.pk,
-        statement: 'I cryptographically attest that I control both this Bitcoin Cash address and this Nostr identity without reliance on custodial intermediaries.',
+        statement:
+          'I cryptographically attest that I control both this Bitcoin Cash address and this Nostr identity without reliance on custodial intermediaries.',
         issuedAt: now,
         network: selectedNetwork
       };
 
       const statementJson = JSON.stringify(statementObject);
-      const statementHash = sha256(new TextEncoder().encode(statementJson));
 
-      // 2. ECDSA secp256k1 BCH signature
-      const bchSignatureObj = secp256k1.sign(statementHash, demoBchData.skBytes);
-      const bchSignatureHex = bytesToHex(bchSignatureObj);
+      // 2. Authentic Bitcoin Signed Message signature (`bch_signMessage` via wallet OR verifiable local secp256k1)
+      let bchSignature = '';
+      if (bchSigningMode === 'wallet' && walletCanSignMessage) {
+        const res = await signBchMessage({
+          message: statementJson,
+          userPrompt: isEs
+            ? `Vincular @${cleanHandle} (${effectiveBchAddress}) con tu identidad Nostr`
+            : `Bind @${cleanHandle} (${effectiveBchAddress}) with your Nostr identity`,
+          isTestnet: !isMainnet,
+          preferredSource: bchWallet?.source
+        });
+        bchSignature = res.signature;
+      } else {
+        if (!demoBchData) {
+          throw new Error(isEs ? 'Par local BCH no disponible.' : 'Local BCH keypair unavailable.');
+        }
+        bchSignature = signBitcoinMessage(statementJson, demoBchData.skBytes);
+      }
 
-      // 3. BIP-340 Schnorr Nostr Event (Kind 30078 / NIP-39)
-      const eventTemplate = {
+      // Verify ownership mathematically before broadcasting!
+      const provisionalTemplate = {
         kind: 30078,
         created_at: now,
         tags: [
-          ['d', 'bch-identity-binding'],
+          ['d', USERLINK_D_TAG],
+          ['t', cleanHandle],
+          ['t', effectiveBchAddress],
+          ['i', `bch:${effectiveBchAddress}`, bchSignature],
           ['bch', effectiveBchAddress],
-          ['bch_pubkey', demoBchData.pubkeyHex],
-          ['bch_sig', bchSignatureHex],
+          ['bch_sig', bchSignature],
+          ['sig_scheme', 'bitcoin-signed-message'],
           ['handle', cleanHandle],
           ['nip05', nip05Address],
           ['c', 'userlink-bch-id'],
           ['client', 'UserLink by Drian Stack Labs'],
           ['network', selectedNetwork],
-          ['claim', 'bch-schnorr-binding']
+          ['claim', 'bch-schnorr-bsm-binding']
         ],
         content: statementJson
       };
 
-      const signedEvent = finalizeEvent(eventTemplate, nostrKeys.skBytes);
-      setPublishedEvent({
-        event: signedEvent,
-        bchSignatureHex,
-        statement: statementObject
-      });
+      // 3. Sign BIP-340 Schnorr Nostr Event (Kind 30078)
+      let signedEvent: NostrEvent;
+      if (nostrKeys.isExtension && (window as any).nostr?.signEvent) {
+        signedEvent = await (window as any).nostr.signEvent({
+          ...provisionalTemplate,
+          pubkey: nostrKeys.pk
+        });
+      } else if (nostrKeys.skBytes) {
+        signedEvent = finalizeEvent(provisionalTemplate, nostrKeys.skBytes);
+      } else {
+        throw new Error('No active Nostr signer available.');
+      }
 
-      // 4. Broadcast to live Nostr Relays
-      const pool = new SimplePool();
-      type LogItem = { relay: string; status: 'pending' | 'ok' | 'error'; latency: number };
-      const logs: LogItem[] = PUBLIC_RELAYS.map(r => ({ relay: r, status: 'pending', latency: 0 }));
+      const preCheck = verifyUserLinkEvent(signedEvent);
+      if (!preCheck.isOverallValid) {
+        throw new Error(
+          preCheck.verificationNote ||
+            (isEs
+              ? 'La firma BCH no coincide con la dirección seleccionada.'
+              : 'BCH signature does not match the selected CashAddress.')
+        );
+      }
+
+      // Attach verified bchPubkey tag preview if needed (preCheck already recovered it)
+      // 4. Broadcast cleanly to live Nostr Relays with genuine awaited OK acks
+      type LogItem = { relay: string; status: 'pending' | 'ok' | 'error'; latency?: number; error?: string };
+      const logs: LogItem[] = USERLINK_RELAYS.map(r => ({ relay: r, status: 'pending', latency: 0 }));
 
       await Promise.all(
-        PUBLIC_RELAYS.map(async (relayUrl, idx) => {
-          const start = Date.now();
-          try {
-            await Promise.race([
-              pool.publish([relayUrl], signedEvent),
-              new Promise((_, reject) => setTimeout(() => reject(new Error('Relay timeout')), 4500))
-            ]);
-            logs[idx] = { relay: relayUrl, status: 'ok', latency: Date.now() - start };
-            setPublishLogs([...logs]);
-          } catch {
-            logs[idx] = { relay: relayUrl, status: 'error', latency: Date.now() - start };
-            setPublishLogs([...logs]);
-          }
+        USERLINK_RELAYS.map(async (relayUrl, idx) => {
+          const res = await publishUserLinkToRelay(relayUrl, signedEvent, 5500);
+          logs[idx] = {
+            relay: relayUrl,
+            status: res.ok ? 'ok' : 'error',
+            latency: res.latency,
+            error: res.error
+          };
+          setPublishLogs([...logs]);
         })
       );
 
-      // Trigger celebratory confetti on successful publish!
-      try {
-        confetti({
-          particleCount: 75,
-          spread: 70,
-          origin: { y: 0.6 }
-        });
-      } catch {}
-
-      // Auto-populate verification input
+      const indexedCount = logs.filter(l => l.status === 'ok').length;
+      setPublishedEvent({
+        event: signedEvent,
+        verified: preCheck,
+        indexedCount
+      });
       setVerifyInput(nostrKeys.npub);
+
+      if (indexedCount > 0) {
+        try {
+          confetti({
+            particleCount: 70,
+            spread: 65,
+            origin: { y: 0.6 }
+          });
+        } catch {}
+      } else {
+        setPublishError(
+          isEs
+            ? 'El evento se firmó correctamente en local, pero ningún relay respondió a tiempo. Verifica tu conexión.'
+            : 'Event was signed locally, but no relay acknowledged within timeout. Please check connectivity.'
+        );
+      }
     } catch (err: any) {
       console.error('UserLink binding generation error:', err);
+      setPublishError(err?.message || (isEs ? 'Error al generar o publicar el enlace.' : 'Failed to create or publish UserLink binding.'));
+      setPublishLogs([]);
     } finally {
       setIsPublishing(false);
     }
   };
 
-  // PAYMENT SIMULATOR: RESOLVE HANDLE TO BITCOIN CASH ADDRESS
+  // REAL DECENTRALIZED PAYMENT RESOLUTION (Tab 2)
   const handleResolvePaymentTarget = async () => {
+    const query = payTarget.trim();
+    if (!query) return;
     setIsResolvingPay(true);
+    setResolvePayError(null);
     setResolvedPayData(null);
     setPaySuccessData(null);
 
-    await new Promise(r => setTimeout(r, 600));
+    try {
+      const { verified, nip05Fallback } = await resolveUserLinkFromRelays(query);
 
-    const rawTarget = payTarget.trim().replace(/^@/, '').toLowerCase();
-    
-    // If user entered their own handle or "myuser"
-    const targetAddress = effectiveBchAddress || (isMainnet ? 'bitcoincash:qpc5tceta5qgl4tsynwhxtgn608pteevvsqm5xqt7p' : 'bchtest:qpc5tceta5qgl4tsynwhxtgn608pteevvsqm5xqt7p');
-    const targetNpub = nostrKeys?.npub || 'npub1me5jwmjjpyt64q38hf9tg3swm4jtthpx8eh5wkef7vl66whcrxgqh936zr';
+      if (verified && verified.isOverallValid) {
+        setResolvedPayData({
+          handle: verified.handle,
+          nip05: verified.nip05,
+          bchAddress: verified.bchAddress,
+          npub: verified.npub,
+          isVerified: true,
+          sourceLabel: isEs ? 'Relay Nostr + Prueba Criptográfica' : 'Nostr Relay + Crypto Proof'
+        });
+        return;
+      }
 
-    setResolvedPayData({
-      handle: `@${rawTarget || 'usuario'}`,
-      nip05: `${rawTarget || 'usuario'}@bliquid.xyz`,
-      bchAddress: targetAddress,
-      npub: targetNpub,
-      isVerified: true
-    });
-    setIsResolvingPay(false);
+      // Check just-published session event ONLY if the query genuinely matches its handle/npub/address
+      const cleanQuery = query.replace(/^@/, '').split('@')[0].toLowerCase();
+      if (
+        publishedEvent?.verified.isOverallValid &&
+        (publishedEvent.verified.handle.replace(/^@/, '').toLowerCase() === cleanQuery ||
+          publishedEvent.verified.npub === query ||
+          publishedEvent.verified.bchAddress === query)
+      ) {
+        setResolvedPayData({
+          handle: publishedEvent.verified.handle,
+          nip05: publishedEvent.verified.nip05,
+          bchAddress: publishedEvent.verified.bchAddress,
+          npub: publishedEvent.verified.npub,
+          isVerified: true,
+          sourceLabel: isEs ? 'Sesión Verificada Localmente' : 'Verified Session Binding'
+        });
+        return;
+      }
+
+      // Static NIP-05 fallback (if domain serves .well-known/nostr.json with bch_addresses, without Kind 30078 proof)
+      if (nip05Fallback?.bchAddress) {
+        setResolvedPayData({
+          handle: nip05Fallback.handle,
+          nip05: nip05Fallback.nip05,
+          bchAddress: nip05Fallback.bchAddress,
+          npub: nip19.npubEncode(nip05Fallback.pubkeyHex),
+          isVerified: false,
+          sourceLabel: isEs ? 'Directorio NIP-05 (Sin firma Kind 30078)' : 'NIP-05 Directory (No Kind 30078 proof)'
+        });
+        return;
+      }
+
+      setResolvePayError(
+        isEs
+          ? `No se encontró ninguna identidad UserLink para "${query}" en los relays de Nostr ni en NIP-05. Crea primero el enlace en la pestaña 1 o prueba con myuser@bliquid.xyz.`
+          : `No UserLink identity found for "${query}" on Nostr relays or NIP-05. Create your binding in Tab 1 first or try myuser@bliquid.xyz.`
+      );
+    } catch {
+      setResolvePayError(
+        isEs ? 'Error consultando los relays descentralizados.' : 'Error querying decentralized relays.'
+      );
+    } finally {
+      setIsResolvingPay(false);
+    }
   };
 
-  // PAYMENT SIMULATOR: SEND 1-CLICK BCH
+  // DEMO PAYMENT SIMULATION (Explicitly marked non-broadcasting demo)
   const handleSendSimulationPay = async () => {
     if (!resolvedPayData) return;
     setIsSendingPay(true);
 
-    await new Promise(r => setTimeout(r, 1200));
+    await new Promise(r => setTimeout(r, 850));
 
-    const fakeTxId = 'bch_tx_' + bytesToHex(crypto.getRandomValues(new Uint8Array(16)));
+    const demoTxId = bytesToHex(crypto.getRandomValues(new Uint8Array(32)));
     setPaySuccessData({
-      txId: fakeTxId,
+      txId: demoTxId,
       amount: payAmount,
       recipient: resolvedPayData.handle,
-      bchAddress: resolvedPayData.bchAddress
+      bchAddress: resolvedPayData.bchAddress,
+      isDemoSimulation: true
     });
     setIsSendingPay(false);
 
     try {
       confetti({
-        particleCount: 60,
-        spread: 60,
+        particleCount: 55,
+        spread: 55,
         origin: { y: 0.55 }
       });
     } catch {}
   };
 
-  // LIVE DECENTRALIZED VERIFICATION BY NPUB, HANDLE OR ADDRESS
+  // LIVE DECENTRALIZED VERIFICATION (Tab 3)
   const handleVerify = async (targetOverride?: string) => {
     const rawTarget = (targetOverride || verifyInput).trim();
     if (!rawTarget) return;
 
     setIsVerifying(true);
     setVerificationResult(null);
+    setAuthenticEventBackup(null);
     setVerifyError(null);
+    setIsTamperedPreview(false);
 
     try {
-      const pool = new SimplePool();
-      let filter: any = { kinds: [30078], '#d': ['bch-identity-binding'] };
-
-      if (rawTarget.startsWith('npub1')) {
-        try {
-          const decoded = nip19.decode(rawTarget);
-          if (decoded.type === 'npub') {
-            filter.authors = [decoded.data as string];
-          }
-        } catch {
-          setVerifyError(isEs ? 'El npub ingresado no es válido.' : 'Invalid npub format.');
-          setIsVerifying(false);
-          return;
-        }
-      } else if (rawTarget.startsWith('bitcoincash:') || rawTarget.startsWith('bchtest:')) {
-        filter['#bch'] = [rawTarget];
-      } else if (rawTarget.startsWith('@') || rawTarget.includes('@')) {
-        const cleanH = rawTarget.replace(/^@/, '').split('@')[0];
-        filter['#handle'] = [cleanH];
-      } else if (rawTarget.length === 64) {
-        filter.authors = [rawTarget];
-      } else {
-        filter['#bch'] = [`bitcoincash:${rawTarget}`, `bchtest:${rawTarget}`, rawTarget];
-      }
-
-      // Query live relays
-      const foundEvent = await Promise.race([
-        pool.get(PUBLIC_RELAYS, filter),
-        new Promise<any>((_, reject) => setTimeout(() => reject(new Error('Timeout')), 6000))
-      ]).catch(() => null);
-
-      if (!foundEvent) {
-        // Fallback for demo instant verification if published in this session
-        if (publishedEvent && (rawTarget.includes(cleanHandle) || rawTarget === nostrKeys?.npub)) {
-          setVerificationResult({
-            npub: nostrKeys?.npub,
-            bchAddress: effectiveBchAddress,
-            nip05: nip05Address,
-            handle: `@${cleanHandle}`,
-            event: publishedEvent.event,
-            timestamp: Math.floor(Date.now() / 1000),
-            isNostrSigValid: true,
-            isBchSigValid: true
-          });
-          setIsVerifying(false);
-          return;
-        }
-
-        setVerifyError(
-          isEs
-            ? 'No se encontró ningún registro de identidad publicado en los relays para este identificador.'
-            : 'No decentralized identity binding found on public relays for this identifier.'
-        );
-        setIsVerifying(false);
+      const { verified } = await resolveUserLinkFromRelays(rawTarget);
+      if (verified) {
+        setVerificationResult(verified);
         return;
       }
 
-      // Cryptographic verification
-      const isNostrSigValid = verifyEvent(foundEvent);
-      const bchAddressTag = foundEvent.tags.find((t: string[]) => t[0] === 'bch')?.[1] || '';
-      const bchPubkeyTag = foundEvent.tags.find((t: string[]) => t[0] === 'bch_pubkey')?.[1] || '';
-      const bchSigTag = foundEvent.tags.find((t: string[]) => t[0] === 'bch_sig')?.[1] || '';
-      const handleTag = foundEvent.tags.find((t: string[]) => t[0] === 'handle')?.[1] || '';
-      const nip05Tag = foundEvent.tags.find((t: string[]) => t[0] === 'nip05')?.[1] || '';
+      // Session fallback ONLY if exact match AND run real cryptographic verification!
+      const cleanQ = rawTarget.replace(/^@/, '').split('@')[0].toLowerCase();
+      if (
+        publishedEvent &&
+        (publishedEvent.verified.handle.replace(/^@/, '').toLowerCase() === cleanQ ||
+          publishedEvent.verified.npub === rawTarget ||
+          publishedEvent.verified.pubkeyHex.toLowerCase() === rawTarget.toLowerCase() ||
+          publishedEvent.verified.bchAddress === rawTarget)
+      ) {
+        setVerificationResult(verifyUserLinkEvent(publishedEvent.event));
+        return;
+      }
 
-      let isBchSigValid = false;
-      try {
-        const statementHash = sha256(new TextEncoder().encode(foundEvent.content));
-        isBchSigValid = secp256k1.verify(bchSigTag, statementHash, bchPubkeyTag);
-      } catch {}
-
-      setVerificationResult({
-        npub: nip19.npubEncode(foundEvent.pubkey),
-        bchAddress: bchAddressTag,
-        bchPubkey: bchPubkeyTag,
-        nip05: nip05Tag || `${handleTag || 'user'}@bliquid.xyz`,
-        handle: `@${handleTag || 'user'}`,
-        event: foundEvent,
-        timestamp: foundEvent.created_at,
-        isNostrSigValid,
-        isBchSigValid
-      });
-    } catch {
-      setVerifyError(isEs ? 'Error al consultar relays de Nostr.' : 'Error querying public Nostr relays.');
+      setVerifyError(
+        isEs
+          ? 'No se encontró ningún registro de identidad publicado en los relays para este identificador.'
+          : 'No decentralized identity binding found on public relays for this identifier.'
+      );
+    } catch (err: any) {
+      if (err?.message === 'INVALID_NPUB') {
+        setVerifyError(isEs ? 'El npub ingresado no es válido.' : 'Invalid npub format.');
+      } else {
+        setVerifyError(isEs ? 'Error al consultar relays de Nostr.' : 'Error querying public Nostr relays.');
+      }
     } finally {
       setIsVerifying(false);
     }
   };
 
-  // CHALLENGE AUTH DEMO
+  // Interactive security demo: alter signed event content and re-run real cryptographic check
+  const handleRunTamperTest = () => {
+    if (!verificationResult) return;
+    if (isTamperedPreview && authenticEventBackup) {
+      // Restore authentic verification from untouched backup
+      setVerificationResult(verifyUserLinkEvent(authenticEventBackup));
+      setAuthenticEventBackup(null);
+      setIsTamperedPreview(false);
+      return;
+    }
+    const fakeAddr = verificationResult.bchAddress.startsWith('bchtest:')
+      ? 'bchtest:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqp5t4s9r'
+      : 'bitcoincash:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqfnhks603';
+    const nextContent = verificationResult.event.content.includes(verificationResult.bchAddress)
+      ? verificationResult.event.content.replace(verificationResult.bchAddress, fakeAddr)
+      : `${verificationResult.event.content} `;
+    setAuthenticEventBackup(verificationResult.event);
+    const tamperedEvent: NostrEvent = {
+      ...verificationResult.event,
+      content: nextContent
+    };
+    setVerificationResult(verifyUserLinkEvent(tamperedEvent));
+    setIsTamperedPreview(true);
+  };
+
+  // CHALLENGE AUTH DEMO (Tab 4): Verifies Schnorr challenge + checks live/verified Nostr <-> BCH binding
   const handleGenerateChallenge = () => {
     const now = Math.floor(Date.now() / 1000);
     const nonce = bytesToHex(crypto.getRandomValues(new Uint8Array(16)));
     const challengeText = `userlink-auth-challenge:${nonce}:${now}:bliquid.xyz`;
     setAuthChallenge(challengeText);
     setAuthSignature('');
-    setAuthSuccess(false);
+    setAuthResult(null);
   };
 
   const handleSignChallenge = async () => {
     if (!authChallenge || !nostrKeys) return;
+    setIsAuthenticating(true);
     try {
-      const challengeBytes = new TextEncoder().encode(authChallenge);
-      const challengeHash = sha256(challengeBytes);
-      const sigBytes = schnorr.sign(challengeHash, nostrKeys.skBytes);
-      const sigHex = bytesToHex(sigBytes);
-      setAuthSignature(sigHex);
+      let isChallengeSigValid = false;
+      let sigDisplay = '';
 
-      const isValid = schnorr.verify(sigBytes, challengeHash, hexToBytes(nostrKeys.pk));
-      if (isValid) {
-        setAuthSuccess(true);
+      if (nostrKeys.isExtension && (window as any).nostr?.signEvent) {
+        const signedAuthEvent = await (window as any).nostr.signEvent({
+          kind: 22242,
+          created_at: Math.floor(Date.now() / 1000),
+          tags: [
+            ['relay', 'wss://bliquid.xyz'],
+            ['challenge', authChallenge]
+          ],
+          content: authChallenge
+        });
+        sigDisplay = signedAuthEvent.sig;
+        isChallengeSigValid = verifyEvent(signedAuthEvent);
+      } else if (nostrKeys.skBytes) {
+        const challengeBytes = new TextEncoder().encode(authChallenge);
+        const challengeHash = sha256(challengeBytes);
+        const sigBytes = schnorr.sign(challengeHash, nostrKeys.skBytes);
+        sigDisplay = bytesToHex(sigBytes);
+        isChallengeSigValid = schnorr.verify(sigBytes, challengeHash, hexToBytes(nostrKeys.pk));
+      }
+
+      setAuthSignature(sigDisplay);
+
+      // Verify that this Nostr pubkey actually has a valid BCH UserLink attestation on relays or in session!
+      let linkedBchAddress: string | null = null;
+      let isIdentityBound = false;
+
+      const { verified } = await resolveUserLinkFromRelays(nostrKeys.npub);
+      if (verified && verified.isOverallValid) {
+        linkedBchAddress = verified.bchAddress;
+        isIdentityBound = true;
+      } else if (
+        publishedEvent?.verified.isOverallValid &&
+        publishedEvent.verified.pubkeyHex === nostrKeys.pk
+      ) {
+        linkedBchAddress = publishedEvent.verified.bchAddress;
+        isIdentityBound = true;
+      }
+
+      setAuthResult({
+        isChallengeSigValid,
+        linkedBchAddress,
+        isIdentityBound,
+        signerNpub: nostrKeys.npub
+      });
+
+      if (isChallengeSigValid && isIdentityBound) {
         try {
           confetti({
             particleCount: 50,
@@ -485,7 +770,19 @@ export default function IdentityView({
       }
     } catch (err) {
       console.error('Challenge signing error:', err);
+    } finally {
+      setIsAuthenticating(false);
     }
+  };
+
+  // BIP-21 URI (never double-prefixes `bitcoincash:` / `bchtest:`)
+  const buildBip21Uri = (address: string, amount?: string, label?: string) => {
+    const cleanAddr = (address || '').trim();
+    const params = new URLSearchParams();
+    if (amount && Number(amount) > 0) params.set('amount', amount);
+    if (label) params.set('label', label);
+    const qs = params.toString();
+    return qs ? `${cleanAddr}?${qs}` : cleanAddr;
   };
 
   // QR Code URL for active CashAddress
@@ -497,22 +794,19 @@ export default function IdentityView({
   return (
     <div className="ui-page space-y-6 sm:space-y-8 animate-fade-in pb-16">
       {/* =========================================================================
-          HERO & HEADER BANNER (WARM BITCOIN ORANGE THEME)
+          HERO & HEADER BANNER
           ========================================================================= */}
       <div className="relative overflow-hidden rounded-3xl bg-surface border border-line p-6 sm:p-8 shadow-sm">
-        {/* Subtle Ambient Bitcoin Glows */}
         <div className="absolute -top-24 -left-24 w-72 h-72 rounded-full bg-primary/15 blur-3xl pointer-events-none" />
         <div className="absolute -bottom-24 -right-24 w-72 h-72 rounded-full bg-amber-500/10 blur-3xl pointer-events-none" />
 
         <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
           <div className="space-y-3 max-w-2xl">
-            {/* Hackathon Bounty Tag */}
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/30 text-primary text-xs font-semibold">
               <Flame className="w-3.5 h-3.5 fill-primary text-primary" />
               <span>BCH BLAZE 2026 · Decentralized Identity Track ($500 PUSD)</span>
             </div>
 
-            {/* Main Brand Title */}
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-primary to-amber-400 p-0.5 shadow-md shadow-primary/20">
                 <div className="w-full h-full rounded-[14px] bg-surface flex items-center justify-center">
@@ -523,31 +817,31 @@ export default function IdentityView({
                 <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-ink flex items-center gap-2">
                   <span>UserLink</span>
                   <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded-md bg-surface-2 text-ink-2 border border-line">
-                    v1.0-PoC
+                    v1.1
                   </span>
                 </h1>
                 <p className="text-xs sm:text-sm text-primary font-bold">
                   {isEs
-                    ? 'Protocolo de Pagos en Bitcoin Cash por Nombre de Usuario (@handle / Nostr)'
-                    : 'Non-Custodial Bitcoin Cash Payments by Username (@handle / Nostr)'}
+                    ? 'Identidad Soberana & Pagos en Bitcoin Cash por @usuario (BCH ⇄ Nostr)'
+                    : 'Self-Sovereign Identity & Bitcoin Cash Payments by @handle (BCH ⇄ Nostr)'}
                 </p>
               </div>
             </div>
 
             <p className="text-xs sm:text-sm text-ink-2 leading-relaxed">
               {isEs
-                ? 'Dile adiós a las direcciones largas de 42 caracteres. Vincula criptográficamente tu @usuario o identidad de Nostr a tu billetera Paytaca a costo de gas cero, vitalicio y sin intermediarios centralizados. Funciona 100% en Mainnet y en relays globales.'
-                : 'Say goodbye to 42-character unreadable hashes. Cryptographically bind your human username to your Paytaca wallet with zero gas fees, lifetime ownership, and zero middlemen. 100% Mainnet and global Nostr ready.'}
+                ? 'Vincula criptográficamente tu @usuario e identidad de Nostr a tu dirección Bitcoin Cash mediante firmas Bitcoin Signed Message + BIP-340 Schnorr, sin custodia, sin gas y verificable en relays públicos.'
+                : 'Cryptographically bind your human username and Nostr identity to a Bitcoin Cash address using Bitcoin Signed Message + BIP-340 Schnorr proofs — non-custodial, zero gas, and independently verifiable across global relays.'}
             </p>
           </div>
 
           {/* Quick Header Badges & Actions */}
           <div className="flex flex-wrap lg:flex-col items-start lg:items-end gap-2.5 shrink-0">
             {/* Mainnet / Chipnet Network Toggle Pill */}
-            <div className="inline-flex items-center p-1 rounded-xl bg-surface-2 border border-line text-xs font-bold shadow-2xs">
+            <div className="inline-flex items-center p-1 rounded-xl bg-surface-2 border border-line text-xs font-bold shadow-sm">
               <button
                 type="button"
-                onClick={() => setSelectedNetwork('mainnet')}
+                onClick={() => handleSelectNetwork('mainnet')}
                 className={`px-3 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
                   isMainnet
                     ? 'bg-primary text-black font-extrabold shadow-sm'
@@ -559,7 +853,7 @@ export default function IdentityView({
               </button>
               <button
                 type="button"
-                onClick={() => setSelectedNetwork('testnet')}
+                onClick={() => handleSelectNetwork('testnet')}
                 className={`px-3 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
                   !isMainnet
                     ? 'bg-primary text-black font-extrabold shadow-sm'
@@ -587,7 +881,9 @@ export default function IdentityView({
             {bchWallet?.address ? (
               <div className="px-3 py-1.5 rounded-xl bg-primary/10 border border-primary/30 text-xs font-semibold text-primary flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-                <span>Paytaca: {formatAddress(bchWallet.address)}</span>
+                <span>
+                  {bchWallet.provider || 'BCH Wallet'}: {formatAddress(convertCashAddressNetwork(bchWallet.address, !isMainnet, false))}
+                </span>
               </div>
             ) : (
               <button
@@ -596,14 +892,30 @@ export default function IdentityView({
                 className="ui-btn-secondary ui-btn-sm text-xs font-semibold flex items-center gap-1.5"
               >
                 <Wallet className="w-3.5 h-3.5 text-primary" />
-                <span>{isEs ? 'Conectar Billetera Paytaca' : 'Connect Paytaca Wallet'}</span>
+                <span>{isEs ? 'Conectar Billetera BCH' : 'Connect BCH Wallet'}</span>
               </button>
             )}
 
-            {/* Chipnet Status */}
+            {/* Dynamic Relay Status */}
             <div className="text-[11px] font-mono text-ink-3 flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-              <span>Nostr Relays: 4 Online (Global Mainnet)</span>
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${
+                  onlineRelayCount === null
+                    ? 'bg-amber-500 animate-pulse'
+                    : onlineRelayCount > 0
+                    ? 'bg-emerald-500'
+                    : 'bg-rose-500'
+                }`}
+              />
+              <span>
+                {onlineRelayCount === null
+                  ? isEs
+                    ? 'Probando relays Nostr...'
+                    : 'Probing Nostr relays...'
+                  : isEs
+                  ? `Relays Nostr: ${onlineRelayCount}/${USERLINK_RELAYS.length} Online`
+                  : `Nostr Relays: ${onlineRelayCount}/${USERLINK_RELAYS.length} Online`}
+              </span>
             </div>
           </div>
         </div>
@@ -636,7 +948,7 @@ export default function IdentityView({
           }`}
         >
           <Zap className="w-3.5 h-3.5 text-primary" />
-          <span>{isEs ? '2. Simulador de Pagos' : '2. Payment Simulator'}</span>
+          <span>{isEs ? '2. Resolver y Pagar' : '2. Resolve & Pay'}</span>
         </button>
 
         <button
@@ -675,7 +987,7 @@ export default function IdentityView({
           }`}
         >
           <Code2 className="w-3.5 h-3.5 text-ink-3" />
-          <span>{isEs ? '5. Especificación NIP-39' : '5. Technical Spec'}</span>
+          <span>{isEs ? '5. Especificación Técnica' : '5. Technical Spec'}</span>
         </button>
       </div>
 
@@ -684,10 +996,9 @@ export default function IdentityView({
           ========================================================================= */}
       {activeTab === 'card' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          {/* LEFT: THE INTERACTIVE HOLOGRAPHIC DIGITAL CARD (PASSPORT) */}
+          {/* LEFT: PASSPORT CARD */}
           <div className="lg:col-span-5 space-y-4">
             <div className="relative group overflow-hidden rounded-3xl p-6 sm:p-7 bg-gradient-to-br from-surface via-surface-2 to-surface border-2 border-primary/35 shadow-xl shadow-primary/10 transition-all">
-              {/* Card Holographic Sheen */}
               <div className="absolute top-0 right-0 w-44 h-44 bg-gradient-to-bl from-primary/20 via-amber-500/5 to-transparent rounded-bl-full pointer-events-none" />
 
               {/* Card Header */}
@@ -712,7 +1023,9 @@ export default function IdentityView({
                         {isEs ? 'Editar' : 'Edit'}
                       </button>
                     </div>
-                    <div className="text-xs text-ink-3 font-mono">{nip05Address}</div>
+                    <div className="text-[11px] text-ink-3 font-mono">
+                      {isEs ? 'Identificador Nostr:' : 'Nostr Handle:'} @{cleanHandle}
+                    </div>
                   </div>
                 </div>
 
@@ -722,7 +1035,7 @@ export default function IdentityView({
                 </div>
               </div>
 
-              {/* Edit Handle Modal / Inline Dropdown */}
+              {/* Edit Handle Dropdown */}
               {isEditingHandle && (
                 <div className="my-3 p-3 rounded-xl bg-surface border border-line space-y-2">
                   <div className="text-xs font-bold text-ink">
@@ -730,7 +1043,7 @@ export default function IdentityView({
                   </div>
                   <div className="flex gap-2">
                     <div className="relative flex-1">
-                      <span className="absolute left-3 top-2.5 text-xs text-ink-3 font-bold">@</span>
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-ink-3 font-bold">@</span>
                       <input
                         type="text"
                         value={tempHandleInput}
@@ -763,9 +1076,16 @@ export default function IdentityView({
                 {/* Proof 1: Bitcoin Cash */}
                 <div className="p-3 rounded-2xl bg-surface border border-line flex items-center justify-between gap-2">
                   <div className="min-w-0">
-                    <div className="text-[10px] uppercase font-bold text-primary flex items-center gap-1">
+                    <div className="text-[10px] uppercase font-bold text-primary flex items-center gap-1.5">
                       <Wallet className="w-3 h-3" />
-                      <span>Bitcoin Cash ({isMainnet ? 'Mainnet' : 'Chipnet'})</span>
+                      <span>
+                        Bitcoin Cash ({isMainnet ? 'Mainnet' : 'Chipnet'}) ·{' '}
+                        {bchSigningMode === 'wallet'
+                          ? bchWallet?.provider || 'WC2 Wallet'
+                          : isEs
+                          ? 'Par Soberano Local'
+                          : 'Local Sovereign Key'}
+                      </span>
                     </div>
                     <div className="text-xs font-mono text-ink truncate select-all">
                       {effectiveBchAddress}
@@ -774,7 +1094,7 @@ export default function IdentityView({
                   <button
                     type="button"
                     onClick={() => copyToClipboard(effectiveBchAddress, 'card_bch')}
-                    className="p-1.5 rounded-lg hover:bg-surface-2 text-ink-3 hover:text-ink transition-colors shrink-0"
+                    className="p-1.5 rounded-lg hover:bg-surface-2 text-ink-3 hover:text-ink transition-colors shrink-0 cursor-pointer"
                     title="Copy CashAddress"
                   >
                     {copiedKey === 'card_bch' ? <Check className="w-3.5 h-3.5 text-primary" /> : <Copy className="w-3.5 h-3.5" />}
@@ -786,16 +1106,18 @@ export default function IdentityView({
                   <div className="min-w-0">
                     <div className="text-[10px] uppercase font-bold text-amber-500 flex items-center gap-1">
                       <Globe className="w-3 h-3" />
-                      <span>Nostr Protocol (BIP-340)</span>
+                      <span>
+                        Nostr Protocol (BIP-340){nostrKeys?.isExtension ? ' · NIP-07' : ''}
+                      </span>
                     </div>
                     <div className="text-xs font-mono text-ink truncate select-all">
-                      {nostrKeys?.npub || 'Generating...'}
+                      {nostrKeys?.npub || (isEs ? 'Generando...' : 'Generating...')}
                     </div>
                   </div>
                   <button
                     type="button"
                     onClick={() => copyToClipboard(nostrKeys?.npub || '', 'card_npub')}
-                    className="p-1.5 rounded-lg hover:bg-surface-2 text-ink-3 hover:text-ink transition-colors shrink-0"
+                    className="p-1.5 rounded-lg hover:bg-surface-2 text-ink-3 hover:text-ink transition-colors shrink-0 cursor-pointer"
                     title="Copy npub"
                   >
                     {copiedKey === 'card_npub' ? <Check className="w-3.5 h-3.5 text-primary" /> : <Copy className="w-3.5 h-3.5" />}
@@ -817,7 +1139,7 @@ export default function IdentityView({
                   type="button"
                   onClick={() => {
                     setActiveTab('pay');
-                    setPayTarget(`@${cleanHandle}`);
+                    setPayTarget(publishedEvent ? `@${cleanHandle}` : 'myuser@bliquid.xyz');
                   }}
                   className="ui-btn-secondary ui-btn-sm text-xs font-semibold flex items-center justify-center gap-1.5"
                 >
@@ -832,18 +1154,22 @@ export default function IdentityView({
                   <ShieldCheck className="w-3.5 h-3.5 text-primary" />
                   <span>{isEs ? 'Sin Custodia · Sin Gas' : 'Non-Custodial · Zero Gas'}</span>
                 </span>
-                <span className="font-mono text-[10px]">ECDSA ⇄ Schnorr</span>
+                <span className="font-mono text-[10px]">BSM ECDSA ⇄ BIP-340</span>
               </div>
             </div>
 
             {/* QR Modal */}
             <AnimatePresence>
               {showQrModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in">
+                <div
+                  onClick={() => setShowQrModal(false)}
+                  className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in"
+                >
                   <motion.div
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.95 }}
+                    onClick={(e) => e.stopPropagation()}
                     className="bg-surface border border-line rounded-3xl p-6 max-w-sm w-full space-y-4 shadow-2xl relative"
                   >
                     <button
@@ -856,15 +1182,18 @@ export default function IdentityView({
 
                     <div className="text-center space-y-1">
                       <div className="text-base font-extrabold text-ink">@{cleanHandle}</div>
-                      <div className="text-xs text-ink-3">{nip05Address}</div>
-                      <div className="text-[10px] font-mono text-primary font-bold">{isMainnet ? 'Bitcoin Cash Mainnet' : 'Chipnet Testnet'}</div>
+                      <div className="text-[10px] font-mono text-primary font-bold">
+                        {isMainnet ? 'Bitcoin Cash Mainnet' : 'Chipnet Testnet'}
+                      </div>
                     </div>
 
                     <div className="p-4 rounded-2xl bg-white border border-line flex items-center justify-center">
                       {qrDataUrl ? (
                         <img src={qrDataUrl} alt="CashAddress QR" className="w-52 h-52 object-contain" />
                       ) : (
-                        <div className="w-52 h-52 flex items-center justify-center text-xs text-gray-400">QR Loading...</div>
+                        <div className="w-52 h-52 flex items-center justify-center text-xs text-gray-400">
+                          {isEs ? 'Generando QR...' : 'QR Loading...'}
+                        </div>
                       )}
                     </div>
 
@@ -888,6 +1217,32 @@ export default function IdentityView({
 
           {/* RIGHT: CRYPTOGRAPHIC ATTESTATION & RELAY PUBLISH SUITE */}
           <div className="lg:col-span-7 space-y-5">
+            {/* WizardConnect transparency notice when connected wallet lacks off-chain `bch_signMessage` */}
+            {bchWallet?.address && !walletCanSignMessage && (
+              <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-xs space-y-2">
+                <div className="flex items-start gap-2 font-bold text-amber-500">
+                  <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>
+                    {isEs
+                      ? `${bchWallet.provider || 'Paytaca'} (${bchWallet.source === 'wizard' ? 'WizardConnect' : 'Modo lectura'}) no soporta firma off-chain bch_signMessage`
+                      : `${bchWallet.provider || 'Paytaca'} (${bchWallet.source === 'wizard' ? 'WizardConnect' : 'Read-only'}) does not expose off-chain bch_signMessage`}
+                  </span>
+                </div>
+                <p className="text-ink-2 leading-relaxed">
+                  {isEs
+                    ? 'Para mantener integridad criptográfica del 100% (donde hash160(pubkey) coincida exactamente con la dirección BCH firmada), actualmente se usa tu Par Soberano Local para generar una firma Bitcoin Signed Message real. Si deseas firmar directamente desde tu billetera móvil, conecta Cashonize / WalletConnect V2 (bch_signMessage).'
+                    : 'To guarantee 100% cryptographic integrity (where hash160(pubkey) strictly matches the signed CashAddress), UserLink uses your Local Sovereign Keypair to produce an authentic Bitcoin Signed Message signature. Connect via Cashonize / WalletConnect V2 (bch_signMessage) to sign with an external wallet.'}
+                </p>
+                <button
+                  type="button"
+                  onClick={onConnectBch}
+                  className="ui-btn-secondary ui-btn-sm text-xs font-bold"
+                >
+                  {isEs ? 'Cambiar a Cashonize / WC2 BCH' : 'Switch to Cashonize / WC2 BCH'}
+                </button>
+              </div>
+            )}
+
             {/* Step 1: Dual Identity Engines */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {/* BCH Card */}
@@ -897,18 +1252,42 @@ export default function IdentityView({
                     <Wallet className="w-3.5 h-3.5" />
                     <span>Bitcoin Cash ({isMainnet ? 'Mainnet' : 'Chipnet'})</span>
                   </span>
-                  {!bchWallet?.address && (
+                  {bchSigningMode === 'local' && (
                     <button
                       type="button"
                       onClick={handleRegenerateBchDemo}
                       className="text-[10px] text-ink-3 hover:text-primary transition-colors flex items-center gap-1 cursor-pointer"
-                      title="New local pair"
+                      title={isEs ? 'Generar nuevo par secp256k1 local' : 'New local secp256k1 pair'}
                     >
                       <RefreshCw className="w-3 h-3" />
                       <span>{isEs ? 'Nuevo par' : 'New pair'}</span>
                     </button>
                   )}
                 </div>
+
+                {/* Explicit Mode Toggle if external wallet supports `bch_signMessage` */}
+                {walletCanSignMessage && (
+                  <div className="flex gap-1 p-0.5 rounded-lg bg-surface-2 border border-line text-[11px] font-bold">
+                    <button
+                      type="button"
+                      onClick={() => { setBchSigningMode('wallet'); resetActiveProofs(); }}
+                      className={`flex-1 py-1 rounded-md cursor-pointer transition-colors ${
+                        bchSigningMode === 'wallet' ? 'bg-primary text-black' : 'text-ink-2 hover:text-ink'
+                      }`}
+                    >
+                      {bchWallet?.provider || 'WC2 Wallet'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setBchSigningMode('local'); resetActiveProofs(); }}
+                      className={`flex-1 py-1 rounded-md cursor-pointer transition-colors ${
+                        bchSigningMode === 'local' ? 'bg-primary text-black' : 'text-ink-2 hover:text-ink'
+                      }`}
+                    >
+                      {isEs ? 'Par Local' : 'Local Key'}
+                    </button>
+                  </div>
+                )}
 
                 <div className="p-2.5 rounded-xl bg-surface-2 border border-line space-y-1">
                   <div className="text-[10px] text-ink-3 uppercase font-bold">CashAddress</div>
@@ -918,33 +1297,48 @@ export default function IdentityView({
                 </div>
 
                 <div className="text-[11px] text-ink-3 leading-snug">
-                  {bchWallet?.address
-                    ? (isEs ? 'Billetera Paytaca conectada para firmar la atestación de soberanía.' : 'Connected Paytaca wallet to sign sovereign attestation.')
-                    : (isEs ? `Clave local BCH secp256k1 en ${isMainnet ? 'Mainnet' : 'Chipnet'} para pruebas.` : `Local BCH secp256k1 keypair on ${isMainnet ? 'Mainnet' : 'Chipnet'} for testing.`)}
+                  {bchSigningMode === 'wallet'
+                    ? isEs
+                      ? `Firmará directamente en ${bchWallet?.provider || 'tu wallet'} vía bch_signMessage (sin exponer claves).`
+                      : `Signs directly inside ${bchWallet?.provider || 'your wallet'} via bch_signMessage (private key stays in wallet).`
+                    : isEs
+                    ? `Clave local secp256k1 vinculada exactamente a esta dirección en ${isMainnet ? 'Mainnet' : 'Chipnet'}.`
+                    : `Local secp256k1 keypair mathematically bound to this ${isMainnet ? 'Mainnet' : 'Chipnet'} CashAddress.`}
                 </div>
               </div>
 
               {/* Nostr Card */}
               <div className="p-5 rounded-2xl bg-surface border border-line space-y-3">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2">
                   <span className="text-xs font-bold text-amber-500 uppercase tracking-wider flex items-center gap-1.5">
                     <Globe className="w-3.5 h-3.5" />
-                    <span>Nostr Protocol (Schnorr)</span>
+                    <span>Nostr (Schnorr)</span>
                   </span>
-                  <button
-                    type="button"
-                    onClick={handleRegenerateNostr}
-                    className="text-[10px] text-ink-3 hover:text-amber-500 transition-colors flex items-center gap-1 cursor-pointer"
-                    title="Generate new Nostr keypair"
-                  >
-                    <RefreshCw className="w-3 h-3" />
-                    <span>{isEs ? 'Nueva' : 'New'}</span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {hasNip07Extension && !useNip07 && (
+                      <button
+                        type="button"
+                        onClick={handleConnectNip07}
+                        className="text-[10px] font-bold text-primary hover:underline cursor-pointer"
+                      >
+                        NIP-07
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleRegenerateNostr}
+                      className="text-[10px] text-ink-3 hover:text-amber-500 transition-colors flex items-center gap-1 cursor-pointer"
+                      title={isEs ? 'Generar nuevo par Nostr' : 'Generate new Nostr keypair'}
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                      <span>{isEs ? 'Nueva' : 'New'}</span>
+                    </button>
+                  </div>
                 </div>
 
                 <div className="p-2.5 rounded-xl bg-surface-2 border border-line space-y-1">
                   <div className="text-[10px] text-ink-3 uppercase font-bold flex items-center justify-between">
-                    <span>npub</span>
+                    <span>npub {nostrKeys?.isExtension ? '(NIP-07)' : ''}</span>
                     <button
                       type="button"
                       onClick={() => copyToClipboard(nostrKeys?.npub || '', 'npub_right')}
@@ -954,14 +1348,18 @@ export default function IdentityView({
                     </button>
                   </div>
                   <div className="text-xs font-mono text-ink break-all select-all">
-                    {nostrKeys?.npub || 'Generating...'}
+                    {nostrKeys?.npub || (isEs ? 'Generando...' : 'Generating...')}
                   </div>
                 </div>
 
                 <div className="text-[11px] text-ink-3 leading-snug">
-                  {isEs 
-                    ? 'Generada en tu navegador con curva BIP-340. Nunca se comparte tu nsec privada.'
-                    : 'Generated client-side via BIP-340. Your private nsec key never leaves the browser.'}
+                  {nostrKeys?.isExtension
+                    ? isEs
+                      ? 'Conectado vía extensión NIP-07: tus claves privadas permanecen en tu extensión.'
+                      : 'Connected via NIP-07 extension: your nsec never leaves the extension.'
+                    : isEs
+                    ? 'Generada localmente en tu navegador con curva BIP-340. Tu clave privada nunca se envía a servidores.'
+                    : 'Generated client-side via BIP-340. Your private key never leaves the browser.'}
                 </div>
               </div>
             </div>
@@ -972,12 +1370,12 @@ export default function IdentityView({
                 <div className="space-y-1">
                   <h3 className="text-base font-bold text-ink flex items-center gap-2">
                     <ShieldCheck className="w-5 h-5 text-primary" />
-                    <span>{isEs ? 'Vincular y Publicar en la Red Nostr' : 'Bind & Broadcast to Nostr Relays'}</span>
+                    <span>{isEs ? 'Vincular y Publicar en Relays Nostr' : 'Bind & Broadcast to Nostr Relays'}</span>
                   </h3>
                   <p className="text-xs text-ink-2">
                     {isEs
-                      ? `Firma la atestación dual (ECDSA secp256k1 + Schnorr BIP-340) en ${isMainnet ? 'BCH Mainnet' : 'Chipnet'} y la indexa en 4 relays públicos.`
-                      : `Dual-signs attestation payload on ${isMainnet ? 'BCH Mainnet' : 'Chipnet'} and indexes it across 4 public decentralized Nostr relays.`}
+                      ? `Firma la atestación dual (Bitcoin Signed Message + Schnorr BIP-340) en ${isMainnet ? 'BCH Mainnet' : 'Chipnet'} y la publica en 4 relays reales.`
+                      : `Dual-signs attestation (Bitcoin Signed Message + Schnorr BIP-340) on ${isMainnet ? 'BCH Mainnet' : 'Chipnet'} and publishes to 4 live relays.`}
                   </p>
                 </div>
 
@@ -1001,12 +1399,19 @@ export default function IdentityView({
                 </button>
               </div>
 
-              {/* Live Relays Tracker */}
+              {publishError && (
+                <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-500 text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{publishError}</span>
+                </div>
+              )}
+
+              {/* Live Relays Tracker (Genuine awaited OK acks) */}
               {publishLogs.length > 0 && (
                 <div className="p-4 rounded-2xl bg-surface-2 border border-line space-y-2.5 animate-fade-in">
                   <div className="text-[11px] font-bold text-ink-2 uppercase tracking-wider flex items-center justify-between">
-                    <span>{isEs ? 'Estado de Relays Descentralizados:' : 'Decentralized Relays Status:'}</span>
-                    <span className="text-[10px] font-mono text-primary font-bold">Kind 30078 / NIP-39</span>
+                    <span>{isEs ? 'Confirmación Real de Relays:' : 'Live Relay Acknowledgements:'}</span>
+                    <span className="text-[10px] font-mono text-primary font-bold">Kind 30078 · NIP-78/39</span>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {publishLogs.map((log) => (
@@ -1014,22 +1419,24 @@ export default function IdentityView({
                         key={log.relay}
                         className="p-2.5 rounded-xl bg-surface border border-line flex items-center justify-between text-xs font-mono"
                       >
-                        <span className="text-ink truncate max-w-[150px]">{log.relay.replace('wss://', '')}</span>
+                        <span className="text-ink truncate max-w-[155px]">{log.relay.replace('wss://', '')}</span>
                         {log.status === 'pending' && (
                           <span className="text-primary text-[11px] flex items-center gap-1 font-bold">
                             <RefreshCw className="w-3 h-3 animate-spin" />
-                            <span>Ping...</span>
+                            <span>{isEs ? 'Enviando...' : 'Publishing...'}</span>
                           </span>
                         )}
                         {log.status === 'ok' && (
-                          <span className="text-primary text-[11px] font-bold flex items-center gap-1">
+                          <span className="text-emerald-500 text-[11px] font-bold flex items-center gap-1">
                             <CheckCheck className="w-3.5 h-3.5" />
-                            <span>Indexed ({log.latency}ms)</span>
+                            <span>
+                              {isEs ? 'Indexado' : 'Indexed'} ({log.latency}ms)
+                            </span>
                           </span>
                         )}
                         {log.status === 'error' && (
-                          <span className="text-amber-500 text-[11px] font-bold flex items-center gap-1">
-                            <span>Offline</span>
+                          <span className="text-rose-500 text-[11px] font-bold flex items-center gap-1">
+                            <span>{isEs ? 'Sin respuesta' : 'Timeout'}</span>
                           </span>
                         )}
                       </div>
@@ -1041,24 +1448,36 @@ export default function IdentityView({
               {/* Published Result Summary */}
               {publishedEvent && (
                 <div className="p-4 rounded-2xl bg-primary/10 border border-primary/30 text-primary space-y-2 animate-fade-in">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
                     <div className="flex items-center gap-2 font-extrabold text-sm text-primary">
                       <CheckCircle2 className="w-5 h-5" />
-                      <span>{isEs ? '¡Identidad UserLink Vinculada con Éxito!' : 'UserLink Identity Successfully Linked!'}</span>
+                      <span>
+                        {publishedEvent.indexedCount > 0
+                          ? isEs
+                            ? `¡Identidad Vinculada en ${publishedEvent.indexedCount}/${USERLINK_RELAYS.length} Relays!`
+                            : `Identity Bound on ${publishedEvent.indexedCount}/${USERLINK_RELAYS.length} Relays!`
+                          : isEs
+                          ? 'Evento Firmado (Sin confirmación de relay)'
+                          : 'Event Signed (No relay confirmation)'}
+                      </span>
                     </div>
-                    <span className="text-[10px] font-mono text-primary font-bold">
-                      Schnorr Verified ✓
+                    <span className="text-[10px] font-mono text-emerald-500 font-bold">
+                      BSM + Schnorr Verified ✓
                     </span>
                   </div>
 
                   <div className="text-xs text-ink-2 space-y-1 font-mono pt-1">
                     <div>
                       <span className="font-bold text-ink font-sans">Handle: </span>
-                      <span>@{cleanHandle} ({nip05Address})</span>
+                      <span>@{cleanHandle}</span>
                     </div>
                     <div className="truncate">
                       <span className="font-bold text-ink font-sans">Event ID: </span>
                       <span className="select-all">{publishedEvent.event.id}</span>
+                    </div>
+                    <div className="truncate">
+                      <span className="font-bold text-ink font-sans">Recovered BCH Pubkey: </span>
+                      <span className="select-all">{publishedEvent.verified.bchPubkey}</span>
                     </div>
                   </div>
 
@@ -1072,18 +1491,19 @@ export default function IdentityView({
                       className="ui-btn-primary ui-btn-sm text-xs font-bold flex-1 flex items-center justify-center gap-1.5 cursor-pointer"
                     >
                       <Zap className="w-3.5 h-3.5 text-black" />
-                      <span>{isEs ? 'Simular Recibir Pago' : 'Simulate Receive Payment'}</span>
+                      <span>{isEs ? 'Resolver y Probar Pago' : 'Resolve & Test Payment'}</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => {
                         setActiveTab('verify');
+                        setVerifyInput(nostrKeys?.npub || `@${cleanHandle}`);
                         handleVerify(nostrKeys?.npub);
                       }}
                       className="ui-btn-secondary ui-btn-sm text-xs font-semibold flex-1 flex items-center justify-center gap-1.5 cursor-pointer"
                     >
                       <ShieldCheck className="w-3.5 h-3.5 text-primary" />
-                      <span>{isEs ? 'Verificar en Relays' : 'Inspect on Relays'}</span>
+                      <span>{isEs ? 'Inspeccionar en Relays' : 'Inspect on Relays'}</span>
                     </button>
                   </div>
                 </div>
@@ -1094,7 +1514,7 @@ export default function IdentityView({
       )}
 
       {/* =========================================================================
-          TAB 2: PAYMENT BY USERNAME SIMULATOR
+          TAB 2: REAL RESOLUTION & PAYMENT LAUNCHER
           ========================================================================= */}
       {activeTab === 'pay' && (
         <div className="max-w-2xl mx-auto space-y-6 animate-fade-in">
@@ -1102,46 +1522,80 @@ export default function IdentityView({
             <div className="space-y-1 text-center max-w-lg mx-auto">
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold mb-1">
                 <Zap className="w-3.5 h-3.5" />
-                <span>Simulador de Pagos P2P sin Hashes Largos ({isMainnet ? 'Mainnet' : 'Chipnet'})</span>
+                <span>
+                  {isEs
+                    ? `Resolución Real P2P en Nostr & NIP-05 (${isMainnet ? 'Mainnet' : 'Chipnet'})`
+                    : `Live Nostr & NIP-05 P2P Resolution (${isMainnet ? 'Mainnet' : 'Chipnet'})`}
+                </span>
               </div>
               <h2 className="text-xl sm:text-2xl font-extrabold text-ink">
                 {isEs ? 'Enviar Bitcoin Cash por Nombre de Usuario' : 'Send Bitcoin Cash via Human Username'}
               </h2>
               <p className="text-xs sm:text-sm text-ink-2">
                 {isEs
-                  ? 'Prueba cómo la billetera resuelve instantáneamente el @usuario a su dirección BCH sin intermediarios ni gas fees.'
-                  : 'Experience instant username resolution to native Bitcoin Cash CashAddresses with zero fees.'}
+                  ? 'Consulta en vivo los relays de Nostr o el registro NIP-05, valida las firmas criptográficas y genera el enlace BIP-21 listo para tu billetera BCH.'
+                  : 'Queries live Nostr relays or NIP-05 registries, validates cryptographic proofs, and builds a ready-to-pay BIP-21 URI.'}
               </p>
+            </div>
+
+            {/* Quick sample buttons */}
+            <div className="flex flex-wrap items-center justify-center gap-2 text-[11px]">
+              <span className="text-ink-3">{isEs ? 'Probar rápido:' : 'Quick test:'}</span>
+              <button
+                type="button"
+                onClick={() => setPayTarget('myuser@bliquid.xyz')}
+                className="px-2.5 py-1 rounded-full bg-surface-2 hover:bg-surface-3 border border-line font-mono text-ink cursor-pointer"
+              >
+                myuser@bliquid.xyz
+              </button>
+              <button
+                type="button"
+                onClick={() => setPayTarget(`@${cleanHandle}`)}
+                className="px-2.5 py-1 rounded-full bg-surface-2 hover:bg-surface-3 border border-line font-mono text-ink cursor-pointer"
+              >
+                @{cleanHandle}
+              </button>
+              {nostrKeys?.npub && (
+                <button
+                  type="button"
+                  onClick={() => setPayTarget(nostrKeys.npub)}
+                  className="px-2.5 py-1 rounded-full bg-surface-2 hover:bg-surface-3 border border-line font-mono text-ink cursor-pointer"
+                >
+                  npub1...{nostrKeys.npub.slice(-6)}
+                </button>
+              )}
             </div>
 
             {/* Input Form */}
             <div className="space-y-4">
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-ink flex items-center justify-between">
-                  <span>{isEs ? 'Nombre de Usuario o NIP-05:' : 'Recipient Handle or NIP-05:'}</span>
-                  <span className="text-[11px] text-ink-3 font-mono">Ej: @{cleanHandle} o @satoshi</span>
+                  <span>{isEs ? 'Usuario (@handle), NIP-05 o npub:' : 'Username (@handle), NIP-05 or npub:'}</span>
+                  <span className="text-[11px] text-ink-3 font-mono">
+                    {isEs ? 'Ej: myuser@bliquid.xyz o @tuusuario' : 'e.g. myuser@bliquid.xyz'}
+                  </span>
                 </label>
                 <div className="flex gap-2">
                   <div className="relative flex-1">
-                    <span className="absolute left-3.5 top-3 text-ink-3 font-bold text-sm">@</span>
+                    <AtSign className="w-3.5 h-3.5 text-ink-3 absolute left-3 top-1/2 -translate-y-1/2" />
                     <input
                       type="text"
-                      value={payTarget.replace(/^@/, '')}
+                      value={payTarget}
                       onChange={(e) => setPayTarget(e.target.value)}
-                      placeholder="myuser"
-                      className="ui-input pl-8 font-mono text-sm"
+                      placeholder="myuser@bliquid.xyz"
+                      className="ui-input pl-9 font-mono text-sm"
                     />
                   </div>
                   <button
                     type="button"
                     disabled={isResolvingPay || !payTarget.trim()}
                     onClick={handleResolvePaymentTarget}
-                    className="ui-btn-primary px-5 text-xs font-bold shrink-0 flex items-center gap-1.5 cursor-pointer"
+                    className="ui-btn-primary px-5 text-xs font-bold shrink-0 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                   >
                     {isResolvingPay ? (
                       <>
                         <RefreshCw className="w-3.5 h-3.5 animate-spin text-black" />
-                        <span>Resolving...</span>
+                        <span>{isEs ? 'Resolviendo...' : 'Resolving...'}</span>
                       </>
                     ) : (
                       <>
@@ -1153,6 +1607,13 @@ export default function IdentityView({
                 </div>
               </div>
 
+              {resolvePayError && (
+                <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-500 text-xs flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>{resolvePayError}</span>
+                </div>
+              )}
+
               {/* Resolved Target Card */}
               {resolvedPayData && (
                 <motion.div
@@ -1160,23 +1621,31 @@ export default function IdentityView({
                   animate={{ opacity: 1, y: 0 }}
                   className="p-4 rounded-2xl bg-surface-2 border border-primary/30 space-y-3"
                 >
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
                     <div className="flex items-center gap-2">
                       <div className="w-8 h-8 rounded-xl bg-primary/20 text-primary flex items-center justify-center font-bold text-xs uppercase">
                         {resolvedPayData.handle.replace('@', '').slice(0, 2)}
                       </div>
                       <div>
                         <div className="text-sm font-extrabold text-ink">{resolvedPayData.handle}</div>
-                        <div className="text-[11px] text-ink-3 font-mono">{resolvedPayData.nip05}</div>
+                        <div className="text-[11px] text-ink-3 font-mono">{resolvedPayData.sourceLabel}</div>
                       </div>
                     </div>
-                    <span className="px-2.5 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-bold border border-primary/20">
-                      ✓ UserLink Verificado
-                    </span>
+                    {resolvedPayData.isVerified ? (
+                      <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 text-[10px] font-bold border border-emerald-500/20">
+                        ✓ {isEs ? 'Firma Criptográfica Verificada' : 'Crypto Proof Verified'}
+                      </span>
+                    ) : (
+                      <span className="px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-500 text-[10px] font-bold border border-amber-500/20">
+                        {isEs ? 'Solo NIP-05 (Sin evento en relay)' : 'NIP-05 Only (No relay event)'}
+                      </span>
+                    )}
                   </div>
 
                   <div className="p-2.5 rounded-xl bg-surface border border-line text-xs font-mono text-ink-2 break-all">
-                    <div className="text-[10px] font-bold uppercase text-ink-3 font-sans pb-0.5">CashAddress Resuelta:</div>
+                    <div className="text-[10px] font-bold uppercase text-ink-3 font-sans pb-0.5">
+                      {isEs ? 'CashAddress Resuelta:' : 'Resolved CashAddress:'}
+                    </div>
                     <span className="text-ink font-semibold select-all">{resolvedPayData.bchAddress}</span>
                   </div>
 
@@ -1188,13 +1657,14 @@ export default function IdentityView({
                     <div className="flex gap-2">
                       <input
                         type="number"
-                        step="0.01"
+                        step="0.001"
+                        min="0"
                         value={payAmount}
                         onChange={(e) => setPayAmount(e.target.value)}
                         className="ui-input text-base font-bold font-mono"
                       />
                       <div className="flex gap-1.5 shrink-0">
-                        {['0.01', '0.05', '0.1'].map((amt) => (
+                        {['0.005', '0.01', '0.05'].map((amt) => (
                           <button
                             key={amt}
                             type="button"
@@ -1212,59 +1682,78 @@ export default function IdentityView({
                     </div>
                   </div>
 
-                  {/* Action Button: 1-Click Pay */}
-                  <button
-                    type="button"
-                    disabled={isSendingPay}
-                    onClick={handleSendSimulationPay}
-                    className="ui-btn-primary ui-btn-lg text-sm font-bold w-full shadow-lg shadow-primary/20 flex items-center justify-center gap-2 cursor-pointer mt-2"
-                  >
-                    {isSendingPay ? (
-                      <>
-                        <RefreshCw className="w-4 h-4 animate-spin text-black" />
-                        <span>{isEs ? 'Firmando con Paytaca y Transmitiendo...' : 'Signing with Paytaca & Broadcasting...'}</span>
-                      </>
-                    ) : (
-                      <>
-                        <Send className="w-4 h-4 text-black fill-black" />
-                        <span>{isEs ? `Enviar ${payAmount} BCH a ${resolvedPayData.handle}` : `Send ${payAmount} BCH to ${resolvedPayData.handle}`}</span>
-                      </>
-                    )}
-                  </button>
+                  {/* Real BIP-21 Launch + Explicit Demo Simulation */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2">
+                    <a
+                      href={buildBip21Uri(resolvedPayData.bchAddress, payAmount, resolvedPayData.handle)}
+                      className="ui-btn-primary ui-btn-lg text-xs font-bold flex items-center justify-center gap-2 shadow-md shadow-primary/20"
+                    >
+                      <Wallet className="w-4 h-4 text-black" />
+                      <span>{isEs ? `Abrir Pago Real en Wallet (${payAmount} BCH)` : `Open Real BIP-21 Payment (${payAmount} BCH)`}</span>
+                    </a>
+
+                    <button
+                      type="button"
+                      disabled={isSendingPay}
+                      onClick={handleSendSimulationPay}
+                      className="ui-btn-secondary ui-btn-lg text-xs font-bold flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      {isSendingPay ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                          <span>{isEs ? 'Simulando...' : 'Simulating...'}</span>
+                        </>
+                      ) : (
+                        <>
+                          <Send className="w-3.5 h-3.5 text-primary" />
+                          <span>{isEs ? 'Simular Flujo Demo (Sin Gasto)' : 'Run Demo Simulation (No Spend)'}</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </motion.div>
               )}
 
-              {/* Success Receipt */}
+              {/* Honest Demo Simulation Receipt */}
               {paySuccessData && (
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
                   className="p-5 rounded-2xl bg-primary/10 border-2 border-primary/40 text-primary space-y-3"
                 >
-                  <div className="flex items-center gap-2 font-extrabold text-base text-primary">
-                    <CheckCircle2 className="w-6 h-6" />
-                    <span>{isEs ? '¡Pago en Bitcoin Cash Enviado con Éxito!' : 'Bitcoin Cash Payment Sent Successfully!'}</span>
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-2 font-extrabold text-sm text-primary">
+                      <CheckCircle2 className="w-5 h-5" />
+                      <span>{isEs ? 'Simulación de Pago UX Completada' : 'UX Payment Simulation Completed'}</span>
+                    </div>
+                    <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-500 text-[10px] font-mono font-bold">
+                      SANDBOX DEMO (OFF-CHAIN)
+                    </span>
                   </div>
 
                   <div className="text-xs text-ink-2 space-y-1 font-mono pt-1">
                     <div>
-                      <span className="font-bold text-ink font-sans">Destinatario: </span>
+                      <span className="font-bold text-ink font-sans">{isEs ? 'Destinatario:' : 'Recipient:'} </span>
                       <span>{paySuccessData.recipient}</span>
                     </div>
                     <div>
-                      <span className="font-bold text-ink font-sans">Monto: </span>
+                      <span className="font-bold text-ink font-sans">{isEs ? 'Dirección Resuelta:' : 'Resolved Address:'} </span>
+                      <span className="break-all select-all">{paySuccessData.bchAddress}</span>
+                    </div>
+                    <div>
+                      <span className="font-bold text-ink font-sans">{isEs ? 'Monto Simulado:' : 'Simulated Amount:'} </span>
                       <span className="font-bold text-ink">{paySuccessData.amount} BCH</span>
                     </div>
                     <div className="truncate">
-                      <span className="font-bold text-ink font-sans">Tx Hash: </span>
+                      <span className="font-bold text-ink font-sans">Mock Demo Hash: </span>
                       <span className="select-all">{paySuccessData.txId}</span>
                     </div>
                   </div>
 
                   <div className="text-[11px] text-ink-3 pt-1">
                     {isEs
-                      ? `✓ Transacción no custodial liquidada directamente en la red Bitcoin Cash (${isMainnet ? 'Mainnet' : 'Chipnet'}) sin comisiones de gas ni intermediarios.`
-                      : `✓ Non-custodial transaction broadcasted directly to the Bitcoin Cash network (${isMainnet ? 'Mainnet' : 'Chipnet'}) with zero gas tax.`}
+                      ? 'Nota: Esta vista previa simula la experiencia de usuario sin gastar fondos reales. Usa el botón "Abrir Pago Real en Wallet" para enviar una transacción BIP-21 verdadera desde Paytaca o Cashonize.'
+                      : 'Note: This preview demonstrates wallet UX without spending real funds. Use "Open Real BIP-21 Payment" to send an actual on-chain BCH transaction via Paytaca or Cashonize.'}
                   </div>
                 </motion.div>
               )}
@@ -1274,7 +1763,7 @@ export default function IdentityView({
       )}
 
       {/* =========================================================================
-          TAB 3: LIVE NOSTR RELAY VERIFIER
+          TAB 3: LIVE CRYPTOGRAPHIC NOSTR RELAY VERIFIER
           ========================================================================= */}
       {activeTab === 'verify' && (
         <div className="max-w-3xl mx-auto space-y-6 animate-fade-in">
@@ -1286,8 +1775,8 @@ export default function IdentityView({
               </h3>
               <p className="text-xs sm:text-sm text-ink-2 mt-1">
                 {isEs
-                  ? 'Inspecciona directamente los relays de Nostr y valida matemáticamente la firma Schnorr (BIP-340) y la atestación ECDSA (secp256k1) sin servidores centralizados.'
-                  : 'Queries live Nostr relays and mathematically validates both Schnorr (BIP-340) and ECDSA (secp256k1) cryptographic proofs with zero centralized servers.'}
+                  ? 'Consulta los relays de Nostr y valida matemáticamente: 1) firma Schnorr BIP-340, 2) firma ECDSA / Bitcoin Signed Message, 3) propiedad CashAddress (hash160) y 4) enlace bidireccional.'
+                  : 'Queries live Nostr relays and mathematically validates: 1) BIP-340 Schnorr signature, 2) Bitcoin Signed Message / ECDSA proof, 3) CashAddress hash160 ownership, and 4) bidirectional binding.'}
               </p>
             </div>
 
@@ -1296,7 +1785,7 @@ export default function IdentityView({
                 type="text"
                 value={verifyInput}
                 onChange={(e) => setVerifyInput(e.target.value)}
-                placeholder="Ingresa @myuser, npub1... o bitcoincash:qp..."
+                placeholder={isEs ? 'Ingresa @usuario, npub1... o bitcoincash:qp...' : 'Enter @username, npub1... or bitcoincash:qp...'}
                 className="flex-1 ui-input font-mono text-xs sm:text-sm"
               />
               <button
@@ -1308,7 +1797,7 @@ export default function IdentityView({
                 {isVerifying ? (
                   <>
                     <RefreshCw className="w-3.5 h-3.5 animate-spin text-black" />
-                    <span>Resolving...</span>
+                    <span>{isEs ? 'Verificando...' : 'Verifying...'}</span>
                   </>
                 ) : (
                   <>
@@ -1319,7 +1808,6 @@ export default function IdentityView({
               </button>
             </div>
 
-            {/* Error Message */}
             {verifyError && (
               <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-500 text-xs flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 shrink-0" />
@@ -1327,27 +1815,65 @@ export default function IdentityView({
               </div>
             )}
 
-            {/* Verification Success Card */}
+            {/* Honest Verification Result Card */}
             {verificationResult && (
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="p-5 sm:p-6 rounded-2xl bg-surface-2 border border-primary/30 space-y-4"
+                className={`p-5 sm:p-6 rounded-2xl bg-surface-2 border space-y-4 ${
+                  verificationResult.isOverallValid ? 'border-emerald-500/40' : 'border-rose-500/50'
+                }`}
               >
-                <div className="flex items-center justify-between pb-3 border-b border-line">
+                <div className="flex items-center justify-between flex-wrap gap-2 pb-3 border-b border-line">
                   <div className="flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-full bg-primary animate-pulse" />
-                    <span className="text-sm font-bold text-primary">
-                      {isEs ? '✅ Enlace UserLink Criptográficamente Verificado' : '✅ Cryptographically Verified UserLink Identity'}
+                    <span
+                      className={`w-3 h-3 rounded-full ${
+                        verificationResult.isOverallValid ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'
+                      }`}
+                    />
+                    <span
+                      className={`text-sm font-bold ${
+                        verificationResult.isOverallValid ? 'text-emerald-500' : 'text-rose-500'
+                      }`}
+                    >
+                      {verificationResult.isOverallValid
+                        ? isEs
+                          ? '✅ Enlace UserLink Criptográficamente Válido'
+                          : '✅ Cryptographically Verified UserLink Identity'
+                        : isEs
+                        ? '❌ Verificación Fallida / Evento Alterado'
+                        : '❌ Cryptographic Verification Failed / Tampered'}
                     </span>
                   </div>
-                  <span className="text-[11px] font-mono text-ink-3">
-                    Relay Kind: 30078 (NIP-39)
-                  </span>
+
+                  <button
+                    type="button"
+                    onClick={handleRunTamperTest}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border cursor-pointer transition-colors ${
+                      isTamperedPreview
+                        ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-500'
+                        : 'bg-surface border-line text-ink-2 hover:text-ink'
+                    }`}
+                  >
+                    {isTamperedPreview
+                      ? isEs
+                        ? 'Restaurar Evento Real'
+                        : 'Restore Authentic Event'
+                      : isEs
+                      ? '🧪 Probar Detección de Alteración'
+                      : '🧪 Test Tamper Detection'}
+                  </button>
                 </div>
 
+                {!verificationResult.isOverallValid && verificationResult.verificationNote && (
+                  <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-500 text-xs font-semibold flex items-center gap-2">
+                    <ShieldAlert className="w-4 h-4 shrink-0" />
+                    <span>{verificationResult.verificationNote}</span>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                  <div className="p-3.5 rounded-xl bg-surface border border-line space-y-1">
+                  <div className="p-3.5 rounded-xl bg-surface border border-line space-y-1.5">
                     <div className="text-[10px] text-ink-3 uppercase font-bold flex items-center gap-1">
                       <User className="w-3 h-3 text-primary" />
                       <span>{isEs ? 'Identidad Nostr & Handle' : 'Nostr Identity & Handle'}</span>
@@ -1356,13 +1882,21 @@ export default function IdentityView({
                     <div className="font-mono text-ink-2 text-[11px] truncate select-all">
                       {verificationResult.npub}
                     </div>
-                    <div className="text-[10px] text-primary flex items-center gap-1 font-semibold pt-1">
-                      <Check className="w-3 h-3" />
-                      <span>BIP-340 Schnorr Signature Valid</span>
+                    <div
+                      className={`text-[11px] flex items-center gap-1 font-semibold pt-1 ${
+                        verificationResult.isNostrSigValid ? 'text-emerald-500' : 'text-rose-500'
+                      }`}
+                    >
+                      {verificationResult.isNostrSigValid ? <Check className="w-3.5 h-3.5" /> : <X className="w-3.5 h-3.5" />}
+                      <span>
+                        {verificationResult.isNostrSigValid
+                          ? 'BIP-340 Schnorr Signature Valid'
+                          : 'BIP-340 Schnorr Signature INVALID'}
+                      </span>
                     </div>
                   </div>
 
-                  <div className="p-3.5 rounded-xl bg-surface border border-line space-y-1">
+                  <div className="p-3.5 rounded-xl bg-surface border border-line space-y-1.5">
                     <div className="text-[10px] text-ink-3 uppercase font-bold flex items-center gap-1">
                       <Wallet className="w-3 h-3 text-primary" />
                       <span>Bitcoin Cash Address</span>
@@ -1370,21 +1904,53 @@ export default function IdentityView({
                     <div className="font-mono text-ink text-xs truncate select-all">
                       {verificationResult.bchAddress}
                     </div>
-                    <div className="text-[10px] text-primary flex items-center gap-1 font-semibold pt-1">
-                      <Check className="w-3 h-3" />
-                      <span>ECDSA secp256k1 Attestation Valid</span>
+                    <div
+                      className={`text-[11px] flex items-center gap-1 font-semibold pt-1 ${
+                        verificationResult.isBchSigValid ? 'text-emerald-500' : 'text-rose-500'
+                      }`}
+                    >
+                      {verificationResult.isBchSigValid ? <Check className="w-3.5 h-3.5" /> : <X className="w-3.5 h-3.5" />}
+                      <span>
+                        {verificationResult.isBchSigValid
+                          ? `BCH ${verificationResult.sigScheme === 'bitcoin-signed-message' ? 'Signed Message' : 'ECDSA'} Valid`
+                          : 'BCH Signature INVALID'}
+                      </span>
+                    </div>
+                    <div
+                      className={`text-[11px] flex items-center gap-1 font-semibold ${
+                        verificationResult.isAddressOwned && verificationResult.isMutualBindingValid
+                          ? 'text-emerald-500'
+                          : 'text-rose-500'
+                      }`}
+                    >
+                      {verificationResult.isAddressOwned && verificationResult.isMutualBindingValid ? (
+                        <Check className="w-3.5 h-3.5" />
+                      ) : (
+                        <X className="w-3.5 h-3.5" />
+                      )}
+                      <span>
+                        {verificationResult.isAddressOwned && verificationResult.isMutualBindingValid
+                          ? isEs
+                            ? 'Hash160(Pubkey) == CashAddress · Enlace Mutuo OK'
+                            : 'Hash160(Pubkey) == CashAddress · Mutual Bind OK'
+                          : isEs
+                          ? 'Fallo en Propiedad o Enlace Mutuo'
+                          : 'Address Ownership / Mutual Bind FAILED'}
+                      </span>
                     </div>
                   </div>
                 </div>
 
-                {/* Mathematical Proof Details */}
                 <div className="p-3.5 rounded-xl bg-surface border border-line text-[11px] font-mono space-y-1 text-ink-2 select-all">
                   <div className="text-[10px] uppercase font-bold text-ink font-sans pb-1">
                     {isEs ? 'Detalle de la Atestación en Relays:' : 'Relay Attestation Proof Payload:'}
                   </div>
-                  <div>Event ID: {verificationResult.event.id}</div>
+                  <div className="truncate">Event ID: {verificationResult.event.id}</div>
+                  {verificationResult.bchPubkey && (
+                    <div className="truncate">Recovered BCH Pubkey: {verificationResult.bchPubkey}</div>
+                  )}
                   <div>Timestamp: {new Date(verificationResult.timestamp * 1000).toUTCString()}</div>
-                  <div>Client: UserLink by Drian Stack Labs</div>
+                  <div>Kind: 30078 (NIP-78 + NIP-39 i-tag)</div>
                 </div>
               </motion.div>
             )}
@@ -1401,12 +1967,12 @@ export default function IdentityView({
             <div>
               <h3 className="text-lg font-bold text-ink flex items-center gap-2">
                 <Key className="w-5 h-5 text-primary" />
-                <span>{isEs ? 'Demostración de Autenticación Challenge-Response' : 'Challenge-Response Authentication Demo'}</span>
+                <span>{isEs ? 'Autenticación Soberana Challenge-Response' : 'Sovereign Challenge-Response Authentication'}</span>
               </h3>
               <p className="text-xs sm:text-sm text-ink-2 mt-1">
                 {isEs
-                  ? 'Demuestra cómo cualquier aplicación externa o servicio Web3 puede autenticar a un usuario utilizando su identidad soberana vinculada (BCH ↔ Nostr) sin contraseñas ni proveedores centrales de OAuth.'
-                  : 'Demonstrates how any third-party dApp or service can authenticate a user using their linked sovereign identity (BCH ↔ Nostr) without passwords or centralized OAuth providers.'}
+                  ? 'Demuestra cómo una dApp autentica al usuario firmando un reto único con Nostr y validando en vivo en los relays que esa identidad posee un enlace UserLink BCH válido, sin contraseñas ni bases de datos.'
+                  : 'Demonstrates how any dApp authenticates a user by signing a fresh cryptographic challenge with Nostr and verifying their bound Bitcoin Cash identity directly on relays — zero passwords or central auth servers.'}
               </p>
             </div>
 
@@ -1428,7 +1994,7 @@ export default function IdentityView({
               </div>
 
               {authChallenge ? (
-                <div className="p-2.5 rounded-xl bg-surface border border-line text-xs font-mono text-ink select-all">
+                <div className="p-2.5 rounded-xl bg-surface border border-line text-xs font-mono text-ink select-all break-all">
                   {authChallenge}
                 </div>
               ) : (
@@ -1441,18 +2007,31 @@ export default function IdentityView({
             {/* Step 2: Sign with Linked Identity */}
             {authChallenge && (
               <div className="p-4 rounded-2xl bg-surface-2 border border-line space-y-3">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2">
                   <span className="text-xs font-bold text-ink flex items-center gap-2">
                     <span className="w-5 h-5 rounded-full bg-primary/20 text-primary flex items-center justify-center text-[11px] font-bold">2</span>
-                    <span>{isEs ? 'Firmar Reto con Enlace UserLink' : 'Sign Challenge with UserLink Identity'}</span>
+                    <span>{isEs ? 'Firmar y Validar Enlace en Relays' : 'Sign & Verify Relay Binding'}</span>
                   </span>
                   <button
                     type="button"
+                    disabled={isAuthenticating}
                     onClick={handleSignChallenge}
-                    className="ui-btn-primary ui-btn-sm text-xs font-bold text-black cursor-pointer"
+                    className="ui-btn-primary ui-btn-sm text-xs font-bold text-black cursor-pointer disabled:opacity-50"
                   >
-                    <Key className="w-3 h-3 mr-1" />
-                    <span>{isEs ? 'Firmar y Autenticar' : 'Sign & Authenticate'}</span>
+                    {isAuthenticating ? (
+                      <RefreshCw className="w-3 h-3 mr-1 animate-spin" />
+                    ) : (
+                      <Key className="w-3 h-3 mr-1" />
+                    )}
+                    <span>
+                      {isAuthenticating
+                        ? isEs
+                          ? 'Validando...'
+                          : 'Verifying...'
+                        : isEs
+                        ? 'Firmar y Autenticar'
+                        : 'Sign & Authenticate'}
+                    </span>
                   </button>
                 </div>
 
@@ -1467,22 +2046,48 @@ export default function IdentityView({
               </div>
             )}
 
-            {/* Step 3: Authenticated State */}
-            {authSuccess && (
+            {/* Step 3: Auth Verification Result */}
+            {authResult && (
               <motion.div
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="p-4 rounded-2xl bg-primary/10 border-2 border-primary/40 text-primary space-y-2"
+                className={`p-4 rounded-2xl border-2 space-y-2 ${
+                  authResult.isChallengeSigValid && authResult.isIdentityBound
+                    ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-500'
+                    : 'bg-amber-500/10 border-amber-500/40 text-amber-500'
+                }`}
               >
                 <div className="flex items-center gap-2 font-bold text-sm">
-                  <CheckCircle2 className="w-5 h-5" />
-                  <span>{isEs ? '¡Sesión Web3 Autenticada con Éxito!' : 'Web3 Session Successfully Authenticated!'}</span>
+                  {authResult.isChallengeSigValid && authResult.isIdentityBound ? (
+                    <CheckCircle2 className="w-5 h-5" />
+                  ) : (
+                    <AlertTriangle className="w-5 h-5" />
+                  )}
+                  <span>
+                    {authResult.isChallengeSigValid && authResult.isIdentityBound
+                      ? isEs
+                        ? '¡Sesión Web3 y Dirección BCH Autenticadas!'
+                        : 'Web3 Session & Bound BCH Identity Authenticated!'
+                      : isEs
+                      ? 'Reto Nostr Válido, pero Falta Publicar Enlace BCH'
+                      : 'Nostr Challenge Valid, but BCH Binding Not Published Yet'}
+                  </span>
                 </div>
-                <p className="text-xs text-ink-2">
-                  {isEs
-                    ? 'La firma criptográfica coincide con la clave pública de Nostr y la atestación de Bitcoin Cash. No se requirió ninguna base de datos centralizada ni contraseña.'
-                    : 'The cryptographic signature matches the Nostr public key and Bitcoin Cash attestation. Zero centralized databases or passwords needed.'}
-                </p>
+
+                <div className="text-xs text-ink-2 space-y-1 font-mono">
+                  <div className="truncate">Nostr: {authResult.signerNpub}</div>
+                  {authResult.linkedBchAddress ? (
+                    <div className="truncate text-ink font-semibold">
+                      BCH: {authResult.linkedBchAddress}
+                    </div>
+                  ) : (
+                    <div className="font-sans text-amber-500 pt-1">
+                      {isEs
+                        ? 'Primero crea y publica tu enlace en la pestaña "1. Pasaporte UserLink" para vincular tu dirección Bitcoin Cash a esta sesión.'
+                        : 'First create & publish your binding in Tab "1. UserLink Passport" to bind a Bitcoin Cash address to this identity.'}
+                    </div>
+                  )}
+                </div>
               </motion.div>
             )}
           </div>
@@ -1490,7 +2095,7 @@ export default function IdentityView({
       )}
 
       {/* =========================================================================
-          TAB 5: TECHNICAL SPECIFICATION (NIP-39 / KIND 30078)
+          TAB 5: TECHNICAL SPECIFICATION (NIP-78 / NIP-39 / BSM)
           ========================================================================= */}
       {activeTab === 'spec' && (
         <div className="max-w-3xl mx-auto space-y-6 animate-fade-in">
@@ -1502,55 +2107,61 @@ export default function IdentityView({
               </h3>
               <p className="text-xs sm:text-sm text-ink-2 mt-1">
                 {isEs
-                  ? 'Estándar abierto para la vinculación descentralizada de Bitcoin Cash (secp256k1) e identidades Nostr (BIP-340 Schnorr) bajo NIP-39 y eventos reemplazables Kind 30078.'
-                  : 'Open standard for decentralized binding of Bitcoin Cash (secp256k1) and Nostr (BIP-340 Schnorr) identities using NIP-39 and replaceable Kind 30078 events.'}
+                  ? 'Estándar abierto para vincular criptográficamente Bitcoin Cash (Bitcoin Signed Message / secp256k1) e identidades Nostr (BIP-340 Schnorr) mediante eventos reemplazables Kind 30078 (NIP-78) y tags indexables NIP-01/NIP-39 (#i, #t).'
+                  : 'Open standard for cryptographically binding Bitcoin Cash (Bitcoin Signed Message / secp256k1) and Nostr (BIP-340 Schnorr) identities using replaceable Kind 30078 (NIP-78) events and indexed NIP-01/NIP-39 tags (#i, #t).'}
               </p>
             </div>
 
-            {/* Diagram */}
             <div className="p-4 rounded-2xl bg-surface-2 border border-line space-y-2 font-mono text-xs text-ink-2">
-              <div className="text-xs font-bold text-ink font-sans">Arquitectura Criptográfica:</div>
+              <div className="text-xs font-bold text-ink font-sans">
+                {isEs ? 'Arquitectura Criptográfica Bidireccional:' : 'Bidirectional Cryptographic Architecture:'}
+              </div>
               <div className="p-3 rounded-xl bg-surface border border-line overflow-x-auto whitespace-pre">
-{`+-----------------------+              +-----------------------+
-|  Bitcoin Cash (ECDSA)  |              |   Nostr (Schnorr)    |
-|   secp256k1 Keypair   |              |    BIP-340 Keypair    |
-+-----------+-----------+              +-----------+-----------+
-            |                                      |
-            v                                      v
-  Firma SHA-256(Statement)                Firma Evento Nostr
-   (bch_sig en tags)                      Kind: 30078 / NIP-39
-            |                                      |
-            +-------------------+------------------+
-                                |
-                                v
-               [ Relays Descentralizados Nostr ]
-              (nos.lol, primal.net, nostr.mom...)
-                                |
-                                v
-                [ Validación Matemática P2P ]
-       (Costo de Gas: $0.00 | BCH Mainnet o Chipnet)`}
+{`+----------------------------+          +----------------------------+
+|  Bitcoin Cash (secp256k1)  |          |     Nostr (BIP-340)        |
+|  bch_signMessage / ECDSA   |          |   Schnorr Keypair / NIP-07 |
++-------------+--------------+          +-------------+--------------+
+              |                                       |
+              v                                       v
+ Signs Canonical Statement                  Signs Kind 30078 Event
+ Containing Nostr Pubkey                    Containing BCH Proof Tag
+              |                                       |
+              +-------------------+-------------------+
+                                  |
+                                  v
+            [ Indexed Public Nostr Relays (#d, #i, #t) ]
+         (primal.net, snort.social, nostr.oxtr.dev, offchain.pub)
+                                  |
+                                  v
+            [ Independent Client-Side Verification ]
+     1) verifyEvent (Schnorr)   2) Recover Pubkey from BSM Sig
+     3) hash160(pubkey) == CashAddr   4) Bidirectional JSON Match`}
               </div>
             </div>
 
-            {/* JSON Schema */}
             <div className="space-y-2">
-              <div className="text-xs font-bold text-ink">Estructura del Evento Nostr (Kind 30078):</div>
-              <div className="p-4 rounded-xl bg-surface-2 border border-line text-[11px] font-mono text-ink-2 overflow-x-auto">
+              <div className="text-xs font-bold text-ink">
+                {isEs ? 'Estructura del Evento Nostr (Kind 30078):' : 'Nostr Event Schema (Kind 30078):'}
+              </div>
+              <div className="p-4 rounded-xl bg-surface-2 border border-line text-[11px] font-mono text-ink-2 overflow-x-auto whitespace-pre">
 {`{
   "kind": 30078,
-  "created_at": 1741549200,
+  "created_at": 1763059200,
+  "pubkey": "de69276e520917aa8227ba4ab4460edd64b5dc263e6f475b29f33fad3af81990",
   "tags": [
-    ["d", "bch-identity-binding"],
-    ["bch", "bitcoincash:qpc5tceta5qgl4tsynwhxtgn608pteevvsqm5xqt7p"],
-    ["bch_pubkey", "03de69276e520917aa8227ba4ab4460edd64b5dc263e6f475b29f33fad3af81990"],
-    ["bch_sig", "30440220..."],
+    ["d", "${USERLINK_D_TAG}"],
+    ["t", "myuser"],
+    ["t", "bitcoincash:qr5zz6098wax242qrz3k7dctsx2kd3vszvywzsefgn"],
+    ["i", "bch:bitcoincash:qr5zz6098wax242qrz3k7dctsx2kd3vszvywzsefgn", "<bsm_base64_sig>"],
+    ["bch", "bitcoincash:qr5zz6098wax242qrz3k7dctsx2kd3vszvywzsefgn"],
+    ["bch_sig", "<bsm_base64_sig>"],
+    ["sig_scheme", "bitcoin-signed-message"],
     ["handle", "myuser"],
     ["nip05", "myuser@bliquid.xyz"],
-    ["c", "userlink-bch-id"],
     ["network", "${selectedNetwork}"],
     ["client", "UserLink by Drian Stack Labs"]
   ],
-  "content": "{\\"protocol\\":\\"bch-nostr-userlink-id-v1\\",\\"username\\":\\"@myuser\\"}"
+  "content": "{\\"protocol\\":\\"bch-nostr-userlink-id-v1\\",\\"username\\":\\"@myuser\\",\\"bchAddress\\":\\"bitcoincash:qr5zz6098wax242qrz3k7dctsx2kd3vszvywzsefgn\\",\\"nostrPubkey\\":\\"de69276e520917aa8227ba4ab4460edd64b5dc263e6f475b29f33fad3af81990\\"}"
 }`}
               </div>
             </div>

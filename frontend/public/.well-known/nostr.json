@@ -5,16 +5,16 @@
     "_": "de69276e520917aa8227ba4ab4460edd64b5dc263e6f475b29f33fad3af81990"
   },
   "bch_addresses": {
-    "myuser": "bitcoincash:qpm2qsznhks23z7629mms6s4cwef74vcwvy22gdx6a",
-    "adrian": "bitcoincash:qpm2qsznhks23z7629mms6s4cwef74vcwvy22gdx6a",
-    "_": "bitcoincash:qpm2qsznhks23z7629mms6s4cwef74vcwvy22gdx6a"
+    "myuser": "bitcoincash:qr5zz6098wax242qrz3k7dctsx2kd3vszvywzsefgn",
+    "adrian": "bitcoincash:qr5zz6098wax242qrz3k7dctsx2kd3vszvywzsefgn",
+    "_": "bitcoincash:qr5zz6098wax242qrz3k7dctsx2kd3vszvywzsefgn"
   },
   "relays": {
     "de69276e520917aa8227ba4ab4460edd64b5dc263e6f475b29f33fad3af81990": [
-      "wss://nos.lol",
       "wss://relay.primal.net",
-      "wss://nostr.mom",
-      "wss://purplerelay.com"
+      "wss://relay.snort.social",
+      "wss://nostr.oxtr.dev",
+      "wss://offchain.pub"
     ]
   }
 }

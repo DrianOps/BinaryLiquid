@@ -188,9 +188,9 @@ export const SdkView: React.FC<SdkViewProps> = ({ lang = 'en', onNavigateToIdent
     latencyMs: number;
   }>({
     handle: 'myuser@bliquid.xyz',
-    bchAddress: 'bitcoincash:qpm2qsznhks23z7629mms6s4cwef74vcwvy22gdx6a',
+    bchAddress: 'bitcoincash:qr5zz6098wax242qrz3k7dctsx2kd3vszvywzsefgn',
     pubkey: 'de69276e520917aa8227ba4ab4460edd64b5dc263e6f475b29f33fad3af81990',
-    relays: ['wss://nos.lol', 'wss://relay.primal.net', 'wss://nostr.mom', 'wss://purplerelay.com'],
+    relays: ['wss://relay.primal.net', 'wss://relay.snort.social', 'wss://nostr.oxtr.dev', 'wss://offchain.pub'],
     latencyMs: 38
   });
 
@@ -228,13 +228,13 @@ export const SdkView: React.FC<SdkViewProps> = ({ lang = 'en', onNavigateToIdent
       const data = await res.json();
       const elapsed = Math.round(performance.now() - start);
 
-      const resolvedAddr = data.bch_addresses?.[targetUser] || 'bitcoincash:qpm2qsznhks23z7629mms6s4cwef74vcwvy22gdx6a';
+      const resolvedAddr = data.bch_addresses?.[targetUser] || 'bitcoincash:qr5zz6098wax242qrz3k7dctsx2kd3vszvywzsefgn';
       const resolvedPk = data.names?.[targetUser] || 'de69276e520917aa8227ba4ab4460edd64b5dc263e6f475b29f33fad3af81990';
       const resolvedRelays = (resolvedPk && data.relays?.[resolvedPk]) || [
-        'wss://nos.lol',
         'wss://relay.primal.net',
-        'wss://nostr.mom',
-        'wss://purplerelay.com'
+        'wss://relay.snort.social',
+        'wss://nostr.oxtr.dev',
+        'wss://offchain.pub'
       ];
 
       setResolveResult({
@@ -248,9 +248,9 @@ export const SdkView: React.FC<SdkViewProps> = ({ lang = 'en', onNavigateToIdent
       const elapsed = Math.round(performance.now() - start);
       setResolveResult({
         handle: `${targetUser}@${targetDomain}`,
-        bchAddress: 'bitcoincash:qpm2qsznhks23z7629mms6s4cwef74vcwvy22gdx6a',
+        bchAddress: 'bitcoincash:qr5zz6098wax242qrz3k7dctsx2kd3vszvywzsefgn',
         pubkey: 'de69276e520917aa8227ba4ab4460edd64b5dc263e6f475b29f33fad3af81990',
-        relays: ['wss://nos.lol', 'wss://relay.primal.net', 'wss://nostr.mom', 'wss://purplerelay.com'],
+        relays: ['wss://relay.primal.net', 'wss://relay.snort.social', 'wss://nostr.oxtr.dev', 'wss://offchain.pub'],
         latencyMs: elapsed || 42
       });
     } finally {
@@ -573,7 +573,7 @@ export const SdkView: React.FC<SdkViewProps> = ({ lang = 'en', onNavigateToIdent
                 </h3>
                 <pre className="p-4 rounded-xl bg-gray-950 text-gray-200 font-mono text-xs overflow-x-auto border border-gray-800">
                   <code>{`// Universal BIP-21 Deep Link standard supported by all BCH wallets:
-window.location.href = "bitcoincash:qpm2qsznhks23z7629mms6s4cwef74vcwvy22gdx6a?amount=0.015&label=@myuser";`}</code>
+window.location.href = "bitcoincash:qr5zz6098wax242qrz3k7dctsx2kd3vszvywzsefgn?amount=0.015&label=@myuser";`}</code>
                 </pre>
               </div>
             </div>
@@ -632,8 +632,8 @@ window.location.href = "bitcoincash:qpm2qsznhks23z7629mms6s4cwef74vcwvy22gdx6a?a
                   </div>
                   <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
                     {isEs 
-                      ? 'Registro reemplazable parametrizado publicado en relays públicos globales (nos.lol, relay.primal.net) 100% descentralizado.' 
-                      : 'Parameterized replaceable event published to global public relays (nos.lol, relay.primal.net) for 100% serverless P2P lookup.'}
+                      ? 'Registro reemplazable parametrizado publicado en relays públicos globales (relay.primal.net, relay.snort.social, nostr.oxtr.dev, offchain.pub) 100% descentralizado.' 
+                      : 'Parameterized replaceable event published to global public relays (relay.primal.net, relay.snort.social, nostr.oxtr.dev, offchain.pub) for 100% serverless P2P lookup.'}
                   </p>
                 </div>
               </div>
@@ -779,7 +779,7 @@ window.location.href = "bitcoincash:qpm2qsznhks23z7629mms6s4cwef74vcwvy22gdx6a?a
                       </div>
 
                       <a
-                        href={`bitcoincash:${resolveResult.bchAddress}?amount=0.01&label=@${resolveResult.handle}`}
+                        href={`${resolveResult.bchAddress.includes(':') ? resolveResult.bchAddress : `bitcoincash:${resolveResult.bchAddress}`}?amount=0.01&label=@${resolveResult.handle}`}
                         className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary hover:text-white font-sans text-xs font-bold transition-all border border-primary/20"
                       >
                         <Wallet className="w-3.5 h-3.5" />
@@ -829,12 +829,13 @@ export async function resolveUserLink(handle: string): Promise<string> {
   const address = data.bch_addresses?.[user];
   if (!address) throw new Error(\`Handle @\${user} is not linked to any Bitcoin Cash address\`);
 
-  return address; // => bitcoincash:qpm2qsznhks23z7629mms6s4cwef74vcwvy22gdx6a
+  return address; // => bitcoincash:qr5zz6098wax242qrz3k7dctsx2kd3vszvywzsefgn
 }
 
 // 2. Launch Universal BIP-21 Payment:
 const recipientAddress = await resolveUserLink('@myuser');
-const bip21Uri = \`bitcoincash:\${recipientAddress}?amount=0.025&label=@myuser\`;
+const normalizedAddr = recipientAddress.includes(':') ? recipientAddress : \`bitcoincash:\${recipientAddress}\`;
+const bip21Uri = \`\${normalizedAddr}?amount=0.025&label=@myuser\`;
 window.location.href = bip21Uri;`, 'ts-code')}
                     className="text-primary hover:underline font-sans cursor-pointer flex items-center gap-1"
                   >
@@ -856,12 +857,13 @@ export async function resolveUserLink(handle: string): Promise<string> {
   const address = data.bch_addresses?.[user];
   if (!address) throw new Error(\`Handle @\${user} is not linked to any Bitcoin Cash address\`);
 
-  return address; // => bitcoincash:qpm2qsznhks23z7629mms6s4cwef74vcwvy22gdx6a
+  return address; // => bitcoincash:qr5zz6098wax242qrz3k7dctsx2kd3vszvywzsefgn
 }
 
 // 2. Launch Universal BIP-21 Payment:
 const recipientAddress = await resolveUserLink('@myuser');
-const bip21Uri = \`bitcoincash:\${recipientAddress}?amount=0.025&label=@myuser\`;
+const normalizedAddr = recipientAddress.includes(':') ? recipientAddress : \`bitcoincash:\${recipientAddress}\`;
+const bip21Uri = \`\${normalizedAddr}?amount=0.025&label=@myuser\`;
 window.location.href = bip21Uri;`}</code>
                 </pre>
               </div>
@@ -920,14 +922,14 @@ curl -s "https://bliquid.xyz/.well-known/nostr.json?name=myuser"
     "myuser": "de69276e520917aa8227ba4ab4460edd64b5dc263e6f475b29f33fad3af81990"
   },
   "bch_addresses": {
-    "myuser": "bitcoincash:qpm2qsznhks23z7629mms6s4cwef74vcwvy22gdx6a"
+    "myuser": "bitcoincash:qr5zz6098wax242qrz3k7dctsx2kd3vszvywzsefgn"
   },
   "relays": {
     "de69276e520917aa8227ba4ab4460edd64b5dc263e6f475b29f33fad3af81990": [
-      "wss://nos.lol",
       "wss://relay.primal.net",
-      "wss://nostr.mom",
-      "wss://purplerelay.com"
+      "wss://relay.snort.social",
+      "wss://nostr.oxtr.dev",
+      "wss://offchain.pub"
     ]
   }
 }`}</code>
@@ -1021,7 +1023,7 @@ def resolve_userlink(handle: str) -> str:
 if __name__ == "__main__":
     bch_dest = resolve_userlink("@myuser")
     print(f"Target on-chain BCH Address: {bch_dest}")
-    # => bitcoincash:qpm2qsznhks23z7629mms6s4cwef74vcwvy22gdx6a`}</code>
+    # => bitcoincash:qr5zz6098wax242qrz3k7dctsx2kd3vszvywzsefgn`}</code>
                 </pre>
               </div>
             </div>
@@ -1047,30 +1049,34 @@ if __name__ == "__main__":
               </div>
 
               <pre className="p-4 rounded-xl bg-gray-950 text-gray-200 font-mono text-xs overflow-x-auto border border-gray-800 leading-relaxed">
-                <code>{`import { SimplePool } from 'nostr-tools';
+                <code>{`import { SimplePool, verifyEvent } from 'nostr-tools';
 
 const pool = new SimplePool();
 const PUBLIC_RELAYS = [
-  'wss://nos.lol',
   'wss://relay.primal.net',
-  'wss://nostr.mom',
-  'wss://purplerelay.com'
+  'wss://relay.snort.social',
+  'wss://nostr.oxtr.dev',
+  'wss://offchain.pub'
 ];
 
 export async function resolveDecentralized(nostrHexPubkey: string) {
-  // Query Nostr Kind 30078 (Application-specific data with d-tag 'userlink:bch')
+  // Query Nostr Kind 30078 (Application-specific data with d-tag 'bch-identity-binding')
   const event = await pool.get(PUBLIC_RELAYS, {
     kinds: [30078],
-    '#d': ['userlink:bch'],
+    '#d': ['bch-identity-binding'],
     authors: [nostrHexPubkey]
   });
 
-  if (!event) throw new Error('Identity record not found on Nostr relays');
+  if (!event || !verifyEvent(event)) {
+    throw new Error('Valid UserLink record not found on Nostr relays');
+  }
 
   const passport = JSON.parse(event.content);
-  console.log('Cryptographically Verified BCH Address:', passport.bchAddress);
-  console.log('ECDSA/Schnorr Proof Signature:', passport.bchSignature);
-  return passport;
+  const bchSig = event.tags.find((t) => t[0] === 'bch_sig')?.[1] || '';
+  const sigScheme = event.tags.find((t) => t[0] === 'sig_scheme')?.[1] || 'bitcoin-signed-message';
+  console.log('BCH Address:', passport.bchAddress);
+  console.log('BCH Proof (' + sigScheme + '):', bchSig);
+  return { passport, bchSig, sigScheme };
 }`}</code>
               </pre>
             </div>
