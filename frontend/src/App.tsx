@@ -2851,7 +2851,7 @@ export default function App() {
                                   CashTokens
                                 </span>
                               </div>
-                              <span className="text-[10px] text-ink-3">Paytaca USD Stablecoin</span>
+                              <span className="text-[10px] text-ink-3">ParyonUSD Stablecoin</span>
                             </div>
                           </div>
                           <div className="text-right">

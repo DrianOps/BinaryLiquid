@@ -18,11 +18,11 @@
         "token": {
           "category": "6b6cf8de5963d67594a4565d49a7bcf3e668a18a7328828de16bd393ac00dcad",
           "symbol": "PUSD",
-          "decimals": 0
+          "decimals": 6
         },
         "uris": {
-          "icon": "https://bsprotocol.xyz/PUSD.png",
-          "web": "https://bsprotocol.xyz"
+          "icon": "https://bliquid.xyz/PUSD.png",
+          "web": "https://bliquid.xyz"
         }
       }
     },
@@ -36,8 +36,8 @@
           "decimals": 2
         },
         "uris": {
-          "icon": "https://bsprotocol.xyz/LIFT.png",
-          "web": "https://bsprotocol.xyz"
+          "icon": "https://bliquid.xyz/LIFT.png",
+          "web": "https://bliquid.xyz"
         }
       }
     }

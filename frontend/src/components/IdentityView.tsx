@@ -1411,7 +1411,7 @@ export default function IdentityView({
                 <div className="p-4 rounded-2xl bg-surface-2 border border-line space-y-2.5 animate-fade-in">
                   <div className="text-[11px] font-bold text-ink-2 uppercase tracking-wider flex items-center justify-between">
                     <span>{isEs ? 'Confirmación Real de Relays:' : 'Live Relay Acknowledgements:'}</span>
-                    <span className="text-[10px] font-mono text-primary font-bold">Kind 30078 · NIP-78/39</span>
+                    <span className="text-[10px] font-mono text-primary font-bold">Kind 30078 · NIP-01 / NIP-78</span>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {publishLogs.map((log) => (
