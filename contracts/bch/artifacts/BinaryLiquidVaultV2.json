@@ -1,0 +1,241 @@
+{
+  "contractName": "BinaryLiquidVaultV2",
+  "constructorInputs": [
+    {
+      "name": "watchmanPk",
+      "type": "pubkey"
+    },
+    {
+      "name": "maxSingleTokenPayout",
+      "type": "int"
+    },
+    {
+      "name": "maxSingleBchPayout",
+      "type": "int"
+    }
+  ],
+  "abi": [
+    {
+      "name": "release",
+      "inputs": [
+        {
+          "name": "watchmanSig",
+          "type": "sig"
+        },
+        {
+          "name": "recipientLockingBytecode",
+          "type": "bytes"
+        },
+        {
+          "name": "payoutAmount",
+          "type": "int"
+        }
+      ]
+    },
+    {
+      "name": "releaseBch",
+      "inputs": [
+        {
+          "name": "watchmanSig",
+          "type": "sig"
+        },
+        {
+          "name": "recipientLockingBytecode",
+          "type": "bytes"
+        },
+        {
+          "name": "payoutSats",
+          "type": "int"
+        }
+      ]
+    }
+  ],
+  "bytecode": "OP_3 OP_PICK OP_0 OP_NUMEQUAL OP_IF OP_4 OP_ROLL OP_SWAP OP_CHECKSIGVERIFY OP_4 OP_PICK OP_0 OP_GREATERTHAN OP_VERIFY OP_4 OP_PICK OP_GREATERTHANOREQUAL OP_VERIFY OP_INPUTINDEX OP_0 OP_NUMEQUALVERIFY OP_TXINPUTCOUNT OP_2 OP_LESSTHANOREQUAL OP_VERIFY OP_TXINPUTCOUNT OP_2 OP_NUMEQUAL OP_IF OP_1 OP_UTXOBYTECODE OP_SIZE OP_NIP 19 OP_NUMEQUALVERIFY OP_1 OP_UTXOTOKENCATEGORY OP_0 OP_EQUALVERIFY OP_ENDIF OP_0 OP_UTXOTOKENCATEGORY OP_0 OP_UTXOTOKENAMOUNT OP_0 OP_UTXOVALUE OP_2 OP_PICK OP_0 OP_EQUAL OP_NOT OP_VERIFY OP_OVER OP_7 OP_PICK OP_GREATERTHANOREQUAL OP_VERIFY OP_0 OP_OUTPUTBYTECODE OP_6 OP_ROLL OP_EQUALVERIFY OP_0 OP_OUTPUTTOKENCATEGORY OP_3 OP_PICK OP_EQUALVERIFY OP_0 OP_OUTPUTTOKENAMOUNT OP_6 OP_PICK OP_NUMEQUALVERIFY OP_0 OP_OUTPUTVALUE 2202 OP_GREATERTHANOREQUAL OP_VERIFY OP_SWAP OP_5 OP_ROLL OP_SUB OP_DUP OP_0 OP_GREATERTHAN OP_IF OP_0 OP_UTXOBYTECODE OP_1 OP_OUTPUTBYTECODE OP_OVER OP_EQUALVERIFY OP_1 OP_OUTPUTTOKENCATEGORY OP_4 OP_PICK OP_EQUALVERIFY OP_1 OP_OUTPUTTOKENAMOUNT OP_2 OP_PICK OP_GREATERTHANOREQUAL OP_VERIFY OP_1 OP_OUTPUTVALUE 2202 OP_GREATERTHANOREQUAL OP_VERIFY OP_2 OP_PICK f209 OP_GREATERTHANOREQUAL OP_IF OP_1 OP_OUTPUTVALUE OP_3 OP_PICK d007 OP_SUB OP_GREATERTHANOREQUAL OP_VERIFY OP_ENDIF OP_TXINPUTCOUNT OP_2 OP_NUMEQUAL OP_IF OP_TXOUTPUTCOUNT OP_3 OP_LESSTHANOREQUAL OP_VERIFY OP_ELSE OP_TXOUTPUTCOUNT OP_2 OP_NUMEQUALVERIFY OP_ENDIF OP_DROP OP_ELSE OP_TXINPUTCOUNT OP_2 OP_NUMEQUAL OP_IF OP_TXOUTPUTCOUNT OP_2 OP_LESSTHANOREQUAL OP_VERIFY OP_ELSE OP_TXOUTPUTCOUNT OP_1 OP_NUMEQUALVERIFY OP_ENDIF OP_ENDIF OP_2DROP OP_2DROP OP_DROP OP_1 OP_ELSE OP_3 OP_ROLL OP_1 OP_NUMEQUALVERIFY OP_3 OP_ROLL OP_SWAP OP_CHECKSIGVERIFY OP_3 OP_PICK 2202 OP_GREATERTHANOREQUAL OP_VERIFY OP_3 OP_PICK OP_ROT OP_LESSTHANOREQUAL OP_VERIFY OP_INPUTINDEX OP_0 OP_NUMEQUALVERIFY OP_TXINPUTCOUNT OP_2 OP_LESSTHANOREQUAL OP_VERIFY OP_TXINPUTCOUNT OP_2 OP_NUMEQUAL OP_IF OP_1 OP_UTXOBYTECODE OP_SIZE OP_NIP 19 OP_NUMEQUALVERIFY OP_1 OP_UTXOTOKENCATEGORY OP_0 OP_EQUALVERIFY OP_ENDIF OP_0 OP_UTXOTOKENCATEGORY OP_0 OP_EQUALVERIFY OP_0 OP_UTXOVALUE OP_DUP OP_4 OP_PICK OP_GREATERTHANOREQUAL OP_VERIFY OP_0 OP_OUTPUTBYTECODE OP_3 OP_ROLL OP_EQUALVERIFY OP_0 OP_OUTPUTTOKENCATEGORY OP_0 OP_EQUALVERIFY OP_0 OP_OUTPUTVALUE OP_3 OP_PICK OP_NUMEQUALVERIFY OP_ROT OP_SUB OP_DUP dc05 OP_SUB OP_DUP 2202 OP_GREATERTHANOREQUAL OP_IF OP_0 OP_UTXOBYTECODE OP_1 OP_OUTPUTBYTECODE OP_OVER OP_EQUALVERIFY OP_1 OP_OUTPUTTOKENCATEGORY OP_0 OP_EQUALVERIFY OP_1 OP_OUTPUTVALUE OP_2 OP_PICK OP_GREATERTHANOREQUAL OP_VERIFY OP_TXINPUTCOUNT OP_2 OP_NUMEQUAL OP_IF OP_TXOUTPUTCOUNT OP_3 OP_LESSTHANOREQUAL OP_VERIFY OP_ELSE OP_TXOUTPUTCOUNT OP_2 OP_NUMEQUALVERIFY OP_ENDIF OP_DROP OP_ELSE OP_OVER dc05 OP_LESSTHANOREQUAL OP_VERIFY OP_TXINPUTCOUNT OP_2 OP_NUMEQUAL OP_IF OP_TXOUTPUTCOUNT OP_2 OP_LESSTHANOREQUAL OP_VERIFY OP_ELSE OP_TXOUTPUTCOUNT OP_1 OP_NUMEQUALVERIFY OP_ENDIF OP_ENDIF OP_2DROP OP_DROP OP_1 OP_ENDIF",
+  "source": "pragma cashscript ^0.14.0;\n\n/**\n * @title BinaryLiquidVaultV2 (Hardened CashTokens + Native BCH Liquidity Pool Covenant)\n * @author BinaryLiquid Protocol / DrianOps\n * @notice 100% Non-Custodial Cross-Chain Liquidity Covenant supporting BOTH CashTokens (PUSD)\n * via `release()` AND Native BCH via `releaseBch()`.\n *\n * V2 HARDENING INVARIANTS:\n * 1. Dual Asset Support: Native BCH swept from swaps/margins is never frozen; `releaseBch()` enforces\n *    independent per-tx BCH circuit breaker bounds (`maxSingleBchPayout`) and strict sats continuation.\n * 2. Dust & Value Conservation: Enforces `value >= 546` on recipient and continuation outputs so\n *    change UTXOs are never dust-burned or underfunded.\n * 3. Anti Multi-Input Covenant Drain: Restricts `tx.inputs.length <= 2` and requires any auxiliary\n *    fee UTXO to have `tokenCategory == 0x` and a different `lockingBytecode`.\n */\ncontract BinaryLiquidVaultV2(\n    pubkey watchmanPk,\n    int maxSingleTokenPayout,\n    int maxSingleBchPayout\n) {\n    /**\n     * @notice Releases CashTokens (e.g. PUSD) from a token UTXO with Watchman signature & continuation\n     */\n    function release(sig watchmanSig, bytes recipientLockingBytecode, int payoutAmount) {\n        require(checkSig(watchmanSig, watchmanPk));\n        require(payoutAmount > 0);\n        require(payoutAmount <= maxSingleTokenPayout);\n        require(this.activeInputIndex == 0);\n\n        require(tx.inputs.length <= 2);\n        if (tx.inputs.length == 2) {\n            require(tx.inputs[1].lockingBytecode.length == 25);\n            require(tx.inputs[1].tokenCategory == 0x);\n        }\n\n        bytes poolCategory = tx.inputs[0].tokenCategory;\n        int poolBalance = tx.inputs[0].tokenAmount;\n        int inputSats = tx.inputs[0].value;\n        require(poolCategory != 0x);\n        require(poolBalance >= payoutAmount);\n\n        // Output #0 delivers exact CashTokens and spendable dust BCH to recipient\n        require(tx.outputs[0].lockingBytecode == recipientLockingBytecode);\n        require(tx.outputs[0].tokenCategory == poolCategory);\n        require(tx.outputs[0].tokenAmount == payoutAmount);\n        require(tx.outputs[0].value >= 546);\n\n        // Output #1 forces remaining CashTokens back into this exact Vault covenant\n        int remainingBalance = poolBalance - payoutAmount;\n        if (remainingBalance > 0) {\n            bytes vaultBytecode = tx.inputs[0].lockingBytecode;\n            require(tx.outputs[1].lockingBytecode == vaultBytecode);\n            require(tx.outputs[1].tokenCategory == poolCategory);\n            require(tx.outputs[1].tokenAmount >= remainingBalance);\n            require(tx.outputs[1].value >= 546);\n            if (inputSats >= 2546) {\n                require(tx.outputs[1].value >= inputSats - 2000);\n            }\n            if (tx.inputs.length == 2) {\n                require(tx.outputs.length <= 3);\n            } else {\n                require(tx.outputs.length == 2);\n            }\n        } else {\n            if (tx.inputs.length == 2) {\n                require(tx.outputs.length <= 2);\n            } else {\n                require(tx.outputs.length == 1);\n            }\n        }\n    }\n\n    /**\n     * @notice Releases Native BCH from a non-token UTXO with Watchman signature & exact BCH continuation\n     */\n    function releaseBch(sig watchmanSig, bytes recipientLockingBytecode, int payoutSats) {\n        require(checkSig(watchmanSig, watchmanPk));\n        require(payoutSats >= 546);\n        require(payoutSats <= maxSingleBchPayout);\n        require(this.activeInputIndex == 0);\n\n        require(tx.inputs.length <= 2);\n        if (tx.inputs.length == 2) {\n            require(tx.inputs[1].lockingBytecode.length == 25);\n            require(tx.inputs[1].tokenCategory == 0x);\n        }\n\n        // Prevent burning CashTokens via native BCH withdrawal path\n        require(tx.inputs[0].tokenCategory == 0x);\n\n        int vaultSats = tx.inputs[0].value;\n        require(vaultSats >= payoutSats);\n\n        require(tx.outputs[0].lockingBytecode == recipientLockingBytecode);\n        require(tx.outputs[0].tokenCategory == 0x);\n        require(tx.outputs[0].value == payoutSats);\n\n        int remainingSats = vaultSats - payoutSats;\n        int minReturnSats = remainingSats - 1500;\n        if (minReturnSats >= 546) {\n            bytes vaultBytecode = tx.inputs[0].lockingBytecode;\n            require(tx.outputs[1].lockingBytecode == vaultBytecode);\n            require(tx.outputs[1].tokenCategory == 0x);\n            require(tx.outputs[1].value >= minReturnSats);\n            if (tx.inputs.length == 2) {\n                require(tx.outputs.length <= 3);\n            } else {\n                require(tx.outputs.length == 2);\n            }\n        } else {\n            require(remainingSats <= 1500);\n            if (tx.inputs.length == 2) {\n                require(tx.outputs.length <= 2);\n            } else {\n                require(tx.outputs.length == 1);\n            }\n        }\n    }\n}\n",
+  "fingerprint": "0655b2a217bc1ab4a7d00a951cc111951c0f071ad20c029876ba6ce89fd8548f",
+  "debug": {
+    "bytecode": "5379009c63547a7cad547900a0695479a269c0009dc352a169c3529c6351c7827701199d51ce00886800ce00d000c6527900879169785779a26900cd567a8800d153798800d356799d00cc022202a2697c557a947600a06300c751cd788851d154798851d35279a26951cc022202a269527902f209a26351cc537902d00794a26968c3529c63c453a16967c4529d687567c3529c63c452a16967c4519d68686d6d755167537a519d537a7cad5379022202a26953797ba169c0009dc352a169c3529c6351c7827701199d51ce00886800ce008800c6765479a26900cd537a8800d1008800cc53799d7b947602dc059476022202a26300c751cd788851d1008851cc5279a269c3529c63c453a16967c4529d6875677802dc05a169c3529c63c452a16967c4519d68686d755168",
+    "sourceMap": "25:4:72:5;;;;;26:25:26:36;;:38::48;:8::51:1;27:16:27:28:0;;:31::32;:16:::1;:8::34;28:16:28:28:0;;:::52:1;:8::54;29:16:29:37:0;:41::42;:8::44:1;31:16:31:32:0;:36::37;:16:::1;:8::39;32:12:32:28:0;:32::33;:12:::1;:35:35:9:0;33:30:33:31;:20::48:1;:::55;;:59::61:0;:12::63:1;34:30:34:31:0;:20::46:1;:50::52:0;:12::54:1;32:35:35:9;37:39:37:40:0;:29::55:1;38:36:38:37:0;:26::50:1;39:34:39:35:0;:24::42:1;40:16:40:28:0;;:32::34;:16:::1;;:8::36;41:16:41:27:0;:31::43;;:16:::1;:8::45;44:27:44:28:0;:16::45:1;:49::73:0;;:8::75:1;45:27:45:28:0;:16::43:1;:47::59:0;;:8::61:1;46:27:46:28:0;:16::41:1;:45::57:0;;:8::59:1;47:27:47:28:0;:16::35:1;:39::42:0;:16:::1;:8::44;50:31:50:42:0;:45::57;;:31:::1;51:12:51:28:0;:31::32;:12:::1;:34:65:9:0;52:44:52:45;:34::62:1;53:31:53:32:0;:20::49:1;:53::66:0;:12::68:1;54:31:54:32:0;:20::47:1;:51::63:0;;:12::65:1;55:31:55:32:0;:20::45:1;:49::65:0;;:20:::1;:12::67;56:31:56:32:0;:20::39:1;:43::46:0;:20:::1;:12::48;57:16:57:25:0;;:29::33;:16:::1;:35:59:13:0;58::58:36;:24::43:1;:47::56:0;;:59::63;:47:::1;:24;:16::65;57:35:59:13;60:16:60:32:0;:36::37;:16:::1;:39:62:13:0;61:24:61:41;:45::46;:24:::1;:16::48;62:19:64:13:0;63:24:63:41;:45::46;:16::48:1;62:19:64:13;51:34:65:9;65:15:71::0;66:16:66:32;:36::37;:16:::1;:39:68:13:0;67:24:67:41;:45::46;:24:::1;:16::48;68:19:70:13:0;69:24:69:41;:45::46;:16::48:1;68:19:70:13;65:15:71:9;25:88:72:5;;;;:4;77::119::0;;;;78:25:78:36;;:38::48;:8::51:1;79:16:79:26:0;;:30::33;:16:::1;:8::35;80:16:80:26:0;;:30::48;:16:::1;:8::50;81:16:81:37:0;:41::42;:8::44:1;83:16:83:32:0;:36::37;:16:::1;:8::39;84:12:84:28:0;:32::33;:12:::1;:35:87:9:0;85:30:85:31;:20::48:1;:::55;;:59::61:0;:12::63:1;86:30:86:31:0;:20::46:1;:50::52:0;:12::54:1;84:35:87:9;90:26:90:27:0;:16::42:1;:46::48:0;:8::50:1;92:34:92:35:0;:24::42:1;93:16:93:25:0;:29::39;;:16:::1;:8::41;95:27:95:28:0;:16::45:1;:49::73:0;;:8::75:1;96:27:96:28:0;:16::43:1;:47::49:0;:8::51:1;97:27:97:28:0;:16::35:1;:39::49:0;;:8::51:1;99:40:99:50:0;:28:::1;100::100:41:0;:44::48;:28:::1;101:12:101:25:0;:29::32;:12:::1;:34:111:9:0;102:44:102:45;:34::62:1;103:31:103:32:0;:20::49:1;:53::66:0;:12::68:1;104:31:104:32:0;:20::47:1;:51::53:0;:12::55:1;105:31:105:32:0;:20::39:1;:43::56:0;;:20:::1;:12::58;106:16:106:32:0;:36::37;:16:::1;:39:108:13:0;107:24:107:41;:45::46;:24:::1;:16::48;108:19:110:13:0;109:24:109:41;:45::46;:16::48:1;108:19:110:13;101:34:111:9;111:15:118::0;112:20:112:33;:37::41;:20:::1;:12::43;113:16:113:32:0;:36::37;:16:::1;:39:115:13:0;114:24:114:41;:45::46;:24:::1;:16::48;115:19:117:13:0;116:24:116:41;:45::46;:16::48:1;115:19:117:13;111:15:118:9;77:89:119:5;;;17:0:120:1",
+    "logs": [],
+    "requires": [
+      {
+        "ip": 11,
+        "line": 26
+      },
+      {
+        "ip": 16,
+        "line": 27
+      },
+      {
+        "ip": 20,
+        "line": 28
+      },
+      {
+        "ip": 23,
+        "line": 29
+      },
+      {
+        "ip": 27,
+        "line": 31
+      },
+      {
+        "ip": 37,
+        "line": 33
+      },
+      {
+        "ip": 41,
+        "line": 34
+      },
+      {
+        "ip": 54,
+        "line": 40
+      },
+      {
+        "ip": 59,
+        "line": 41
+      },
+      {
+        "ip": 64,
+        "line": 44
+      },
+      {
+        "ip": 69,
+        "line": 45
+      },
+      {
+        "ip": 74,
+        "line": 46
+      },
+      {
+        "ip": 79,
+        "line": 47
+      },
+      {
+        "ip": 93,
+        "line": 53
+      },
+      {
+        "ip": 98,
+        "line": 54
+      },
+      {
+        "ip": 104,
+        "line": 55
+      },
+      {
+        "ip": 109,
+        "line": 56
+      },
+      {
+        "ip": 122,
+        "line": 58
+      },
+      {
+        "ip": 131,
+        "line": 61
+      },
+      {
+        "ip": 135,
+        "line": 63
+      },
+      {
+        "ip": 146,
+        "line": 67
+      },
+      {
+        "ip": 150,
+        "line": 69
+      },
+      {
+        "ip": 165,
+        "line": 78
+      },
+      {
+        "ip": 170,
+        "line": 79
+      },
+      {
+        "ip": 175,
+        "line": 80
+      },
+      {
+        "ip": 178,
+        "line": 81
+      },
+      {
+        "ip": 182,
+        "line": 83
+      },
+      {
+        "ip": 192,
+        "line": 85
+      },
+      {
+        "ip": 196,
+        "line": 86
+      },
+      {
+        "ip": 201,
+        "line": 90
+      },
+      {
+        "ip": 208,
+        "line": 93
+      },
+      {
+        "ip": 213,
+        "line": 95
+      },
+      {
+        "ip": 217,
+        "line": 96
+      },
+      {
+        "ip": 222,
+        "line": 97
+      },
+      {
+        "ip": 237,
+        "line": 103
+      },
+      {
+        "ip": 241,
+        "line": 104
+      },
+      {
+        "ip": 247,
+        "line": 105
+      },
+      {
+        "ip": 255,
+        "line": 107
+      },
+      {
+        "ip": 259,
+        "line": 109
+      },
+      {
+        "ip": 266,
+        "line": 112
+      },
+      {
+        "ip": 274,
+        "line": 114
+      },
+      {
+        "ip": 278,
+        "line": 116
+      }
+    ],
+    "sourceTags": "134:134:sc;258:258:sc"
+  },
+  "compiler": {
+    "name": "cashc",
+    "version": "0.14.0",
+    "options": {
+      "enforceFunctionParameterTypes": true,
+      "enforceLocktimeGuard": true
+    }
+  },
+  "updatedAt": "2026-11-15T19:58:59.687Z"
+}

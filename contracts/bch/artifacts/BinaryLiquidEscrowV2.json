@@ -1,0 +1,203 @@
+{
+  "contractName": "BinaryLiquidEscrowV2",
+  "constructorInputs": [
+    {
+      "name": "watchmanPk",
+      "type": "pubkey"
+    },
+    {
+      "name": "vaultPoolLockingBytecode",
+      "type": "bytes"
+    },
+    {
+      "name": "refundLockingBytecode",
+      "type": "bytes"
+    },
+    {
+      "name": "expiryTimestamp",
+      "type": "int"
+    },
+    {
+      "name": "orderSalt",
+      "type": "bytes16"
+    }
+  ],
+  "abi": [
+    {
+      "name": "settleToVault",
+      "inputs": [
+        {
+          "name": "watchmanSig",
+          "type": "sig"
+        }
+      ]
+    },
+    {
+      "name": "refund",
+      "inputs": []
+    }
+  ],
+  "bytecode": "OP_5 OP_PICK OP_0 OP_NUMEQUAL OP_IF OP_4 OP_ROLL OP_SIZE OP_NIP OP_16 OP_NUMEQUALVERIFY OP_5 OP_ROLL OP_SWAP OP_CHECKSIGVERIFY OP_INPUTINDEX OP_0 OP_NUMEQUALVERIFY OP_TXINPUTCOUNT OP_2 OP_LESSTHANOREQUAL OP_VERIFY OP_TXINPUTCOUNT OP_2 OP_NUMEQUAL OP_IF OP_1 OP_UTXOBYTECODE OP_SIZE OP_NIP 19 OP_NUMEQUALVERIFY OP_1 OP_UTXOTOKENCATEGORY OP_0 OP_EQUALVERIFY OP_TXOUTPUTCOUNT OP_2 OP_LESSTHANOREQUAL OP_VERIFY OP_TXOUTPUTCOUNT OP_2 OP_NUMEQUAL OP_IF OP_1 OP_OUTPUTTOKENCATEGORY OP_0 OP_EQUALVERIFY OP_1 OP_OUTPUTVALUE OP_1 OP_UTXOVALUE OP_LESSTHANOREQUAL OP_VERIFY OP_ENDIF OP_ELSE OP_TXOUTPUTCOUNT OP_1 OP_NUMEQUALVERIFY OP_ENDIF OP_0 OP_UTXOTOKENCATEGORY OP_0 OP_UTXOTOKENAMOUNT OP_0 OP_UTXOTOKENCOMMITMENT OP_0 OP_UTXOVALUE OP_0 OP_OUTPUTBYTECODE OP_5 OP_ROLL OP_EQUALVERIFY OP_0 OP_OUTPUTVALUE 2202 OP_GREATERTHANOREQUAL OP_VERIFY OP_3 OP_PICK OP_0 OP_EQUAL OP_NOTIF OP_0 OP_OUTPUTTOKENCATEGORY OP_4 OP_PICK OP_EQUALVERIFY OP_0 OP_OUTPUTTOKENAMOUNT OP_3 OP_PICK OP_GREATERTHANOREQUAL OP_VERIFY OP_0 OP_OUTPUTTOKENCOMMITMENT OP_2 OP_PICK OP_EQUALVERIFY OP_DUP f209 OP_GREATERTHANOREQUAL OP_IF OP_0 OP_OUTPUTVALUE OP_OVER d007 OP_SUB OP_GREATERTHANOREQUAL OP_VERIFY OP_ENDIF OP_ELSE OP_0 OP_OUTPUTTOKENCATEGORY OP_0 OP_EQUALVERIFY OP_0 OP_OUTPUTVALUE OP_OVER d007 OP_SUB OP_GREATERTHANOREQUAL OP_VERIFY OP_ENDIF OP_2DROP OP_2DROP OP_2DROP OP_DROP OP_1 OP_ELSE OP_5 OP_ROLL OP_1 OP_NUMEQUALVERIFY OP_4 OP_ROLL OP_SIZE OP_NIP OP_16 OP_NUMEQUALVERIFY OP_3 OP_ROLL OP_CHECKLOCKTIMEVERIFY OP_DROP OP_INPUTINDEX OP_0 OP_NUMEQUALVERIFY OP_TXINPUTCOUNT OP_2 OP_LESSTHANOREQUAL OP_VERIFY OP_TXINPUTCOUNT OP_2 OP_NUMEQUAL OP_IF OP_1 OP_UTXOBYTECODE OP_SIZE OP_NIP 19 OP_NUMEQUALVERIFY OP_1 OP_UTXOTOKENCATEGORY OP_0 OP_EQUALVERIFY OP_TXOUTPUTCOUNT OP_2 OP_LESSTHANOREQUAL OP_VERIFY OP_TXOUTPUTCOUNT OP_2 OP_NUMEQUAL OP_IF OP_1 OP_OUTPUTTOKENCATEGORY OP_0 OP_EQUALVERIFY OP_1 OP_OUTPUTVALUE OP_1 OP_UTXOVALUE OP_LESSTHANOREQUAL OP_VERIFY OP_ENDIF OP_ELSE OP_TXOUTPUTCOUNT OP_1 OP_NUMEQUALVERIFY OP_ENDIF OP_0 OP_UTXOTOKENCATEGORY OP_0 OP_UTXOTOKENAMOUNT OP_0 OP_UTXOTOKENCOMMITMENT OP_0 OP_UTXOVALUE OP_0 OP_OUTPUTBYTECODE OP_7 OP_ROLL OP_EQUALVERIFY OP_0 OP_OUTPUTVALUE 2202 OP_GREATERTHANOREQUAL OP_VERIFY OP_3 OP_PICK OP_0 OP_EQUAL OP_NOTIF OP_0 OP_OUTPUTTOKENCATEGORY OP_4 OP_PICK OP_EQUALVERIFY OP_0 OP_OUTPUTTOKENAMOUNT OP_3 OP_PICK OP_GREATERTHANOREQUAL OP_VERIFY OP_0 OP_OUTPUTTOKENCOMMITMENT OP_2 OP_PICK OP_EQUALVERIFY OP_DUP f209 OP_GREATERTHANOREQUAL OP_IF OP_0 OP_OUTPUTVALUE OP_OVER d007 OP_SUB OP_GREATERTHANOREQUAL OP_VERIFY OP_ENDIF OP_ELSE OP_0 OP_OUTPUTTOKENCATEGORY OP_0 OP_EQUALVERIFY OP_0 OP_OUTPUTVALUE OP_OVER d007 OP_SUB OP_GREATERTHANOREQUAL OP_VERIFY OP_ENDIF OP_2DROP OP_2DROP OP_2DROP OP_1 OP_ENDIF",
+  "source": "pragma cashscript ^0.14.0;\n\n/**\n * @title BinaryLiquidEscrowV2 (Hardened Per-Swap Non-Custodial Intent Covenant)\n * @author BinaryLiquid Protocol / DrianOps\n * @notice Generates a deterministic, isolated P2SH32 CashTokens Smart Contract\n * for each cross-chain swap order, with zero private keys and autonomous 24-hour Timelock Refund.\n *\n * V2 HARDENING INVARIANTS:\n * 1. Native BCH Value Preservation: Both `settleToVault` and permissionless `refund` enforce\n *    `tx.outputs[0].value >= inputSats - 2000` (and `>= 546` dust floor) when settling/refunding\n *    native BCH (`tokenAmt == 0`) or BCH surplus alongside CashTokens, preventing 546-sat drain.\n * 2. Anti Multi-Input Covenant/Token Drain: Restricts `tx.inputs.length <= 2` and requires any\n *    auxiliary second input (fee UTXO) to carry `tokenCategory == 0x` and a distinct lockingBytecode.\n * 3. Strict Output Caps: Bounds `tx.outputs.length` (`== 1` for single-input native BCH refund)\n *    so excess satoshis can never be diverted to an unverified change output.\n */\ncontract BinaryLiquidEscrowV2(\n    pubkey watchmanPk,\n    bytes vaultPoolLockingBytecode,\n    bytes refundLockingBytecode,\n    int expiryTimestamp,\n    bytes16 orderSalt\n) {\n    /**\n     * @notice Sweeps verified user deposit strictly into the main BinaryLiquidVault Liquidity Pool\n     */\n    function settleToVault(sig watchmanSig) {\n        require(orderSalt.length == 16);\n        require(checkSig(watchmanSig, watchmanPk));\n        require(this.activeInputIndex == 0);\n\n        require(tx.inputs.length <= 2);\n        if (tx.inputs.length == 2) {\n            // Secondary input (#1) MUST be a standard 25-byte P2PKH fee sponsor without CashTokens (blocks 2-covenant pairing)\n            require(tx.inputs[1].lockingBytecode.length == 25);\n            require(tx.inputs[1].tokenCategory == 0x);\n            require(tx.outputs.length <= 2);\n            if (tx.outputs.length == 2) {\n                require(tx.outputs[1].tokenCategory == 0x);\n                require(tx.outputs[1].value <= tx.inputs[1].value);\n            }\n        } else {\n            require(tx.outputs.length == 1);\n        }\n\n        bytes tokenCat = tx.inputs[0].tokenCategory;\n        int tokenAmt = tx.inputs[0].tokenAmount;\n        bytes nftComm = tx.inputs[0].nftCommitment;\n        int inputSats = tx.inputs[0].value;\n\n        // Mathematically cannot be diverted anywhere except the Non-Custodial Vault Pool\n        require(tx.outputs[0].lockingBytecode == vaultPoolLockingBytecode);\n        require(tx.outputs[0].value >= 546);\n\n        if (tokenCat != 0x) {\n            require(tx.outputs[0].tokenCategory == tokenCat);\n            require(tx.outputs[0].tokenAmount >= tokenAmt);\n            require(tx.outputs[0].nftCommitment == nftComm);\n            if (inputSats >= 2546) {\n                require(tx.outputs[0].value >= inputSats - 2000);\n            }\n        } else {\n            require(tx.outputs[0].tokenCategory == 0x);\n            require(tx.outputs[0].value >= inputSats - 2000);\n        }\n    }\n\n    /**\n     * @notice Permissionless 24h Timelock Refund: Anyone can trigger after expiryTimestamp,\n     * and the BCH VM forces 100% of tokens, NFTs, and BCH (minus <= 2000 sat miner fee) back to refundLockingBytecode.\n     */\n    function refund() {\n        require(orderSalt.length == 16);\n        require(tx.time >= expiryTimestamp);\n        require(this.activeInputIndex == 0);\n\n        require(tx.inputs.length <= 2);\n        if (tx.inputs.length == 2) {\n            require(tx.inputs[1].lockingBytecode.length == 25);\n            require(tx.inputs[1].tokenCategory == 0x);\n            require(tx.outputs.length <= 2);\n            if (tx.outputs.length == 2) {\n                require(tx.outputs[1].tokenCategory == 0x);\n                require(tx.outputs[1].value <= tx.inputs[1].value);\n            }\n        } else {\n            require(tx.outputs.length == 1);\n        }\n\n        bytes tokenCat = tx.inputs[0].tokenCategory;\n        int tokenAmt = tx.inputs[0].tokenAmount;\n        bytes nftComm = tx.inputs[0].nftCommitment;\n        int inputSats = tx.inputs[0].value;\n\n        require(tx.outputs[0].lockingBytecode == refundLockingBytecode);\n        require(tx.outputs[0].value >= 546);\n\n        if (tokenCat != 0x) {\n            require(tx.outputs[0].tokenCategory == tokenCat);\n            require(tx.outputs[0].tokenAmount >= tokenAmt);\n            require(tx.outputs[0].nftCommitment == nftComm);\n            if (inputSats >= 2546) {\n                require(tx.outputs[0].value >= inputSats - 2000);\n            }\n        } else {\n            require(tx.outputs[0].tokenCategory == 0x);\n            require(tx.outputs[0].value >= inputSats - 2000);\n        }\n    }\n}\n",
+  "fingerprint": "e643886cb36d7404b2de75b9f366c8af414c924b9740a890c8c5c3434d2a22a3",
+  "debug": {
+    "bytecode": "5579009c63547a8277609d557a7cadc0009dc352a169c3529c6351c7827701199d51ce0088c452a169c4529c6351d1008851cc51c6a1696867c4519d6800ce00d000cf00c600cd557a8800cc022202a269537900876400d154798800d35379a26900d25279887602f209a26300cc7802d00794a269686700d1008800cc7802d00794a269686d6d6d755167557a519d547a8277609d537ab175c0009dc352a169c3529c6351c7827701199d51ce0088c452a169c4529c6351d1008851cc51c6a1696867c4519d6800ce00d000cf00c600cd577a8800cc022202a269537900876400d154798800d35379a26900d25279887602f209a26300cc7802d00794a269686700d1008800cc7802d00794a269686d6d6d5168",
+    "sourceMap": "28:4:67:5;;;;;29:16:29:25;;:::32:1;;:36::38:0;:8::40:1;30:25:30:36:0;;:38::48;:8::51:1;31:16:31:37:0;:41::42;:8::44:1;33:16:33:32:0;:36::37;:16:::1;:8::39;34:12:34:28:0;:32::33;:12:::1;:35:43:9:0;36:30:36:31;:20::48:1;:::55;;:59::61:0;:12::63:1;37:30:37:31:0;:20::46:1;:50::52:0;:12::54:1;38:20:38:37:0;:41::42;:20:::1;:12::44;39:16:39:33:0;:37::38;:16:::1;:40:42:13:0;40:35:40:36;:24::51:1;:55::57:0;:16::59:1;41:35:41:36:0;:24::43:1;:57::58:0;:47::65:1;:24;:16::67;39:40:42:13;43:15:45:9:0;44:20:44:37;:41::42;:12::44:1;43:15:45:9;47:35:47:36:0;:25::51:1;48:33:48:34:0;:23::47:1;49:34:49:35:0;:24::50:1;50:34:50:35:0;:24::42:1;53:27:53:28:0;:16::45:1;:49::73:0;;:8::75:1;54:27:54:28:0;:16::35:1;:39::42:0;:16:::1;:8::44;56:12:56:20:0;;:24::26;:12:::1;::63:9:0;57:31:57:32;:20::47:1;:51::59:0;;:12::61:1;58:31:58:32:0;:20::45:1;:49::57:0;;:20:::1;:12::59;59:31:59:32:0;:20::47:1;:51::58:0;;:12::60:1;60:16:60:25:0;:29::33;:16:::1;:35:62:13:0;61::61:36;:24::43:1;:47::56:0;:59::63;:47:::1;:24;:16::65;60:35:62:13;63:15:66:9:0;64:31:64:32;:20::47:1;:51::53:0;:12::55:1;65:31:65:32:0;:20::39:1;:43::52:0;:55::59;:43:::1;:20;:12::61;63:15:66:9;28:44:67:5;;;;;:4;73::110::0;;;;74:16:74:25;;:::32:1;;:36::38:0;:8::40:1;75:27:75:42:0;;:8::44:1;;76:16:76:37:0;:41::42;:8::44:1;78:16:78:32:0;:36::37;:16:::1;:8::39;79:12:79:28:0;:32::33;:12:::1;:35:87:9:0;80:30:80:31;:20::48:1;:::55;;:59::61:0;:12::63:1;81:30:81:31:0;:20::46:1;:50::52:0;:12::54:1;82:20:82:37:0;:41::42;:20:::1;:12::44;83:16:83:33:0;:37::38;:16:::1;:40:86:13:0;84:35:84:36;:24::51:1;:55::57:0;:16::59:1;85:35:85:36:0;:24::43:1;:57::58:0;:47::65:1;:24;:16::67;83:40:86:13;87:15:89:9:0;88:20:88:37;:41::42;:12::44:1;87:15:89:9;91:35:91:36:0;:25::51:1;92:33:92:34:0;:23::47:1;93:34:93:35:0;:24::50:1;94:34:94:35:0;:24::42:1;96:27:96:28:0;:16::45:1;:49::70:0;;:8::72:1;97:27:97:28:0;:16::35:1;:39::42:0;:16:::1;:8::44;99:12:99:20:0;;:24::26;:12:::1;::106:9:0;100:31:100:32;:20::47:1;:51::59:0;;:12::61:1;101:31:101:32:0;:20::45:1;:49::57:0;;:20:::1;:12::59;102:31:102:32:0;:20::47:1;:51::58:0;;:12::60:1;103:16:103:25:0;:29::33;:16:::1;:35:105:13:0;104::104:36;:24::43:1;:47::56:0;:59::63;:47:::1;:24;:16::65;103:35:105:13;106:15:109:9:0;107:31:107:32;:20::47:1;:51::53:0;:12::55:1;108:31:108:32:0;:20::39:1;:43::52:0;:55::59;:43:::1;:20;:12::61;106:15:109:9;73:22:110:5;;;;18:0:111:1",
+    "logs": [],
+    "requires": [
+      {
+        "ip": 15,
+        "line": 29
+      },
+      {
+        "ip": 19,
+        "line": 30
+      },
+      {
+        "ip": 22,
+        "line": 31
+      },
+      {
+        "ip": 26,
+        "line": 33
+      },
+      {
+        "ip": 36,
+        "line": 36
+      },
+      {
+        "ip": 40,
+        "line": 37
+      },
+      {
+        "ip": 44,
+        "line": 38
+      },
+      {
+        "ip": 52,
+        "line": 40
+      },
+      {
+        "ip": 58,
+        "line": 41
+      },
+      {
+        "ip": 63,
+        "line": 44
+      },
+      {
+        "ip": 77,
+        "line": 53
+      },
+      {
+        "ip": 82,
+        "line": 54
+      },
+      {
+        "ip": 92,
+        "line": 57
+      },
+      {
+        "ip": 98,
+        "line": 58
+      },
+      {
+        "ip": 103,
+        "line": 59
+      },
+      {
+        "ip": 114,
+        "line": 61
+      },
+      {
+        "ip": 120,
+        "line": 64
+      },
+      {
+        "ip": 127,
+        "line": 65
+      },
+      {
+        "ip": 144,
+        "line": 74
+      },
+      {
+        "ip": 147,
+        "line": 75
+      },
+      {
+        "ip": 151,
+        "line": 76
+      },
+      {
+        "ip": 155,
+        "line": 78
+      },
+      {
+        "ip": 165,
+        "line": 80
+      },
+      {
+        "ip": 169,
+        "line": 81
+      },
+      {
+        "ip": 173,
+        "line": 82
+      },
+      {
+        "ip": 181,
+        "line": 84
+      },
+      {
+        "ip": 187,
+        "line": 85
+      },
+      {
+        "ip": 192,
+        "line": 88
+      },
+      {
+        "ip": 206,
+        "line": 96
+      },
+      {
+        "ip": 211,
+        "line": 97
+      },
+      {
+        "ip": 221,
+        "line": 100
+      },
+      {
+        "ip": 227,
+        "line": 101
+      },
+      {
+        "ip": 232,
+        "line": 102
+      },
+      {
+        "ip": 243,
+        "line": 104
+      },
+      {
+        "ip": 249,
+        "line": 107
+      },
+      {
+        "ip": 256,
+        "line": 108
+      }
+    ]
+  },
+  "compiler": {
+    "name": "cashc",
+    "version": "0.14.0",
+    "options": {
+      "enforceFunctionParameterTypes": true,
+      "enforceLocktimeGuard": true
+    }
+  },
+  "updatedAt": "2026-11-15T19:58:59.759Z"
+}

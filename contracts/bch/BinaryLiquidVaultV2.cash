@@ -1,0 +1,120 @@
+pragma cashscript ^0.14.0;
+
+/**
+ * @title BinaryLiquidVaultV2 (Hardened CashTokens + Native BCH Liquidity Pool Covenant)
+ * @author BinaryLiquid Protocol / DrianOps
+ * @notice 100% Non-Custodial Cross-Chain Liquidity Covenant supporting BOTH CashTokens (PUSD)
+ * via `release()` AND Native BCH via `releaseBch()`.
+ *
+ * V2 HARDENING INVARIANTS:
+ * 1. Dual Asset Support: Native BCH swept from swaps/margins is never frozen; `releaseBch()` enforces
+ *    independent per-tx BCH circuit breaker bounds (`maxSingleBchPayout`) and strict sats continuation.
+ * 2. Dust & Value Conservation: Enforces `value >= 546` on recipient and continuation outputs so
+ *    change UTXOs are never dust-burned or underfunded.
+ * 3. Anti Multi-Input Covenant Drain: Restricts `tx.inputs.length <= 2` and requires any auxiliary
+ *    fee UTXO to have `tokenCategory == 0x` and a different `lockingBytecode`.
+ */
+contract BinaryLiquidVaultV2(
+    pubkey watchmanPk,
+    int maxSingleTokenPayout,
+    int maxSingleBchPayout
+) {
+    /**
+     * @notice Releases CashTokens (e.g. PUSD) from a token UTXO with Watchman signature & continuation
+     */
+    function release(sig watchmanSig, bytes recipientLockingBytecode, int payoutAmount) {
+        require(checkSig(watchmanSig, watchmanPk));
+        require(payoutAmount > 0);
+        require(payoutAmount <= maxSingleTokenPayout);
+        require(this.activeInputIndex == 0);
+
+        require(tx.inputs.length <= 2);
+        if (tx.inputs.length == 2) {
+            require(tx.inputs[1].lockingBytecode.length == 25);
+            require(tx.inputs[1].tokenCategory == 0x);
+        }
+
+        bytes poolCategory = tx.inputs[0].tokenCategory;
+        int poolBalance = tx.inputs[0].tokenAmount;
+        int inputSats = tx.inputs[0].value;
+        require(poolCategory != 0x);
+        require(poolBalance >= payoutAmount);
+
+        // Output #0 delivers exact CashTokens and spendable dust BCH to recipient
+        require(tx.outputs[0].lockingBytecode == recipientLockingBytecode);
+        require(tx.outputs[0].tokenCategory == poolCategory);
+        require(tx.outputs[0].tokenAmount == payoutAmount);
+        require(tx.outputs[0].value >= 546);
+
+        // Output #1 forces remaining CashTokens back into this exact Vault covenant
+        int remainingBalance = poolBalance - payoutAmount;
+        if (remainingBalance > 0) {
+            bytes vaultBytecode = tx.inputs[0].lockingBytecode;
+            require(tx.outputs[1].lockingBytecode == vaultBytecode);
+            require(tx.outputs[1].tokenCategory == poolCategory);
+            require(tx.outputs[1].tokenAmount >= remainingBalance);
+            require(tx.outputs[1].value >= 546);
+            if (inputSats >= 2546) {
+                require(tx.outputs[1].value >= inputSats - 2000);
+            }
+            if (tx.inputs.length == 2) {
+                require(tx.outputs.length <= 3);
+            } else {
+                require(tx.outputs.length == 2);
+            }
+        } else {
+            if (tx.inputs.length == 2) {
+                require(tx.outputs.length <= 2);
+            } else {
+                require(tx.outputs.length == 1);
+            }
+        }
+    }
+
+    /**
+     * @notice Releases Native BCH from a non-token UTXO with Watchman signature & exact BCH continuation
+     */
+    function releaseBch(sig watchmanSig, bytes recipientLockingBytecode, int payoutSats) {
+        require(checkSig(watchmanSig, watchmanPk));
+        require(payoutSats >= 546);
+        require(payoutSats <= maxSingleBchPayout);
+        require(this.activeInputIndex == 0);
+
+        require(tx.inputs.length <= 2);
+        if (tx.inputs.length == 2) {
+            require(tx.inputs[1].lockingBytecode.length == 25);
+            require(tx.inputs[1].tokenCategory == 0x);
+        }
+
+        // Prevent burning CashTokens via native BCH withdrawal path
+        require(tx.inputs[0].tokenCategory == 0x);
+
+        int vaultSats = tx.inputs[0].value;
+        require(vaultSats >= payoutSats);
+
+        require(tx.outputs[0].lockingBytecode == recipientLockingBytecode);
+        require(tx.outputs[0].tokenCategory == 0x);
+        require(tx.outputs[0].value == payoutSats);
+
+        int remainingSats = vaultSats - payoutSats;
+        int minReturnSats = remainingSats - 1500;
+        if (minReturnSats >= 546) {
+            bytes vaultBytecode = tx.inputs[0].lockingBytecode;
+            require(tx.outputs[1].lockingBytecode == vaultBytecode);
+            require(tx.outputs[1].tokenCategory == 0x);
+            require(tx.outputs[1].value >= minReturnSats);
+            if (tx.inputs.length == 2) {
+                require(tx.outputs.length <= 3);
+            } else {
+                require(tx.outputs.length == 2);
+            }
+        } else {
+            require(remainingSats <= 1500);
+            if (tx.inputs.length == 2) {
+                require(tx.outputs.length <= 2);
+            } else {
+                require(tx.outputs.length == 1);
+            }
+        }
+    }
+}

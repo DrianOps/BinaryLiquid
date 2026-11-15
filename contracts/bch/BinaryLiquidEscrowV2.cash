@@ -1,0 +1,111 @@
+pragma cashscript ^0.14.0;
+
+/**
+ * @title BinaryLiquidEscrowV2 (Hardened Per-Swap Non-Custodial Intent Covenant)
+ * @author BinaryLiquid Protocol / DrianOps
+ * @notice Generates a deterministic, isolated P2SH32 CashTokens Smart Contract
+ * for each cross-chain swap order, with zero private keys and autonomous 24-hour Timelock Refund.
+ *
+ * V2 HARDENING INVARIANTS:
+ * 1. Native BCH Value Preservation: Both `settleToVault` and permissionless `refund` enforce
+ *    `tx.outputs[0].value >= inputSats - 2000` (and `>= 546` dust floor) when settling/refunding
+ *    native BCH (`tokenAmt == 0`) or BCH surplus alongside CashTokens, preventing 546-sat drain.
+ * 2. Anti Multi-Input Covenant/Token Drain: Restricts `tx.inputs.length <= 2` and requires any
+ *    auxiliary second input (fee UTXO) to carry `tokenCategory == 0x` and a distinct lockingBytecode.
+ * 3. Strict Output Caps: Bounds `tx.outputs.length` (`== 1` for single-input native BCH refund)
+ *    so excess satoshis can never be diverted to an unverified change output.
+ */
+contract BinaryLiquidEscrowV2(
+    pubkey watchmanPk,
+    bytes vaultPoolLockingBytecode,
+    bytes refundLockingBytecode,
+    int expiryTimestamp,
+    bytes16 orderSalt
+) {
+    /**
+     * @notice Sweeps verified user deposit strictly into the main BinaryLiquidVault Liquidity Pool
+     */
+    function settleToVault(sig watchmanSig) {
+        require(orderSalt.length == 16);
+        require(checkSig(watchmanSig, watchmanPk));
+        require(this.activeInputIndex == 0);
+
+        require(tx.inputs.length <= 2);
+        if (tx.inputs.length == 2) {
+            // Secondary input (#1) MUST be a standard 25-byte P2PKH fee sponsor without CashTokens (blocks 2-covenant pairing)
+            require(tx.inputs[1].lockingBytecode.length == 25);
+            require(tx.inputs[1].tokenCategory == 0x);
+            require(tx.outputs.length <= 2);
+            if (tx.outputs.length == 2) {
+                require(tx.outputs[1].tokenCategory == 0x);
+                require(tx.outputs[1].value <= tx.inputs[1].value);
+            }
+        } else {
+            require(tx.outputs.length == 1);
+        }
+
+        bytes tokenCat = tx.inputs[0].tokenCategory;
+        int tokenAmt = tx.inputs[0].tokenAmount;
+        bytes nftComm = tx.inputs[0].nftCommitment;
+        int inputSats = tx.inputs[0].value;
+
+        // Mathematically cannot be diverted anywhere except the Non-Custodial Vault Pool
+        require(tx.outputs[0].lockingBytecode == vaultPoolLockingBytecode);
+        require(tx.outputs[0].value >= 546);
+
+        if (tokenCat != 0x) {
+            require(tx.outputs[0].tokenCategory == tokenCat);
+            require(tx.outputs[0].tokenAmount >= tokenAmt);
+            require(tx.outputs[0].nftCommitment == nftComm);
+            if (inputSats >= 2546) {
+                require(tx.outputs[0].value >= inputSats - 2000);
+            }
+        } else {
+            require(tx.outputs[0].tokenCategory == 0x);
+            require(tx.outputs[0].value >= inputSats - 2000);
+        }
+    }
+
+    /**
+     * @notice Permissionless 24h Timelock Refund: Anyone can trigger after expiryTimestamp,
+     * and the BCH VM forces 100% of tokens, NFTs, and BCH (minus <= 2000 sat miner fee) back to refundLockingBytecode.
+     */
+    function refund() {
+        require(orderSalt.length == 16);
+        require(tx.time >= expiryTimestamp);
+        require(this.activeInputIndex == 0);
+
+        require(tx.inputs.length <= 2);
+        if (tx.inputs.length == 2) {
+            require(tx.inputs[1].lockingBytecode.length == 25);
+            require(tx.inputs[1].tokenCategory == 0x);
+            require(tx.outputs.length <= 2);
+            if (tx.outputs.length == 2) {
+                require(tx.outputs[1].tokenCategory == 0x);
+                require(tx.outputs[1].value <= tx.inputs[1].value);
+            }
+        } else {
+            require(tx.outputs.length == 1);
+        }
+
+        bytes tokenCat = tx.inputs[0].tokenCategory;
+        int tokenAmt = tx.inputs[0].tokenAmount;
+        bytes nftComm = tx.inputs[0].nftCommitment;
+        int inputSats = tx.inputs[0].value;
+
+        require(tx.outputs[0].lockingBytecode == refundLockingBytecode);
+        require(tx.outputs[0].value >= 546);
+
+        if (tokenCat != 0x) {
+            require(tx.outputs[0].tokenCategory == tokenCat);
+            require(tx.outputs[0].tokenAmount >= tokenAmt);
+            require(tx.outputs[0].nftCommitment == nftComm);
+            if (inputSats >= 2546) {
+                require(tx.outputs[0].value >= inputSats - 2000);
+            }
+        } else {
+            require(tx.outputs[0].tokenCategory == 0x);
+            require(tx.outputs[0].value >= inputSats - 2000);
+        }
+    }
+}

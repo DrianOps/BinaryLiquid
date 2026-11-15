@@ -1,0 +1,51 @@
+pragma cashscript ^0.14.0;
+
+/**
+ * @title BinaryLiquidEscrow (Per-Swap Non-Custodial Intent Covenant)
+ * @author BinaryLiquid Protocol / DrianOps
+ * @notice Generates a deterministic, isolated P2SH32 CashTokens Smart Contract (`bchtest:r...` / `bitcoincash:r...`)
+ * for each cross-chain swap order, with zero private keys and autonomous 24-hour Timelock Refund.
+ */
+contract BinaryLiquidEscrow(
+    pubkey watchmanPk,
+    bytes vaultPoolLockingBytecode,
+    bytes refundLockingBytecode,
+    int expiryTimestamp,
+    bytes16 orderSalt
+) {
+    /**
+     * @notice Sweeps verified user deposit strictly into the main BinaryLiquidVault Liquidity Pool
+     */
+    function settleToVault(sig watchmanSig) {
+        require(orderSalt.length == 16);
+        require(checkSig(watchmanSig, watchmanPk));
+
+        bytes tokenCat = tx.inputs[this.activeInputIndex].tokenCategory;
+        int tokenAmt = tx.inputs[this.activeInputIndex].tokenAmount;
+
+        // Mathematically cannot be diverted anywhere except the Non-Custodial Vault Pool
+        require(tx.outputs[0].lockingBytecode == vaultPoolLockingBytecode);
+        if (tokenAmt > 0) {
+            require(tx.outputs[0].tokenCategory == tokenCat);
+            require(tx.outputs[0].tokenAmount >= tokenAmt);
+        }
+    }
+
+    /**
+     * @notice Permissionless 24h Timelock Refund: Anyone can trigger after expiryTimestamp,
+     * and the BCH VM forces 100% of tokens/BCH back to the depositor's refundLockingBytecode.
+     */
+    function refund() {
+        require(orderSalt.length == 16);
+        require(tx.time >= expiryTimestamp);
+
+        bytes tokenCat = tx.inputs[this.activeInputIndex].tokenCategory;
+        int tokenAmt = tx.inputs[this.activeInputIndex].tokenAmount;
+
+        require(tx.outputs[0].lockingBytecode == refundLockingBytecode);
+        if (tokenAmt > 0) {
+            require(tx.outputs[0].tokenCategory == tokenCat);
+            require(tx.outputs[0].tokenAmount >= tokenAmt);
+        }
+    }
+}

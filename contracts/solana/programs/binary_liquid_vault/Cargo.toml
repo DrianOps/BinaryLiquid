@@ -1,0 +1,21 @@
+[package]
+name = "binary-liquid-vault"
+version = "1.0.0"
+description = "100% Non-Custodial Cross-Chain Liquidity Vault for Solana SVM <-> Bitcoin Cash (CashTokens) & EVM Networks"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "binary_liquid_vault"
+
+[features]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+cpi = ["no-entrypoint"]
+default = []
+
+[dependencies]
+anchor-lang = "0.30.1"
+anchor-spl = "0.30.1"
+solana-program = "1.18.22"

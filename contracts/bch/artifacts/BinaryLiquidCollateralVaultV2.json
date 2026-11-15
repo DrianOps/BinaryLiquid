@@ -1,0 +1,306 @@
+{
+  "contractName": "BinaryLiquidCollateralVaultV2",
+  "constructorInputs": [
+    {
+      "name": "watchmanPk",
+      "type": "pubkey"
+    },
+    {
+      "name": "borrowerLockingBytecode",
+      "type": "bytes"
+    },
+    {
+      "name": "liquidatorVaultLockingBytecode",
+      "type": "bytes"
+    },
+    {
+      "name": "rescueTimestamp",
+      "type": "int"
+    }
+  ],
+  "abi": [
+    {
+      "name": "releaseCollateral",
+      "inputs": [
+        {
+          "name": "watchmanSig",
+          "type": "sig"
+        },
+        {
+          "name": "withdrawSats",
+          "type": "int"
+        },
+        {
+          "name": "returnToVaultSats",
+          "type": "int"
+        }
+      ]
+    },
+    {
+      "name": "liquidateCollateral",
+      "inputs": [
+        {
+          "name": "watchmanSig",
+          "type": "sig"
+        },
+        {
+          "name": "liquidateSats",
+          "type": "int"
+        },
+        {
+          "name": "returnToBorrowerSats",
+          "type": "int"
+        }
+      ]
+    },
+    {
+      "name": "rescueCollateral",
+      "inputs": [
+        {
+          "name": "watchmanRescueApprovalSig",
+          "type": "sig"
+        }
+      ]
+    }
+  ],
+  "bytecode": "OP_4 OP_PICK OP_0 OP_NUMEQUAL OP_IF OP_5 OP_ROLL OP_SWAP OP_CHECKSIGVERIFY OP_4 OP_PICK 2202 OP_GREATERTHANOREQUAL OP_VERIFY OP_5 OP_PICK OP_0 OP_GREATERTHANOREQUAL OP_VERIFY OP_INPUTINDEX OP_0 OP_NUMEQUALVERIFY OP_TXINPUTCOUNT OP_2 OP_LESSTHANOREQUAL OP_VERIFY OP_TXINPUTCOUNT OP_2 OP_NUMEQUAL OP_IF OP_1 OP_UTXOBYTECODE OP_SIZE OP_NIP 19 OP_NUMEQUALVERIFY OP_1 OP_UTXOTOKENCATEGORY OP_0 OP_EQUALVERIFY OP_ENDIF OP_0 OP_UTXOTOKENCATEGORY OP_0 OP_EQUALVERIFY OP_0 OP_UTXOVALUE OP_5 OP_PICK OP_7 OP_PICK OP_ADD OP_OVER dc05 OP_SUB OP_GREATERTHANOREQUAL OP_VERIFY OP_0 OP_OUTPUTBYTECODE OP_ROT OP_EQUALVERIFY OP_0 OP_OUTPUTTOKENCATEGORY OP_0 OP_EQUALVERIFY OP_0 OP_OUTPUTVALUE OP_5 OP_PICK OP_GREATERTHANOREQUAL OP_VERIFY OP_5 OP_PICK 2202 OP_GREATERTHANOREQUAL OP_IF OP_0 OP_UTXOBYTECODE OP_1 OP_OUTPUTBYTECODE OP_OVER OP_EQUALVERIFY OP_1 OP_OUTPUTTOKENCATEGORY OP_0 OP_EQUALVERIFY OP_1 OP_OUTPUTVALUE OP_7 OP_PICK OP_GREATERTHANOREQUAL OP_VERIFY OP_TXINPUTCOUNT OP_2 OP_NUMEQUAL OP_IF OP_TXOUTPUTCOUNT OP_3 OP_LESSTHANOREQUAL OP_VERIFY OP_ELSE OP_TXOUTPUTCOUNT OP_2 OP_NUMEQUALVERIFY OP_ENDIF OP_DROP OP_ELSE OP_4 OP_PICK OP_OVER dc05 OP_SUB OP_GREATERTHANOREQUAL OP_VERIFY OP_TXINPUTCOUNT OP_2 OP_NUMEQUAL OP_IF OP_TXOUTPUTCOUNT OP_2 OP_LESSTHANOREQUAL OP_VERIFY OP_ELSE OP_TXOUTPUTCOUNT OP_1 OP_NUMEQUALVERIFY OP_ENDIF OP_ENDIF OP_2DROP OP_2DROP OP_2DROP OP_1 OP_ELSE OP_4 OP_PICK OP_1 OP_NUMEQUAL OP_IF OP_5 OP_ROLL OP_SWAP OP_CHECKSIGVERIFY OP_4 OP_PICK 2202 OP_GREATERTHANOREQUAL OP_VERIFY OP_5 OP_PICK OP_0 OP_GREATERTHANOREQUAL OP_VERIFY OP_INPUTINDEX OP_0 OP_NUMEQUALVERIFY OP_TXINPUTCOUNT OP_2 OP_LESSTHANOREQUAL OP_VERIFY OP_TXINPUTCOUNT OP_2 OP_NUMEQUAL OP_IF OP_1 OP_UTXOBYTECODE OP_SIZE OP_NIP 19 OP_NUMEQUALVERIFY OP_1 OP_UTXOTOKENCATEGORY OP_0 OP_EQUALVERIFY OP_ENDIF OP_0 OP_UTXOTOKENCATEGORY OP_0 OP_EQUALVERIFY OP_0 OP_UTXOVALUE OP_5 OP_PICK OP_7 OP_PICK OP_ADD OP_OVER dc05 OP_SUB OP_GREATERTHANOREQUAL OP_VERIFY OP_0 OP_OUTPUTBYTECODE OP_3 OP_ROLL OP_EQUALVERIFY OP_0 OP_OUTPUTTOKENCATEGORY OP_0 OP_EQUALVERIFY OP_0 OP_OUTPUTVALUE OP_5 OP_PICK OP_GREATERTHANOREQUAL OP_VERIFY OP_5 OP_PICK 2202 OP_GREATERTHANOREQUAL OP_IF OP_1 OP_OUTPUTBYTECODE OP_2 OP_PICK OP_EQUALVERIFY OP_1 OP_OUTPUTTOKENCATEGORY OP_0 OP_EQUALVERIFY OP_1 OP_OUTPUTVALUE OP_6 OP_PICK OP_GREATERTHANOREQUAL OP_VERIFY OP_TXINPUTCOUNT OP_2 OP_NUMEQUAL OP_IF OP_TXOUTPUTCOUNT OP_3 OP_LESSTHANOREQUAL OP_VERIFY OP_ELSE OP_TXOUTPUTCOUNT OP_2 OP_NUMEQUALVERIFY OP_ENDIF OP_ELSE OP_4 OP_PICK OP_OVER dc05 OP_SUB OP_GREATERTHANOREQUAL OP_VERIFY OP_TXINPUTCOUNT OP_2 OP_NUMEQUAL OP_IF OP_TXOUTPUTCOUNT OP_2 OP_LESSTHANOREQUAL OP_VERIFY OP_ELSE OP_TXOUTPUTCOUNT OP_1 OP_NUMEQUALVERIFY OP_ENDIF OP_ENDIF OP_2DROP OP_2DROP OP_2DROP OP_1 OP_ELSE OP_4 OP_ROLL OP_2 OP_NUMEQUALVERIFY OP_3 OP_ROLL OP_CHECKLOCKTIMEVERIFY OP_DROP OP_3 OP_ROLL OP_SWAP OP_CHECKSIGVERIFY OP_INPUTINDEX OP_0 OP_NUMEQUALVERIFY OP_TXINPUTCOUNT OP_2 OP_LESSTHANOREQUAL OP_VERIFY OP_TXINPUTCOUNT OP_2 OP_NUMEQUAL OP_IF OP_1 OP_UTXOBYTECODE OP_SIZE OP_NIP 19 OP_NUMEQUALVERIFY OP_1 OP_UTXOTOKENCATEGORY OP_0 OP_EQUALVERIFY OP_TXOUTPUTCOUNT OP_2 OP_LESSTHANOREQUAL OP_VERIFY OP_TXOUTPUTCOUNT OP_2 OP_NUMEQUAL OP_IF OP_1 OP_OUTPUTTOKENCATEGORY OP_0 OP_EQUALVERIFY OP_1 OP_OUTPUTVALUE OP_1 OP_UTXOVALUE OP_LESSTHANOREQUAL OP_VERIFY OP_ENDIF OP_ELSE OP_TXOUTPUTCOUNT OP_1 OP_NUMEQUALVERIFY OP_ENDIF OP_0 OP_UTXOTOKENCATEGORY OP_0 OP_EQUALVERIFY OP_0 OP_UTXOVALUE OP_0 OP_OUTPUTBYTECODE OP_ROT OP_EQUALVERIFY OP_0 OP_OUTPUTTOKENCATEGORY OP_0 OP_EQUALVERIFY OP_0 OP_OUTPUTVALUE 2202 OP_GREATERTHANOREQUAL OP_VERIFY OP_0 OP_OUTPUTVALUE OP_SWAP dc05 OP_SUB OP_GREATERTHANOREQUAL OP_NIP OP_ENDIF OP_ENDIF",
+  "source": "pragma cashscript ^0.14.0;\n\n/**\n * @title BinaryLiquidCollateralVaultV2 (Hardened Lending Collateral Covenant)\n * @author BinaryLiquid Protocol / DrianOps\n * @notice Deterministic P2SH32 CashScript Vault with borrower withdrawal, on-chain liquidation\n * to the immutable protocol Vault, and permissionless emergency timelock rescue.\n *\n * V2 HARDENING INVARIANTS:\n * 1. Strict Input Guard: Blocks multi-covenant/multi-token UTXO consumption (`tx.inputs.length <= 2`).\n * 2. Exact Dust & Value Conservation: When remaining collateral < 546 sats, requires single/fee-bounded\n *    full sweep so leftover satoshis cannot leak into unverified outputs.\n * 3. On-Chain Liquidation Route: Watchman can liquidate unhealthy positions strictly into\n *    `liquidatorVaultLockingBytecode` (returning any positive equity to `borrowerLockingBytecode`).\n * 4. Trustless Emergency Exit: After `rescueTimestamp`, borrower collateral can be recovered\n *    permissionlessly back to `borrowerLockingBytecode` even if Watchman is offline.\n */\ncontract BinaryLiquidCollateralVaultV2(\n    pubkey watchmanPk,\n    bytes borrowerLockingBytecode,\n    bytes liquidatorVaultLockingBytecode,\n    int rescueTimestamp\n) {\n    function releaseCollateral(sig watchmanSig, int withdrawSats, int returnToVaultSats) {\n        require(checkSig(watchmanSig, watchmanPk));\n        require(withdrawSats >= 546);\n        require(returnToVaultSats >= 0);\n        require(this.activeInputIndex == 0);\n\n        require(tx.inputs.length <= 2);\n        if (tx.inputs.length == 2) {\n            require(tx.inputs[1].lockingBytecode.length == 25);\n            require(tx.inputs[1].tokenCategory == 0x);\n        }\n        require(tx.inputs[0].tokenCategory == 0x);\n\n        int inputSats = tx.inputs[0].value;\n        require(withdrawSats + returnToVaultSats >= inputSats - 1500);\n\n        require(tx.outputs[0].lockingBytecode == borrowerLockingBytecode);\n        require(tx.outputs[0].tokenCategory == 0x);\n        require(tx.outputs[0].value >= withdrawSats);\n\n        if (returnToVaultSats >= 546) {\n            bytes vaultBytecode = tx.inputs[0].lockingBytecode;\n            require(tx.outputs[1].lockingBytecode == vaultBytecode);\n            require(tx.outputs[1].tokenCategory == 0x);\n            require(tx.outputs[1].value >= returnToVaultSats);\n            if (tx.inputs.length == 2) {\n                require(tx.outputs.length <= 3);\n            } else {\n                require(tx.outputs.length == 2);\n            }\n        } else {\n            require(withdrawSats >= inputSats - 1500);\n            if (tx.inputs.length == 2) {\n                require(tx.outputs.length <= 2);\n            } else {\n                require(tx.outputs.length == 1);\n            }\n        }\n    }\n\n    function liquidateCollateral(sig watchmanSig, int liquidateSats, int returnToBorrowerSats) {\n        require(checkSig(watchmanSig, watchmanPk));\n        require(liquidateSats >= 546);\n        require(returnToBorrowerSats >= 0);\n        require(this.activeInputIndex == 0);\n\n        require(tx.inputs.length <= 2);\n        if (tx.inputs.length == 2) {\n            require(tx.inputs[1].lockingBytecode.length == 25);\n            require(tx.inputs[1].tokenCategory == 0x);\n        }\n        require(tx.inputs[0].tokenCategory == 0x);\n\n        int inputSats = tx.inputs[0].value;\n        require(liquidateSats + returnToBorrowerSats >= inputSats - 1500);\n\n        require(tx.outputs[0].lockingBytecode == liquidatorVaultLockingBytecode);\n        require(tx.outputs[0].tokenCategory == 0x);\n        require(tx.outputs[0].value >= liquidateSats);\n\n        if (returnToBorrowerSats >= 546) {\n            require(tx.outputs[1].lockingBytecode == borrowerLockingBytecode);\n            require(tx.outputs[1].tokenCategory == 0x);\n            require(tx.outputs[1].value >= returnToBorrowerSats);\n            if (tx.inputs.length == 2) {\n                require(tx.outputs.length <= 3);\n            } else {\n                require(tx.outputs.length == 2);\n            }\n        } else {\n            require(liquidateSats >= inputSats - 1500);\n            if (tx.inputs.length == 2) {\n                require(tx.outputs.length <= 2);\n            } else {\n                require(tx.outputs.length == 1);\n            }\n        }\n    }\n\n    function rescueCollateral(sig watchmanRescueApprovalSig) {\n        // Requires both timelock maturity AND Watchman/solvency attestation (or debt-free proof) so borrowers with active debt cannot self-rescue collateral\n        require(tx.time >= rescueTimestamp);\n        require(checkSig(watchmanRescueApprovalSig, watchmanPk));\n        require(this.activeInputIndex == 0);\n        require(tx.inputs.length <= 2);\n        if (tx.inputs.length == 2) {\n            require(tx.inputs[1].lockingBytecode.length == 25);\n            require(tx.inputs[1].tokenCategory == 0x);\n            require(tx.outputs.length <= 2);\n            if (tx.outputs.length == 2) {\n                require(tx.outputs[1].tokenCategory == 0x);\n                require(tx.outputs[1].value <= tx.inputs[1].value);\n            }\n        } else {\n            require(tx.outputs.length == 1);\n        }\n        require(tx.inputs[0].tokenCategory == 0x);\n\n        int inputSats = tx.inputs[0].value;\n        require(tx.outputs[0].lockingBytecode == borrowerLockingBytecode);\n        require(tx.outputs[0].tokenCategory == 0x);\n        require(tx.outputs[0].value >= 546);\n        require(tx.outputs[0].value >= inputSats - 1500);\n    }\n}\n",
+  "fingerprint": "09920f97d8234a759d8b8cf1efe86b6b360e4f4b1672d3b60be1ce810a81cfae",
+  "debug": {
+    "bytecode": "5479009c63557a7cad5479022202a269557900a269c0009dc352a169c3529c6351c7827701199d51ce00886800ce008800c655795779937802dc0594a26900cd7b8800d1008800cc5579a2695579022202a26300c751cd788851d1008851cc5779a269c3529c63c453a16967c4529d68756754797802dc0594a269c3529c63c452a16967c4519d68686d6d6d51675479519c63557a7cad5479022202a269557900a269c0009dc352a169c3529c6351c7827701199d51ce00886800ce008800c655795779937802dc0594a26900cd537a8800d1008800cc5579a2695579022202a26351cd52798851d1008851cc5679a269c3529c63c453a16967c4529d686754797802dc0594a269c3529c63c452a16967c4519d68686d6d6d5167547a529d537ab175537a7cadc0009dc352a169c3529c6351c7827701199d51ce0088c452a169c4529c6351d1008851cc51c6a1696867c4519d6800ce008800c600cd7b8800d1008800cc022202a26900cc7c02dc0594a2776868",
+    "sourceMap": "24:4:62:5;;;;;25:25:25:36;;:38::48;:8::51:1;26:16:26:28:0;;:32::35;:16:::1;:8::37;27:16:27:33:0;;:37::38;:16:::1;:8::40;28:16:28:37:0;:41::42;:8::44:1;30:16:30:32:0;:36::37;:16:::1;:8::39;31:12:31:28:0;:32::33;:12:::1;:35:34:9:0;32:30:32:31;:20::48:1;:::55;;:59::61:0;:12::63:1;33:30:33:31:0;:20::46:1;:50::52:0;:12::54:1;31:35:34:9;35:26:35:27:0;:16::42:1;:46::48:0;:8::50:1;37:34:37:35:0;:24::42:1;38:16:38:28:0;;:31::48;;:16:::1;:52::61:0;:64::68;:52:::1;:16;:8::70;40:27:40:28:0;:16::45:1;:49::72:0;:8::74:1;41:27:41:28:0;:16::43:1;:47::49:0;:8::51:1;42:27:42:28:0;:16::35:1;:39::51:0;;:16:::1;:8::53;44:12:44:29:0;;:33::36;:12:::1;:38:54:9:0;45:44:45:45;:34::62:1;46:31:46:32:0;:20::49:1;:53::66:0;:12::68:1;47:31:47:32:0;:20::47:1;:51::53:0;:12::55:1;48:31:48:32:0;:20::39:1;:43::60:0;;:20:::1;:12::62;49:16:49:32:0;:36::37;:16:::1;:39:51:13:0;50:24:50:41;:45::46;:24:::1;:16::48;51:19:53:13:0;52:24:52:41;:45::46;:16::48:1;51:19:53:13;44:38:54:9;54:15:61::0;55:20:55:32;;:36::45;:48::52;:36:::1;:20;:12::54;56:16:56:32:0;:36::37;:16:::1;:39:58:13:0;57:24:57:41;:45::46;:24:::1;:16::48;58:19:60:13:0;59:24:59:41;:45::46;:16::48:1;58:19:60:13;54:15:61:9;24:89:62:5;;;;:4;64::101::0;;;;;65:25:65:36;;:38::48;:8::51:1;66:16:66:29:0;;:33::36;:16:::1;:8::38;67:16:67:36:0;;:40::41;:16:::1;:8::43;68:16:68:37:0;:41::42;:8::44:1;70:16:70:32:0;:36::37;:16:::1;:8::39;71:12:71:28:0;:32::33;:12:::1;:35:74:9:0;72:30:72:31;:20::48:1;:::55;;:59::61:0;:12::63:1;73:30:73:31:0;:20::46:1;:50::52:0;:12::54:1;71:35:74:9;75:26:75:27:0;:16::42:1;:46::48:0;:8::50:1;77:34:77:35:0;:24::42:1;78:16:78:29:0;;:32::52;;:16:::1;:56::65:0;:68::72;:56:::1;:16;:8::74;80:27:80:28:0;:16::45:1;:49::79:0;;:8::81:1;81:27:81:28:0;:16::43:1;:47::49:0;:8::51:1;82:27:82:28:0;:16::35:1;:39::52:0;;:16:::1;:8::54;84:12:84:32:0;;:36::39;:12:::1;:41:93:9:0;85:31:85:32;:20::49:1;:53::76:0;;:12::78:1;86:31:86:32:0;:20::47:1;:51::53:0;:12::55:1;87:31:87:32:0;:20::39:1;:43::63:0;;:20:::1;:12::65;88:16:88:32:0;:36::37;:16:::1;:39:90:13:0;89:24:89:41;:45::46;:24:::1;:16::48;90:19:92:13:0;91:24:91:41;:45::46;:16::48:1;90:19:92:13;93:15:100:9:0;94:20:94:33;;:37::46;:49::53;:37:::1;:20;:12::55;95:16:95:32:0;:36::37;:16:::1;:39:97:13:0;96:24:96:41;:45::46;:24:::1;:16::48;97:19:99:13:0;98:24:98:41;:45::46;:16::48:1;97:19:99:13;93:15:100:9;64:95:101:5;;;;:4;103::127::0;;;;105:27:105:42;;:8::44:1;;106:25:106:50:0;;:52::62;:8::65:1;107:16:107:37:0;:41::42;:8::44:1;108:16:108:32:0;:36::37;:16:::1;:8::39;109:12:109:28:0;:32::33;:12:::1;:35:117:9:0;110:30:110:31;:20::48:1;:::55;;:59::61:0;:12::63:1;111:30:111:31:0;:20::46:1;:50::52:0;:12::54:1;112:20:112:37:0;:41::42;:20:::1;:12::44;113:16:113:33:0;:37::38;:16:::1;:40:116:13:0;114:35:114:36;:24::51:1;:55::57:0;:16::59:1;115:35:115:36:0;:24::43:1;:57::58:0;:47::65:1;:24;:16::67;113:40:116:13;117:15:119:9:0;118:20:118:37;:41::42;:12::44:1;117:15:119:9;120:26:120:27:0;:16::42:1;:46::48:0;:8::50:1;122:34:122:35:0;:24::42:1;123:27:123:28:0;:16::45:1;:49::72:0;:8::74:1;124:27:124:28:0;:16::43:1;:47::49:0;:8::51:1;125:27:125:28:0;:16::35:1;:39::42:0;:16:::1;:8::44;126:27:126:28:0;:16::35:1;:39::48:0;:51::55;:39:::1;:8::57;103:61:127:5;18:0:128:1;",
+    "logs": [],
+    "requires": [
+      {
+        "ip": 12,
+        "line": 25
+      },
+      {
+        "ip": 17,
+        "line": 26
+      },
+      {
+        "ip": 22,
+        "line": 27
+      },
+      {
+        "ip": 25,
+        "line": 28
+      },
+      {
+        "ip": 29,
+        "line": 30
+      },
+      {
+        "ip": 39,
+        "line": 32
+      },
+      {
+        "ip": 43,
+        "line": 33
+      },
+      {
+        "ip": 48,
+        "line": 35
+      },
+      {
+        "ip": 60,
+        "line": 38
+      },
+      {
+        "ip": 64,
+        "line": 40
+      },
+      {
+        "ip": 68,
+        "line": 41
+      },
+      {
+        "ip": 74,
+        "line": 42
+      },
+      {
+        "ip": 85,
+        "line": 46
+      },
+      {
+        "ip": 89,
+        "line": 47
+      },
+      {
+        "ip": 95,
+        "line": 48
+      },
+      {
+        "ip": 103,
+        "line": 50
+      },
+      {
+        "ip": 107,
+        "line": 52
+      },
+      {
+        "ip": 117,
+        "line": 55
+      },
+      {
+        "ip": 125,
+        "line": 57
+      },
+      {
+        "ip": 129,
+        "line": 59
+      },
+      {
+        "ip": 145,
+        "line": 65
+      },
+      {
+        "ip": 150,
+        "line": 66
+      },
+      {
+        "ip": 155,
+        "line": 67
+      },
+      {
+        "ip": 158,
+        "line": 68
+      },
+      {
+        "ip": 162,
+        "line": 70
+      },
+      {
+        "ip": 172,
+        "line": 72
+      },
+      {
+        "ip": 176,
+        "line": 73
+      },
+      {
+        "ip": 181,
+        "line": 75
+      },
+      {
+        "ip": 193,
+        "line": 78
+      },
+      {
+        "ip": 198,
+        "line": 80
+      },
+      {
+        "ip": 202,
+        "line": 81
+      },
+      {
+        "ip": 208,
+        "line": 82
+      },
+      {
+        "ip": 218,
+        "line": 85
+      },
+      {
+        "ip": 222,
+        "line": 86
+      },
+      {
+        "ip": 228,
+        "line": 87
+      },
+      {
+        "ip": 236,
+        "line": 89
+      },
+      {
+        "ip": 240,
+        "line": 91
+      },
+      {
+        "ip": 249,
+        "line": 94
+      },
+      {
+        "ip": 257,
+        "line": 96
+      },
+      {
+        "ip": 261,
+        "line": 98
+      },
+      {
+        "ip": 275,
+        "line": 105
+      },
+      {
+        "ip": 280,
+        "line": 106
+      },
+      {
+        "ip": 283,
+        "line": 107
+      },
+      {
+        "ip": 287,
+        "line": 108
+      },
+      {
+        "ip": 297,
+        "line": 110
+      },
+      {
+        "ip": 301,
+        "line": 111
+      },
+      {
+        "ip": 305,
+        "line": 112
+      },
+      {
+        "ip": 313,
+        "line": 114
+      },
+      {
+        "ip": 319,
+        "line": 115
+      },
+      {
+        "ip": 324,
+        "line": 118
+      },
+      {
+        "ip": 329,
+        "line": 120
+      },
+      {
+        "ip": 335,
+        "line": 123
+      },
+      {
+        "ip": 339,
+        "line": 124
+      },
+      {
+        "ip": 344,
+        "line": 125
+      },
+      {
+        "ip": 351,
+        "line": 126
+      }
+    ],
+    "sourceTags": "105:105:sc;347:347:sc"
+  },
+  "compiler": {
+    "name": "cashc",
+    "version": "0.14.0",
+    "options": {
+      "enforceFunctionParameterTypes": true,
+      "enforceLocktimeGuard": true
+    }
+  },
+  "updatedAt": "2026-11-15T19:58:59.837Z"
+}

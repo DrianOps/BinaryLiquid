@@ -1,0 +1,45 @@
+name: BinaryLiquid Sovereign CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  security-and-build:
+    name: Contracts, Security Suite & Frontend Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Verify Zero Secret Leakage in Repository
+        run: |
+          if git ls-files | grep -E '(^|/)(\.env|secure_vault|ltc-cold-treasury\.json|ltc-vault\.json|solana-authority\.json|bridge_db\.json)$'; then
+            echo "❌ Forbidden secret or state file tracked in Git!"
+            exit 1
+          fi
+          echo "✅ Zero secret files tracked in Git."
+
+      - name: Install Root & Contract Dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Compile EVM & CashScript V2 Smart Contracts
+        run: node contracts/compile.js
+
+      - name: Install Backend Dependencies & Run Security Suite
+        run: |
+          npm --prefix backend install --no-audit --no-fund
+          node backend/test-api.js
+
+      - name: Install Frontend Dependencies & Type-Check + Build
+        run: |
+          npm --prefix frontend install --no-audit --no-fund
+          npm --prefix frontend run build

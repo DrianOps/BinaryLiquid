@@ -1,0 +1,58 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Node modules & build outputs
+node_modules
+dist-ssr
+frontend/dist/
+contracts/solana/target/
+*.local
+
+# Environment & Private Keys
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.secret.json
+secure_vault/
+backend/secure_vault/
+vault/
+*.wif
+*treasury*.json
+*credentials*
+solana-authority.json
+*authority.json
+*vault.json
+backend/config/solana-authority.json
+backend/config/ltc-*.json
+
+# Database runtime files
+*.sqlite
+*.sqlite3
+bridge_db.json
+backend/data/
+backend/data/*.json
+!backend/data/.gitkeep
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Temporary and packaging files
+*.tar.gz
+*.zip
+/tmp/
