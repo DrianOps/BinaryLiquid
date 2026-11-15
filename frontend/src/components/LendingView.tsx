@@ -24,7 +24,9 @@ import {
   executeWeb3LpDeposit,
   executeBchSwapDeposit,
   hasActiveBchSigningCapability,
-  DEPLOYED_TESTNET_CONTRACTS
+  DEPLOYED_TESTNET_CONTRACTS,
+  AuthSessionChain,
+  EnsureAuthSessionOptions
 } from '../services/walletConnectService';
 import {
   convertCashAddressNetwork,
@@ -49,7 +51,7 @@ interface LendingViewProps {
   showToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
   lang?: 'en' | 'es';
   authToken?: string | null;
-  onEnsureAuthSession?: () => Promise<string | null>;
+  onEnsureAuthSession?: (options?: EnsureAuthSessionOptions) => Promise<string | null>;
 }
 
 const lendTexts = {
@@ -632,7 +634,7 @@ export default function LendingView({
       return;
     }
 
-    const token = authToken || (await onEnsureAuthSession?.());
+    const token = await onEnsureAuthSession?.({ chains: ['bch'] });
     if (!token) return;
 
     setIsSubmitting(true);
@@ -645,9 +647,8 @@ export default function LendingView({
           Authorization: `Bearer ${token}`
         },
         body: JSON.stringify({
-          userAddress: effectiveAddress,
+          userAddress: connectedBch,
           bchAddress: connectedBch,
-          evmAddress: connectedEvm,
           amountBch: amt,
           network: platformNetwork
         })
@@ -703,7 +704,9 @@ export default function LendingView({
       return;
     }
 
-    const token = authToken || (await onEnsureAuthSession?.());
+    const borrowChains: AuthSessionChain[] =
+      borrowToken === 'USDT' ? (connectedBch ? ['bch', 'evm'] : ['evm']) : ['bch'];
+    const token = await onEnsureAuthSession?.({ chains: borrowChains });
     if (!token) return;
 
     setIsSubmitting(true);
@@ -716,9 +719,9 @@ export default function LendingView({
           Authorization: `Bearer ${token}`
         },
         body: JSON.stringify({
-          userAddress: effectiveAddress,
+          userAddress: borrowToken === 'USDT' ? effectiveAddress : connectedBch,
           bchAddress: connectedBch,
-          evmAddress: connectedEvm,
+          evmAddress: borrowToken === 'USDT' ? connectedEvm : '',
           token: borrowToken,
           amount: amt,
           network: platformNetwork
@@ -1009,7 +1012,9 @@ export default function LendingView({
       return;
     }
 
-    const token = authToken || (await onEnsureAuthSession?.());
+    const supplyChains: AuthSessionChain[] =
+      supplyToken === 'USDT' ? (connectedBch ? ['bch', 'evm'] : ['evm']) : ['bch'];
+    const token = await onEnsureAuthSession?.({ chains: supplyChains });
     if (!token) return;
 
     setIsSubmitting(true);
@@ -1022,9 +1027,9 @@ export default function LendingView({
           Authorization: `Bearer ${token}`
         },
         body: JSON.stringify({
-          userAddress: effectiveAddress,
+          userAddress: supplyToken === 'USDT' ? effectiveAddress : connectedBch,
           bchAddress: connectedBch,
-          evmAddress: connectedEvm,
+          evmAddress: supplyToken === 'USDT' ? connectedEvm : '',
           token: supplyToken,
           amount: amt,
           network: platformNetwork

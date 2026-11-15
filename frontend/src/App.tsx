@@ -160,7 +160,8 @@ import {
   signSolanaAuthMessage,
   signBchMessage,
   hasActiveBchMessageSigningCapability,
-  hasActiveEvmSigningCapability
+  hasActiveEvmSigningCapability,
+  EnsureAuthSessionOptions
 } from './services/walletConnectService';
 
 const translations = {
@@ -1573,16 +1574,24 @@ export default function App() {
   };
 
   /**
-   * Ensures an authenticated cryptographic wallet session token exists covering the active
-   * connected wallets (EVM, Solana, or Cashonize/Paytaca BCH `bch_signMessage`).
+   * Ensures an authenticated cryptographic wallet session token exists covering the requested
+   * wallet chain(s) (`bch`, `evm`, `solana`) without triggering unrelated wallets like MetaMask
+   * during BCH/PUSD actions.
    */
-  const ensureAuthSession = async (): Promise<string | null> => {
+  const ensureAuthSession = async (options?: EnsureAuthSessionOptions): Promise<string | null> => {
     const cleanEvm = evmWallet?.address || '';
     const cleanSol = solanaWallet?.address || '';
     const cleanBch = bchWallet?.address ? bchWallet.address.split(',')[0].trim() : '';
-    const canSignBch = Boolean(cleanBch && hasActiveBchMessageSigningCapability(bchWallet?.source));
-    const canSignEvm = Boolean(cleanEvm && hasActiveEvmSigningCapability());
-    const canSignSol = Boolean(cleanSol);
+
+    const scopedChains =
+      options?.chains && options.chains.length > 0 ? new Set(options.chains) : null;
+    const wantBch = !scopedChains || scopedChains.has('bch');
+    const wantEvm = !scopedChains || scopedChains.has('evm');
+    const wantSol = !scopedChains || scopedChains.has('solana');
+
+    const canSignBch = Boolean(wantBch && cleanBch && hasActiveBchMessageSigningCapability(bchWallet?.source));
+    const canSignEvm = Boolean(wantEvm && cleanEvm && hasActiveEvmSigningCapability());
+    const canSignSol = Boolean(wantSol && cleanSol);
 
     const neededAddrs = [
       ...(canSignEvm ? [cleanEvm.toLowerCase()] : []),
@@ -1603,12 +1612,40 @@ export default function App() {
     ];
 
     if (challengeAddresses.length === 0) {
-      showToast(
-        lang === 'es'
-          ? 'Conecta MetaMask/WalletConnect, Phantom/Solflare o Cashonize/Paytaca con firma de mensajes para autenticar esta acción.'
-          : 'Connect MetaMask/WalletConnect, Phantom/Solflare, or a message-signing BCH wallet to authenticate this action.',
-        'error'
-      );
+      const bchOnly = scopedChains?.has('bch') && !scopedChains.has('evm') && !scopedChains.has('solana');
+      const evmOnly = scopedChains?.has('evm') && !scopedChains.has('bch') && !scopedChains.has('solana');
+      const solOnly = scopedChains?.has('solana') && !scopedChains.has('bch') && !scopedChains.has('evm');
+
+      let msg: string;
+      if (bchOnly) {
+        if (cleanBch && !canSignBch) {
+          msg =
+            lang === 'es'
+              ? `Tu conexión BCH actual (${bchWallet?.provider || bchWallet?.source}) no soporta firma de mensajes (bch_signMessage). Conecta Cashonize o la extensión de Paytaca para autenticar acciones BCH/PUSD.`
+              : `Your current BCH connection (${bchWallet?.provider || bchWallet?.source}) does not support message signing (bch_signMessage). Connect Cashonize or the Paytaca extension to authenticate BCH/PUSD actions.`;
+        } else {
+          msg =
+            lang === 'es'
+              ? 'Conecta una billetera BCH con firma de mensajes (Cashonize o extensión Paytaca) para autenticar acciones BCH/PUSD.'
+              : 'Connect a message-signing BCH wallet (Cashonize or Paytaca extension) to authenticate BCH/PUSD actions.';
+        }
+      } else if (evmOnly) {
+        msg =
+          lang === 'es'
+            ? 'Conecta una billetera EVM (MetaMask o WalletConnect) para autenticar esta acción USDT/USDC.'
+            : 'Connect an EVM wallet (MetaMask or WalletConnect) to authenticate this USDT/USDC action.';
+      } else if (solOnly) {
+        msg =
+          lang === 'es'
+            ? 'Conecta Phantom o Solflare para autenticar esta acción en Solana.'
+            : 'Connect Phantom or Solflare to authenticate this Solana action.';
+      } else {
+        msg =
+          lang === 'es'
+            ? 'Conecta MetaMask/WalletConnect, Phantom/Solflare o Cashonize/Paytaca con firma de mensajes para autenticar esta acción.'
+            : 'Connect MetaMask/WalletConnect, Phantom/Solflare, or a message-signing BCH wallet to authenticate this action.';
+      }
+      showToast(msg, 'error');
       return null;
     }
 
@@ -1651,10 +1688,17 @@ export default function App() {
         method: 'POST',
         headers,
         body: JSON.stringify({
-          address: cleanBch || cleanEvm || cleanSol,
-          bchAddress: cleanBch || null,
-          evmAddress: cleanEvm || null,
-          provider: [bchWallet?.provider, evmWallet?.provider, solanaWallet?.provider].filter(Boolean).join(' + ') || 'Web3',
+          address: (canSignBch ? cleanBch : '') || (canSignEvm ? cleanEvm : '') || (canSignSol ? cleanSol : ''),
+          bchAddress: canSignBch ? cleanBch : null,
+          evmAddress: canSignEvm ? cleanEvm : null,
+          provider:
+            [
+              canSignBch ? bchWallet?.provider : null,
+              canSignEvm ? evmWallet?.provider : null,
+              canSignSol ? solanaWallet?.provider : null
+            ]
+              .filter(Boolean)
+              .join(' + ') || 'Web3',
           network: platformNetwork,
           challengeToken: chData.challengeToken,
           message: chData.message,

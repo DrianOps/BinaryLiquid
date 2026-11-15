@@ -17,7 +17,9 @@ import { formatCryptoBalance, generateQrDataUrl } from '../utils/bchAddress';
 import {
   executeBchSwapDeposit,
   executeWeb3LpDeposit,
-  hasActiveBchSigningCapability
+  hasActiveBchSigningCapability,
+  AuthSessionChain,
+  EnsureAuthSessionOptions
 } from '../services/walletConnectService';
 
 export interface PerpsViewProps {
@@ -42,7 +44,7 @@ export interface PerpsViewProps {
   showToast: (msg: string, type?: 'success' | 'error') => void;
   lang?: 'en' | 'es';
   authToken?: string | null;
-  onEnsureAuthSession?: () => Promise<string | null>;
+  onEnsureAuthSession?: (options?: EnsureAuthSessionOptions) => Promise<string | null>;
 }
 
 export interface PerpPosition {
@@ -1037,11 +1039,15 @@ export default function PerpsView({
     }
   };
 
+  const resolvePositionAuthChain = (pos: PerpPosition): AuthSessionChain =>
+    (pos.collateralToken || 'PUSD').toUpperCase() === 'USDT' ? 'evm' : 'bch';
+
   // =========================================================================
   // CLOSE PERPETUAL POSITION (100% Real On-Chain Payout from Vault)
   // =========================================================================
   const handleClosePosition = async (pos: PerpPosition, reason = 'USER_CLOSE') => {
-    const token = authToken || (await onEnsureAuthSession?.());
+    const requiredChain = resolvePositionAuthChain(pos);
+    const token = await onEnsureAuthSession?.({ chains: [requiredChain] });
     if (!token) return;
     setClosingPosId(pos.id);
     try {
@@ -1088,7 +1094,8 @@ export default function PerpsView({
   const handleSaveTpSl = async () => {
     if (!editingTpSlPos) return;
     try {
-      const token = authToken || (await onEnsureAuthSession?.());
+      const requiredChain = resolvePositionAuthChain(editingTpSlPos);
+      const token = await onEnsureAuthSession?.({ chains: [requiredChain] });
       if (!token) return;
       const res = await fetch(`${backendUrl}/api/perps/update-tpsl`, {
         method: 'POST',

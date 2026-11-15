@@ -20,7 +20,9 @@ import {
   executeWeb3LpDeposit,
   executeBchSwapDeposit,
   hasActiveBchSigningCapability,
-  DEPLOYED_TESTNET_CONTRACTS
+  DEPLOYED_TESTNET_CONTRACTS,
+  AuthSessionChain,
+  EnsureAuthSessionOptions
 } from '../services/walletConnectService';
 import {
   convertCashAddressNetwork,
@@ -128,7 +130,7 @@ interface PoolsViewProps {
   showToast: (msg: string, type: 'success' | 'error') => void;
   lang?: 'en' | 'es';
   authToken?: string | null;
-  onEnsureAuthSession?: () => Promise<string | null>;
+  onEnsureAuthSession?: (options?: EnsureAuthSessionOptions) => Promise<string | null>;
 }
 
 /** Formats USD figures uniformly using en-US decimals so tables stay aligned across locales. */
@@ -1496,7 +1498,12 @@ export default function PoolsView({
       }
     }
 
-    const token = authToken || (await onEnsureAuthSession?.());
+    const creatorChains: AuthSessionChain[] = /^0x/i.test(effectiveAddress)
+      ? ['evm']
+      : /^(bchtest:|bitcoincash:)/i.test(effectiveAddress)
+      ? ['bch']
+      : ['bch', 'evm'];
+    const token = await onEnsureAuthSession?.({ chains: creatorChains });
     if (!token) return;
 
     const isEvmB = isEvmSymbol(symB);
@@ -1760,7 +1767,22 @@ export default function PoolsView({
       return;
     }
 
-    const token = authToken || (await onEnsureAuthSession?.());
+    const posHasBch = Boolean(
+      selectedPosition.bchAddress ||
+        /^(bchtest:|bitcoincash:)/i.test(selectedPosition.providerAddress || '')
+    );
+    const posHasEvm = Boolean(
+      selectedPosition.evmAddress || /^0x/i.test(selectedPosition.providerAddress || '')
+    );
+    const removeChains: AuthSessionChain[] = isEvmWithdraw
+      ? posHasEvm || !posHasBch
+        ? ['evm']
+        : ['bch', 'evm']
+      : posHasBch || !posHasEvm
+      ? ['bch']
+      : ['bch', 'evm'];
+
+    const token = await onEnsureAuthSession?.({ chains: removeChains });
     if (!token) return;
 
     setIsSubmitting(true);

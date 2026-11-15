@@ -1898,3 +1898,9 @@ export async function signSolanaAuthMessage(
   }
   return { address: pubkey, signature: sigHex };
 }
+
+export type AuthSessionChain = 'bch' | 'evm' | 'solana';
+
+export interface EnsureAuthSessionOptions {
+  chains?: AuthSessionChain[];
+}

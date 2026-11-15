@@ -30,7 +30,9 @@ import {
   executeBchSwapDeposit,
   hasActiveBchSigningCapability,
   repairEvmNetworkRpc,
-  DEPLOYED_TESTNET_CONTRACTS
+  DEPLOYED_TESTNET_CONTRACTS,
+  AuthSessionChain,
+  EnsureAuthSessionOptions
 } from '../services/walletConnectService';
 
 interface BridgeSwapProps {
@@ -66,7 +68,7 @@ interface BridgeSwapProps {
   wizardConnectManager?: any;
   wizardConnectState?: string;
   authToken?: string | null;
-  onEnsureAuthSession?: () => Promise<string | null>;
+  onEnsureAuthSession?: (options?: EnsureAuthSessionOptions) => Promise<string | null>;
 }
 
 const UI_TEXT = {
@@ -1217,7 +1219,30 @@ export default function BridgeSwap({
 
   const handleCancelLimitOrder = async (orderId: string) => {
     try {
-      const token = authToken || (await onEnsureAuthSession?.());
+      const targetOrder = limitOrders.find(o => o.id === orderId);
+      const orderOwnerAddr = String(targetOrder?.userAddress || payingWalletAddress || '').trim();
+      const orderChainHint = String(targetOrder?.fromChain || '').toLowerCase();
+      let requiredChains: AuthSessionChain[];
+      if (/^0x/i.test(orderOwnerAddr)) {
+        requiredChains = ['evm'];
+      } else if (/^(bchtest:|bitcoincash:)/i.test(orderOwnerAddr)) {
+        requiredChains = ['bch'];
+      } else if (orderChainHint.includes('bch') || orderChainHint.includes('chipnet')) {
+        requiredChains = ['bch'];
+      } else if (orderChainHint.includes('sol')) {
+        requiredChains = ['solana'];
+      } else if (
+        orderChainHint.includes('poly') ||
+        orderChainHint.includes('amoy') ||
+        orderChainHint.includes('bsc') ||
+        orderChainHint.includes('eth')
+      ) {
+        requiredChains = ['evm'];
+      } else {
+        requiredChains = sellToken.isBch ? ['bch'] : sellToken.isSolana ? ['solana'] : ['evm'];
+      }
+
+      const token = await onEnsureAuthSession?.({ chains: requiredChains });
       if (!token) return;
       const res = await fetch(`${backendUrl}/api/limit-orders/${orderId}/cancel`, {
         method: 'POST',
@@ -1225,7 +1250,7 @@ export default function BridgeSwap({
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ userAddress: payingWalletAddress })
+        body: JSON.stringify({ userAddress: orderOwnerAddr || payingWalletAddress })
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
