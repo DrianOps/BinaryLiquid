@@ -2306,43 +2306,37 @@ export default function App() {
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 4, scale: 0.98 }}
                   transition={{ duration: 0.14, ease: 'easeOut' }}
-                  className="absolute left-0 top-full mt-1.5 w-64 bg-surface border border-line rounded-panel shadow-soft p-1.5 z-50"
+                  className="absolute left-0 top-full mt-1.5 w-72 bg-surface border border-line rounded-panel shadow-soft p-1.5 z-50"
                 >
                   {[
                     {
                       id: 'gateway',
                       title: 'Gateway',
-                      desc: lang === 'es' ? 'Inicio y vista general' : 'Protocol home & overview',
-                      icon: Sparkles
+                      desc: lang === 'es' ? 'Inicio y visión general del protocolo' : 'Protocol home & overview'
                     },
                     {
                       id: 'whitepaper',
                       title: 'Whitepaper',
-                      desc: lang === 'es' ? 'Arquitectura & Covenants P2SH32' : 'Architecture & P2SH32 Covenants',
-                      badge: 'v1.0',
-                      icon: BookOpen
+                      desc: lang === 'es' ? 'Especificación técnica P2SH32 & EVM' : 'Technical spec P2SH32 & EVM',
+                      badge: 'v1.0'
                     },
                     {
                       id: 'sdk',
                       title: 'SDK & API',
-                      desc: lang === 'es' ? 'Widget iFrame & endpoints DEX' : 'iFrame widget & DEX endpoints',
-                      icon: Code2
+                      desc: lang === 'es' ? 'Widget embed y endpoints DEX' : 'Embed widget & DEX endpoints'
                     },
                     {
                       id: 'identity',
                       title: lang === 'es' ? 'Identidad Soberana' : 'Sovereign Identity',
-                      desc: lang === 'es' ? 'BCH ↔ Nostr ID (Paytaca $500)' : 'BCH ↔ Nostr ID (Paytaca $500)',
-                      badge: 'BCH ⟷ Nostr',
-                      icon: Fingerprint
+                      desc: lang === 'es' ? 'BCH ↔ Nostr · PoC Paytaca' : 'BCH ↔ Nostr · Paytaca PoC',
+                      badge: 'BCH ⟷ Nostr'
                     },
                     {
                       id: 'docs',
                       title: lang === 'es' ? 'Documentación' : 'Documentation',
-                      desc: lang === 'es' ? 'Guía de uso y contratos' : 'User guide & contracts',
-                      icon: FileText
+                      desc: lang === 'es' ? 'Guía de integración y contratos' : 'Integration guide & contracts'
                     }
                   ].map((item) => {
-                    const Icon = item.icon;
                     const active = mainView === item.id;
                     return (
                       <button
@@ -2353,63 +2347,55 @@ export default function App() {
                           setMainView(item.id as any);
                           setBrandMenuOpen(false);
                         }}
-                        className={`w-full flex items-start gap-2.5 p-2.5 rounded-control text-left transition-colors cursor-pointer ${
+                        className={`w-full px-3 py-2 rounded-control text-left transition-colors cursor-pointer ${
                           active ? 'bg-surface-2 text-ink' : 'hover:bg-surface-2/80 text-ink-2 hover:text-ink'
                         }`}
                       >
-                        <div
-                          className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 border ${
-                            active
-                              ? 'bg-primary/10 border-primary/30 text-primary'
-                              : 'bg-surface-2 border-line text-ink-3'
-                          }`}
-                        >
-                          <Icon className="w-3.5 h-3.5" />
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-semibold text-ink whitespace-nowrap">
+                            {item.title}
+                          </span>
+                          {item.badge && (
+                            <span className="px-1.5 py-0.5 rounded-full bg-surface-2 border border-line text-ink-2 text-[10px] font-medium whitespace-nowrap shrink-0">
+                              {item.badge}
+                            </span>
+                          )}
                         </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center justify-between gap-1.5">
-                            <span className="text-xs font-semibold text-ink">{item.title}</span>
-                            {item.badge && (
-                              <span className="px-1.5 py-0.2 rounded-full bg-primary/10 text-primary text-[10px] font-semibold">
-                                {item.badge}
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-[11px] text-ink-3 leading-snug mt-0.5 truncate">{item.desc}</p>
-                        </div>
+                        <p className="text-[11px] text-ink-3 leading-snug mt-0.5 truncate">
+                          {item.desc}
+                        </p>
                       </button>
                     );
                   })}
 
                   <div className="my-1 border-t border-line" />
 
-                  <div className="px-2.5 py-1.5 flex items-center justify-between text-[11px] text-ink-3">
+                  <div className="px-3 py-1.5 flex items-center justify-between text-[11px] font-medium text-ink-3">
                     <a
                       href="https://bchblaze.cash"
                       target="_blank"
                       rel="noreferrer"
-                      className="hover:text-ink inline-flex items-center gap-1 transition-colors"
+                      className="hover:text-ink transition-colors"
                     >
-                      <span>BCH BLAZE</span>
-                      <ExternalLink className="w-2.5 h-2.5" />
+                      BCH BLAZE
                     </a>
+                    <span className="text-line-strong">·</span>
                     <a
                       href="https://paryonusd.com"
                       target="_blank"
                       rel="noreferrer"
-                      className="hover:text-ink inline-flex items-center gap-1 transition-colors"
+                      className="hover:text-ink transition-colors"
                     >
-                      <span>ParyonUSD</span>
-                      <ExternalLink className="w-2.5 h-2.5" />
+                      ParyonUSD
                     </a>
+                    <span className="text-line-strong">·</span>
                     <a
                       href={PLATFORM_NETWORKS[platformNetwork].explorerBch}
                       target="_blank"
                       rel="noreferrer"
-                      className="hover:text-ink inline-flex items-center gap-1 transition-colors"
+                      className="hover:text-ink transition-colors"
                     >
-                      <span>Explorer</span>
-                      <ExternalLink className="w-2.5 h-2.5" />
+                      Explorer
                     </a>
                   </div>
                 </motion.div>
