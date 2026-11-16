@@ -388,13 +388,18 @@ export default function WhitepaperView({
                     : 'Every swap instantiates a unique P2SH32 contract parameterized with a 16-byte orderSalt, the user’s refundLockingBytecode, and expiryTimestamp (+24h). The settleToVault path mathematically forces 100% of tokens into BinaryLiquidVault; the refund path lets the user reclaim full principal permissionlessly once tx.time >= expiryTimestamp.'}
                 </p>
                 <pre className="bg-surface-2/50 border border-line rounded-lg p-4 font-mono text-[11.5px] text-ink overflow-x-auto leading-relaxed">{`function settleToVault(sig watchmanSig) {
+    require(orderSalt.length == 16);
     require(checkSig(watchmanSig, watchmanPk));
+    bytes tokenCat = tx.inputs[this.activeInputIndex].tokenCategory;
+    int tokenAmt = tx.inputs[this.activeInputIndex].tokenAmount;
     require(tx.outputs[0].lockingBytecode == vaultPoolLockingBytecode);
-    require(tx.outputs[0].tokenCategory == tx.inputs[this.activeInputIndex].tokenCategory);
-    require(tx.outputs[0].tokenAmount >= tx.inputs[this.activeInputIndex].tokenAmount);
+    if (tokenAmt > 0) {
+        require(tx.outputs[0].tokenCategory == tokenCat);
+        require(tx.outputs[0].tokenAmount >= tokenAmt);
+    }
 }
 function refund() {
-    require(tx.time >= expiryTimestamp); // Autonomous 24h Timelock
+    require(tx.time >= expiryTimestamp); // 24h Timelock
     require(tx.outputs[0].lockingBytecode == refundLockingBytecode);
 }`}</pre>
               </div>
@@ -429,20 +434,21 @@ if (remainingBalance > 0) {
 
             <p className="text-[15px] text-ink-2 leading-[1.75]">
               {isEs
-                ? 'En Polygon (PoS Mainnet y Amoy Testnet), las reservas estables (USDT, USDC) residen exclusivamente dentro de BinaryLiquidVault.sol (Solidity 0.8.20). El contrato carece deliberadamente de cualquier función administrativa de retiro de liquidez (sin ownerWithdraw), garantizando cero riesgo de rug-pull o custodia.'
-                : 'On Polygon (PoS Mainnet and Amoy Testnet), ERC-20 reserves (USDT, USDC) live strictly inside BinaryLiquidVault.sol (Solidity 0.8.20). The contract deliberately omits any administrative liquidity withdrawal function, eliminating admin rug-pull vectors.'}
+                ? 'En Polygon (PoS Mainnet y Amoy Testnet), las reservas estables (USDT, USDC) residen exclusivamente dentro de BinaryLiquidVault.sol (Solidity 0.8.20). El contrato carece deliberadamente de cualquier función administrativa de retiro de liquidez (sin ownerWithdraw); las liberaciones requieren atestación EIP-191 de Watchman con techo por operación, y la especificación V2 (BinaryLiquidVaultV2.sol) añade timelock de 48h para rotación de firmante y límites diarios.'
+                : 'On Polygon (PoS Mainnet and Amoy Testnet), ERC-20 reserves (USDT, USDC) live strictly inside BinaryLiquidVault.sol (Solidity 0.8.20). The contract deliberately omits any administrative liquidity withdrawal function (no ownerWithdraw); payouts require Watchman EIP-191 attestation bounded per transaction, while V2 (BinaryLiquidVaultV2.sol) adds a 48h signer-rotation timelock and daily outflow limits.'}
             </p>
 
             <div className="space-y-2">
               <div className="text-xs font-semibold text-ink">
                 {isEs ? 'Invariantes de liquidación EIP-191 y Anti-Replay:' : 'EIP-191 attestation & anti-replay invariants:'}
               </div>
-              <pre className="bg-surface-2/50 border border-line rounded-lg p-4 font-mono text-[11.5px] text-ink overflow-x-auto leading-relaxed">{`bytes32 digest = keccak256(abi.encodePacked(
-    bchTxHash, recipient, token, amount, nonce, block.chainid, address(this)
+              <pre className="bg-surface-2/50 border border-line rounded-lg p-4 font-mono text-[11.5px] text-ink overflow-x-auto leading-relaxed">{`require(!executedPayouts[bchTxHash], "BinaryLiquid: Anti-Replay blocked");
+require(amount > 0 && amount <= MAX_SINGLE_PAYOUT, "BinaryLiquid: Exceeds circuit breaker");
+bytes32 messageHash = keccak256(abi.encodePacked(
+    "\\x19Ethereum Signed Message:\\n32",
+    keccak256(abi.encodePacked(bchTxHash, recipient, token, amount, nonce, block.chainid, address(this)))
 ));
-require(!executedPayouts[bchTxHash], "Anti-Replay");
-require(amount <= MAX_SINGLE_PAYOUT, "Circuit Breaker");
-require(ecrecover(ethSignedHash, v, r, s) == watchmanSigner, "Invalid Attestation");`}</pre>
+require(recoverSigner(messageHash, watchmanSignature) == watchmanSigner, "Invalid signature");`}</pre>
               <p className="text-xs text-ink-3 leading-relaxed">
                 {isEs
                   ? 'Al ligar la firma a block.chainid y address(this), ninguna atestación válida en Testnet o en otra red puede reutilizarse en Mainnet.'
@@ -517,7 +523,7 @@ require(ecrecover(ethSignedHash, v, r, s) == watchmanSigner, "Invalid Attestatio
             <div className="py-3 border-y border-line grid grid-cols-3 gap-4 text-xs">
               <div>
                 <div className="text-ink-3">{isEs ? 'LTV Máximo Inicial' : 'Max Initial LTV'}</div>
-                <div className="text-sm font-semibold text-ink tabular-nums mt-0.5">70.0%</div>
+                <div className="text-sm font-semibold text-ink tabular-nums mt-0.5">65.0%</div>
               </div>
               <div>
                 <div className="text-ink-3">{isEs ? 'Umbral de Liquidación' : 'Liquidation Threshold'}</div>
@@ -531,8 +537,8 @@ require(ecrecover(ethSignedHash, v, r, s) == watchmanSigner, "Invalid Attestatio
 
             <p className="text-xs text-ink-3 leading-relaxed">
               {isEs
-                ? 'Oráculos híbridos: Los precios de BCH y CashTokens se validan cruzando reservas on-chain de Cauldron DEX en Bitcoin Cash con feeds medianizados de mercado (Binance / CoinGecko), auditados continuamente por el módulo oracleAuditor del Watchman.'
-                : 'Hybrid Oracles: BCH and CashToken valuations cross-verify on-chain Cauldron DEX UTXO reserves against medianized market feeds (Binance / CoinGecko), continuously checked by the Watchman oracleAuditor module.'}
+                ? 'Oráculos en cascada: Los precios de BCH y activos mayores se obtienen mediante failover automático entre Binance, CoinGecko, Coinbase y Kraken (caché Redis 15s); el precio de LIFT se consulta en vivo vía Cauldron DEX Router (WebSocket), mientras OracleAuditor bloquea desviaciones mayores al 1.5%.'
+                : 'Multi-Provider Oracles: BCH and major asset prices query Binance, CoinGecko, Coinbase, and Kraken with automatic failover (15s Redis cache); LIFT pricing queries Cauldron DEX Router live via WebSocket, while OracleAuditor blocks deviations exceeding 1.5%.'}
             </p>
           </section>
 
@@ -582,10 +588,10 @@ require(ecrecover(ethSignedHash, v, r, s) == watchmanSigner, "Invalid Attestatio
                         {isEs ? 'Compromiso de firma atestadora' : 'Attester key compromise'}
                       </td>
                       <td className="py-2.5 px-4 font-mono text-[11px]">
-                        maxSinglePayout + State Continuation + Pause
+                        maxSinglePayout + State Continuation + Pause (48h timelock V2)
                       </td>
                       <td className="py-2.5 pl-4">
-                        {isEs ? 'Colateral BCH intocable; pool protegido por techo VM.' : 'BCH collateral untouchable; pool bounded by VM cap.'}
+                        {isEs ? 'Colateral BCH intocable; pool acotado por techo VM y pausa.' : 'BCH collateral untouchable; pool bounded by VM cap & pause.'}
                       </td>
                     </tr>
                     <tr>
@@ -634,8 +640,8 @@ require(ecrecover(ethSignedHash, v, r, s) == watchmanSigner, "Invalid Attestatio
               <li>
                 <strong className="text-ink font-semibold">API REST de Covenants:</strong>{' '}
                 {isEs
-                  ? 'Endpoints /api/quote, /api/swap/create y /api/swap/status/:id permiten a billeteras y bots instanciar contratos P2SH32 al vuelo.'
-                  : 'Endpoints /api/quote, /api/swap/create, and /api/swap/status/:id let native wallets and bots instantiate P2SH32 escrows programmatically.'}
+                  ? 'Endpoints /api/quote, /api/swap/create y /api/swap/:id permiten a billeteras y bots instanciar contratos P2SH32 al vuelo.'
+                  : 'Endpoints /api/quote, /api/swap/create, and /api/swap/:id let native wallets and bots instantiate P2SH32 escrows programmatically.'}
               </li>
               <li>
                 <strong className="text-ink font-semibold">Indexación Global DEX:</strong>{' '}
@@ -659,7 +665,7 @@ require(ecrecover(ethSignedHash, v, r, s) == watchmanSigner, "Invalid Attestatio
           {/* APPENDIX A */}
           <section id="wp-deployments" className="pt-8 scroll-mt-20 space-y-4">
             <h2 className="text-lg sm:text-xl font-semibold text-ink">
-              {isEs ? 'Anexo A. Artefactos y contratos verificados on-chain' : 'Appendix A. Verifiable On-Chain Contracts & Artifacts'}
+              {isEs ? 'Anexo A. Contratos y artefactos verificados en Testnet' : 'Appendix A. Verifiable Testnet Contracts & Artifacts'}
             </h2>
 
             <div className="divide-y divide-line border-y border-line">
