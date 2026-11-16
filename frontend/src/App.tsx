@@ -697,6 +697,22 @@ export default function App() {
           }
         }
       }
+      const inferBchSource = (
+        provider?: string,
+        rawSource?: 'wizard' | 'wc2-bch' | 'extension' | 'manual'
+      ): 'wizard' | 'wc2-bch' | 'extension' | 'manual' => {
+        const prov = String(provider || '').toLowerCase();
+        if (rawSource === 'manual' || prov.includes('manual')) return 'manual';
+        if (prov.includes('cashonize') || prov.includes('zapit') || prov.includes('wc2') || prov.includes('walletconnect')) {
+          return 'wc2-bch';
+        }
+        if (rawSource === 'wc2-bch' || rawSource === 'extension' || rawSource === 'wizard') {
+          return rawSource;
+        }
+        if (prov.includes('extension')) return 'extension';
+        return 'wizard';
+      };
+
       const raw = localStorage.getItem('bliq_wallets_v2');
       if (raw) {
         const parsed = JSON.parse(raw);
@@ -704,6 +720,7 @@ export default function App() {
           if (parsed.bchWallet?.address && isValidCashAddress(parsed.bchWallet.address)) {
             return {
               ...parsed.bchWallet,
+              source: inferBchSource(parsed.bchWallet.provider, parsed.bchWallet.source),
               address: convertCashAddressNetwork(parsed.bchWallet.address, isTest, false),
               tokenAddress: convertCashAddressNetwork(parsed.bchWallet.tokenAddress || parsed.bchWallet.address, isTest, true)
             };
@@ -730,7 +747,7 @@ export default function App() {
             address: convertCashAddressNetwork(candidate, isTest, false),
             tokenAddress: convertCashAddressNetwork(candidate, isTest, true),
             provider: p.provider || 'Paytaca',
-            source: 'wizard'
+            source: inferBchSource(p.provider)
           };
         }
       }
@@ -1174,12 +1191,15 @@ export default function App() {
 
     // 2. Restore BCH WalletConnect V2 (Cashonize / Paytaca WC2) session
     if (bchWallet?.source !== 'manual') {
+      const shouldForceBchWc2 =
+        bchWallet?.source === 'wc2-bch' ||
+        /cashonize|wc2|walletconnect|zapit/i.test(bchWallet?.provider || '');
       restoreBchWalletConnectSession(
         isTest,
         () => {
           setBchWallet(prev => (prev?.source === 'wc2-bch' ? null : prev));
         },
-        { forceCheck: bchWallet?.source === 'wc2-bch' }
+        { forceCheck: shouldForceBchWc2 }
       ).then(restoredBch => {
         if (restoredBch && !restoredBch.networkMismatch) {
           setBchWallet({
@@ -1598,20 +1618,31 @@ export default function App() {
     const wantSol = !scopedChains || scopedChains.has('solana');
 
     // Hydrate persisted WalletConnect v2 sessions lazily on demand (e.g. immediately after page reload)
-    if (wantBch && cleanBch && bchWallet?.source === 'wc2-bch' && !hasActiveBchMessageSigningCapability('wc2-bch')) {
-      await restoreBchWalletConnectSession(
+    let effectiveBchSource = bchWallet?.source;
+    const looksLikeWc2BchProvider = /cashonize|wc2|walletconnect|zapit/i.test(bchWallet?.provider || '');
+    if (wantBch && cleanBch && effectiveBchSource !== 'manual' && !hasActiveBchMessageSigningCapability(effectiveBchSource)) {
+      const restoredBch = await restoreBchWalletConnectSession(
         platformNetwork === 'testnet',
         () => {
           setBchWallet(prev => (prev?.source === 'wc2-bch' ? null : prev));
         },
-        { forceCheck: true }
+        { forceCheck: effectiveBchSource === 'wc2-bch' || looksLikeWc2BchProvider }
       ).catch(() => null);
+      if (restoredBch && !restoredBch.networkMismatch) {
+        effectiveBchSource = 'wc2-bch';
+        setBchWallet({
+          address: restoredBch.address,
+          tokenAddress: restoredBch.tokenAddress,
+          provider: restoredBch.walletName,
+          source: 'wc2-bch'
+        });
+      }
     }
     if (wantEvm && cleanEvm && evmWallet?.source === 'wc2-evm' && !hasActiveEvmSigningCapability()) {
       await restoreEvmWalletConnectSession(evmEventCallbacks, { forceCheck: true }).catch(() => null);
     }
 
-    const canSignBch = Boolean(wantBch && cleanBch && hasActiveBchMessageSigningCapability(bchWallet?.source));
+    const canSignBch = Boolean(wantBch && cleanBch && hasActiveBchMessageSigningCapability(effectiveBchSource));
     const canSignEvm = Boolean(wantEvm && cleanEvm && hasActiveEvmSigningCapability());
     const canSignSol = Boolean(wantSol && cleanSol);
 
@@ -1640,18 +1671,23 @@ export default function App() {
 
       let msg: string;
       if (bchOnly) {
-        if (cleanBch && bchWallet?.source === 'wc2-bch' && !isBchWc2SessionConnected()) {
+        const expectsWc2Bch = effectiveBchSource === 'wc2-bch' || looksLikeWc2BchProvider;
+        if (cleanBch && expectsWc2Bch && !isBchWc2SessionConnected()) {
           msg =
             lang === 'es'
-              ? `La sesión WalletConnect de ${bchWallet?.provider || 'Cashonize'} expiró o no está activa tras recargar. Vuelve a conectar Cashonize (QR) para firmar esta acción BCH/PUSD.`
-              : `Your ${bchWallet?.provider || 'Cashonize'} WalletConnect session expired or is inactive after reloading. Reconnect Cashonize (WC2 QR) to authenticate this BCH/PUSD action.`;
+              ? `La sesión WalletConnect de ${bchWallet?.provider || 'Cashonize'} no está activa o expiró tras recargar. Escanea de nuevo el QR de Cashonize para firmar esta acción BCH/PUSD.`
+              : `Your ${bchWallet?.provider || 'Cashonize'} WalletConnect session is inactive or expired. Please reconnect Cashonize (WC2 QR) to authenticate this BCH/PUSD action.`;
+          setShowWalletModal(true);
         } else if (cleanBch && !canSignBch) {
-          const sessionMethods = bchWallet?.source === 'wc2-bch' ? getBchWc2SessionMethods() : [];
-          const methodsSuffix = sessionMethods.length > 0 ? ` [${sessionMethods.join(', ')}]` : '';
+          const sessionMethods = expectsWc2Bch ? getBchWc2SessionMethods() : [];
+          const methodsSuffix = sessionMethods.length > 0 ? ` [${sessionMethods.join(', ')}]` : ` [src=${effectiveBchSource || 'none'}]`;
           msg =
             lang === 'es'
-              ? `Tu conexión BCH actual (${bchWallet?.provider || bchWallet?.source}${methodsSuffix}) no autorizó firma de mensajes (bch_signMessage). Reconecta Cashonize o usa la extensión de Paytaca para acciones BCH/PUSD.`
-              : `Your current BCH connection (${bchWallet?.provider || bchWallet?.source}${methodsSuffix}) did not authorize message signing (bch_signMessage). Reconnect Cashonize or use the Paytaca extension for BCH/PUSD actions.`;
+              ? `Tu conexión BCH actual (${bchWallet?.provider || effectiveBchSource}${methodsSuffix}) no autorizó firma de mensajes (bch_signMessage). Reconecta Cashonize o usa la extensión de Paytaca para acciones BCH/PUSD.`
+              : `Your current BCH connection (${bchWallet?.provider || effectiveBchSource}${methodsSuffix}) did not authorize message signing (bch_signMessage). Reconnect Cashonize or use the Paytaca extension for BCH/PUSD actions.`;
+          if (expectsWc2Bch) {
+            setShowWalletModal(true);
+          }
         } else {
           msg =
             lang === 'es'
@@ -1705,7 +1741,7 @@ export default function App() {
           message: chData.message,
           userPrompt: 'BinaryLiquid Auth Session',
           isTestnet: platformNetwork === 'testnet',
-          preferredSource: bchWallet?.source
+          preferredSource: effectiveBchSource
         });
         proofs.push({ address: cleanBch, signature: signed.signature });
       }
