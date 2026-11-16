@@ -1,7 +1,15 @@
+import { Buffer } from 'buffer';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import './index.css';
+
+if (typeof globalThis !== 'undefined' && !(globalThis as any).Buffer) {
+  (globalThis as any).Buffer = Buffer;
+}
+if (typeof window !== 'undefined' && !(window as any).Buffer) {
+  (window as any).Buffer = Buffer;
+}
 
 // Guard WebSocket.prototype.send against DOMException when socket is already closing or closed.
 if (typeof window !== 'undefined' && window.WebSocket) {

@@ -1,3 +1,4 @@
+import { Buffer } from 'buffer';
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   ArrowDownUp,
@@ -25,6 +26,10 @@ import {
   createTransferInstruction,
   createAssociatedTokenAccountInstruction
 } from '@solana/spl-token';
+
+if (typeof globalThis !== 'undefined' && !(globalThis as any).Buffer) {
+  (globalThis as any).Buffer = Buffer;
+}
 import {
   executeWeb3VaultDeposit,
   executeBchSwapDeposit,
@@ -871,6 +876,28 @@ export default function BridgeSwap({
       const createdSwap = createData.swap;
       setActiveSwap(createdSwap);
 
+      const verifySwapWithRetry = async (swapId: string, txHash: string, maxAttempts = 5) => {
+        let lastData: any = null;
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+          const verifyRes = await fetch(`${backendUrl}/api/swap/${swapId}/verify-tx`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ txHash })
+          });
+          lastData = await verifyRes.json();
+          if (lastData?.success) return lastData;
+          const errText = String(lastData?.error || lastData?.reason || '').toLowerCase();
+          const isPermanentError =
+            errText.includes('replay') ||
+            errText.includes('slippage') ||
+            errText.includes('rejected') ||
+            errText.includes('failed on-chain');
+          if (isPermanentError || attempt === maxAttempts) break;
+          await new Promise(r => setTimeout(r, 1500));
+        }
+        return lastData;
+      };
+
       // 2A. Paying Litecoin (tLTC / LTC): Show QR & Auto-poll for on-chain mempool detection
       if (sellToken.isLtc || sellToken.symbol.toUpperCase() === 'LTC') {
         setProcessingStage('settling');
@@ -950,10 +977,13 @@ export default function BridgeSwap({
         if (!solanaProvider.publicKey) {
           await solanaProvider.connect();
         }
-        const userPubkey = solanaProvider.publicKey;
-        if (!userPubkey) {
+        const rawUserPk = solanaProvider.publicKey;
+        if (!rawUserPk) {
           throw new Error(lang === 'es' ? 'No se detectó cuenta activa en billetera Solana' : 'No active Solana wallet account');
         }
+        const userPubkey = new PublicKey(
+          typeof rawUserPk.toBase58 === 'function' ? rawUserPk.toBase58() : rawUserPk.toString()
+        );
 
         const solanaRpc = isTestnet
           ? 'https://api.devnet.solana.com'
@@ -986,7 +1016,29 @@ export default function BridgeSwap({
               : sellToken.categoryOrAddress || 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB');
           const mintPubkey = new PublicKey(mintAddress);
           const sourceAta = await getAssociatedTokenAddress(mintPubkey, userPubkey);
-          const vaultAta = await getAssociatedTokenAddress(mintPubkey, vaultPubkey);
+          const vaultAta = await getAssociatedTokenAddress(mintPubkey, vaultPubkey, true);
+
+          if (isTestnet) {
+            let currentTokenUnits = 0n;
+            try {
+              const balRes = await connection.getTokenAccountBalance(sourceAta, 'confirmed');
+              currentTokenUnits = BigInt(balRes?.value?.amount || '0');
+            } catch {
+              currentTokenUnits = 0n;
+            }
+            if (currentTokenUnits < rawAmount) {
+              await fetch(`${backendUrl}/api/faucet/testnet`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  recipient: userPubkey.toBase58(),
+                  token: 'USDT',
+                  chain: 'solana_devnet',
+                  amount: Math.max(Number(createdSwap.fromAmount), 100)
+                })
+              }).catch(() => null);
+            }
+          }
 
           // Ensure Vault ATA exists
           const vaultAtaInfo = await connection.getAccountInfo(vaultAta);
@@ -1015,8 +1067,21 @@ export default function BridgeSwap({
         transaction.recentBlockhash = blockhash;
         transaction.feePayer = userPubkey;
 
-        const sendResult = await solanaProvider.signAndSendTransaction(transaction);
-        const txSignature = typeof sendResult === 'string' ? sendResult : sendResult?.signature;
+        let txSignature = '';
+        if (typeof solanaProvider.signTransaction === 'function') {
+          const signedTx = await solanaProvider.signTransaction(transaction);
+          const rawTx =
+            typeof signedTx?.serialize === 'function'
+              ? signedTx.serialize()
+              : transaction.serialize();
+          txSignature = await connection.sendRawTransaction(rawTx, {
+            skipPreflight: false,
+            preflightCommitment: 'confirmed'
+          });
+        } else {
+          const sendResult = await solanaProvider.signAndSendTransaction(transaction);
+          txSignature = typeof sendResult === 'string' ? sendResult : sendResult?.signature;
+        }
         if (!txSignature) {
           throw new Error(lang === 'es' ? 'Solana no devolvió firma de transacción' : 'Solana did not return a transaction signature');
         }
@@ -1034,14 +1099,9 @@ export default function BridgeSwap({
         setProcessingStage('settling');
         setSigningStep(t.settling);
 
-        const verifyRes = await fetch(`${backendUrl}/api/swap/${createdSwap.id}/verify-tx`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ txHash: txSignature })
-        });
-        const verifyData = await verifyRes.json();
-        if (!verifyData.success) {
-          throw new Error(verifyData.error || 'Error liquidando swap en contrato destino');
+        const verifyData = await verifySwapWithRetry(createdSwap.id, txSignature, 5);
+        if (!verifyData?.success) {
+          throw new Error(verifyData?.error || 'Error liquidando swap en contrato destino');
         }
 
         setActiveSwap(verifyData.swap);
@@ -1070,14 +1130,9 @@ export default function BridgeSwap({
 
         setProcessingStage('settling');
         setSigningStep(t.settling);
-        const verifyRes = await fetch(`${backendUrl}/api/swap/${createdSwap.id}/verify-tx`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ txHash })
-        });
-        const verifyData = await verifyRes.json();
-        if (!verifyData.success) {
-          throw new Error(verifyData.error || 'Error liquidando en contrato destino');
+        const verifyData = await verifySwapWithRetry(createdSwap.id, txHash, 4);
+        if (!verifyData?.success) {
+          throw new Error(verifyData?.error || 'Error liquidando en contrato destino');
         }
 
         setActiveSwap(verifyData.swap);
@@ -1117,20 +1172,7 @@ export default function BridgeSwap({
       setProcessingStage('settling');
       setSigningStep(t.settling);
 
-      let verifyData: any = null;
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        const verifyRes = await fetch(`${backendUrl}/api/swap/${createdSwap.id}/verify-tx`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ txHash })
-        });
-        verifyData = await verifyRes.json();
-        if (verifyData?.success) break;
-        if (attempt < 3) {
-          await new Promise(r => setTimeout(r, 1500));
-        }
-      }
-
+      const verifyData = await verifySwapWithRetry(createdSwap.id, txHash, 4);
       if (!verifyData?.success) {
         throw new Error(verifyData?.error || 'Error liquidando en contrato destino');
       }
