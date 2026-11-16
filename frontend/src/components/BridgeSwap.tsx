@@ -404,6 +404,8 @@ export default function BridgeSwap({
   // Quote & UI Popovers
   const [quote, setQuote] = useState<any>(null);
   const [loadingQuote, setLoadingQuote] = useState<boolean>(false);
+  const [quoteCountdown, setQuoteCountdown] = useState<number>(12);
+  const quoteAbortRef = useRef<AbortController | null>(null);
   const [detailsOpen, setDetailsOpen] = useState<boolean>(false);
   const [settingsOpen, setSettingsOpen] = useState<boolean>(false);
   const [slippage, setSlippage] = useState<number>(0.5);
@@ -637,39 +639,71 @@ export default function BridgeSwap({
   const isRecipientValid = Boolean(normalizedRecipient);
 
   // ==========================================================================
-  // LIVE ORACLE QUOTE
+  // LIVE ORACLE QUOTE (WITH ABORT CONTROLLER & 12s AUTO-REFRESH COUNTDOWN)
   // ==========================================================================
   const fetchQuote = useCallback(async () => {
     const parsed = parseFloat(amount);
     if (!amount || isNaN(parsed) || parsed <= 0 || !isPairLiquid) {
+      quoteAbortRef.current?.abort();
       setQuote(null);
+      setLoadingQuote(false);
       return;
     }
+
+    quoteAbortRef.current?.abort();
+    const controller = new AbortController();
+    quoteAbortRef.current = controller;
 
     setLoadingQuote(true);
     try {
       const fromChain = getTokenChainId(sellToken.symbol, sellToken.isBch, isTestnet, sellToken.isSolana, sellToken.isLtc, sellToken.chain);
       const toChain = getTokenChainId(buyToken.symbol, buyToken.isBch, isTestnet, buyToken.isSolana, buyToken.isLtc, buyToken.chain);
       const res = await fetch(
-        `${backendUrl}/api/quote?fromToken=${sellToken.symbol}&toToken=${buyToken.symbol}&amount=${parsed}&network=${platformNetwork}&fromChain=${fromChain}&toChain=${toChain}`
+        `${backendUrl}/api/quote?fromToken=${sellToken.symbol}&toToken=${buyToken.symbol}&amount=${parsed}&network=${platformNetwork}&fromChain=${fromChain}&toChain=${toChain}`,
+        { signal: controller.signal }
       );
       const data = await res.json();
+      if (controller.signal.aborted) return;
       if (data.success && data.quote) {
         setQuote(data.quote);
+        setQuoteCountdown(12);
       } else {
         setQuote(null);
       }
-    } catch {
+    } catch (err: any) {
+      if (err?.name === 'AbortError' || controller.signal.aborted) return;
       setQuote(null);
     } finally {
-      setLoadingQuote(false);
+      if (!controller.signal.aborted) {
+        setLoadingQuote(false);
+      }
     }
   }, [amount, sellToken, buyToken, isPairLiquid, isTestnet, platformNetwork, backendUrl]);
 
   useEffect(() => {
-    const timer = setTimeout(fetchQuote, 220);
-    return () => clearTimeout(timer);
+    const timer = setTimeout(fetchQuote, 180);
+    return () => {
+      clearTimeout(timer);
+      quoteAbortRef.current?.abort();
+    };
   }, [fetchQuote]);
+
+  useEffect(() => {
+    const parsed = parseFloat(amount);
+    if (cardState !== 'form' || activeTab !== 'swap' || !isPairLiquid || !amount || isNaN(parsed) || parsed <= 0) {
+      return;
+    }
+    const interval = setInterval(() => {
+      setQuoteCountdown(prev => {
+        if (prev <= 1) {
+          fetchQuote();
+          return 12;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [cardState, activeTab, isPairLiquid, amount, fetchQuote]);
 
   // ==========================================================================
   // LIMIT ORDERS FETCH
@@ -848,9 +882,10 @@ export default function BridgeSwap({
     setSigningStep(t.signing);
 
     try {
-      const minOut = quote
-        ? Number((quote.netPayout * (1 - slippage / 100)).toFixed(6))
-        : 0;
+      const minOut =
+        effectiveQuoteMetrics.netPayout > 0
+          ? Number((effectiveQuoteMetrics.netPayout * (1 - slippage / 100)).toFixed(6))
+          : 0;
 
       // 1. Create Non-Custodial Swap Order
       const createRes = await fetch(`${backendUrl}/api/swap/create`, {
@@ -1420,6 +1455,45 @@ export default function BridgeSwap({
   // ==========================================================================
   // COMPUTED DISPLAY VALUES & PRIMARY CTA STATE
   // ==========================================================================
+  const effectiveQuoteMetrics = useMemo(() => {
+    const parsed = parseFloat(amount);
+    if (!amount || isNaN(parsed) || parsed <= 0 || !isPairLiquid) {
+      return { netPayout: 0, feeAmount: 0, netPayoutUsd: 0 };
+    }
+    const isExactQuoteMatch =
+      quote?.netPayout !== undefined &&
+      Math.abs(Number(quote.inputAmount) - parsed) < 1e-9;
+
+    if (isExactQuoteMatch) {
+      return {
+        netPayout: Number(quote.netPayout),
+        feeAmount: Number(quote.feeAmount || 0),
+        netPayoutUsd:
+          quote.netPayoutUsd !== undefined
+            ? Number(quote.netPayoutUsd)
+            : Number((Number(quote.netPayout) * Number(quote.priceToUsd || 1)).toFixed(2))
+      };
+    }
+
+    const fallbackRate =
+      quote?.rate && Number(quote.rate) > 0
+        ? Number(quote.rate)
+        : sellToken.isBch && !buyToken.isBch && sellToken.symbol === 'BCH'
+        ? 470
+        : !sellToken.isBch && buyToken.isBch && buyToken.symbol === 'BCH'
+        ? 1 / 470
+        : 1;
+    const gross = parsed * fallbackRate;
+    const fee = Number((gross * 0.003).toFixed(6));
+    const net = Number((gross - fee).toFixed(6));
+    const priceToUsd = Number(quote?.priceToUsd || 1);
+    return {
+      netPayout: net,
+      feeAmount: fee,
+      netPayoutUsd: Number((net * priceToUsd).toFixed(2))
+    };
+  }, [amount, isPairLiquid, quote, sellToken.isBch, sellToken.symbol, buyToken.isBch, buyToken.symbol]);
+
   const receiveDisplay = useMemo(() => {
     const parsed = parseFloat(amount);
     if (!amount || isNaN(parsed) || parsed <= 0 || !isPairLiquid) return '';
@@ -1428,11 +1502,8 @@ export default function BridgeSwap({
     if (activeTab === 'limit') {
       const r = parseFloat(targetRate) || 1;
       rawVal = parsed * r * 0.997;
-    } else if (quote?.netPayout !== undefined) {
-      rawVal = Number(quote.netPayout);
     } else {
-      const rate = sellToken.isBch && !buyToken.isBch ? 470 : !sellToken.isBch && buyToken.isBch ? 1 / 470 : 1;
-      rawVal = parsed * rate * 0.997;
+      rawVal = effectiveQuoteMetrics.netPayout;
     }
 
     if (isNaN(rawVal) || rawVal <= 0) return '';
@@ -1452,7 +1523,7 @@ export default function BridgeSwap({
     }
 
     return rawVal.toFixed(2);
-  }, [amount, isPairLiquid, activeTab, targetRate, quote, buyToken.symbol, sellToken.isBch, buyToken.isBch]);
+  }, [amount, isPairLiquid, activeTab, targetRate, effectiveQuoteMetrics.netPayout, buyToken.symbol]);
 
   const ctaConfig = useMemo(() => {
     if (!isPairLiquid) {
@@ -1804,9 +1875,17 @@ export default function BridgeSwap({
                 ) : activeTab === 'limit' ? (
                   <span className="truncate">{t.limitRouteHint}</span>
                 ) : quote && parseFloat(amount) > 0 ? (
-                  <span className="text-ink-2 font-medium truncate">
-                    1 {sellToken.symbol} = {quote.rate} {buyToken.symbol}
-                  </span>
+                  <button
+                    type="button"
+                    onClick={() => fetchQuote()}
+                    title={lang === 'es' ? 'Actualizar cotización del oráculo' : 'Refresh oracle quote'}
+                    className="text-ink-2 hover:text-ink font-medium truncate inline-flex items-center gap-1 cursor-pointer"
+                  >
+                    <span className="truncate">
+                      1 {sellToken.symbol} = {quote.rate} {buyToken.symbol}
+                    </span>
+                    <span className="text-ink-3 text-[10px] shrink-0">· {quoteCountdown}s</span>
+                  </button>
                 ) : (
                   <span className="truncate">~3s · 0.3%</span>
                 )}
@@ -1856,8 +1935,8 @@ export default function BridgeSwap({
 
               <div className="flex items-center justify-between mt-2.5 text-[11px] text-ink-3 gap-2">
                 <span className="tabular-nums">
-                  {quote?.netPayoutUsd !== undefined
-                    ? `~$${Number(quote.netPayoutUsd).toFixed(2)}`
+                  {effectiveQuoteMetrics.netPayoutUsd > 0
+                    ? `~$${effectiveQuoteMetrics.netPayoutUsd.toFixed(2)}`
                     : receiveDisplay
                     ? `~$${receiveDisplay}`
                     : '$0.00'}
@@ -1956,7 +2035,7 @@ export default function BridgeSwap({
                   className="w-full flex items-center justify-between text-ink-2 cursor-pointer"
                 >
                   <span className="font-medium text-ink-2 tabular-nums">
-                    {t.minShort} {(quote.netPayout * (1 - slippage / 100)).toFixed(4)} {buyToken.symbol}
+                    {t.minShort} {(effectiveQuoteMetrics.netPayout * (1 - slippage / 100)).toFixed(4)} {buyToken.symbol}
                   </span>
                   <span className="flex items-center gap-1.5 text-[11px]">
                     <span>{t.fee} 0.3%</span>
@@ -1973,13 +2052,13 @@ export default function BridgeSwap({
                     <div className="flex justify-between">
                       <span>{t.minReceived} ({slippage}%)</span>
                       <span className="font-medium text-ink tabular-nums">
-                        {(quote.netPayout * (1 - slippage / 100)).toFixed(4)} {buyToken.symbol}
+                        {(effectiveQuoteMetrics.netPayout * (1 - slippage / 100)).toFixed(4)} {buyToken.symbol}
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span>{t.fee} (0.20% LP + 0.10% Protocol)</span>
                       <span className="font-medium text-ink tabular-nums">
-                        {quote.feeAmount} {buyToken.symbol}
+                        {effectiveQuoteMetrics.feeAmount} {buyToken.symbol}
                       </span>
                     </div>
                     <div className="flex justify-between">
