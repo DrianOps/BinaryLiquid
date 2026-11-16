@@ -1068,7 +1068,24 @@ export default function BridgeSwap({
         transaction.feePayer = userPubkey;
 
         let txSignature = '';
-        if (typeof solanaProvider.signTransaction === 'function') {
+        try {
+          const sendResult = await solanaProvider.signAndSendTransaction(transaction, {
+            skipPreflight: false,
+            preflightCommitment: 'confirmed'
+          });
+          txSignature = typeof sendResult === 'string' ? sendResult : sendResult?.signature;
+        } catch (sendErr: any) {
+          const errMsg = String(sendErr?.message || sendErr || '').toLowerCase();
+          const userRejected =
+            sendErr?.code === 4001 ||
+            errMsg.includes('rejected') ||
+            errMsg.includes('cancelled') ||
+            errMsg.includes('canceled') ||
+            errMsg.includes('user denied');
+          if (userRejected || typeof solanaProvider.signTransaction !== 'function') {
+            throw sendErr;
+          }
+          // Fallback if wallet internal RPC is on Mainnet while dApp is on Devnet
           const signedTx = await solanaProvider.signTransaction(transaction);
           const rawTx =
             typeof signedTx?.serialize === 'function'
@@ -1078,9 +1095,6 @@ export default function BridgeSwap({
             skipPreflight: false,
             preflightCommitment: 'confirmed'
           });
-        } else {
-          const sendResult = await solanaProvider.signAndSendTransaction(transaction);
-          txSignature = typeof sendResult === 'string' ? sendResult : sendResult?.signature;
         }
         if (!txSignature) {
           throw new Error(lang === 'es' ? 'Solana no devolvió firma de transacción' : 'Solana did not return a transaction signature');
