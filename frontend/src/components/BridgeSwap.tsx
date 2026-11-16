@@ -14,7 +14,8 @@ import {
   ArrowLeft,
   ArrowRight,
   ClipboardPaste,
-  ArrowLeftRight
+  ArrowLeftRight,
+  Zap
 } from 'lucide-react';
 import TokenSelectModal, { SUPPORTED_TOKENS, TokenInfo } from './TokenSelectModal';
 import qrcode from 'qrcode-generator';
@@ -126,7 +127,19 @@ const UI_TEXT = {
     signatureRequiredBadge: 'Firma requerida',
     settlingBadge: 'Liquidando en cadena',
     nonCustodialBadge: '100% No custodial • Atómico',
-    switchToQrAction: '¿Prefieres pagar escaneando código QR?'
+    switchToQrAction: '¿Prefieres pagar escaneando código QR?',
+    protocolLabel: 'Protocolo',
+    vaultBackingLabel: 'Bóvedas',
+    mainnetVaultEmpty: 'Mainnet sin liquidez',
+    nonCustodialShort: '100% No custodial',
+    limitModeTag: 'Orden límite',
+    limitRouteHint: 'Por precio objetivo',
+    flipPair: 'Invertir par',
+    quoting: 'Cotizando...',
+    recentActivity: 'Actividad reciente',
+    explorer: 'Explorador',
+    minShort: 'Mín.',
+    details: 'Detalles'
   },
   en: {
     swap: 'Swap',
@@ -182,7 +195,19 @@ const UI_TEXT = {
     signatureRequiredBadge: 'Signature required',
     settlingBadge: 'Settling on-chain',
     nonCustodialBadge: '100% Non-custodial • Atomic',
-    switchToQrAction: 'Prefer to pay by scanning QR code?'
+    switchToQrAction: 'Prefer to pay by scanning QR code?',
+    protocolLabel: 'Protocol',
+    vaultBackingLabel: 'Vaults',
+    mainnetVaultEmpty: 'Mainnet unseeded',
+    nonCustodialShort: '100% Non-custodial',
+    limitModeTag: 'Limit order',
+    limitRouteHint: 'Target execution',
+    flipPair: 'Flip pair',
+    quoting: 'Quoting...',
+    recentActivity: 'Recent activity',
+    explorer: 'Explorer',
+    minShort: 'Min.',
+    details: 'Details'
   }
 };
 
@@ -205,52 +230,132 @@ function getTokenChainMeta(token: TokenInfo, isTestnet: boolean) {
   const chainKey = resolveTokenChainKey(token);
   const table: Record<
     TokenChainKey,
-    { badge: string; badgeClass: string; networkLabel: string; contractName: string }
+    { badge: string; badgeClass: string; networkLabel: string; contractName: string; chainIcon: string }
   > = {
     ton: {
       badge: 'TON',
       badgeClass: 'bg-sky-500/15 text-sky-600 dark:text-sky-400 border-sky-500/20',
       networkLabel: isTestnet ? 'TON Testnet' : 'TON Blockchain',
-      contractName: 'BinaryLiquidTonVault'
+      contractName: 'BinaryLiquidTonVault',
+      chainIcon: '/TON.png'
     },
     bnb: {
       badge: 'BNB Chain',
       badgeClass: 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/20',
       networkLabel: isTestnet ? 'BNB Testnet' : 'BNB Chain',
-      contractName: 'BinaryLiquidVault.sol'
+      contractName: 'BinaryLiquidVault.sol',
+      chainIcon: '/BNB.png'
     },
     bch: {
       badge: 'BCH',
       badgeClass: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
       networkLabel: isTestnet ? 'BCH Chipnet' : 'Bitcoin Cash',
-      contractName: 'BinaryLiquidEscrow.cash'
+      contractName: 'BinaryLiquidEscrow.cash',
+      chainIcon: '/BCH.png'
     },
     solana: {
       badge: 'Solana',
       badgeClass: 'bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 border-cyan-500/20',
       networkLabel: isTestnet ? 'Solana Devnet' : 'Solana',
-      contractName: 'BinaryLiquidAnchorVault (SVM)'
+      contractName: 'BinaryLiquidAnchorVault (SVM)',
+      chainIcon: '/SOL.png'
     },
     litecoin: {
       badge: 'Litecoin',
       badgeClass: 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/20',
       networkLabel: isTestnet ? 'Litecoin Testnet4' : 'Litecoin',
-      contractName: 'Litecoin P2WPKH Vault'
+      contractName: 'Litecoin P2WPKH Vault',
+      chainIcon: '/LTC.png'
     },
     ethereum: {
       badge: 'Ethereum',
       badgeClass: 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border-indigo-500/20',
       networkLabel: 'Ethereum Mainnet',
-      contractName: 'BinaryLiquidVault.sol'
+      contractName: 'BinaryLiquidVault.sol',
+      chainIcon: '/ETH.png'
     },
     polygon: {
       badge: 'Polygon',
       badgeClass: 'bg-purple-500/15 text-purple-600 dark:text-purple-400 border-purple-500/20',
       networkLabel: isTestnet ? 'Polygon Amoy' : 'Polygon',
-      contractName: 'BinaryLiquidVault.sol'
+      contractName: 'BinaryLiquidVault.sol',
+      chainIcon: '/POL.png'
     }
   };
   return { chainKey, ...table[chainKey] };
+}
+
+function formatCompactUsd(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return '$0';
+  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(2)}M`;
+  if (value >= 1_000) return `$${(value / 1_000).toFixed(1)}k`;
+  return `$${value.toFixed(0)}`;
+}
+
+function formatPresetAmount(value: number, isVolatile: boolean): string {
+  const decimals = isVolatile || value < 1 ? 4 : 2;
+  return value.toFixed(decimals).replace(/\.?0+$/, '') || '0';
+}
+
+function formatRelativeTime(iso: string | undefined, lang: 'en' | 'es'): string {
+  if (!iso) return '';
+  const ts = Date.parse(iso);
+  if (Number.isNaN(ts)) return '';
+  const diffSec = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+  if (diffSec < 60) return lang === 'es' ? 'ahora' : 'just now';
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return lang === 'es' ? `hace ${diffMin}m` : `${diffMin}m ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return lang === 'es' ? `hace ${diffHr}h` : `${diffHr}h ago`;
+  const diffDay = Math.floor(diffHr / 24);
+  return lang === 'es' ? `hace ${diffDay}d` : `${diffDay}d ago`;
+}
+
+function isNativeChainAsset(symbol: string, chainKey: TokenChainKey): boolean {
+  const sym = symbol.toUpperCase();
+  return (
+    (chainKey === 'bch' && sym === 'BCH') ||
+    (chainKey === 'solana' && sym === 'SOL') ||
+    (chainKey === 'litecoin' && sym === 'LTC') ||
+    (chainKey === 'ton' && sym === 'TON') ||
+    (chainKey === 'ethereum' && sym === 'ETH') ||
+    (chainKey === 'bnb' && sym === 'BNB') ||
+    (chainKey === 'polygon' && sym === 'POL')
+  );
+}
+
+interface TokenPillChipProps {
+  token: TokenInfo;
+  meta: ReturnType<typeof getTokenChainMeta>;
+  onClick: () => void;
+}
+
+function TokenPillChip({ token, meta, onClick }: TokenPillChipProps) {
+  const showChainBadge = !isNativeChainAsset(token.symbol, meta.chainKey);
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex items-center gap-2 pl-2 pr-2.5 py-1.5 rounded-full bg-surface hover:bg-surface-3 border border-line hover:border-line-strong shrink-0 transition-colors cursor-pointer shadow-soft"
+    >
+      <div className="relative shrink-0">
+        <img
+          src={token.icon}
+          alt={token.symbol}
+          className="w-6 h-6 rounded-full object-contain"
+        />
+        {showChainBadge && (
+          <img
+            src={meta.chainIcon}
+            alt={meta.badge}
+            className="w-3.5 h-3.5 rounded-full object-contain bg-surface ring-2 ring-surface absolute -bottom-0.5 -right-0.5"
+          />
+        )}
+      </div>
+      <span className="font-semibold text-sm text-ink">{token.symbol}</span>
+      <ChevronDown className="w-3.5 h-3.5 text-ink-3" />
+    </button>
+  );
 }
 
 function getTokenChainId(symbol: string, isBch: boolean, isTestnet: boolean, isSolana?: boolean, isLtc?: boolean, chain?: string): string {
@@ -340,6 +445,12 @@ export default function BridgeSwap({
 
   // Limit Orders
   const [limitOrders, setLimitOrders] = useState<any[]>([]);
+
+  // Live Cross-Chain Protocol Telemetry & Activity
+  const [watchmanOnline, setWatchmanOnline] = useState<boolean>(true);
+  const [vaultTvlUsd, setVaultTvlUsd] = useState<number | null>(null);
+  const [recentSwaps, setRecentSwaps] = useState<any[]>([]);
+  const [activityOpen, setActivityOpen] = useState<boolean>(false);
 
   // ==========================================================================
   // STRICT PAY-WALLET vs RECEIVE-ADDRESS SEPARATION
@@ -611,6 +722,81 @@ export default function BridgeSwap({
       fetchLimitOrders();
     }
   }, [activeTab, fetchLimitOrders]);
+
+  // ==========================================================================
+  // LIVE CROSS-CHAIN TELEMETRY (Watchman, Vault TVL, Recent Activity)
+  // ==========================================================================
+  const fetchProtocolTelemetry = useCallback(async () => {
+    try {
+      const [watchRes, poolsRes, swapsRes] = await Promise.allSettled([
+        fetch(`${backendUrl}/api/watchman/status`),
+        fetch(`${backendUrl}/api/pools/stats?network=${platformNetwork}`),
+        fetch(`${backendUrl}/api/swaps/recent?limit=10`)
+      ]);
+
+      if (watchRes.status === 'fulfilled' && watchRes.value.ok) {
+        const wData = await watchRes.value.json();
+        setWatchmanOnline(wData?.watchman?.status === 'ONLINE');
+      }
+
+      if (poolsRes.status === 'fulfilled' && poolsRes.value.ok) {
+        const pData = await poolsRes.value.json();
+        const tvl = Number(pData?.protocolStats?.totalTvlUsd);
+        if (Number.isFinite(tvl)) {
+          setVaultTvlUsd(tvl);
+        }
+      }
+
+      if (swapsRes.status === 'fulfilled' && swapsRes.value.ok) {
+        const sData = await swapsRes.value.json();
+        if (Array.isArray(sData?.swaps)) {
+          setRecentSwaps(sData.swaps);
+        }
+      }
+    } catch {
+      // keep previous telemetry quietly on transient network blips
+    }
+  }, [backendUrl, platformNetwork]);
+
+  useEffect(() => {
+    fetchProtocolTelemetry();
+    const interval = setInterval(fetchProtocolTelemetry, 30000);
+    return () => clearInterval(interval);
+  }, [fetchProtocolTelemetry]);
+
+  useEffect(() => {
+    if (cardState === 'success') {
+      fetchProtocolTelemetry();
+    }
+  }, [cardState, fetchProtocolTelemetry]);
+
+  const quickAmountOptions = useMemo(() => {
+    const isVolatile = ['BCH', 'SOL', 'LTC', 'ETH', 'BNB', 'TON', 'POL'].includes(
+      sellToken.symbol.toUpperCase()
+    );
+    if (isPayingWalletConnected && sellBalance !== null && sellBalance > 0) {
+      return [
+        { label: '25%', value: formatPresetAmount(sellBalance * 0.25, isVolatile) },
+        { label: '50%', value: formatPresetAmount(sellBalance * 0.5, isVolatile) },
+        { label: '75%', value: formatPresetAmount(sellBalance * 0.75, isVolatile) },
+        { label: t.max, value: String(sellBalance) }
+      ];
+    }
+    const defaults = isVolatile ? ['0.05', '0.1', '0.5', '1'] : ['10', '25', '50', '100'];
+    return defaults.map(v => ({ label: isVolatile ? v : `$${v}`, value: v }));
+  }, [sellToken.symbol, isPayingWalletConnected, sellBalance, t.max]);
+
+  const filteredRecentSwaps = useMemo(() => {
+    return recentSwaps
+      .filter(s => {
+        if (s?.status !== 'COMPLETED') return false;
+        const from = String(s.fromChain || '');
+        const to = String(s.toChain || '');
+        const swapIsTestnet = /chipnet|amoy|devnet|testnet/i.test(from) || /chipnet|amoy|devnet|testnet/i.test(to);
+        return swapIsTestnet === isTestnet;
+      })
+      .slice(0, 3);
+  }, [recentSwaps, isTestnet]);
 
   // ==========================================================================
   // ACTIONS
@@ -1369,7 +1555,7 @@ export default function BridgeSwap({
   ]);
 
   return (
-    <div className="w-full max-w-[440px] mx-auto pt-2 sm:pt-6 pb-8">
+    <div className="w-full max-w-[448px] mx-auto pt-2 sm:pt-6 pb-8">
       {/* Minimal Mainnet Switch Bar (only shown if user switched platform to Mainnet) */}
       {!isTestnet && (
         <div className="mb-3 px-3.5 py-2.5 rounded-panel bg-rose-500/10 border border-rose-500/20 flex items-center justify-between text-xs">
@@ -1389,15 +1575,50 @@ export default function BridgeSwap({
         </div>
       )}
 
-      {/* MAIN MINIMALIST SWAP CARD */}
+      {/* LIQUID FLOW TOP TELEMETRY PILL */}
+      {cardState === 'form' && (
+        <div className="mb-3 px-3.5 py-1.5 rounded-full bg-surface border border-line shadow-soft flex items-center justify-between gap-2 text-xs">
+          <div className="flex items-center gap-2 min-w-0">
+            <span
+              className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                !isPairLiquid
+                  ? 'bg-rose-500'
+                  : !isTestnet
+                  ? 'bg-amber-500'
+                  : watchmanOnline
+                  ? 'bg-emerald-500 animate-pulse'
+                  : 'bg-ink-3'
+              }`}
+            />
+            <span className="font-medium text-ink truncate">
+              {watchmanOnline ? 'Watchman' : t.protocolLabel}
+            </span>
+            <span className="text-ink-3">·</span>
+            <span className="text-ink-2 tabular-nums truncate">
+              {!isTestnet
+                ? t.mainnetVaultEmpty
+                : vaultTvlUsd !== null
+                ? `${t.vaultBackingLabel} ${formatCompactUsd(vaultTvlUsd)}`
+                : t.nonCustodialShort}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-1.5 shrink-0 text-[11px] font-medium text-ink-2 tabular-nums">
+            <Zap className="w-3 h-3 text-ink-3" />
+            <span>{activeTab === 'limit' ? t.limitModeTag : '~3s'}</span>
+          </div>
+        </div>
+      )}
+
+      {/* MAIN LIQUID FLOW SWAP CARD */}
       <div className={`bg-surface rounded-card p-3.5 sm:p-4 transition-all duration-300 ${
         cardState === 'success'
-          ? 'border-2 border-primary shadow-xl shadow-primary/20'
+          ? 'border border-line-strong shadow-soft'
           : 'border border-line shadow-soft'
       }`}>
         {/* CARD TOP BAR */}
         {cardState === 'form' && (
-          <div className="flex items-center justify-between px-1 pb-3">
+          <div className="flex items-center justify-between px-0.5 pb-3">
             {/* Swap | Limit Segmented Control */}
             <div className="ui-segment">
               <button
@@ -1416,7 +1637,7 @@ export default function BridgeSwap({
               </button>
             </div>
 
-            {/* Subtle Utility Actions (Faucet + Slippage) */}
+            {/* Subtle Utility Actions (Faucet + Slippage %) */}
             <div className="flex items-center gap-1.5">
               {isTestnet && (
                 <button
@@ -1443,13 +1664,14 @@ export default function BridgeSwap({
                   setSettingsOpen(!settingsOpen);
                   setFaucetOpen(false);
                 }}
-                className={`w-8 h-8 rounded-control flex items-center justify-center transition-colors cursor-pointer ${
+                className={`h-8 px-2.5 rounded-control flex items-center gap-1 text-[11px] font-medium tabular-nums transition-colors cursor-pointer ${
                   settingsOpen
-                    ? 'bg-primary/15 text-primary'
+                    ? 'bg-surface-3 text-ink border border-line-strong'
                     : 'bg-surface-2 text-ink-2 hover:text-ink'
                 }`}
                 title={t.slippage}
               >
+                <span>{slippage}%</span>
                 <Settings className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -1535,36 +1757,28 @@ export default function BridgeSwap({
         {/* VIEW 1: CLEAN SWAP / LIMIT FORM                                  */}
         {/* ================================================================ */}
         {cardState === 'form' && (
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             {/* PAY BOX (`sellToken` — Bound to Connected Paying Wallet) */}
             <div className="p-4 rounded-panel bg-surface-2 border border-transparent focus-within:border-line-strong transition-colors">
-              <div className="flex items-center justify-between text-xs text-ink-2 mb-2">
-                <span className="font-medium">{t.pay}</span>
+              <div className="flex items-center justify-between text-xs text-ink-2 mb-2.5">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="font-medium text-ink">{t.pay}</span>
+                  <span className="text-[11px] text-ink-3 truncate">· {sellMeta.networkLabel}</span>
+                </div>
                 {isPayingWalletConnected ? (
-                  <div className="flex items-center gap-1.5">
-                    <span>
-                      {t.balance}:{' '}
-                      <strong className="text-ink font-semibold tabular-nums">
-                        {sellBalance !== null
-                          ? formatCryptoBalance(sellBalance, sellToken.isBch && sellToken.symbol === 'BCH')
-                          : '0.00'}
-                      </strong>
-                    </span>
-                    {sellBalance !== null && sellBalance > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => setAmount(String(sellBalance))}
-                        className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-primary/15 text-primary hover:bg-primary/25 transition cursor-pointer"
-                      >
-                        {t.max}
-                      </button>
-                    )}
-                  </div>
+                  <span className="text-[11px] text-ink-2 shrink-0">
+                    {t.balance}:{' '}
+                    <strong className="text-ink font-semibold tabular-nums">
+                      {sellBalance !== null
+                        ? formatCryptoBalance(sellBalance, sellToken.isBch && sellToken.symbol === 'BCH')
+                        : '0.00'}
+                    </strong>
+                  </span>
                 ) : (
                   <button
                     type="button"
                     onClick={onConnectWallet}
-                    className="text-[11px] font-semibold text-primary hover:underline cursor-pointer"
+                    className="px-2 py-0.5 rounded-full bg-surface border border-line hover:border-line-strong text-[11px] font-medium text-ink transition-colors cursor-pointer shrink-0"
                   >
                     + {sellToken.isBch ? 'Wallet BCH' : sellToken.isSolana ? 'Wallet Solana' : sellToken.isLtc ? 'Wallet LTC' : sellToken.isTon || sellToken.chain === 'ton' ? 'Wallet TON' : 'Wallet EVM'}
                   </button>
@@ -1583,59 +1797,104 @@ export default function BridgeSwap({
                   className="w-full min-w-0 bg-transparent text-3xl font-semibold tracking-tight text-ink placeholder:text-ink-3/60 outline-none tabular-nums"
                 />
 
-                <button
-                  type="button"
+                <TokenPillChip
+                  token={sellToken}
+                  meta={sellMeta}
                   onClick={() => setTokenModalTarget('sell')}
-                  className="flex items-center gap-2 pl-2.5 pr-3 py-1.5 rounded-full bg-surface hover:bg-surface-3 border border-line  shrink-0 transition cursor-pointer"
-                >
-                  <img
-                    src={sellToken.icon}
-                    alt={sellToken.symbol}
-                    className="w-6 h-6 rounded-full object-contain"
-                  />
-                  <span className="font-semibold text-sm text-ink flex items-center gap-1.5">
-                    {sellToken.symbol}
-                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${sellMeta.badgeClass}`}>
-                      {sellMeta.badge}
-                    </span>
-                  </span>
-                  <ChevronDown className="w-3.5 h-3.5 text-ink-3" />
-                </button>
+                />
               </div>
 
-              <div className="flex items-center justify-between mt-1.5 text-[11px] text-ink-3">
-                <span className="tabular-nums">
+              <div className="flex flex-wrap items-center justify-between gap-2 mt-2.5">
+                <span className="text-[11px] text-ink-3 tabular-nums">
                   {amount && parseFloat(amount) > 0
                     ? `~$${(parseFloat(amount) * (quote?.priceFromUsd || 1)).toFixed(2)}`
                     : '$0.00'}
                 </span>
-                <span>{sellMeta.networkLabel}</span>
+
+                <div className="flex items-center gap-1">
+                  {quickAmountOptions.map(preset => (
+                    <button
+                      key={preset.label}
+                      type="button"
+                      onClick={() => setAmount(preset.value)}
+                      className={`px-2 py-0.5 rounded-full border text-[11px] font-medium transition-colors cursor-pointer tabular-nums ${
+                        amount === preset.value
+                          ? 'bg-surface-3 border-line-strong text-ink'
+                          : 'bg-surface border-line text-ink-2 hover:text-ink hover:border-line-strong'
+                      }`}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
-            {/* FLIP BUTTON */}
-            <div className="relative h-2 flex items-center justify-center z-10">
+            {/* CROSS-CHAIN LIQUID FLOW CONNECTOR BAR */}
+            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-3 py-1.5 rounded-control bg-surface-2/80 border border-line text-[11px]">
+              <div className="flex items-center gap-1.5 min-w-0 text-ink-2 font-medium">
+                <img
+                  src={sellMeta.chainIcon}
+                  alt={sellMeta.badge}
+                  className="w-3.5 h-3.5 rounded-full object-contain shrink-0"
+                />
+                <span className="truncate">{sellMeta.badge}</span>
+                <ArrowRight
+                  className={`w-3 h-3 shrink-0 transition-colors ${
+                    loadingQuote ? 'text-primary animate-pulse' : 'text-ink-3'
+                  }`}
+                />
+                <img
+                  src={buyMeta.chainIcon}
+                  alt={buyMeta.badge}
+                  className="w-3.5 h-3.5 rounded-full object-contain shrink-0"
+                />
+                <span className="truncate">{buyMeta.badge}</span>
+              </div>
+
               <button
                 type="button"
                 onClick={handleFlipTokens}
-                aria-label="Invertir par"
-                className="w-9 h-9 rounded-control bg-surface hover:bg-surface-3 border-4 border-surface shadow-soft flex items-center justify-center text-ink-2 hover:rotate-180 transition-all duration-200 cursor-pointer"
+                aria-label={t.flipPair}
+                className="w-7 h-7 rounded-full bg-surface hover:bg-surface-3 border border-line hover:border-line-strong shadow-soft flex items-center justify-center text-ink-2 hover:text-ink hover:rotate-180 transition-all duration-200 cursor-pointer shrink-0"
               >
                 <ArrowDownUp className="w-3.5 h-3.5" />
               </button>
+
+              <div className="flex items-center justify-end gap-1 min-w-0 text-ink-3 tabular-nums">
+                {loadingQuote ? (
+                  <span className="flex items-center gap-1 text-ink-2 font-medium truncate">
+                    <Loader2 className="w-3 h-3 animate-spin shrink-0" />
+                    <span className="truncate">{t.quoting}</span>
+                  </span>
+                ) : !isPairLiquid ? (
+                  <span className="text-rose-500 font-medium truncate">{t.noLiquidity}</span>
+                ) : activeTab === 'limit' ? (
+                  <span className="truncate">{t.limitRouteHint}</span>
+                ) : quote && parseFloat(amount) > 0 ? (
+                  <span className="text-ink-2 font-medium truncate">
+                    1 {sellToken.symbol} = {quote.rate} {buyToken.symbol}
+                  </span>
+                ) : (
+                  <span className="truncate">~3s · 0.3%</span>
+                )}
+              </div>
             </div>
 
             {/* RECEIVE BOX (`buyToken`) */}
             <div className="p-4 rounded-panel bg-surface-2 border border-transparent transition-colors">
-              <div className="flex items-center justify-between text-xs text-ink-2 mb-2">
-                <span className="font-medium">{t.receive}</span>
-                <div className="flex items-center gap-1.5">
+              <div className="flex items-center justify-between text-xs text-ink-2 mb-2.5">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="font-medium text-ink">{t.receive}</span>
+                  <span className="text-[11px] text-ink-3 truncate">· {buyMeta.networkLabel}</span>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
                   {!isPairLiquid ? (
-                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-500">
+                    <span className="ui-badge-danger">
                       {t.noLiquidity}
                     </span>
                   ) : isReceivingWalletConnected && buyBalance !== null ? (
-                    <span>
+                    <span className="text-[11px] text-ink-2">
                       {t.balance}:{' '}
                       <strong className="text-ink font-semibold tabular-nums">
                         {formatCryptoBalance(buyBalance, (buyToken.isBch && buyToken.symbol === 'BCH') || (buyToken.isSolana && buyToken.symbol === 'SOL'))}
@@ -1656,27 +1915,14 @@ export default function BridgeSwap({
                   )}
                 </div>
 
-                <button
-                  type="button"
+                <TokenPillChip
+                  token={buyToken}
+                  meta={buyMeta}
                   onClick={() => setTokenModalTarget('buy')}
-                  className="flex items-center gap-2 pl-2.5 pr-3 py-1.5 rounded-full bg-surface hover:bg-surface-3 border border-line  shrink-0 transition cursor-pointer"
-                >
-                  <img
-                    src={buyToken.icon}
-                    alt={buyToken.symbol}
-                    className="w-6 h-6 rounded-full object-contain"
-                  />
-                  <span className="font-semibold text-sm text-ink flex items-center gap-1.5">
-                    {buyToken.symbol}
-                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${buyMeta.badgeClass}`}>
-                      {buyMeta.badge}
-                    </span>
-                  </span>
-                  <ChevronDown className="w-3.5 h-3.5 text-ink-3" />
-                </button>
+                />
               </div>
 
-              <div className="flex items-center justify-between mt-1.5 text-[11px] text-ink-3">
+              <div className="flex items-center justify-between mt-2.5 text-[11px] text-ink-3 gap-2">
                 <span className="tabular-nums">
                   {quote?.netPayoutUsd !== undefined
                     ? `~$${Number(quote.netPayoutUsd).toFixed(2)}`
@@ -1684,7 +1930,9 @@ export default function BridgeSwap({
                     ? `~$${receiveDisplay}`
                     : '$0.00'}
                 </span>
-                <span>{buyMeta.networkLabel}</span>
+                <span className="truncate">
+                  {t.nonCustodialShort}
+                </span>
               </div>
             </div>
 
@@ -1776,12 +2024,12 @@ export default function BridgeSwap({
                   className="w-full flex items-center justify-between text-ink-2 cursor-pointer"
                 >
                   <span className="font-medium text-ink-2 tabular-nums">
-                    1 {sellToken.symbol} = {quote.rate} {buyToken.symbol}
+                    {t.minShort} {(quote.netPayout * (1 - slippage / 100)).toFixed(4)} {buyToken.symbol}
                   </span>
                   <span className="flex items-center gap-1.5 text-[11px]">
                     <span>{t.fee} 0.3%</span>
                     <span>•</span>
-                    <span>~3s</span>
+                    <span>{t.details}</span>
                     <ChevronDown
                       className={`w-3.5 h-3.5 transition-transform ${detailsOpen ? 'rotate-180' : ''}`}
                     />
@@ -2202,6 +2450,62 @@ export default function BridgeSwap({
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* SUBTLE COLLAPSIBLE RECENT ON-CHAIN ACTIVITY */}
+      {cardState === 'form' && filteredRecentSwaps.length > 0 && (
+        <div className="mt-3 bg-surface border border-line rounded-panel shadow-soft overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setActivityOpen(!activityOpen)}
+            className="w-full px-3.5 py-2.5 flex items-center justify-between gap-2 text-xs hover:bg-surface-2/60 transition-colors cursor-pointer"
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+              <span className="font-medium text-ink shrink-0">{t.recentActivity}</span>
+              <span className="text-ink-3 truncate tabular-nums">
+                {filteredRecentSwaps[0].fromAmount} {filteredRecentSwaps[0].fromToken} → {filteredRecentSwaps[0].toAmount} {filteredRecentSwaps[0].toToken}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0 text-[11px] text-ink-3 tabular-nums">
+              <span>{formatRelativeTime(filteredRecentSwaps[0].completedAt || filteredRecentSwaps[0].createdAt, lang)}</span>
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${activityOpen ? 'rotate-180' : ''}`} />
+            </div>
+          </button>
+
+          {activityOpen && (
+            <div className="border-t border-line divide-y divide-line">
+              {filteredRecentSwaps.map(swapItem => (
+                <div
+                  key={swapItem.id}
+                  className="px-3.5 py-2.5 flex items-center justify-between gap-2 text-xs"
+                >
+                  <div className="min-w-0">
+                    <div className="font-medium text-ink tabular-nums truncate">
+                      {swapItem.fromAmount} {swapItem.fromToken} → {swapItem.toAmount} {swapItem.toToken}
+                    </div>
+                    <div className="text-[11px] text-ink-3 tabular-nums">
+                      {formatRelativeTime(swapItem.completedAt || swapItem.createdAt, lang)}
+                    </div>
+                  </div>
+                  {swapItem.payoutExplorerUrl ? (
+                    <a
+                      href={swapItem.payoutExplorerUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 text-[11px] font-medium text-ink-2 hover:text-ink transition-colors shrink-0"
+                    >
+                      <span>{t.explorer}</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  ) : (
+                    <span className="ui-badge-success shrink-0">On-chain</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
