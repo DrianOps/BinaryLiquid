@@ -14,8 +14,7 @@ import {
   ArrowLeft,
   ArrowRight,
   ClipboardPaste,
-  ArrowLeftRight,
-  Zap
+  ArrowLeftRight
 } from 'lucide-react';
 import TokenSelectModal, { SUPPORTED_TOKENS, TokenInfo } from './TokenSelectModal';
 import qrcode from 'qrcode-generator';
@@ -128,16 +127,10 @@ const UI_TEXT = {
     settlingBadge: 'Liquidando en cadena',
     nonCustodialBadge: '100% No custodial • Atómico',
     switchToQrAction: '¿Prefieres pagar escaneando código QR?',
-    protocolLabel: 'Protocolo',
-    vaultBackingLabel: 'Bóvedas',
-    mainnetVaultEmpty: 'Mainnet sin liquidez',
-    nonCustodialShort: '100% No custodial',
-    limitModeTag: 'Orden límite',
     limitRouteHint: 'Por precio objetivo',
     flipPair: 'Invertir par',
     quoting: 'Cotizando...',
-    recentActivity: 'Actividad reciente',
-    explorer: 'Explorador',
+    nonCustodialShort: '100% No custodial',
     minShort: 'Mín.',
     details: 'Detalles'
   },
@@ -196,16 +189,10 @@ const UI_TEXT = {
     settlingBadge: 'Settling on-chain',
     nonCustodialBadge: '100% Non-custodial • Atomic',
     switchToQrAction: 'Prefer to pay by scanning QR code?',
-    protocolLabel: 'Protocol',
-    vaultBackingLabel: 'Vaults',
-    mainnetVaultEmpty: 'Mainnet unseeded',
-    nonCustodialShort: '100% Non-custodial',
-    limitModeTag: 'Limit order',
     limitRouteHint: 'Target execution',
     flipPair: 'Flip pair',
     quoting: 'Quoting...',
-    recentActivity: 'Recent activity',
-    explorer: 'Explorer',
+    nonCustodialShort: '100% Non-custodial',
     minShort: 'Min.',
     details: 'Details'
   }
@@ -285,30 +272,9 @@ function getTokenChainMeta(token: TokenInfo, isTestnet: boolean) {
   return { chainKey, ...table[chainKey] };
 }
 
-function formatCompactUsd(value: number): string {
-  if (!Number.isFinite(value) || value <= 0) return '$0';
-  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(2)}M`;
-  if (value >= 1_000) return `$${(value / 1_000).toFixed(1)}k`;
-  return `$${value.toFixed(0)}`;
-}
-
 function formatPresetAmount(value: number, isVolatile: boolean): string {
   const decimals = isVolatile || value < 1 ? 4 : 2;
   return value.toFixed(decimals).replace(/\.?0+$/, '') || '0';
-}
-
-function formatRelativeTime(iso: string | undefined, lang: 'en' | 'es'): string {
-  if (!iso) return '';
-  const ts = Date.parse(iso);
-  if (Number.isNaN(ts)) return '';
-  const diffSec = Math.max(0, Math.floor((Date.now() - ts) / 1000));
-  if (diffSec < 60) return lang === 'es' ? 'ahora' : 'just now';
-  const diffMin = Math.floor(diffSec / 60);
-  if (diffMin < 60) return lang === 'es' ? `hace ${diffMin}m` : `${diffMin}m ago`;
-  const diffHr = Math.floor(diffMin / 60);
-  if (diffHr < 24) return lang === 'es' ? `hace ${diffHr}h` : `${diffHr}h ago`;
-  const diffDay = Math.floor(diffHr / 24);
-  return lang === 'es' ? `hace ${diffDay}d` : `${diffDay}d ago`;
 }
 
 function isNativeChainAsset(symbol: string, chainKey: TokenChainKey): boolean {
@@ -336,7 +302,7 @@ function TokenPillChip({ token, meta, onClick }: TokenPillChipProps) {
     <button
       type="button"
       onClick={onClick}
-      className="flex items-center gap-2 pl-2 pr-2.5 py-1.5 rounded-full bg-surface hover:bg-surface-3 border border-line hover:border-line-strong shrink-0 transition-colors cursor-pointer shadow-soft"
+      className="flex items-center gap-2 pl-2 pr-2.5 py-1.5 rounded-full bg-surface-2 hover:bg-surface-3 border border-line hover:border-line-strong shrink-0 transition-colors cursor-pointer"
     >
       <div className="relative shrink-0">
         <img
@@ -348,7 +314,7 @@ function TokenPillChip({ token, meta, onClick }: TokenPillChipProps) {
           <img
             src={meta.chainIcon}
             alt={meta.badge}
-            className="w-3.5 h-3.5 rounded-full object-contain bg-surface ring-2 ring-surface absolute -bottom-0.5 -right-0.5"
+            className="w-3.5 h-3.5 rounded-full object-contain bg-surface-2 ring-2 ring-surface-2 absolute -bottom-0.5 -right-0.5"
           />
         )}
       </div>
@@ -445,12 +411,6 @@ export default function BridgeSwap({
 
   // Limit Orders
   const [limitOrders, setLimitOrders] = useState<any[]>([]);
-
-  // Live Cross-Chain Protocol Telemetry & Activity
-  const [watchmanOnline, setWatchmanOnline] = useState<boolean>(true);
-  const [vaultTvlUsd, setVaultTvlUsd] = useState<number | null>(null);
-  const [recentSwaps, setRecentSwaps] = useState<any[]>([]);
-  const [activityOpen, setActivityOpen] = useState<boolean>(false);
 
   // ==========================================================================
   // STRICT PAY-WALLET vs RECEIVE-ADDRESS SEPARATION
@@ -723,53 +683,6 @@ export default function BridgeSwap({
     }
   }, [activeTab, fetchLimitOrders]);
 
-  // ==========================================================================
-  // LIVE CROSS-CHAIN TELEMETRY (Watchman, Vault TVL, Recent Activity)
-  // ==========================================================================
-  const fetchProtocolTelemetry = useCallback(async () => {
-    try {
-      const [watchRes, poolsRes, swapsRes] = await Promise.allSettled([
-        fetch(`${backendUrl}/api/watchman/status`),
-        fetch(`${backendUrl}/api/pools/stats?network=${platformNetwork}`),
-        fetch(`${backendUrl}/api/swaps/recent?limit=10`)
-      ]);
-
-      if (watchRes.status === 'fulfilled' && watchRes.value.ok) {
-        const wData = await watchRes.value.json();
-        setWatchmanOnline(wData?.watchman?.status === 'ONLINE');
-      }
-
-      if (poolsRes.status === 'fulfilled' && poolsRes.value.ok) {
-        const pData = await poolsRes.value.json();
-        const tvl = Number(pData?.protocolStats?.totalTvlUsd);
-        if (Number.isFinite(tvl)) {
-          setVaultTvlUsd(tvl);
-        }
-      }
-
-      if (swapsRes.status === 'fulfilled' && swapsRes.value.ok) {
-        const sData = await swapsRes.value.json();
-        if (Array.isArray(sData?.swaps)) {
-          setRecentSwaps(sData.swaps);
-        }
-      }
-    } catch {
-      // keep previous telemetry quietly on transient network blips
-    }
-  }, [backendUrl, platformNetwork]);
-
-  useEffect(() => {
-    fetchProtocolTelemetry();
-    const interval = setInterval(fetchProtocolTelemetry, 30000);
-    return () => clearInterval(interval);
-  }, [fetchProtocolTelemetry]);
-
-  useEffect(() => {
-    if (cardState === 'success') {
-      fetchProtocolTelemetry();
-    }
-  }, [cardState, fetchProtocolTelemetry]);
-
   const quickAmountOptions = useMemo(() => {
     const isVolatile = ['BCH', 'SOL', 'LTC', 'ETH', 'BNB', 'TON', 'POL'].includes(
       sellToken.symbol.toUpperCase()
@@ -785,18 +698,6 @@ export default function BridgeSwap({
     const defaults = isVolatile ? ['0.05', '0.1', '0.5', '1'] : ['10', '25', '50', '100'];
     return defaults.map(v => ({ label: isVolatile ? v : `$${v}`, value: v }));
   }, [sellToken.symbol, isPayingWalletConnected, sellBalance, t.max]);
-
-  const filteredRecentSwaps = useMemo(() => {
-    return recentSwaps
-      .filter(s => {
-        if (s?.status !== 'COMPLETED') return false;
-        const from = String(s.fromChain || '');
-        const to = String(s.toChain || '');
-        const swapIsTestnet = /chipnet|amoy|devnet|testnet/i.test(from) || /chipnet|amoy|devnet|testnet/i.test(to);
-        return swapIsTestnet === isTestnet;
-      })
-      .slice(0, 3);
-  }, [recentSwaps, isTestnet]);
 
   // ==========================================================================
   // ACTIONS
@@ -1555,7 +1456,7 @@ export default function BridgeSwap({
   ]);
 
   return (
-    <div className="w-full max-w-[448px] mx-auto pt-2 sm:pt-6 pb-8">
+    <div className="w-full max-w-[448px] mx-auto pt-2 sm:pt-4 pb-6">
       {/* Minimal Mainnet Switch Bar (only shown if user switched platform to Mainnet) */}
       {!isTestnet && (
         <div className="mb-3 px-3.5 py-2.5 rounded-panel bg-rose-500/10 border border-rose-500/20 flex items-center justify-between text-xs">
@@ -1575,50 +1476,15 @@ export default function BridgeSwap({
         </div>
       )}
 
-      {/* LIQUID FLOW TOP TELEMETRY PILL */}
-      {cardState === 'form' && (
-        <div className="mb-3 px-3.5 py-1.5 rounded-full bg-surface border border-line shadow-soft flex items-center justify-between gap-2 text-xs">
-          <div className="flex items-center gap-2 min-w-0">
-            <span
-              className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                !isPairLiquid
-                  ? 'bg-rose-500'
-                  : !isTestnet
-                  ? 'bg-amber-500'
-                  : watchmanOnline
-                  ? 'bg-emerald-500 animate-pulse'
-                  : 'bg-ink-3'
-              }`}
-            />
-            <span className="font-medium text-ink truncate">
-              {watchmanOnline ? 'Watchman' : t.protocolLabel}
-            </span>
-            <span className="text-ink-3">·</span>
-            <span className="text-ink-2 tabular-nums truncate">
-              {!isTestnet
-                ? t.mainnetVaultEmpty
-                : vaultTvlUsd !== null
-                ? `${t.vaultBackingLabel} ${formatCompactUsd(vaultTvlUsd)}`
-                : t.nonCustodialShort}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-1.5 shrink-0 text-[11px] font-medium text-ink-2 tabular-nums">
-            <Zap className="w-3 h-3 text-ink-3" />
-            <span>{activeTab === 'limit' ? t.limitModeTag : '~3s'}</span>
-          </div>
-        </div>
-      )}
-
-      {/* MAIN LIQUID FLOW SWAP CARD */}
-      <div className={`bg-surface rounded-card p-3.5 sm:p-4 transition-all duration-300 ${
+      {/* MAIN SEAMLESS SWAP CARD (Zero nested boxes) */}
+      <div className={`bg-surface rounded-card overflow-hidden transition-all duration-300 ${
         cardState === 'success'
           ? 'border border-line-strong shadow-soft'
           : 'border border-line shadow-soft'
       }`}>
         {/* CARD TOP BAR */}
         {cardState === 'form' && (
-          <div className="flex items-center justify-between px-0.5 pb-3">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-line">
             {/* Swap | Limit Segmented Control */}
             <div className="ui-segment">
               <button
@@ -1680,7 +1546,7 @@ export default function BridgeSwap({
 
         {/* COMPACT FAUCET POPOVER */}
         {cardState === 'form' && faucetOpen && isTestnet && (
-          <div className="mb-3 p-3 rounded-panel bg-surface-2 border border-line space-y-2">
+          <div className="px-4 py-3 bg-surface-2/50 border-b border-line space-y-2">
             <div className="flex items-center justify-between text-[11px] text-ink-2">
               <span className="font-semibold text-ink flex items-center gap-1">
                 <Sparkles className="w-3 h-3 text-emerald-500" /> PUSD Chipnet Faucet
@@ -1699,7 +1565,7 @@ export default function BridgeSwap({
                 value={faucetAddress}
                 onChange={e => setFaucetAddress(e.target.value)}
                 placeholder={t.faucetPlaceholder}
-                className="flex-1 min-w-0 bg-surface border border-line rounded-control px-2.5 py-1.5 text-xs font-mono text-ink outline-none focus:border-emerald-500"
+                className="flex-1 min-w-0 bg-surface-2 border border-line rounded-control px-2.5 py-1.5 text-xs font-mono text-ink outline-none focus:border-emerald-500"
               />
               <button
                 type="button"
@@ -1715,7 +1581,7 @@ export default function BridgeSwap({
 
         {/* COMPACT SLIPPAGE POPOVER */}
         {cardState === 'form' && settingsOpen && (
-          <div className="mb-3 p-3 rounded-panel bg-surface-2 border border-line flex items-center justify-between gap-2">
+          <div className="px-4 py-3 bg-surface-2/50 border-b border-line flex items-center justify-between gap-2">
             <span className="text-xs font-medium text-ink-2">{t.slippage}</span>
             <div className="flex items-center gap-1">
               {[0.1, 0.5, 1.0].map(val => (
@@ -1729,7 +1595,7 @@ export default function BridgeSwap({
                   className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
                     slippage === val && !customSlippage
                       ? 'bg-ink text-canvas'
-                      : 'bg-surface text-ink-2 border border-line'
+                      : 'bg-surface-2 text-ink-2 border border-line'
                   }`}
                 >
                   {val}%
@@ -1747,20 +1613,20 @@ export default function BridgeSwap({
                   const n = parseFloat(e.target.value);
                   if (!isNaN(n) && n > 0 && n <= 20) setSlippage(n);
                 }}
-                className="w-16 px-2 py-1 rounded-lg text-xs text-right bg-surface border border-line text-ink outline-none"
+                className="w-16 px-2 py-1 rounded-lg text-xs text-right bg-surface-2 border border-line text-ink outline-none"
               />
             </div>
           </div>
         )}
 
         {/* ================================================================ */}
-        {/* VIEW 1: CLEAN SWAP / LIMIT FORM                                  */}
+        {/* VIEW 1: SEAMLESS UNIFIED SWAP / LIMIT FORM                       */}
         {/* ================================================================ */}
         {cardState === 'form' && (
-          <div className="space-y-2">
-            {/* PAY BOX (`sellToken` — Bound to Connected Paying Wallet) */}
-            <div className="p-4 rounded-panel bg-surface-2 border border-transparent focus-within:border-line-strong transition-colors">
-              <div className="flex items-center justify-between text-xs text-ink-2 mb-2.5">
+          <div>
+            {/* PAY SECTION (`sellToken` — Flush on card surface) */}
+            <div className="px-4 py-4 focus-within:bg-surface-2/25 transition-colors">
+              <div className="flex items-center justify-between text-xs text-ink-2 mb-2">
                 <div className="flex items-center gap-1.5 min-w-0">
                   <span className="font-medium text-ink">{t.pay}</span>
                   <span className="text-[11px] text-ink-3 truncate">· {sellMeta.networkLabel}</span>
@@ -1778,7 +1644,7 @@ export default function BridgeSwap({
                   <button
                     type="button"
                     onClick={onConnectWallet}
-                    className="px-2 py-0.5 rounded-full bg-surface border border-line hover:border-line-strong text-[11px] font-medium text-ink transition-colors cursor-pointer shrink-0"
+                    className="px-2 py-0.5 rounded-full bg-surface-2 border border-line hover:border-line-strong text-[11px] font-medium text-ink transition-colors cursor-pointer shrink-0"
                   >
                     + {sellToken.isBch ? 'Wallet BCH' : sellToken.isSolana ? 'Wallet Solana' : sellToken.isLtc ? 'Wallet LTC' : sellToken.isTon || sellToken.chain === 'ton' ? 'Wallet TON' : 'Wallet EVM'}
                   </button>
@@ -1820,7 +1686,7 @@ export default function BridgeSwap({
                       className={`px-2 py-0.5 rounded-full border text-[11px] font-medium transition-colors cursor-pointer tabular-nums ${
                         amount === preset.value
                           ? 'bg-surface-3 border-line-strong text-ink'
-                          : 'bg-surface border-line text-ink-2 hover:text-ink hover:border-line-strong'
+                          : 'bg-surface-2 border-line text-ink-2 hover:text-ink hover:border-line-strong'
                       }`}
                     >
                       {preset.label}
@@ -1830,8 +1696,8 @@ export default function BridgeSwap({
               </div>
             </div>
 
-            {/* CROSS-CHAIN LIQUID FLOW CONNECTOR BAR */}
-            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-3 py-1.5 rounded-control bg-surface-2/80 border border-line text-[11px]">
+            {/* SEAMLESS EDGE-TO-EDGE ROUTE DIVIDER */}
+            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-4 py-2 bg-surface-2/35 border-y border-line text-[11px]">
               <div className="flex items-center gap-1.5 min-w-0 text-ink-2 font-medium">
                 <img
                   src={sellMeta.chainIcon}
@@ -1856,7 +1722,7 @@ export default function BridgeSwap({
                 type="button"
                 onClick={handleFlipTokens}
                 aria-label={t.flipPair}
-                className="w-7 h-7 rounded-full bg-surface hover:bg-surface-3 border border-line hover:border-line-strong shadow-soft flex items-center justify-center text-ink-2 hover:text-ink hover:rotate-180 transition-all duration-200 cursor-pointer shrink-0"
+                className="w-7 h-7 rounded-full bg-surface hover:bg-surface-2 border border-line hover:border-line-strong flex items-center justify-center text-ink-2 hover:text-ink hover:rotate-180 transition-all duration-200 cursor-pointer shrink-0"
               >
                 <ArrowDownUp className="w-3.5 h-3.5" />
               </button>
@@ -1881,9 +1747,9 @@ export default function BridgeSwap({
               </div>
             </div>
 
-            {/* RECEIVE BOX (`buyToken`) */}
-            <div className="p-4 rounded-panel bg-surface-2 border border-transparent transition-colors">
-              <div className="flex items-center justify-between text-xs text-ink-2 mb-2.5">
+            {/* RECEIVE SECTION (`buyToken` — Flush on card surface) */}
+            <div className="px-4 py-4">
+              <div className="flex items-center justify-between text-xs text-ink-2 mb-2">
                 <div className="flex items-center gap-1.5 min-w-0">
                   <span className="font-medium text-ink">{t.receive}</span>
                   <span className="text-[11px] text-ink-3 truncate">· {buyMeta.networkLabel}</span>
@@ -1907,7 +1773,7 @@ export default function BridgeSwap({
               <div className="flex items-center justify-between gap-3">
                 <div className="w-full min-w-0 text-3xl font-semibold tracking-tight tabular-nums truncate">
                   {loadingQuote && !receiveDisplay ? (
-                    <span className="inline-block w-24 h-8 rounded-lg bg-surface-3 animate-pulse align-middle" />
+                    <span className="inline-block w-24 h-8 rounded-lg bg-surface-2 animate-pulse align-middle" />
                   ) : receiveDisplay ? (
                     <span className="text-ink">{receiveDisplay}</span>
                   ) : (
@@ -1936,9 +1802,9 @@ export default function BridgeSwap({
               </div>
             </div>
 
-            {/* TARGET PRICE ROW (Only in Limit Tab) */}
+            {/* TARGET PRICE SECTION (Only in Limit Tab) */}
             {activeTab === 'limit' && (
-              <div className="px-4 py-3 rounded-panel bg-surface-2 flex items-center justify-between gap-3">
+              <div className="px-4 py-3 border-t border-line flex items-center justify-between gap-3">
                 <div className="text-xs text-ink-2">
                   <div className="font-medium">{t.targetPrice}</div>
                   <button
@@ -1956,15 +1822,15 @@ export default function BridgeSwap({
                     min="0.0001"
                     value={targetRate}
                     onChange={e => setTargetRate(e.target.value)}
-                    className="w-24 bg-surface border border-line rounded-control px-2.5 py-1.5 text-right text-sm font-semibold text-ink outline-none tabular-nums"
+                    className="w-24 bg-surface-2 border border-line rounded-control px-2.5 py-1.5 text-right text-sm font-semibold text-ink outline-none tabular-nums"
                   />
                   <span className="text-xs font-semibold text-ink-3">{buyToken.symbol}</span>
                 </div>
               </div>
             )}
 
-            {/* DESTINATION ADDRESS INPUT (`Recibir en` — User manually pastes/enters destination!) */}
-            <div className="px-4 py-3 rounded-panel bg-surface-2 border border-transparent focus-within:border-line-strong transition-colors">
+            {/* DESTINATION ADDRESS SECTION (`Recibir en` — Flush hairline row) */}
+            <div className="px-4 py-3.5 border-t border-line focus-within:bg-surface-2/25 transition-colors">
               <div className="flex items-center justify-between mb-1.5">
                 <label className="text-xs font-medium text-ink-2 flex items-center gap-1.5">
                   <span>
@@ -1981,7 +1847,7 @@ export default function BridgeSwap({
                       <button
                         type="button"
                         onClick={() => setRecipientAddress(optionalReceiveWallet)}
-                        className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-surface-3 text-ink-2 hover:bg-surface-3 transition cursor-pointer"
+                        className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-surface-2 border border-line text-ink-2 hover:text-ink transition cursor-pointer"
                       >
                         {t.myWallet}
                       </button>
@@ -1989,7 +1855,7 @@ export default function BridgeSwap({
                   <button
                     type="button"
                     onClick={handlePasteRecipient}
-                    className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-surface-3 text-ink-2 hover:bg-surface-3 flex items-center gap-1 transition cursor-pointer"
+                    className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-surface-2 border border-line text-ink-2 hover:text-ink flex items-center gap-1 transition cursor-pointer"
                   >
                     <ClipboardPaste className="w-2.5 h-2.5" />
                     <span>{t.paste}</span>
@@ -2017,7 +1883,7 @@ export default function BridgeSwap({
 
             {/* 1-LINE COLLAPSIBLE QUOTE SUMMARY */}
             {quote && isPairLiquid && parseFloat(amount) > 0 && (
-              <div className="px-3.5 py-2.5 rounded-panel border border-line text-xs">
+              <div className="px-4 py-2.5 border-t border-line text-xs">
                 <button
                   type="button"
                   onClick={() => setDetailsOpen(!detailsOpen)}
@@ -2062,7 +1928,7 @@ export default function BridgeSwap({
             )}
 
             {swapError && (
-              <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-3.5 py-2.5 text-xs text-red-400 space-y-2">
+              <div className="mx-4 mt-1 mb-2 rounded-xl border border-red-500/30 bg-red-500/10 px-3.5 py-2.5 text-xs text-red-400 space-y-2">
                 <div className="flex items-start justify-between gap-2">
                   <span className="leading-relaxed break-words">{swapError.message}</span>
                   <button
@@ -2097,7 +1963,7 @@ export default function BridgeSwap({
             )}
 
             {/* PRIMARY CTA BUTTON */}
-            <div className="pt-1.5">
+            <div className="px-4 pb-4 pt-1">
               <button
                 type="button"
                 disabled={ctaConfig.disabled}
@@ -2121,7 +1987,7 @@ export default function BridgeSwap({
         {/* VIEW 2: FLUID 1-CLICK PROCESSING & SIGNING LIFECYCLE              */}
         {/* ================================================================ */}
         {cardState === 'processing' && (
-          <div className="p-1 sm:p-2 space-y-4 animate-in fade-in zoom-in-95 duration-200">
+          <div className="p-4 sm:p-5 space-y-4 animate-in fade-in zoom-in-95 duration-200">
             {/* Header: Discreet Back / Cancel Action + Live Status Badge */}
             <div className="flex items-center justify-between">
               <button
@@ -2450,62 +2316,6 @@ export default function BridgeSwap({
               )}
             </div>
           ))}
-        </div>
-      )}
-
-      {/* SUBTLE COLLAPSIBLE RECENT ON-CHAIN ACTIVITY */}
-      {cardState === 'form' && filteredRecentSwaps.length > 0 && (
-        <div className="mt-3 bg-surface border border-line rounded-panel shadow-soft overflow-hidden">
-          <button
-            type="button"
-            onClick={() => setActivityOpen(!activityOpen)}
-            className="w-full px-3.5 py-2.5 flex items-center justify-between gap-2 text-xs hover:bg-surface-2/60 transition-colors cursor-pointer"
-          >
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-              <span className="font-medium text-ink shrink-0">{t.recentActivity}</span>
-              <span className="text-ink-3 truncate tabular-nums">
-                {filteredRecentSwaps[0].fromAmount} {filteredRecentSwaps[0].fromToken} → {filteredRecentSwaps[0].toAmount} {filteredRecentSwaps[0].toToken}
-              </span>
-            </div>
-            <div className="flex items-center gap-1.5 shrink-0 text-[11px] text-ink-3 tabular-nums">
-              <span>{formatRelativeTime(filteredRecentSwaps[0].completedAt || filteredRecentSwaps[0].createdAt, lang)}</span>
-              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${activityOpen ? 'rotate-180' : ''}`} />
-            </div>
-          </button>
-
-          {activityOpen && (
-            <div className="border-t border-line divide-y divide-line">
-              {filteredRecentSwaps.map(swapItem => (
-                <div
-                  key={swapItem.id}
-                  className="px-3.5 py-2.5 flex items-center justify-between gap-2 text-xs"
-                >
-                  <div className="min-w-0">
-                    <div className="font-medium text-ink tabular-nums truncate">
-                      {swapItem.fromAmount} {swapItem.fromToken} → {swapItem.toAmount} {swapItem.toToken}
-                    </div>
-                    <div className="text-[11px] text-ink-3 tabular-nums">
-                      {formatRelativeTime(swapItem.completedAt || swapItem.createdAt, lang)}
-                    </div>
-                  </div>
-                  {swapItem.payoutExplorerUrl ? (
-                    <a
-                      href={swapItem.payoutExplorerUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1 text-[11px] font-medium text-ink-2 hover:text-ink transition-colors shrink-0"
-                    >
-                      <span>{t.explorer}</span>
-                      <ExternalLink className="w-3 h-3" />
-                    </a>
-                  ) : (
-                    <span className="ui-badge-success shrink-0">On-chain</span>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       )}
 
