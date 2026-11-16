@@ -938,7 +938,14 @@ class PerpsService {
     if (!addrs.traderKey || !this.matchesTrader(pos, addrs)) {
       throw new Error(errMismatch);
     }
-    if (Array.isArray(authenticatedAddresses)) {
+    const colToken = String(pos.collateralToken || 'PUSD').toUpperCase();
+    if (colToken !== 'USDT' && pos.bchAddress) {
+      const posBchVariants = new Set(expandBchAddressVariants(pos.bchAddress));
+      if (!addrs.cleanBch || !posBchVariants.has(String(addrs.cleanBch).trim().toLowerCase())) {
+        throw new Error(errMismatch);
+      }
+    }
+    if (Array.isArray(authenticatedAddresses) && authenticatedAddresses.length > 0) {
       const authSet = new Set(
         authenticatedAddresses
           .filter(Boolean)
@@ -947,12 +954,17 @@ class PerpsService {
             return parseCashAddress(low) ? expandBchAddressVariants(low) : [low];
           })
       );
-      const posOwners = [pos.traderKey, pos.bchAddress, pos.evmAddress]
-        .filter(Boolean)
-        .flatMap(a => (parseCashAddress(a) ? expandBchAddressVariants(a) : [String(a).trim().toLowerCase()]));
-      if (!posOwners.some(a => authSet.has(a))) {
-        throw new Error('No autorizado: la sesión autenticada no es propietaria de esta posición.');
+      const hasBchInAuth = authenticatedAddresses.some(a => Boolean(parseCashAddress(String(a || '').trim())));
+      if (colToken === 'USDT' || hasBchInAuth) {
+        const posOwners = [pos.traderKey, pos.bchAddress, pos.evmAddress]
+          .filter(Boolean)
+          .flatMap(a => (parseCashAddress(a) ? expandBchAddressVariants(a) : [String(a).trim().toLowerCase()]));
+        if (!posOwners.some(a => authSet.has(a))) {
+          throw new Error('No autorizado: la sesión autenticada no es propietaria de esta posición.');
+        }
       }
+    } else if (colToken === 'USDT') {
+      throw new Error('Autenticación criptográfica requerida: firma con tu billetera EVM para operar esta posición USDT.');
     }
   }
 
@@ -1058,7 +1070,7 @@ class PerpsService {
       // Execute real on-chain settlement from BinaryLiquidVault if payoutAmount > dust threshold
       if (payoutAmount > (colToken === 'BCH' ? 0.00001 : 0.01)) {
         if (colToken === 'PUSD' || colToken === 'BCH') {
-          const rawTargetBch = addrs.cleanBch || pos.bchAddress;
+          const rawTargetBch = pos.bchAddress || addrs.cleanBch;
           const parsedTargetBch = parseCashAddress(rawTargetBch, isPosTestnet);
           const expectedPrefix = isPosTestnet ? 'bchtest' : 'bitcoincash';
           if (!parsedTargetBch || parsedTargetBch.prefix !== expectedPrefix) {
@@ -1103,7 +1115,7 @@ class PerpsService {
           closeTxHash = releaseRes.txHash;
           closeExplorerUrl = releaseRes.explorerUrl;
         } else if (colToken === 'USDT') {
-          const targetEvm = addrs.cleanEvm || pos.evmAddress;
+          const targetEvm = pos.evmAddress || addrs.cleanEvm;
           if (!targetEvm || !targetEvm.startsWith('0x')) {
             throw new Error(
               `Conecta tu billetera ${isPosTestnet ? 'Polygon Amoy' : 'Polygon PoS'} (0x...) para recibir la liquidación de ${payoutAmount} USDT.`

@@ -247,6 +247,23 @@ export async function getWalletConnectProvider(): Promise<InstanceType<typeof Et
   return evmWcInitPromise;
 }
 
+function sessionHasNamespaceAccounts(sess: any, namespace: 'eip155' | 'bch'): boolean {
+  const nsMap = sess?.namespaces;
+  if (!nsMap || typeof nsMap !== 'object') return false;
+  for (const [key, val] of Object.entries(nsMap)) {
+    const kLow = key.toLowerCase();
+    if (kLow === namespace || kLow.startsWith(`${namespace}:`)) {
+      if (Array.isArray((val as any)?.accounts) && (val as any).accounts.length > 0) {
+        return true;
+      }
+      if (namespace === 'bch') {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 function payloadHasNamespaceSession(raw: unknown, namespace: 'eip155' | 'bch'): boolean {
   if (!raw) return false;
   try {
@@ -256,9 +273,9 @@ function payloadHasNamespaceSession(raw: unknown, namespace: 'eip155' | 'bch'): 
       : parsed && typeof parsed === 'object'
       ? Object.values(parsed)
       : [];
-    return sessions.some((sess: any) => Boolean(sess?.namespaces?.[namespace]?.accounts?.length));
+    return sessions.some((sess: any) => sessionHasNamespaceAccounts(sess, namespace));
   } catch {
-    return typeof raw === 'string' && raw.includes(`"${namespace}"`);
+    return typeof raw === 'string' && raw.includes(`"${namespace}`);
   }
 }
 
@@ -382,14 +399,6 @@ function purgeWc2NamespaceStorage(namespace: 'eip155' | 'bch'): void {
         }
       } catch {
         // Ignore unparseable session payloads
-      }
-    }
-    const otherNamespace = namespace === 'eip155' ? 'bch' : 'eip155';
-    if (!hasLocalWc2NamespaceSession(otherNamespace)) {
-      for (const key of Object.keys(localStorage)) {
-        if (key.startsWith('wc@2:')) {
-          localStorage.removeItem(key);
-        }
       }
     }
   } catch {}
@@ -747,8 +756,64 @@ async function getBchSignClient(onSessionDeleted?: () => void): Promise<Instance
   return bchSignClientPromise;
 }
 
+function getBchSessionNamespace(session: any): {
+  accounts: string[];
+  chains: string[];
+  methods: string[];
+  events: string[];
+} | null {
+  if (!session || typeof session !== 'object') return null;
+  const nsMap = session.namespaces || {};
+  const bchKeys = Object.keys(nsMap).filter(
+    k => k.toLowerCase() === 'bch' || k.toLowerCase().startsWith('bch:')
+  );
+  if (bchKeys.length === 0) return null;
+
+  const accounts: string[] = [];
+  const chains: string[] = [];
+  const methods: string[] = [];
+  const events: string[] = [];
+
+  for (const key of bchKeys) {
+    const ns = nsMap[key];
+    if (!ns || typeof ns !== 'object') continue;
+    if (key.includes(':') && !chains.includes(key)) {
+      chains.push(key);
+    }
+    if (Array.isArray(ns.accounts)) {
+      for (const a of ns.accounts) {
+        if (typeof a === 'string') {
+          if (!accounts.includes(a)) accounts.push(a);
+          const parts = a.split(':');
+          if (parts.length >= 2 && parts[0].toLowerCase() === 'bch') {
+            const derivedChain = `${parts[0].toLowerCase()}:${parts[1].toLowerCase()}`;
+            if (!chains.includes(derivedChain)) chains.push(derivedChain);
+          }
+        }
+      }
+    }
+    if (Array.isArray(ns.chains)) {
+      for (const c of ns.chains) {
+        if (typeof c === 'string' && !chains.includes(c)) chains.push(c);
+      }
+    }
+    if (Array.isArray(ns.methods)) {
+      for (const m of ns.methods) {
+        if (typeof m === 'string' && !methods.includes(m)) methods.push(m);
+      }
+    }
+    if (Array.isArray(ns.events)) {
+      for (const e of ns.events) {
+        if (typeof e === 'string' && !events.includes(e)) events.push(e);
+      }
+    }
+  }
+
+  return { accounts, chains, methods, events };
+}
+
 function extractBchAddressFromSession(session: SessionTypes.Struct, isTestnet: boolean): BchWcSessionResult | null {
-  const bchNamespace = session.namespaces?.bch;
+  const bchNamespace = getBchSessionNamespace(session);
   const accounts = bchNamespace?.accounts || [];
   if (accounts.length === 0) return null;
 
@@ -795,7 +860,7 @@ export async function restoreBchWalletConnectSession(
 
     const client = await getBchSignClient(onSessionDeleted);
     const sessions = client.session.getAll();
-    const bchSess = [...sessions].reverse().find(s => Boolean(s.namespaces?.bch?.accounts?.length));
+    const bchSess = [...sessions].reverse().find(s => Boolean(getBchSessionNamespace(s)));
     if (!bchSess) return null;
 
     activeBchSession = bchSess;
@@ -815,20 +880,6 @@ export async function startBchWalletConnectPairing(
   waitForApproval: () => Promise<BchWcSessionResult>;
 }> {
   const client = await getBchSignClient(onSessionDeleted);
-
-  // Clean up any stale BCH WC2 sessions before starting a fresh pairing
-  try {
-    const existingSessions = client.session.getAll();
-    for (const sess of existingSessions) {
-      if (sess.namespaces?.bch) {
-        await client.disconnect({
-          topic: sess.topic,
-          reason: { code: 6000, message: 'Replacing previous BCH session' }
-        }).catch(() => {});
-      }
-    }
-    activeBchSession = null;
-  } catch {}
 
   const primaryChain = isTestnet ? 'bch:bchtest' : 'bch:bitcoincash';
   const secondaryChain = isTestnet ? 'bch:bitcoincash' : 'bch:bchtest';
@@ -852,6 +903,20 @@ export async function startBchWalletConnectPairing(
   const waitForApproval = async (): Promise<BchWcSessionResult> => {
     const session = await approval();
     activeBchSession = session;
+
+    // Clean up any older stale BCH WC2 sessions only AFTER the new session is approved
+    try {
+      const existingSessions = client.session.getAll();
+      for (const sess of existingSessions) {
+        if (sess.topic !== session.topic && getBchSessionNamespace(sess)) {
+          await client.disconnect({
+            topic: sess.topic,
+            reason: { code: 6000, message: 'Replacing previous BCH session' }
+          }).catch(() => {});
+        }
+      }
+    } catch {}
+
     const peerName = session.peer?.metadata?.name || 'Cashonize / Paytaca (WC2)';
 
     const extracted = extractBchAddressFromSession(session, isTestnet);
@@ -866,19 +931,28 @@ export async function startBchWalletConnectPairing(
       );
     }
 
-    // Optionally request explicit token-aware addresses via `bch_getAddresses` if supported
+    // If CAIP-10 session accounts already provided a valid address, return immediately without blocking on a second RPC round-trip
+    if (extracted) {
+      return extracted;
+    }
+
+    // Fallback: request explicit addresses via `bch_getAddresses` with a 3s timeout if session accounts were empty
     try {
-      const chainToQuery = session.namespaces?.bch?.chains?.includes(primaryChain)
+      const bchNs = getBchSessionNamespace(session);
+      const chainToQuery = bchNs?.chains?.includes(primaryChain)
         ? primaryChain
-        : session.namespaces?.bch?.chains?.[0] || primaryChain;
-      const addrList = await client.request<string[]>({
-        topic: session.topic,
-        chainId: chainToQuery,
-        request: {
-          method: 'bch_getAddresses',
-          params: { token: true }
-        }
-      });
+        : bchNs?.chains?.[0] || primaryChain;
+      const addrList = await Promise.race([
+        client.request<string[]>({
+          topic: session.topic,
+          chainId: chainToQuery,
+          request: {
+            method: 'bch_getAddresses',
+            params: { token: true }
+          }
+        }),
+        new Promise<null>(resolve => setTimeout(() => resolve(null), 3000))
+      ]);
       if (Array.isArray(addrList) && addrList.length > 0) {
         const expectedPrefix = isTestnet ? 'bchtest:' : 'bitcoincash:';
         const matchingAddr = addrList.find(a => a.toLowerCase().startsWith(expectedPrefix)) || addrList[0];
@@ -904,13 +978,9 @@ export async function startBchWalletConnectPairing(
       if (rpcErr?.message && rpcErr.message.includes('Network mismatch') || rpcErr?.message?.includes('respondió con dirección')) {
         throw rpcErr;
       }
-      // Fallback to CAIP-10 session accounts
     }
 
-    if (!extracted) {
-      throw new Error('La billetera BCH no compartió ninguna dirección CashAddr válida.');
-    }
-    return extracted;
+    throw new Error('La billetera BCH no compartió ninguna dirección CashAddr válida.');
   };
 
   return { uri, qrDataUrl, waitForApproval };
@@ -921,7 +991,7 @@ export async function disconnectBchWalletConnect(): Promise<void> {
     if (bchSignClient) {
       const sessions = bchSignClient.session?.getAll?.() || [];
       for (const sess of sessions) {
-        if (sess?.namespaces?.bch) {
+        if (getBchSessionNamespace(sess)) {
           await bchSignClient.disconnect({
             topic: sess.topic,
             reason: { code: 6000, message: 'User disconnected from BinaryLiquid' }
@@ -941,11 +1011,11 @@ export function resolveHydratedBchSession() {
   if (bchSignClient && !activeBchSession) {
     try {
       const sessions = bchSignClient.session.getAll();
-      const latest = [...sessions].reverse().find(s => Boolean(s.namespaces?.bch?.accounts?.length));
+      const latest = [...sessions].reverse().find(s => Boolean(getBchSessionNamespace(s)));
       if (latest) activeBchSession = latest;
     } catch {}
   }
-  return bchSignClient && activeBchSession && activeBchSession.namespaces?.bch?.accounts?.length
+  return bchSignClient && activeBchSession && Boolean(getBchSessionNamespace(activeBchSession))
     ? activeBchSession
     : null;
 }
@@ -956,7 +1026,7 @@ export function isBchWc2SessionConnected(): boolean {
 
 export function getBchWc2SessionMethods(): string[] {
   const session = resolveHydratedBchSession();
-  return session?.namespaces?.bch?.methods || [];
+  return getBchSessionNamespace(session)?.methods || [];
 }
 
 /**
@@ -973,7 +1043,7 @@ export function hasActiveBchMessageSigningCapability(
   const hasWc2Sign = () => {
     const session = resolveHydratedBchSession();
     if (!session) return false;
-    const methods = session.namespaces?.bch?.methods || [];
+    const methods = getBchSessionNamespace(session)?.methods || [];
     return methods.length === 0 || methods.includes('bch_signMessage');
   };
   const hasExtSign = () => {
@@ -1013,7 +1083,7 @@ export async function signBchMessage(params: {
       }
     } else {
       const desiredChain = isTestnet ? 'bch:bchtest' : 'bch:bitcoincash';
-      const allowedChains = session.namespaces?.bch?.chains || [];
+      const allowedChains = getBchSessionNamespace(session)?.chains || [];
       const chainIdToUse = allowedChains.includes(desiredChain) ? desiredChain : allowedChains[0] || desiredChain;
       const peerName = session.peer?.metadata?.name || 'Cashonize / WalletConnect';
 
@@ -1596,7 +1666,7 @@ export async function executeBchSwapDeposit(params: {
   resolveHydratedBchSession();
 
   const hasWc2Session = Boolean(
-    bchSignClient && activeBchSession && activeBchSession.namespaces?.bch?.accounts?.length
+    bchSignClient && activeBchSession && getBchSessionNamespace(activeBchSession)
   );
   const hasWizardSession = isWizardManagerConnected(wizardManager);
   const hasExtExtension =
@@ -1692,7 +1762,7 @@ export async function executeBchSwapDeposit(params: {
     if (!bchSignClient || !activeBchSession) {
       throw new Error('Sesión WalletConnect V2 BCH no activa.');
     }
-    const allowedChains = activeBchSession.namespaces?.bch?.chains || [];
+    const allowedChains = getBchSessionNamespace(activeBchSession)?.chains || [];
     const chainIdToUse = allowedChains.includes(desiredChain)
       ? desiredChain
       : allowedChains[0] || buildData.chainId || desiredChain;

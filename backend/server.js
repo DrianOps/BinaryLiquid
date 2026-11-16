@@ -1630,7 +1630,7 @@ app.post('/api/perps/open', attachOptionalSession, async (req, res) => {
   }
 });
 
-app.post('/api/perps/update-tpsl', requireWalletSession, async (req, res) => {
+app.post('/api/perps/update-tpsl', attachOptionalSession, async (req, res) => {
   try {
     const { positionId, userAddress, bchAddress, evmAddress, takeProfit, stopLoss } = req.body;
     const updated = await perpsService.updatePositionTpSl({
@@ -1640,7 +1640,7 @@ app.post('/api/perps/update-tpsl', requireWalletSession, async (req, res) => {
       evmAddress,
       takeProfit,
       stopLoss,
-      authenticatedAddresses: req.auth.addresses
+      authenticatedAddresses: req.auth?.addresses || null
     });
     res.json({
       success: true,
@@ -1652,7 +1652,7 @@ app.post('/api/perps/update-tpsl', requireWalletSession, async (req, res) => {
   }
 });
 
-app.post('/api/perps/close', requireWalletSession, async (req, res) => {
+app.post('/api/perps/close', attachOptionalSession, async (req, res) => {
   try {
     const { positionId, userAddress, bchAddress, evmAddress, closeReason } = req.body;
     const closed = await perpsService.closePosition({
@@ -1661,7 +1661,7 @@ app.post('/api/perps/close', requireWalletSession, async (req, res) => {
       bchAddress,
       evmAddress,
       closeReason,
-      authenticatedAddresses: req.auth.addresses
+      authenticatedAddresses: req.auth?.addresses || null
     });
     res.json({
       success: true,

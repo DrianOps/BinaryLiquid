@@ -1677,6 +1677,7 @@ export default function App() {
             lang === 'es'
               ? `La sesión WalletConnect de ${bchWallet?.provider || 'Cashonize'} no está activa o expiró tras recargar. Escanea de nuevo el QR de Cashonize para firmar esta acción BCH/PUSD.`
               : `Your ${bchWallet?.provider || 'Cashonize'} WalletConnect session is inactive or expired. Please reconnect Cashonize (WC2 QR) to authenticate this BCH/PUSD action.`;
+          setWalletModalTab('bch');
           setShowWalletModal(true);
         } else if (cleanBch && !canSignBch) {
           const sessionMethods = expectsWc2Bch ? getBchWc2SessionMethods() : [];
@@ -1686,6 +1687,7 @@ export default function App() {
               ? `Tu conexión BCH actual (${bchWallet?.provider || effectiveBchSource}${methodsSuffix}) no autorizó firma de mensajes (bch_signMessage). Reconecta Cashonize o usa la extensión de Paytaca para acciones BCH/PUSD.`
               : `Your current BCH connection (${bchWallet?.provider || effectiveBchSource}${methodsSuffix}) did not authorize message signing (bch_signMessage). Reconnect Cashonize or use the Paytaca extension for BCH/PUSD actions.`;
           if (expectsWc2Bch) {
+            setWalletModalTab('bch');
             setShowWalletModal(true);
           }
         } else {

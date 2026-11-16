@@ -49,6 +49,8 @@ export interface PerpsViewProps {
 
 export interface PerpPosition {
   id: string;
+  bchAddress?: string | null;
+  evmAddress?: string | null;
   symbol: string;
   market: string;
   base?: string;
@@ -1047,21 +1049,26 @@ export default function PerpsView({
   // =========================================================================
   const handleClosePosition = async (pos: PerpPosition, reason = 'USER_CLOSE') => {
     const requiredChain = resolvePositionAuthChain(pos);
-    const token = await onEnsureAuthSession?.({ chains: [requiredChain] });
-    if (!token) return;
+    let token = authToken || null;
+    if (requiredChain === 'evm') {
+      token = (await onEnsureAuthSession?.({ chains: ['evm'] })) || null;
+      if (!token) return;
+    }
     setClosingPosId(pos.id);
     try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
       const res = await fetch(`${backendUrl}/api/perps/close`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
+        headers,
         body: JSON.stringify({
           positionId: pos.id,
-          userAddress: userAddress || connectedBch || connectedEvm,
-          bchAddress: connectedBch,
-          evmAddress: connectedEvm,
+          userAddress:
+            requiredChain === 'bch'
+              ? connectedBch || pos.bchAddress || userAddress
+              : connectedEvm || pos.evmAddress || userAddress,
+          bchAddress: connectedBch || pos.bchAddress || '',
+          evmAddress: requiredChain === 'evm' ? connectedEvm || pos.evmAddress || '' : '',
           closeReason: reason
         })
       });
@@ -1095,19 +1102,24 @@ export default function PerpsView({
     if (!editingTpSlPos) return;
     try {
       const requiredChain = resolvePositionAuthChain(editingTpSlPos);
-      const token = await onEnsureAuthSession?.({ chains: [requiredChain] });
-      if (!token) return;
+      let token = authToken || null;
+      if (requiredChain === 'evm') {
+        token = (await onEnsureAuthSession?.({ chains: ['evm'] })) || null;
+        if (!token) return;
+      }
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
       const res = await fetch(`${backendUrl}/api/perps/update-tpsl`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
+        headers,
         body: JSON.stringify({
           positionId: editingTpSlPos.id,
-          userAddress: userAddress || connectedBch || connectedEvm,
-          bchAddress: connectedBch,
-          evmAddress: connectedEvm,
+          userAddress:
+            requiredChain === 'bch'
+              ? connectedBch || editingTpSlPos.bchAddress || userAddress
+              : connectedEvm || editingTpSlPos.evmAddress || userAddress,
+          bchAddress: connectedBch || editingTpSlPos.bchAddress || '',
+          evmAddress: requiredChain === 'evm' ? connectedEvm || editingTpSlPos.evmAddress || '' : '',
           takeProfit: parseFloat(editTpVal) > 0 ? parseFloat(editTpVal) : null,
           stopLoss: parseFloat(editSlVal) > 0 ? parseFloat(editSlVal) : null
         })
