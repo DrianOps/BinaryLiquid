@@ -1476,7 +1476,7 @@ export default function BridgeSwap({
         </div>
       )}
 
-      {/* MAIN SEAMLESS SWAP CARD (Zero nested boxes) */}
+      {/* MAIN LINE-FREE UNIFIED SWAP CARD */}
       <div className={`bg-surface rounded-card overflow-hidden transition-all duration-300 ${
         cardState === 'success'
           ? 'border border-line-strong shadow-soft'
@@ -1484,7 +1484,7 @@ export default function BridgeSwap({
       }`}>
         {/* CARD TOP BAR */}
         {cardState === 'form' && (
-          <div className="flex items-center justify-between px-4 py-3 border-b border-line">
+          <div className="flex items-center justify-between px-4 sm:px-5 pt-4 pb-2">
             {/* Swap | Limit Segmented Control */}
             <div className="ui-segment">
               <button
@@ -1546,7 +1546,7 @@ export default function BridgeSwap({
 
         {/* COMPACT FAUCET POPOVER */}
         {cardState === 'form' && faucetOpen && isTestnet && (
-          <div className="px-4 py-3 bg-surface-2/50 border-b border-line space-y-2">
+          <div className="mx-4 sm:mx-5 mt-1 mb-2 p-3 rounded-panel bg-surface-2 space-y-2">
             <div className="flex items-center justify-between text-[11px] text-ink-2">
               <span className="font-semibold text-ink flex items-center gap-1">
                 <Sparkles className="w-3 h-3 text-emerald-500" /> PUSD Chipnet Faucet
@@ -1565,7 +1565,7 @@ export default function BridgeSwap({
                 value={faucetAddress}
                 onChange={e => setFaucetAddress(e.target.value)}
                 placeholder={t.faucetPlaceholder}
-                className="flex-1 min-w-0 bg-surface-2 border border-line rounded-control px-2.5 py-1.5 text-xs font-mono text-ink outline-none focus:border-emerald-500"
+                className="flex-1 min-w-0 bg-surface border border-line rounded-control px-2.5 py-1.5 text-xs font-mono text-ink outline-none focus:border-emerald-500"
               />
               <button
                 type="button"
@@ -1581,7 +1581,7 @@ export default function BridgeSwap({
 
         {/* COMPACT SLIPPAGE POPOVER */}
         {cardState === 'form' && settingsOpen && (
-          <div className="px-4 py-3 bg-surface-2/50 border-b border-line flex items-center justify-between gap-2">
+          <div className="mx-4 sm:mx-5 mt-1 mb-2 p-3 rounded-panel bg-surface-2 flex items-center justify-between gap-2">
             <span className="text-xs font-medium text-ink-2">{t.slippage}</span>
             <div className="flex items-center gap-1">
               {[0.1, 0.5, 1.0].map(val => (
@@ -1595,7 +1595,7 @@ export default function BridgeSwap({
                   className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
                     slippage === val && !customSlippage
                       ? 'bg-ink text-canvas'
-                      : 'bg-surface-2 text-ink-2 border border-line'
+                      : 'bg-surface text-ink-2 border border-line'
                   }`}
                 >
                   {val}%
@@ -1613,19 +1613,19 @@ export default function BridgeSwap({
                   const n = parseFloat(e.target.value);
                   if (!isNaN(n) && n > 0 && n <= 20) setSlippage(n);
                 }}
-                className="w-16 px-2 py-1 rounded-lg text-xs text-right bg-surface-2 border border-line text-ink outline-none"
+                className="w-16 px-2 py-1 rounded-lg text-xs text-right bg-surface border border-line text-ink outline-none"
               />
             </div>
           </div>
         )}
 
         {/* ================================================================ */}
-        {/* VIEW 1: SEAMLESS UNIFIED SWAP / LIMIT FORM                       */}
+        {/* VIEW 1: LINE-FREE UNIFIED SWAP / LIMIT FORM                      */}
         {/* ================================================================ */}
         {cardState === 'form' && (
           <div>
-            {/* PAY SECTION (`sellToken` — Flush on card surface) */}
-            <div className="px-4 py-4 focus-within:bg-surface-2/25 transition-colors">
+            {/* PAY SECTION (`sellToken`) */}
+            <div className="px-4 sm:px-5 pt-2.5 pb-3">
               <div className="flex items-center justify-between text-xs text-ink-2 mb-2">
                 <div className="flex items-center gap-1.5 min-w-0">
                   <span className="font-medium text-ink">{t.pay}</span>
@@ -1696,8 +1696,8 @@ export default function BridgeSwap({
               </div>
             </div>
 
-            {/* SEAMLESS EDGE-TO-EDGE ROUTE DIVIDER */}
-            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-4 py-2 bg-surface-2/35 border-y border-line text-[11px]">
+            {/* LINE-FREE ROUTE & FLIP CONNECTOR */}
+            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-4 sm:px-5 py-2 text-[11px]">
               <div className="flex items-center gap-1.5 min-w-0 text-ink-2 font-medium">
                 <img
                   src={sellMeta.chainIcon}
@@ -1722,7 +1722,7 @@ export default function BridgeSwap({
                 type="button"
                 onClick={handleFlipTokens}
                 aria-label={t.flipPair}
-                className="w-7 h-7 rounded-full bg-surface hover:bg-surface-2 border border-line hover:border-line-strong flex items-center justify-center text-ink-2 hover:text-ink hover:rotate-180 transition-all duration-200 cursor-pointer shrink-0"
+                className="w-8 h-8 rounded-full bg-surface-2 hover:bg-surface-3 border border-line hover:border-line-strong flex items-center justify-center text-ink-2 hover:text-ink hover:rotate-180 transition-all duration-200 cursor-pointer shrink-0"
               >
                 <ArrowDownUp className="w-3.5 h-3.5" />
               </button>
@@ -1747,8 +1747,8 @@ export default function BridgeSwap({
               </div>
             </div>
 
-            {/* RECEIVE SECTION (`buyToken` — Flush on card surface) */}
-            <div className="px-4 py-4">
+            {/* RECEIVE SECTION (`buyToken`) */}
+            <div className="px-4 sm:px-5 pt-2.5 pb-3">
               <div className="flex items-center justify-between text-xs text-ink-2 mb-2">
                 <div className="flex items-center gap-1.5 min-w-0">
                   <span className="font-medium text-ink">{t.receive}</span>
@@ -1804,7 +1804,7 @@ export default function BridgeSwap({
 
             {/* TARGET PRICE SECTION (Only in Limit Tab) */}
             {activeTab === 'limit' && (
-              <div className="px-4 py-3 border-t border-line flex items-center justify-between gap-3">
+              <div className="px-4 sm:px-5 py-2.5 flex items-center justify-between gap-3">
                 <div className="text-xs text-ink-2">
                   <div className="font-medium">{t.targetPrice}</div>
                   <button
@@ -1829,8 +1829,8 @@ export default function BridgeSwap({
               </div>
             )}
 
-            {/* DESTINATION ADDRESS SECTION (`Recibir en` — Flush hairline row) */}
-            <div className="px-4 py-3.5 border-t border-line focus-within:bg-surface-2/25 transition-colors">
+            {/* DESTINATION ADDRESS SECTION (`Recibir en`) */}
+            <div className="px-4 sm:px-5 py-3">
               <div className="flex items-center justify-between mb-1.5">
                 <label className="text-xs font-medium text-ink-2 flex items-center gap-1.5">
                   <span>
@@ -1883,7 +1883,7 @@ export default function BridgeSwap({
 
             {/* 1-LINE COLLAPSIBLE QUOTE SUMMARY */}
             {quote && isPairLiquid && parseFloat(amount) > 0 && (
-              <div className="px-4 py-2.5 border-t border-line text-xs">
+              <div className="px-4 sm:px-5 py-2 text-xs">
                 <button
                   type="button"
                   onClick={() => setDetailsOpen(!detailsOpen)}
@@ -1903,7 +1903,7 @@ export default function BridgeSwap({
                 </button>
 
                 {detailsOpen && (
-                  <div className="pt-2.5 mt-2.5 border-t border-line space-y-1.5 text-[11px] text-ink-2">
+                  <div className="pt-2.5 space-y-1.5 text-[11px] text-ink-2">
                     <div className="flex justify-between">
                       <span>{t.minReceived} ({slippage}%)</span>
                       <span className="font-medium text-ink tabular-nums">
@@ -1928,7 +1928,7 @@ export default function BridgeSwap({
             )}
 
             {swapError && (
-              <div className="mx-4 mt-1 mb-2 rounded-xl border border-red-500/30 bg-red-500/10 px-3.5 py-2.5 text-xs text-red-400 space-y-2">
+              <div className="mx-4 sm:mx-5 mt-1 mb-2 rounded-xl border border-red-500/30 bg-red-500/10 px-3.5 py-2.5 text-xs text-red-400 space-y-2">
                 <div className="flex items-start justify-between gap-2">
                   <span className="leading-relaxed break-words">{swapError.message}</span>
                   <button
@@ -1963,7 +1963,7 @@ export default function BridgeSwap({
             )}
 
             {/* PRIMARY CTA BUTTON */}
-            <div className="px-4 pb-4 pt-1">
+            <div className="px-4 sm:px-5 pt-2 pb-4 sm:pb-5">
               <button
                 type="button"
                 disabled={ctaConfig.disabled}
