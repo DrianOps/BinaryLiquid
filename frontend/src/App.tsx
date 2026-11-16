@@ -483,15 +483,19 @@ function getViewFromUrl(): MainView {
 
 export default function App() {
   const [mainView, setMainView] = useState<MainView>(() => getViewFromUrl());
-  const [darkMode, setDarkMode] = useState<boolean>(() => {
-    return localStorage.getItem('bliq_theme') === 'dark' || 
-      (!localStorage.getItem('bliq_theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
-  });
-
   const isEmbed = typeof window !== 'undefined' && (
     window.location.pathname === '/embed' || 
     window.location.search.includes('embed=true')
   );
+  const [darkMode, setDarkMode] = useState<boolean>(() => {
+    if (typeof window !== 'undefined' && isEmbed) {
+      const urlTheme = new URLSearchParams(window.location.search).get('theme');
+      if (urlTheme === 'dark') return true;
+      if (urlTheme === 'light') return false;
+    }
+    return localStorage.getItem('bliq_theme') === 'dark' || 
+      (!localStorage.getItem('bliq_theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [brandMenuOpen, setBrandMenuOpen] = useState(false);
   const brandMenuRef = useRef<HTMLDivElement | null>(null);
@@ -3137,8 +3141,13 @@ export default function App() {
 
       {/* DEVELOPER PORTAL & SDK VIEW */}
       {mainView === 'sdk' && (
-        <main className="flex-1 flex flex-col items-center justify-start p-4 sm:p-6 w-full max-w-7xl mx-auto pb-28 md:pb-12">
-          <SdkView lang={lang} onNavigateToIdentity={() => setMainView('identity')} />
+        <main className="flex-1 p-4 sm:p-6 max-w-[1240px] w-full mx-auto animate-in fade-in zoom-in duration-300 pb-28 md:pb-12 text-left">
+          <SdkView
+            lang={lang}
+            onNavigateToIdentity={() => setMainView('identity')}
+            onBackToSwap={() => setMainView('bridge')}
+            showToast={showToast}
+          />
         </main>
       )}
 

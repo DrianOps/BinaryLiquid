@@ -1,22 +1,5 @@
-import React, { useState } from 'react';
-import { 
-  Globe, 
-  Zap, 
-  Droplets, 
-  Activity, 
-  ShieldCheck, 
-  Wallet, 
-  ArrowRight, 
-  ExternalLink, 
-  Check, 
-  Copy,
-  Lock, 
-  Sparkles,
-  BookOpen,
-  Code2,
-  Coins,
-  FileText
-} from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { ArrowLeft, Check, Copy, ExternalLink } from 'lucide-react';
 
 interface DocsViewProps {
   lang?: 'en' | 'es';
@@ -28,6 +11,60 @@ interface DocsViewProps {
   networks: Record<string, any>;
 }
 
+const TESTNET_CONTRACTS = [
+  {
+    key: 'bch-cov',
+    labelEs: 'Covenant Bóveda CashTokens (P2SH32)',
+    labelEn: 'CashTokens Vault Covenant (P2SH32)',
+    network: 'BCH Chipnet (Testnet4)',
+    value: 'bchtest:pvqse7cr2ptah2e34sl53r5utqwxl28fk84grvf5ufzd6n5tclme2hmkrmd9e',
+    explorer: 'https://chipnet.imaginary.cash/address/bchtest:pvqse7cr2ptah2e34sl53r5utqwxl28fk84grvf5ufzd6n5tclme2hmkrmd9e'
+  },
+  {
+    key: 'pusd-cat',
+    labelEs: 'Categoría CashToken PUSD',
+    labelEn: 'PUSD CashToken Category ID',
+    network: 'CHIP-2022-02',
+    value: '6b6cf8de5963d67594a4565d49a7bcf3e668a18a7328828de16bd393ac00dcad',
+    explorer: 'https://chipnet.chaingraph.cash'
+  },
+  {
+    key: 'evm-vault',
+    labelEs: 'Contrato BinaryLiquidVault.sol',
+    labelEn: 'BinaryLiquidVault.sol Contract',
+    network: 'Polygon Amoy (80002)',
+    value: '0xc830c7cB16cd05bdEd8CA9d0c73E9038ed25Aa4A',
+    explorer: 'https://amoy.polygonscan.com/address/0xc830c7cB16cd05bdEd8CA9d0c73E9038ed25Aa4A'
+  },
+  {
+    key: 'evm-usdt',
+    labelEs: 'Reserva Estable USDT (ERC-20)',
+    labelEn: 'USDT Stable Reserve (ERC-20)',
+    network: 'Polygon Amoy (80002)',
+    value: '0x1a29793F2a64424D09f56AD045827dF1F0Fa1A75',
+    explorer: 'https://amoy.polygonscan.com/address/0x1a29793F2a64424D09f56AD045827dF1F0Fa1A75'
+  }
+];
+
+const MAINNET_TOKENS = [
+  {
+    key: 'pos-usdt',
+    labelEs: 'Polygon PoS USDT (ERC-20)',
+    labelEn: 'Polygon PoS USDT (ERC-20)',
+    network: 'Polygon PoS (137)',
+    value: '0xc2132D05D31c914a87C6611C10748AEb04B58e8F',
+    explorer: 'https://polygonscan.com/token/0xc2132D05D31c914a87C6611C10748AEb04B58e8F'
+  },
+  {
+    key: 'pos-usdc',
+    labelEs: 'Polygon PoS USDC (ERC-20)',
+    labelEn: 'Polygon PoS USDC (ERC-20)',
+    network: 'Polygon PoS (137)',
+    value: '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359',
+    explorer: 'https://polygonscan.com/token/0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359'
+  }
+];
+
 export default function DocsView({
   lang = 'es',
   platformNetwork,
@@ -37,659 +74,592 @@ export default function DocsView({
   showToast,
   networks
 }: DocsViewProps) {
-  const [activeTab, setActiveTab] = useState<'overview' | 'architecture' | 'pools' | 'lending' | 'fees' | 'contracts'>('overview');
+  const [activeSection, setActiveSection] = useState<string>('overview');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   const isEs = lang === 'es';
 
-  const copyAddress = (key: string, text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedKey(key);
-    showToast(isEs ? 'Dirección copiada al portapapeles' : 'Address copied to clipboard', 'success');
-    setTimeout(() => setCopiedKey(null), 2000);
+  const sections = isEs
+    ? [
+        { id: 'overview', label: '1. Visión general' },
+        { id: 'architecture', label: '2. Arquitectura sin custodia' },
+        { id: 'pools', label: '3. Pools & Real Yield' },
+        { id: 'lending', label: '4. Préstamos & colateral' },
+        { id: 'fees', label: '5. Tarifas & oráculos' },
+        { id: 'contracts', label: '6. Contratos & billeteras' }
+      ]
+    : [
+        { id: 'overview', label: '1. Overview' },
+        { id: 'architecture', label: '2. Architecture' },
+        { id: 'pools', label: '3. Pools & Real Yield' },
+        { id: 'lending', label: '4. Lending & Collateral' },
+        { id: 'fees', label: '5. Fees & Oracles' },
+        { id: 'contracts', label: '6. Contracts & Wallets' }
+      ];
+
+  useEffect(() => {
+    if (typeof IntersectionObserver === 'undefined') return;
+    const ids = ['overview', 'architecture', 'pools', 'lending', 'fees', 'contracts'];
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries.find((e) => e.isIntersecting);
+        if (visible) {
+          const clean = visible.target.id.replace(/^doc-/, '');
+          setActiveSection(clean);
+        }
+      },
+      { rootMargin: '-18% 0px -68% 0px', threshold: 0.05 }
+    );
+
+    ids.forEach((id) => {
+      const el = document.getElementById(`doc-${id}`);
+      if (el) observer.observe(el);
+    });
+
+    return () => observer.disconnect();
+  }, []);
+
+  const scrollToSection = (id: string) => {
+    setActiveSection(id);
+    const el = document.getElementById(`doc-${id}`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
   };
 
-  const navItems = [
-    { id: 'overview', label: isEs ? '1. Visión & BLAZE' : '1. Overview & BLAZE', icon: Globe },
-    { id: 'architecture', label: isEs ? '2. Arquitectura Covenants' : '2. Non-Custodial Architecture', icon: ShieldCheck },
-    { id: 'pools', label: isEs ? '3. Pools & Real Yield' : '3. Pools & Real Yield', icon: Droplets },
-    { id: 'lending', label: isEs ? '4. Préstamos & Colateral' : '4. Lending & Collateral', icon: Lock },
-    { id: 'fees', label: isEs ? '5. Tarifas & Oráculos' : '5. Fees & Oracles', icon: Activity },
-    { id: 'contracts', label: isEs ? '6. Contratos & Billeteras' : '6. Contracts & Wallets', icon: Code2 },
-  ];
+  const copyAddress = (key: string, text: string) => {
+    navigator.clipboard?.writeText(text).catch(() => {});
+    setCopiedKey(key);
+    showToast(isEs ? 'Dirección copiada al portapapeles' : 'Address copied to clipboard', 'success');
+    setTimeout(() => setCopiedKey(null), 1800);
+  };
+
+  const handleSelectNetwork = (next: 'mainnet' | 'testnet') => {
+    if (next === platformNetwork) return;
+    setPlatformNetwork(next);
+    showToast(next === 'mainnet' ? 'Red: Bitcoin Cash Mainnet' : 'Red: BCH Chipnet');
+  };
+
+  const contractsList = platformNetwork === 'testnet' ? TESTNET_CONTRACTS : MAINNET_TOKENS;
 
   return (
-    <div className="w-full space-y-6">
-      {/* Header Strip */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-line">
-        <div>
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-primary/10 border border-primary/20 text-primary text-[11px] font-bold uppercase tracking-wider mb-2">
-            <BookOpen className="w-3.5 h-3.5" />
-            <span>{isEs ? 'Documentación Oficial' : 'Official Documentation'}</span>
-          </div>
-          <h1 className="ui-title text-2xl sm:text-3xl">
-            {isEs ? 'Protocolo BinaryLiquid' : 'BinaryLiquid Protocol'}
-          </h1>
-          <p className="ui-subtitle mt-1 text-xs sm:text-sm">
-            {isEs 
-              ? 'Arquitectura 100% no custodial basada en covenants CashScript y contratos inteligentes EVM.' 
-              : '100% non-custodial architecture built on CashScript covenants and EVM smart contracts.'}
-          </p>
-        </div>
+    <div className="w-full xl:grid xl:grid-cols-[190px_minmax(0,820px)_190px] xl:justify-center xl:gap-8 items-start">
+      {/* BORDERLESS MARGIN OUTLINE (Wide desktop only — matching Whitepaper) */}
+      <aside className="hidden xl:block sticky top-24 pt-10">
+        <nav aria-label="Documentation sections" className="space-y-1 border-l border-line pl-3">
+          {sections.map((sec) => {
+            const active = activeSection === sec.id;
+            return (
+              <button
+                key={sec.id}
+                type="button"
+                onClick={() => scrollToSection(sec.id)}
+                className={`block w-full text-left py-1 text-xs transition-colors cursor-pointer ${
+                  active
+                    ? 'text-ink font-semibold'
+                    : 'text-ink-3 hover:text-ink-2 font-normal'
+                }`}
+              >
+                {sec.label}
+              </button>
+            );
+          })}
+        </nav>
+      </aside>
 
-        <div className="flex items-center gap-2">
-          {/* Network Selector Pill */}
+      {/* CENTERED DOCUMENT COLUMN */}
+      <div className="w-full max-w-[820px] mx-auto space-y-3">
+        {/* SUBTLE CONTROLS ABOVE THE PAPER */}
+        <div className="flex flex-wrap items-center justify-between gap-2 px-1">
           <button
-            onClick={() => {
-              const next = platformNetwork === 'mainnet' ? 'testnet' : 'mainnet';
-              setPlatformNetwork(next);
-              showToast(next === 'mainnet' ? 'Red: Bitcoin Cash Mainnet' : 'Red: BCH Chipnet');
-            }}
-            className="ui-btn-secondary ui-btn-sm"
-            title={isEs ? 'Cambiar red' : 'Switch network'}
-          >
-            <span className={`w-2 h-2 rounded-full ${platformNetwork === 'mainnet' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'}`} />
-            <span className="capitalize">{platformNetwork}</span>
-          </button>
-
-          {onOpenWhitepaper && (
-            <button
-              type="button"
-              onClick={onOpenWhitepaper}
-              className="ui-btn-secondary ui-btn-sm flex items-center gap-1.5"
-            >
-              <FileText className="w-3.5 h-3.5" />
-              <span>Whitepaper</span>
-            </button>
-          )}
-
-          <button 
+            type="button"
             onClick={onLaunchApp}
-            className="ui-btn-primary ui-btn-sm flex items-center gap-1.5"
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-ink-3 hover:text-ink transition-colors cursor-pointer"
           >
-            <span>{isEs ? 'Abrir Swap' : 'Launch Swap'}</span>
-            <ArrowRight className="w-3.5 h-3.5" />
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span>{isEs ? 'Volver al Swap' : 'Back to Swap'}</span>
           </button>
-        </div>
-      </div>
 
-      {/* Main Layout: Nav Tabs + Content Area */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        
-        {/* Navigation Sidebar (Desktop) / Horizontal Segment (Mobile) */}
-        <div className="lg:col-span-3 lg:sticky lg:top-20">
-          <div className="flex lg:flex-col overflow-x-auto lg:overflow-x-visible gap-1 p-1 bg-surface-2 rounded-xl border border-line">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              const active = activeTab === item.id;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => setActiveTab(item.id as any)}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-                    active
-                      ? 'bg-surface text-ink shadow-xs font-bold'
-                      : 'text-ink-3 hover:text-ink'
-                  }`}
-                >
-                  <Icon className={`w-4 h-4 shrink-0 ${active ? 'text-primary' : 'text-ink-3'}`} />
-                  <span>{item.label}</span>
-                </button>
-              );
-            })}
+          <div className="flex items-center gap-2">
+            <div className="ui-segment">
+              <button
+                type="button"
+                onClick={() => handleSelectNetwork('testnet')}
+                className={`ui-segment-item inline-flex items-center gap-1.5 ${
+                  platformNetwork === 'testnet' ? 'ui-segment-item-active' : ''
+                }`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                <span>Chipnet</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSelectNetwork('mainnet')}
+                className={`ui-segment-item inline-flex items-center gap-1.5 ${
+                  platformNetwork === 'mainnet' ? 'ui-segment-item-active' : ''
+                }`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                <span>Mainnet</span>
+              </button>
+            </div>
+
+            {onOpenWhitepaper && (
+              <button
+                type="button"
+                onClick={onOpenWhitepaper}
+                className="ui-btn-secondary ui-btn-sm"
+              >
+                Whitepaper
+              </button>
+            )}
           </div>
         </div>
 
-        {/* Content Body */}
-        <div className="lg:col-span-9 space-y-6">
-          
-          {/* TAB 1: OVERVIEW */}
-          {activeTab === 'overview' && (
-            <div className="space-y-6">
-              <div className="ui-card p-6 space-y-4">
-                <div className="flex items-center gap-2">
-                  <Globe className="w-5 h-5 text-primary" />
-                  <h2 className="text-lg font-bold text-ink">
-                    {isEs ? 'Visión General & Misión BLAZE Hackathon' : 'Protocol Overview & BLAZE Mission'}
-                  </h2>
-                </div>
-                
-                <p className="text-sm text-ink-2 leading-relaxed">
-                  {isEs ? (
-                    <>
-                      <strong>BinaryLiquid</strong> es la primera pasarela de liquidez cross-chain y protocolo de préstamos <strong>100% sin custodia</strong> construida sobre la red <strong>Bitcoin Cash (BCH)</strong> con tecnología <strong>CashTokens</strong> y <strong>Polygon (EVM)</strong>. Desarrollada para el hackathon <strong>BCH BLAZE Hackathon</strong> ($750 PUSD Stablecoin Track) patrocinado por <em>ParyonUSD</em>.
-                    </>
-                  ) : (
-                    <>
-                      <strong>BinaryLiquid</strong> is the first <strong>100% non-custodial</strong> cross-chain liquidity gateway and lending protocol built on the <strong>Bitcoin Cash (BCH)</strong> network with <strong>CashTokens</strong> and <strong>Polygon (EVM)</strong>. Built for the <strong>BCH BLAZE Hackathon</strong> ($750 PUSD Stablecoin Track) sponsored by <em>ParyonUSD</em>.
-                    </>
-                  )}
-                </p>
+        {/* SINGLE CONTINUOUS DOCUMENTATION SHEET */}
+        <article className="bg-surface border border-line rounded-xl shadow-soft px-6 py-8 sm:px-14 sm:py-12">
+          {/* DOCUMENT HEADER */}
+          <header className="pb-6 border-b border-line space-y-3">
+            <div className="text-[11px] font-mono text-ink-3">
+              BinaryLiquid Protocol · Docs · BCH (CashTokens) ⟷ Polygon EVM · {platformNetwork === 'mainnet' ? 'Mainnet' : 'Chipnet / Amoy'}
+            </div>
 
-                {/* 3 Core Pillars */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
-                  <div className="ui-panel p-4 space-y-1.5">
-                    <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center font-bold text-xs">
-                      <ShieldCheck className="w-4 h-4" />
-                    </div>
-                    <h3 className="font-bold text-xs text-ink">{isEs ? '100% No Custodial' : '100% Non-Custodial'}</h3>
-                    <p className="text-[11px] text-ink-3 leading-relaxed">
-                      {isEs 
-                        ? 'Las llaves privadas nunca salen de tu billetera. Los fondos residen en covenants CashScript inmutables.' 
-                        : 'Private keys never leave your wallet. Funds are secured in immutable CashScript covenants.'}
-                    </p>
-                  </div>
+            <h1 className="text-2xl sm:text-[28px] font-semibold tracking-tight text-ink leading-tight">
+              {isEs ? 'Documentación del Protocolo' : 'Protocol Documentation'}
+            </h1>
 
-                  <div className="ui-panel p-4 space-y-1.5">
-                    <div className="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center font-bold text-xs">
-                      <Zap className="w-4 h-4" />
-                    </div>
-                    <h3 className="font-bold text-xs text-ink">{isEs ? 'Liquidación en ~3s' : '~3s Settlement'}</h3>
-                    <p className="text-[11px] text-ink-3 leading-relaxed">
-                      {isEs 
-                        ? 'Detección en tiempo real de UTXOs en CashTokens y eventos EVM con ejecución automática.' 
-                        : 'Real-time UTXO CashToken detection and EVM events with automated settlement.'}
-                    </p>
-                  </div>
+            <p className="text-sm text-ink-2 leading-relaxed">
+              {isEs
+                ? 'Especificación práctica de la arquitectura no custodial basada en covenants CashScript P2SH32, bóvedas deterministas en Solidity, pools cross-chain y préstamos sobre BCH.'
+                : 'Technical reference covering non-custodial CashScript P2SH32 covenants, deterministic EVM vaults, cross-chain liquidity pools, and native BCH collateralized lending.'}
+            </p>
+          </header>
 
-                  <div className="ui-panel p-4 space-y-1.5">
-                    <div className="w-7 h-7 rounded-lg bg-cyan-500/10 text-cyan-500 flex items-center justify-center font-bold text-xs">
-                      <Coins className="w-4 h-4" />
-                    </div>
-                    <h3 className="font-bold text-xs text-ink">{isEs ? 'Rendimiento Real (LP)' : 'Real Yield (LP)'}</h3>
-                    <p className="text-[11px] text-ink-3 leading-relaxed">
-                      {isEs 
-                        ? 'El 0.20% del volumen de swap se distribuye directamente a los pools de liquidez sin inflación.' 
-                        : '0.20% of swap volume is distributed directly to liquidity pools with zero token dilution.'}
-                    </p>
-                  </div>
+          {/* COMPACT MOBILE / TABLET JUMP BAR */}
+          <nav
+            aria-label="Documentation index"
+            className="xl:hidden py-3 border-b border-line flex items-center gap-2 overflow-x-auto no-scrollbar"
+          >
+            {sections.map((sec) => (
+              <button
+                key={sec.id}
+                type="button"
+                onClick={() => scrollToSection(sec.id)}
+                className={`text-[11px] whitespace-nowrap px-2 py-1 rounded-md transition-colors cursor-pointer ${
+                  activeSection === sec.id
+                    ? 'bg-surface-2 text-ink font-semibold'
+                    : 'text-ink-3 hover:text-ink'
+                }`}
+              >
+                {sec.label}
+              </button>
+            ))}
+          </nav>
+
+          {/* SECTION 1: OVERVIEW */}
+          <section id="doc-overview" className="pt-8 scroll-mt-20 space-y-4">
+            <h2 className="text-lg font-semibold text-ink">
+              {isEs ? '1. Visión general & entornos soportados' : '1. Protocol overview & supported networks'}
+            </h2>
+
+            <p className="text-[15px] text-ink-2 leading-[1.75]">
+              {isEs
+                ? 'BinaryLiquid conecta activos nativos emitidos bajo CashTokens (CHIP-2022-02) en Bitcoin Cash directamente con stablecoins y tokens líquidos en Polygon EVM, sin emisores de tokens envueltos (wrapped IOUs) ni custodia centralizada. El protocolo nació para el track de stablecoins de BCH BLAZE Hackathon en torno a ParyonUSD (PUSD).'
+                : 'BinaryLiquid connects native CashTokens assets (CHIP-2022-02) on Bitcoin Cash directly with EVM liquidity on Polygon without wrapped tokens or centralized custody. Built around ParyonUSD (PUSD) for the BCH BLAZE Hackathon stablecoin track.'}
+            </p>
+
+            {/* Pure typographic guarantees row */}
+            <div className="my-5 py-4 border-y border-line grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+              <div>
+                <div className="text-ink-3">{isEs ? 'Modelo de custodia' : 'Custody model'}</div>
+                <div className="text-base font-semibold text-ink mt-0.5">100% On-Chain</div>
+                <div className="text-[11px] text-ink-3 mt-0.5">
+                  {isEs ? 'Covenants P2SH32 y bóvedas sin ownerWithdraw' : 'P2SH32 covenants & vaults with no ownerWithdraw'}
                 </div>
               </div>
-
-              {/* Network Status Card */}
-              <div className="ui-card p-5 space-y-3">
-                <div className="text-xs font-bold text-ink uppercase tracking-wider">
-                  {isEs ? 'Entornos de Red Soportados' : 'Supported Network Environments'}
+              <div>
+                <div className="text-ink-3">{isEs ? 'Liquidación media' : 'Mean settlement'}</div>
+                <div className="text-base font-semibold text-ink tabular-nums mt-0.5">~3.2s</div>
+                <div className="text-[11px] text-ink-3 mt-0.5">
+                  {isEs ? 'Detección UTXO en tiempo real y despacho EVM' : 'Real-time UTXO detection & EVM payout'}
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                  <div className="ui-panel p-3 flex items-center justify-between">
-                    <div>
-                      <span className="text-[10px] text-ink-3 font-semibold uppercase block">Bitcoin Cash</span>
-                      <span className="font-bold text-ink flex items-center gap-1.5 mt-0.5">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                        {platformNetwork === 'mainnet' ? 'BCH Mainnet' : 'BCH Chipnet (Testnet4)'}
+              </div>
+              <div>
+                <div className="text-ink-3">{isEs ? 'Rendimiento Real (LP)' : 'LP Real Yield'}</div>
+                <div className="text-base font-semibold text-ink tabular-nums mt-0.5">0.20% / swap</div>
+                <div className="text-[11px] text-ink-3 mt-0.5">
+                  {isEs ? 'Acreditado a reservas nativas, cero inflación' : 'Accrued directly in native reserves, zero inflation'}
+                </div>
+              </div>
+            </div>
+
+            {/* Active environment explorers */}
+            <div className="divide-y divide-line border-y border-line text-xs">
+              <div className="py-3 flex items-center justify-between gap-4">
+                <div>
+                  <div className="text-ink-3 text-[11px]">Bitcoin Cash</div>
+                  <div className="font-medium text-ink flex items-center gap-2 mt-0.5">
+                    <span className={`w-1.5 h-1.5 rounded-full ${platformNetwork === 'mainnet' ? 'bg-emerald-500' : 'bg-amber-400'}`} />
+                    <span>{platformNetwork === 'mainnet' ? 'BCH Mainnet' : 'BCH Chipnet (Testnet4)'}</span>
+                  </div>
+                </div>
+                <a
+                  href={networks[platformNetwork]?.explorerBch}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 text-ink-2 hover:text-ink font-medium"
+                >
+                  <span>Explorer</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              </div>
+
+              <div className="py-3 flex items-center justify-between gap-4">
+                <div>
+                  <div className="text-ink-3 text-[11px]">EVM Layer</div>
+                  <div className="font-medium text-ink flex items-center gap-2 mt-0.5">
+                    <span className={`w-1.5 h-1.5 rounded-full ${platformNetwork === 'mainnet' ? 'bg-emerald-500' : 'bg-amber-400'}`} />
+                    <span>{platformNetwork === 'mainnet' ? 'Polygon PoS (137)' : 'Polygon Amoy (80002)'}</span>
+                  </div>
+                </div>
+                <a
+                  href={networks[platformNetwork]?.explorerEvm}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 text-ink-2 hover:text-ink font-medium"
+                >
+                  <span>Explorer</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              </div>
+            </div>
+          </section>
+
+          {/* SECTION 2: NON-CUSTODIAL ARCHITECTURE */}
+          <section id="doc-architecture" className="pt-8 scroll-mt-20 space-y-4">
+            <h2 className="text-lg font-semibold text-ink">
+              {isEs ? '2. Arquitectura sin custodia & covenants' : '2. Non-custodial architecture & covenants'}
+            </h2>
+
+            <p className="text-[15px] text-ink-2 leading-[1.75]">
+              {isEs
+                ? 'Las llaves privadas del usuario nunca salen de su billetera. Cada intercambio bloquea fondos en contratos deterministas auditables en ambas cadenas:'
+                : 'User private keys never leave their wallet. Each swap locks principal directly into verifiable on-chain contracts across both chains:'}
+            </p>
+
+            <div className="space-y-3 pl-3 border-l-2 border-line">
+              <div>
+                <h3 className="text-sm font-semibold text-ink">
+                  BinaryLiquidEscrow.cash &amp; BinaryLiquidVault.cash (P2SH32)
+                </h3>
+                <p className="text-sm text-ink-2 leading-relaxed mt-1">
+                  {isEs
+                    ? 'Cada orden instancia un covenant P2SH32 parametrizado con un orderSalt de 16 bytes. Mediante introspección UTXO nativa, settleToVault obliga por consenso a enviar el 100% de los tokens hacia BinaryLiquidVault.cash, cuyo remanente regresa al mismo lockingBytecode. Si pasan 24h sin liquidación, refund() permite al usuario recuperar su depósito sin permisos externos.'
+                    : 'Each swap deploys a deterministic P2SH32 escrow parameterized with a 16-byte orderSalt. Via native UTXO introspection, settleToVault forces 100% of tokens into BinaryLiquidVault.cash, while state continuation sends any remainder back to the vault lockingBytecode. After 24h, refund() grants permissionless unilateral recovery.'}
+                </p>
+              </div>
+
+              <div>
+                <h3 className="text-sm font-semibold text-ink">
+                  BinaryLiquidVault.sol (Polygon EVM)
+                </h3>
+                <p className="text-sm text-ink-2 leading-relaxed mt-1">
+                  {isEs
+                    ? 'Bóveda ERC-20 con ReentrancyGuard y disyuntor por operación (MAX_SINGLE_PAYOUT = 50,000 USDC/USDT). Carece de función administrativa ownerWithdraw; los pagos requieren firma EIP-191 ligada a block.chainid y address(this) con registro anti-replay (executedPayouts). La especificación V2 añade timelock de 48h para rotación de firmante y límites diarios.'
+                    : 'ERC-20 liquidity vault protected with ReentrancyGuard and a per-tx cap (MAX_SINGLE_PAYOUT = 50,000 USDC/USDT). Contains no ownerWithdraw admin function; payouts require Watchman EIP-191 attestation bound to block.chainid and address(this) with executedPayouts anti-replay. BinaryLiquidVaultV2 adds a 48h signer-rotation timelock and daily caps.'}
+                </p>
+              </div>
+            </div>
+
+            {/* 4-step pipeline strip */}
+            <div className="my-5 py-4 border-y border-line grid grid-cols-1 sm:grid-cols-4 gap-4 text-xs">
+              {[
+                {
+                  step: '01',
+                  title: isEs ? 'Cotización Oracle' : 'Oracle quote',
+                  desc: isEs ? 'Cálculo en vivo y comisión transparente de 0.30%.' : 'Live market feed and flat 0.30% fee computation.'
+                },
+                {
+                  step: '02',
+                  title: isEs ? 'Bloqueo P2SH32' : 'Covenant lock',
+                  desc: isEs ? 'El usuario firma desde su billetera hacia el escrow único.' : 'User signs lock transaction directly into P2SH32 escrow.'
+                },
+                {
+                  step: '03',
+                  title: isEs ? 'Validación Watchman' : 'Watchman proof',
+                  desc: isEs ? 'Detección UTXO, auditoría de desvío (≤1.5%) y firma EIP-191.' : 'UTXO check, ≤1.5% oracle audit & EIP-191 attestation.'
+                },
+                {
+                  step: '04',
+                  title: isEs ? 'Despacho nativo' : 'Native payout',
+                  desc: isEs ? 'Liberación al destinatario en ~3.2s con timelock de 24h.' : 'Native asset release to recipient in ~3.2s (24h safety exit).'
+                }
+              ].map((s) => (
+                <div key={s.step} className="space-y-1">
+                  <div className="font-mono text-[11px] text-ink-3">{s.step}</div>
+                  <div className="font-semibold text-ink">{s.title}</div>
+                  <p className="text-[11px] text-ink-3 leading-relaxed">{s.desc}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {/* SECTION 3: POOLS & REAL YIELD */}
+          <section id="doc-pools" className="pt-8 scroll-mt-20 space-y-4">
+            <h2 className="text-lg font-semibold text-ink">
+              {isEs ? '3. Pools cross-chain & Real Yield' : '3. Cross-chain liquidity pools & Real Yield'}
+            </h2>
+
+            <p className="text-[15px] text-ink-2 leading-[1.75]">
+              {isEs
+                ? 'Los Proveedores de Liquidez (LPs) depositan inventario nativo sin tokens intermediarios. En cada swap, el 0.20% del volumen se acumula directamente en las reservas a favor de los LP Shares (Real Yield sin emisión inflacionaria).'
+                : 'Liquidity Providers (LPs) supply native inventory on each chain. On every executed swap, 0.20% of volume accrues directly to pool reserves pro-rata by LP Shares with zero inflationary token emissions.'}
+            </p>
+
+            <div className="overflow-x-auto border-y border-line">
+              <table className="w-full text-left text-xs">
+                <thead className="text-ink border-b border-line">
+                  <tr>
+                    <th className="py-2.5 pr-4 font-semibold">{isEs ? 'Par' : 'Pair'}</th>
+                    <th className="py-2.5 px-4 font-semibold">{isEs ? 'Rutas / Capas' : 'Layers'}</th>
+                    <th className="py-2.5 px-4 font-semibold">{isEs ? 'Rendimiento' : 'Yield model'}</th>
+                    <th className="py-2.5 pl-4 font-semibold">{isEs ? 'Modo' : 'Mode'}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-line text-ink-2">
+                  <tr>
+                    <td className="py-2.5 pr-4 font-medium text-ink">PUSD / USDT</td>
+                    <td className="py-2.5 px-4">CashTokens ⟷ Polygon</td>
+                    <td className="py-2.5 px-4 tabular-nums">0.20% / vol</td>
+                    <td className="py-2.5 pl-4 text-emerald-500 font-medium">{isEs ? 'Activo (Testnet)' : 'Active (Testnet)'}</td>
+                  </tr>
+                  <tr>
+                    <td className="py-2.5 pr-4 font-medium text-ink">PUSD / USDC</td>
+                    <td className="py-2.5 px-4">CashTokens ⟷ Polygon</td>
+                    <td className="py-2.5 px-4 tabular-nums">0.20% / vol</td>
+                    <td className="py-2.5 pl-4">{isEs ? 'Par canónico' : 'Canonical pair'}</td>
+                  </tr>
+                  <tr>
+                    <td className="py-2.5 pr-4 font-medium text-ink">BCH / USDT</td>
+                    <td className="py-2.5 px-4">Bitcoin Cash L1 ⟷ Polygon</td>
+                    <td className="py-2.5 px-4 tabular-nums">0.20% / vol</td>
+                    <td className="py-2.5 pl-4">{isEs ? 'Par canónico' : 'Canonical pair'}</td>
+                  </tr>
+                  <tr>
+                    <td className="py-2.5 pr-4 font-medium text-ink">CashToken (64-hex)</td>
+                    <td className="py-2.5 px-4">{isEs ? 'Cualquier Category ID ⟷ EVM' : 'Any Category ID ⟷ EVM'}</td>
+                    <td className="py-2.5 px-4 tabular-nums">0.20% / vol</td>
+                    <td className="py-2.5 pl-4">Standard / Bootstrapping</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div className="pl-3 border-l-2 border-line space-y-1">
+              <div className="text-xs font-semibold text-ink">
+                {isEs ? 'Activación por Bootstrapping' : 'Bootstrapping activation threshold'}
+              </div>
+              <p className="text-xs text-ink-2 leading-relaxed">
+                {isEs
+                  ? 'Los proyectos nuevos pueden iniciar en estado BOOTSTRAPPING con una meta mínima de TVL. La comunidad aporta liquidez inicial y, al alcanzar el 100% de la meta, el enrutamiento público de swaps queda habilitado.'
+                  : 'New CashToken pools can start in BOOTSTRAPPING mode with a target TVL. Once community liquidity reaches 100% of the target threshold, public swap routing unlocks cleanly.'}
+              </p>
+            </div>
+          </section>
+
+          {/* SECTION 4: LENDING & COLLATERAL */}
+          <section id="doc-lending" className="pt-8 scroll-mt-20 space-y-4">
+            <h2 className="text-lg font-semibold text-ink">
+              {isEs ? '4. Préstamos & bóvedas de colateral BCH' : '4. Lending & BCH collateral vaults'}
+            </h2>
+
+            <p className="text-[15px] text-ink-2 leading-[1.75]">
+              {isEs
+                ? 'Permite depositar Bitcoin Cash nativo como colateral en un covenant individual BinaryLiquidCollateralVault.cash para pedir prestadas stablecoins (PUSD o USDT) sin vender tu exposición a BCH. La restricción tx.outputs[0].lockingBytecode == borrowerLockingBytecode impide que terceros retiren el colateral hacia otra dirección.'
+                : 'Borrowers deposit native Bitcoin Cash into a per-user BinaryLiquidCollateralVault.cash covenant to borrow stablecoins (PUSD or USDT) without selling BCH exposure. Enforcing tx.outputs[0].lockingBytecode == borrowerLockingBytecode guarantees collateral can only return to the borrower wallet.'}
+            </p>
+
+            <div className="py-4 border-y border-line grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+              <div>
+                <div className="text-ink-3">{isEs ? 'LTV máximo inicial' : 'Max initial LTV'}</div>
+                <div className="text-base font-semibold text-ink tabular-nums mt-0.5">65.0%</div>
+                <div className="text-[11px] text-ink-3 mt-0.5">
+                  {isEs ? 'Crédito máximo respecto al valor del BCH depositado' : 'Maximum borrow ratio against deposited BCH value'}
+                </div>
+              </div>
+              <div>
+                <div className="text-ink-3">{isEs ? 'Umbral de liquidación' : 'Liquidation threshold'}</div>
+                <div className="text-base font-semibold text-amber-500 tabular-nums mt-0.5">80.0%</div>
+                <div className="text-[11px] text-ink-3 mt-0.5">
+                  {isEs ? 'Nivel donde la bóveda entra en liquidación' : 'LTV level where positions become eligible for liquidation'}
+                </div>
+              </div>
+              <div>
+                <div className="text-ink-3">{isEs ? 'Health Factor mínimo' : 'Minimum Health Factor'}</div>
+                <div className="text-base font-semibold text-emerald-500 tabular-nums mt-0.5">HF ≥ 1.15</div>
+                <div className="text-[11px] text-ink-3 mt-0.5">
+                  {isEs ? 'Margen operativo mínimo tras el préstamo o retiro' : 'Minimum operational health factor after borrow/withdraw'}
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* SECTION 5: FEES & ORACLES */}
+          <section id="doc-fees" className="pt-8 scroll-mt-20 space-y-4">
+            <h2 className="text-lg font-semibold text-ink">
+              {isEs ? '5. Modelo de tarifas & oráculos' : '5. Fee model & multi-source oracles'}
+            </h2>
+
+            <p className="text-[15px] text-ink-2 leading-[1.75]">
+              {isEs
+                ? 'Cada intercambio aplica una comisión plana y transparente del 0.30% (30 bps) sobre el volumen operado, sin recargos ocultos por retiro:'
+                : 'Every swap charges a flat, transparent 0.30% (30 bps) fee on traded volume with zero hidden withdrawal surcharges:'}
+            </p>
+
+            <div className="py-3 border-y border-line grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-ink">{isEs ? 'Proveedores de Liquidez (LPs)' : 'Liquidity Providers (LPs)'}</span>
+                  <span className="font-mono font-semibold text-emerald-500 tabular-nums">0.20% (66.7%)</span>
+                </div>
+                <p className="text-ink-3 mt-1 leading-relaxed">
+                  {isEs
+                    ? 'Acreditado en reservas reales para los dueños de LP Shares.'
+                    : 'Accrued directly in real reserve assets for LP Share holders.'}
+                </p>
+              </div>
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-ink">{isEs ? 'Reserva del Protocolo' : 'Protocol Reserve'}</span>
+                  <span className="font-mono font-semibold text-ink tabular-nums">0.10% (33.3%)</span>
+                </div>
+                <p className="text-ink-3 mt-1 leading-relaxed">
+                  {isEs
+                    ? 'Sostenibilidad de infraestructura, auditorías y monitoreo Watchman.'
+                    : 'Sustains network infrastructure, security audits, and Watchman uptime.'}
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-surface-2/50 border border-line rounded-lg p-4 font-mono text-[11.5px] text-ink-2 space-y-1">
+              <div className="text-ink font-semibold">
+                {isEs ? 'Ejemplo (1,000.00 PUSD → USDT):' : 'Example (1,000.00 PUSD → USDT):'}
+              </div>
+              <div>· {isEs ? 'Monto entregado' : 'Input'}: 1,000.00 PUSD</div>
+              <div>· {isEs ? 'Comisión total (0.30%)' : 'Total fee (0.30%)'}: -3.00 USD (2.00 LP + 1.00 Protocolo)</div>
+              <div className="text-ink font-semibold">· {isEs ? 'Neto recibido' : 'Net output'}: 997.00 USDT</div>
+            </div>
+
+            <div className="pl-3 border-l-2 border-line space-y-1">
+              <div className="text-xs font-semibold text-ink">
+                {isEs ? 'Failover de oráculos & OracleAuditor' : 'Cascading oracle failover & OracleAuditor'}
+              </div>
+              <p className="text-xs text-ink-2 leading-relaxed">
+                {isEs
+                  ? 'Para BCH y criptoactivos mayores, el backend consulta Binance, CoinGecko, Coinbase y Kraken con failover secuencial y caché Redis de 15s. LIFT consulta Cauldron DEX Router vía WebSocket en vivo, las stablecoins operan con paridad 1:1 y OracleAuditor bloquea ejecuciones con desviaciones mayores al 1.5%.'
+                  : 'For BCH and major assets, pricing fails over sequentially across Binance, CoinGecko, Coinbase, and Kraken (15s Redis cache). LIFT queries Cauldron DEX Router live via WebSocket, stablecoins settle at 1:1 parity, and OracleAuditor blocks execution if price deviation exceeds 1.5%.'}
+              </p>
+            </div>
+          </section>
+
+          {/* SECTION 6: CONTRACTS & WALLETS */}
+          <section id="doc-contracts" className="pt-8 scroll-mt-20 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-lg font-semibold text-ink">
+                {isEs ? '6. Contratos verificados & billeteras' : '6. Verified contracts & wallets'}
+              </h2>
+              <span className="text-xs font-mono text-ink-3">
+                {platformNetwork === 'mainnet' ? 'Mainnet (PoS / BCH)' : 'Testnet (Chipnet / Amoy)'}
+              </span>
+            </div>
+
+            {platformNetwork === 'mainnet' && (
+              <p className="text-xs text-ink-3 leading-relaxed">
+                {isEs
+                  ? 'Las bóvedas puente en Mainnet están en preparación para despliegue auditado; abajo se listan los contratos oficiales de stablecoins en Polygon PoS:'
+                  : 'Mainnet bridge vaults are scheduled following final audit sign-off; canonical Polygon PoS stablecoin contracts are listed below:'}
+              </p>
+            )}
+
+            <div className="divide-y divide-line border-y border-line">
+              {contractsList.map((item) => (
+                <div key={item.key} className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="font-semibold text-ink">
+                        {isEs ? item.labelEs : item.labelEn}
                       </span>
+                      <span className="text-[11px] text-ink-3">· {item.network}</span>
                     </div>
-                    <a 
-                      href={networks[platformNetwork]?.explorerBch}
+                    <div className="font-mono text-[11px] text-ink-2 break-all mt-0.5 select-all">
+                      {item.value}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => copyAddress(item.key, item.value)}
+                      className="inline-flex items-center gap-1 text-ink-3 hover:text-ink transition-colors cursor-pointer"
+                    >
+                      {copiedKey === item.key ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{copiedKey === item.key ? (isEs ? 'Copiado' : 'Copied') : (isEs ? 'Copiar' : 'Copy')}</span>
+                    </button>
+                    <span className="text-line-strong">·</span>
+                    <a
+                      href={item.explorer}
                       target="_blank"
                       rel="noreferrer"
-                      className="text-primary hover:underline font-semibold flex items-center gap-1"
+                      className="inline-flex items-center gap-1 text-ink-3 hover:text-ink transition-colors"
                     >
                       <span>Explorer</span>
-                      <ExternalLink className="w-3 h-3" />
-                    </a>
-                  </div>
-
-                  <div className="ui-panel p-3 flex items-center justify-between">
-                    <div>
-                      <span className="text-[10px] text-ink-3 font-semibold uppercase block">EVM Layer</span>
-                      <span className="font-bold text-ink flex items-center gap-1.5 mt-0.5">
-                        <span className="w-2 h-2 rounded-full bg-blue-500" />
-                        {platformNetwork === 'mainnet' ? 'Polygon PoS (137)' : 'Polygon Amoy (80002)'}
-                      </span>
-                    </div>
-                    <a 
-                      href={networks[platformNetwork]?.explorerEvm}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-primary hover:underline font-semibold flex items-center gap-1"
-                    >
-                      <span>Explorer</span>
-                      <ExternalLink className="w-3 h-3" />
+                      <ExternalLink className="w-3.5 h-3.5" />
                     </a>
                   </div>
                 </div>
-              </div>
+              ))}
             </div>
-          )}
 
-          {/* TAB 2: ARCHITECTURE */}
-          {activeTab === 'architecture' && (
-            <div className="space-y-6">
-              <div className="ui-card p-6 space-y-4">
-                <div className="flex items-center gap-2">
-                  <ShieldCheck className="w-5 h-5 text-emerald-500" />
-                  <h2 className="text-lg font-bold text-ink">
-                    {isEs ? 'Arquitectura 100% No Custodial & Covenants' : '100% Non-Custodial Architecture & Covenants'}
-                  </h2>
+            <div className="pt-2 space-y-2">
+              <h3 className="text-sm font-semibold text-ink">
+                {isEs ? 'Billeteras Web3 compatibles' : 'Supported Web3 wallets'}
+              </h3>
+              <div className="divide-y divide-line border-y border-line text-xs">
+                <div className="py-2.5 flex items-center justify-between gap-3">
+                  <div>
+                    <span className="font-semibold text-ink">Paytaca Wallet</span>
+                    <span className="text-ink-3 ml-2">· WizardConnect &amp; WalletConnect v2</span>
+                  </div>
+                  <span className="text-ink-3 text-[11px]">
+                    {isEs ? 'CashTokens (PUSD, MUSD, LIFT)' : 'Native CashTokens & covenants'}
+                  </span>
                 </div>
-
-                <p className="text-sm text-ink-2 leading-relaxed">
-                  {isEs ? (
-                    <>
-                      BinaryLiquid <strong>no utiliza billeteras calientes (hot wallets) ni custodia fondos</strong>. Toda la liquidez y las operaciones de los usuarios están resguardadas directamente en <strong>Covenants CashScript P2SH-32</strong> en Bitcoin Cash y <strong>Smart Contracts auditados</strong> en Polygon.
-                    </>
-                  ) : (
-                    <>
-                      BinaryLiquid <strong>does not use hot wallets or custodial fund pools</strong>. All user swaps and liquidity are safeguarded directly by <strong>CashScript P2SH-32 Covenants</strong> on Bitcoin Cash and <strong>audited Smart Contracts</strong> on Polygon.
-                    </>
-                  )}
-                </p>
-
-                {/* Technical Mechanics */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-                  <div className="ui-panel p-4 space-y-2">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-primary">
-                      {isEs ? 'Bitcoin Cash: CashScript Covenants' : 'Bitcoin Cash: CashScript Covenants'}
-                    </span>
-                    <h3 className="font-bold text-sm text-ink">BinaryLiquidEscrow.cash</h3>
-                    <p className="text-xs text-ink-3 leading-relaxed">
-                      {isEs
-                        ? 'Contratos covenants P2SH-32 compilados directamente a bytecode nativo BCH. Solo liberan fondos si se presenta la prueba criptográfica de liquidación o si expira el timelock de reembolso para el usuario.'
-                        : 'P2SH-32 covenants compiled directly to native BCH bytecode. Funds are only unlocked upon cryptographic settlement proof or returned to the user via timelock refund.'}
-                    </p>
+                <div className="py-2.5 flex items-center justify-between gap-3">
+                  <div>
+                    <span className="font-semibold text-ink">Cashonize</span>
+                    <span className="text-ink-3 ml-2">· WalletConnect v2 (wc2-bch-bcr)</span>
                   </div>
-
-                  <div className="ui-panel p-4 space-y-2">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-blue-500">
-                      {isEs ? 'Polygon EVM: Bóveda Inteligente' : 'Polygon EVM: Smart Vault'}
-                    </span>
-                    <h3 className="font-bold text-sm text-ink">BinaryLiquidVault.sol</h3>
-                    <p className="text-xs text-ink-3 leading-relaxed">
-                      {isEs
-                        ? 'Contrato ERC-20 con protección contra reentrancia (ReentrancyGuard). Los depósitos emiten eventos inmutables indexados y solo despachan bajo validación de solvencia descentralizada.'
-                        : 'ERC-20 vault with ReentrancyGuard. Deposits emit immutable on-chain events and execute payouts under decentralized validation.'}
-                    </p>
-                  </div>
+                  <span className="text-ink-3 text-[11px]">
+                    {isEs ? 'Chipnet & BCH Mainnet' : 'Chipnet & BCH Mainnet'}
+                  </span>
                 </div>
-
-                {/* 4-Step Pipeline */}
-                <div className="pt-4 border-t border-line space-y-3">
-                  <div className="text-xs font-bold text-ink uppercase tracking-wider">
-                    {isEs ? 'Flujo de Ejecución Paso a Paso' : 'Step-by-Step Execution Pipeline'}
+                <div className="py-2.5 flex items-center justify-between gap-3">
+                  <div>
+                    <span className="font-semibold text-ink">MetaMask / Rabby</span>
+                    <span className="text-ink-3 ml-2">· EIP-6963</span>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
-                    {[
-                      { step: '1', title: isEs ? 'Cotización Oracle' : 'Oracle Quote', desc: isEs ? 'Cálculo de tipo de cambio y comisión plana de 0.30% en tiempo real.' : 'Real-time price feed and transparent 0.30% fee computation.' },
-                      { step: '2', title: isEs ? 'Firma en Covenant' : 'Covenant Lock', desc: isEs ? 'El usuario firma la transacción bloqueando fondos en el contrato P2SH32.' : 'User signs transaction directly locking tokens in P2SH32 escrow.' },
-                      { step: '3', title: isEs ? 'Validación Relayer' : 'Relayer Proof', desc: isEs ? 'El indexador detecta la confirmación on-chain y valida la categoría.' : 'Relayer detects the on-chain UTXO and validates token categories.' },
-                      { step: '4', title: isEs ? 'Despacho Inmediato' : 'Instant Release', desc: isEs ? 'Tokens liberados al destino en ~3s con timelock de seguridad.' : 'Tokens dispatched to recipient in ~3s with safety timelock.' }
-                    ].map((s) => (
-                      <div key={s.step} className="ui-panel p-3 space-y-1">
-                        <span className="w-5 h-5 rounded-full bg-primary/20 text-primary font-bold text-[11px] flex items-center justify-center">
-                          {s.step}
-                        </span>
-                        <div className="font-bold text-xs text-ink">{s.title}</div>
-                        <p className="text-[11px] text-ink-3 leading-relaxed">{s.desc}</p>
-                      </div>
-                    ))}
-                  </div>
+                  <span className="text-ink-3 text-[11px]">
+                    {isEs ? 'Polygon PoS & Polygon Amoy' : 'Polygon PoS & Polygon Amoy'}
+                  </span>
                 </div>
               </div>
             </div>
-          )}
-
-          {/* TAB 3: LIQUIDITY POOLS */}
-          {activeTab === 'pools' && (
-            <div className="space-y-6">
-              <div className="ui-card p-6 space-y-4">
-                <div className="flex items-center gap-2">
-                  <Droplets className="w-5 h-5 text-cyan-500" />
-                  <h2 className="text-lg font-bold text-ink">
-                    {isEs ? 'Pools de Liquidez & Rendimiento Real' : 'Liquidity Pools & Real Yield'}
-                  </h2>
-                </div>
-
-                <p className="text-sm text-ink-2 leading-relaxed">
-                  {isEs ? (
-                    <>
-                      Los Proveedores de Liquidez (LPs) suministran reservas a los contratos sin intermediarios. Por cada swap realizado en la plataforma, <strong>el 0.20% del volumen se transfiere automáticamente a los pools</strong>, aumentando el valor intrínseco de cada share LP en stablecoins reales (Real Yield).
-                    </>
-                  ) : (
-                    <>
-                      Liquidity Providers (LPs) supply reserves to smart contracts without intermediaries. On every swap, <strong>0.20% of trading volume is credited directly to the pool reserves</strong>, boosting LP share value in real stablecoins (Real Yield).
-                    </>
-                  )}
-                </p>
-
-                {/* Pool Status Table */}
-                <div className="space-y-2 pt-2">
-                  <div className="text-xs font-bold text-ink uppercase tracking-wider">
-                    {isEs ? 'Pares Oficiales del Protocolo' : 'Protocol Canonical Pairs'}
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {[
-                      { pair: 'PUSD / USDT', type: isEs ? 'CashTokens ⟷ Polygon PoS' : 'CashTokens ⟷ Polygon PoS', apy: '6.8%', status: 'ACTIVE', tag: 'BLAZE Track' },
-                      { pair: 'PUSD / USDC', type: isEs ? 'CashTokens ⟷ Polygon PoS' : 'CashTokens ⟷ Polygon PoS', apy: '7.1%', status: 'ACTIVE', tag: 'Paryon Sponsor' },
-                      { pair: 'BCH / USDC', type: isEs ? 'Bitcoin Cash ⟷ USD Coin' : 'Bitcoin Cash ⟷ USD Coin', apy: '6.4%', status: 'ACTIVE', tag: 'Core BCH' },
-                      { pair: 'BCH / PUSD', type: isEs ? 'UTXO Native AMM' : 'UTXO Native AMM', apy: '8.2%', status: 'ACTIVE', tag: 'Native AMM' },
-                    ].map((p, i) => (
-                      <div key={i} className="ui-panel p-3.5 flex items-center justify-between">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-xs text-ink">{p.pair}</span>
-                            <span className="ui-badge-success text-[10px]">{p.status}</span>
-                          </div>
-                          <span className="text-[11px] text-ink-3 block mt-0.5">{p.type}</span>
-                          <span className="text-[10px] font-semibold text-primary">{p.tag}</span>
-                        </div>
-                        <div className="text-right">
-                          <span className="text-[10px] text-ink-3 uppercase block font-semibold">APY Est.</span>
-                          <span className="text-sm font-bold text-emerald-500">{p.apy}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Bootstrapping Mechanism */}
-                <div className="p-4 rounded-xl bg-surface-2 border border-line space-y-1.5">
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-primary" />
-                    <span className="font-bold text-xs text-ink">
-                      {isEs ? 'Mecanismo de Activación Automática (Bootstrapping)' : 'Bootstrapping Auto-Unlock'}
-                    </span>
-                  </div>
-                  <p className="text-xs text-ink-2 leading-relaxed">
-                    {isEs 
-                      ? 'Nuevos pools se lanzan en estado BOOTSTRAPPING con una meta de TVL. La comunidad provee liquidez y, en cuanto se alcanza el 100% de la meta, el smart contract habilita automáticamente los swaps públicos sin intervención de administradores.' 
-                      : 'New pools start in BOOTSTRAPPING phase with a target TVL. The community provides liquidity and the exact moment 100% is reached, public swapping is unlocked automatically with zero admin intervention.'}
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 4: LENDING */}
-          {activeTab === 'lending' && (
-            <div className="space-y-6">
-              <div className="ui-card p-6 space-y-4">
-                <div className="flex items-center gap-2">
-                  <Lock className="w-5 h-5 text-emerald-500" />
-                  <h2 className="text-lg font-bold text-ink">
-                    {isEs ? 'Préstamos & Bóvedas de Colateral BCH' : 'Lending & BCH Collateral Vaults'}
-                  </h2>
-                </div>
-
-                <p className="text-sm text-ink-2 leading-relaxed">
-                  {isEs ? (
-                    <>
-                      El módulo de préstamos permite depositar <strong>Bitcoin Cash nativo</strong> como colateral en un contrato covenant <strong>BinaryLiquidCollateralVault.cash</strong> para pedir prestadas stablecoins <strong>ParyonUSD (PUSD)</strong> manteniendo la soberanía total.
-                    </>
-                  ) : (
-                    <>
-                      The lending module allows depositing <strong>native Bitcoin Cash</strong> as collateral into a <strong>BinaryLiquidCollateralVault.cash</strong> covenant to borrow <strong>ParyonUSD (PUSD)</strong> stablecoins while retaining full sovereign ownership.
-                    </>
-                  )}
-                </p>
-
-                {/* Risk Parameters */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
-                  <div className="ui-panel p-4 space-y-1">
-                    <span className="text-[10px] uppercase font-bold text-ink-3">LTV Máximo</span>
-                    <div className="text-lg font-black text-ink">70.0%</div>
-                    <p className="text-[11px] text-ink-3">
-                      {isEs ? 'Monto máximo de préstamo respecto al valor del BCH depositado.' : 'Maximum borrow amount relative to deposited BCH value.'}
-                    </p>
-                  </div>
-
-                  <div className="ui-panel p-4 space-y-1">
-                    <span className="text-[10px] uppercase font-bold text-ink-3">Umbral Liquidación</span>
-                    <div className="text-lg font-black text-amber-500">80.0%</div>
-                    <p className="text-[11px] text-ink-3">
-                      {isEs ? 'Nivel donde la posición se abre a liquidadores descentralizados.' : 'Threshold where positions become eligible for decentralized liquidation.'}
-                    </p>
-                  </div>
-
-                  <div className="ui-panel p-4 space-y-1">
-                    <span className="text-[10px] uppercase font-bold text-ink-3">Health Factor</span>
-                    <div className="text-lg font-black text-emerald-500">&gt; 1.25</div>
-                    <p className="text-[11px] text-ink-3">
-                      {isEs ? 'Rango seguro de salud para proteger el colateral ante volatilidad.' : 'Safe health buffer safeguarding collateral against market dips.'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 5: FEES & ORACLES */}
-          {activeTab === 'fees' && (
-            <div className="space-y-6">
-              <div className="ui-card p-6 space-y-4">
-                <div className="flex items-center gap-2">
-                  <Activity className="w-5 h-5 text-purple-500" />
-                  <h2 className="text-lg font-bold text-ink">
-                    {isEs ? 'Modelo de Tarifas & Oráculos de Alta Frecuencia' : 'Fee Model & High-Frequency Oracles'}
-                  </h2>
-                </div>
-
-                <p className="text-sm text-ink-2 leading-relaxed">
-                  {isEs ? (
-                    <>
-                      BinaryLiquid cobra una <strong>comisión plana y transparente del 0.30%</strong> sobre el volumen intercambiado. No existen tarifas ocultas ni comisiones por retiro.
-                    </>
-                  ) : (
-                    <>
-                      BinaryLiquid operates a <strong>flat, transparent 0.30% fee</strong> on all swap volume. There are zero hidden fees or withdrawal surcharges.
-                    </>
-                  )}
-                </p>
-
-                {/* Fee Split */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                  <div className="ui-panel p-4 space-y-1.5 border-l-2 border-l-emerald-500">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-ink">{isEs ? 'Proveedores de Liquidez (LPs)' : 'Liquidity Providers'}</span>
-                      <span className="text-sm font-bold text-emerald-500">0.20% (66.7%)</span>
-                    </div>
-                    <p className="text-xs text-ink-3 leading-relaxed">
-                      {isEs 
-                        ? 'Se acredita instantáneamente al balance del pool en cada swap, aumentando el valor de los shares LP sin dilución.' 
-                        : 'Credited instantly to pool reserves on every swap, increasing the book value of LP shares without dilution.'}
-                    </p>
-                  </div>
-
-                  <div className="ui-panel p-4 space-y-1.5 border-l-2 border-l-primary">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-ink">{isEs ? 'Reserva de Liquidez del Protocolo' : 'Protocol Liquidity Reserve'}</span>
-                      <span className="text-sm font-bold text-primary">0.10% (33.3%)</span>
-                    </div>
-                    <p className="text-xs text-ink-3 leading-relaxed">
-                      {isEs 
-                        ? 'Asignado al fondo de reserva para respaldar infraestructura, auditorías continuas y solvencia.' 
-                        : 'Allocated to protocol reserves backing network infrastructure, ongoing audits, and cross-chain solvency.'}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Math Example */}
-                <div className="p-4 rounded-xl bg-surface-2 border border-line space-y-2 text-xs">
-                  <div className="font-bold text-ink flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5 text-primary" />
-                    <span>{isEs ? 'Ejemplo Matemático (Swap de 1,000 PUSD ➔ USDT)' : 'Mathematical Example (1,000 PUSD ➔ USDT Swap)'}</span>
-                  </div>
-                  <div className="font-mono text-[11px] text-ink-2 space-y-0.5">
-                    <div>• {isEs ? 'Monto Vendido' : 'Sell Amount'}: 1,000.00 PUSD</div>
-                    <div>• {isEs ? 'Comisión Total (0.30%)' : 'Total Fee (0.30%)'}: -3.00 USD (2.00 USD LPs + 1.00 USD Reserva)</div>
-                    <div className="font-bold text-primary">• {isEs ? 'Monto Neto Recibido' : 'Net Received'}: 997.00 USDT (Despacho inmediato a la dirección indicada)</div>
-                  </div>
-                </div>
-
-                {/* Multi-Source Oracle Engine */}
-                <div className="ui-panel p-4 space-y-2">
-                  <h3 className="font-bold text-xs text-ink flex items-center gap-1.5">
-                    <Activity className="w-3.5 h-3.5 text-primary" />
-                    <span>{isEs ? 'Motor de Oráculos Multi-Fuente Descentralizado' : 'Decentralized Multi-Source Oracle Engine'}</span>
-                  </h3>
-                  <p className="text-xs text-ink-3 leading-relaxed">
-                    {isEs 
-                      ? 'Para pares con precios fluctuantes (BCH, ETH, SOL, POL), el motor consulta agregadores DEX y fuentes primarias con caché persistente de alta velocidad para asegurar cotizaciones precisas y prevenir manipulaciones de slippage.' 
-                      : 'For volatile assets (BCH, ETH, SOL, POL), our engine aggregates decentralized DEX feeds with high-frequency caching to deliver true market quotes and protect against slippage spikes.'}
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 6: CONTRACTS & WALLETS */}
-          {activeTab === 'contracts' && (
-            <div className="space-y-6">
-              <div className="ui-card p-6 space-y-4">
-                <div className="flex items-center gap-2">
-                  <Code2 className="w-5 h-5 text-primary" />
-                  <h2 className="text-lg font-bold text-ink">
-                    {isEs ? 'Contratos Oficiales & Billeteras Soportadas' : 'Official Contracts & Supported Wallets'}
-                  </h2>
-                </div>
-
-                <p className="text-sm text-ink-2 leading-relaxed">
-                  {isEs ? (
-                    <>
-                      Todos los contratos y covenants son públicos, auditables y verificables en exploradores blockchain:
-                    </>
-                  ) : (
-                    <>
-                      All smart contracts and covenants are public, auditable, and verifiable on-chain:
-                    </>
-                  )}
-                </p>
-
-                {/* Contract Addresses Box */}
-                <div className="space-y-2.5 pt-2">
-                  <div className="text-xs font-bold text-ink uppercase tracking-wider">
-                    {platformNetwork === 'mainnet' ? 'Producción (Mainnet)' : 'Pruebas (Chipnet & Amoy)'}
-                  </div>
-
-                  {platformNetwork === 'testnet' ? (
-                    <div className="space-y-2">
-                      <div className="ui-panel p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                        <div>
-                          <span className="text-[10px] text-ink-3 font-semibold uppercase block">BCH Chipnet Covenant (P2SH-32)</span>
-                          <span className="font-mono text-xs text-ink select-all break-all">
-                            bchtest:pvqse7cr2ptah2e34sl53r5utqwxl28fk84grvf5ufzd6n5tclme2hmkrmd9e
-                          </span>
-                        </div>
-                        <button
-                          onClick={() => copyAddress('bch-cov', 'bchtest:pvqse7cr2ptah2e34sl53r5utqwxl28fk84grvf5ufzd6n5tclme2hmkrmd9e')}
-                          className="ui-btn-secondary ui-btn-sm shrink-0 flex items-center gap-1 self-start sm:self-center"
-                        >
-                          {copiedKey === 'bch-cov' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                          <span>{copiedKey === 'bch-cov' ? (isEs ? 'Copiado' : 'Copied') : (isEs ? 'Copiar' : 'Copy')}</span>
-                        </button>
-                      </div>
-
-                      <div className="ui-panel p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                        <div>
-                          <span className="text-[10px] text-ink-3 font-semibold uppercase block">PUSD CashTokens Category ID</span>
-                          <span className="font-mono text-xs text-ink select-all break-all">
-                            6b6cf8de5963d67594a4565d49a7bcf3e668a18a7328828de16bd393ac00dcad
-                          </span>
-                        </div>
-                        <button
-                          onClick={() => copyAddress('pusd-cat', '6b6cf8de5963d67594a4565d49a7bcf3e668a18a7328828de16bd393ac00dcad')}
-                          className="ui-btn-secondary ui-btn-sm shrink-0 flex items-center gap-1 self-start sm:self-center"
-                        >
-                          {copiedKey === 'pusd-cat' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                          <span>{copiedKey === 'pusd-cat' ? (isEs ? 'Copiado' : 'Copied') : (isEs ? 'Copiar' : 'Copy')}</span>
-                        </button>
-                      </div>
-
-                      <div className="ui-panel p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                        <div>
-                          <span className="text-[10px] text-ink-3 font-semibold uppercase block">Polygon Amoy Vault Contract</span>
-                          <span className="font-mono text-xs text-ink select-all break-all">
-                            0xc830c7cB16cd05bdEd8CA9d0c73E9038ed25Aa4A
-                          </span>
-                        </div>
-                        <button
-                          onClick={() => copyAddress('evm-vault', '0xc830c7cB16cd05bdEd8CA9d0c73E9038ed25Aa4A')}
-                          className="ui-btn-secondary ui-btn-sm shrink-0 flex items-center gap-1 self-start sm:self-center"
-                        >
-                          {copiedKey === 'evm-vault' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                          <span>{copiedKey === 'evm-vault' ? (isEs ? 'Copiado' : 'Copied') : (isEs ? 'Copiar' : 'Copy')}</span>
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      <div className="ui-panel p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                        <div>
-                          <span className="text-[10px] text-ink-3 font-semibold uppercase block">Polygon PoS USDT (ERC-20)</span>
-                          <span className="font-mono text-xs text-ink select-all break-all">
-                            0xc2132D05D31c914a87C6611C10748AEb04B58e8F
-                          </span>
-                        </div>
-                        <button
-                          onClick={() => copyAddress('pos-usdt', '0xc2132D05D31c914a87C6611C10748AEb04B58e8F')}
-                          className="ui-btn-secondary ui-btn-sm shrink-0 flex items-center gap-1 self-start sm:self-center"
-                        >
-                          {copiedKey === 'pos-usdt' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                          <span>{copiedKey === 'pos-usdt' ? (isEs ? 'Copiado' : 'Copied') : (isEs ? 'Copiar' : 'Copy')}</span>
-                        </button>
-                      </div>
-
-                      <div className="ui-panel p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                        <div>
-                          <span className="text-[10px] text-ink-3 font-semibold uppercase block">Polygon PoS USDC (ERC-20)</span>
-                          <span className="font-mono text-xs text-ink select-all break-all">
-                            0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359
-                          </span>
-                        </div>
-                        <button
-                          onClick={() => copyAddress('pos-usdc', '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359')}
-                          className="ui-btn-secondary ui-btn-sm shrink-0 flex items-center gap-1 self-start sm:self-center"
-                        >
-                          {copiedKey === 'pos-usdc' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                          <span>{copiedKey === 'pos-usdc' ? (isEs ? 'Copiado' : 'Copied') : (isEs ? 'Copiar' : 'Copy')}</span>
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Supported Wallets */}
-                <div className="pt-4 border-t border-line space-y-3">
-                  <div className="text-xs font-bold text-ink uppercase tracking-wider">
-                    {isEs ? 'Billeteras Web3 Recomendadas' : 'Recommended Web3 Wallets'}
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="ui-panel p-3.5 flex items-center gap-3">
-                      <img src="/wizardconnect-logo.png" className="w-8 h-8 object-contain rounded-lg" alt="Paytaca" />
-                      <div>
-                        <div className="font-bold text-xs text-ink flex items-center gap-1.5">
-                          <span>Paytaca Wallet</span>
-                          <span className="ui-badge-success text-[10px]">WizardConnect</span>
-                        </div>
-                        <p className="text-[11px] text-ink-3 mt-0.5">
-                          {isEs ? 'Soporte nativo para CashTokens (PUSD, MUSD, LIFT).' : 'Native peer-to-peer support for CashTokens (PUSD, MUSD, LIFT).'}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="ui-panel p-3.5 flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-500 flex items-center justify-center font-bold text-xs">
-                        <Wallet className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <div className="font-bold text-xs text-ink flex items-center gap-1.5">
-                          <span>MetaMask / Rabby</span>
-                          <span className="ui-badge-neutral text-[10px]">EVM Web3</span>
-                        </div>
-                        <p className="text-[11px] text-ink-3 mt-0.5">
-                          {isEs ? 'Soporte directo para Polygon PoS y Polygon Amoy.' : 'Multi-chain support for Polygon PoS and Polygon Amoy.'}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-        </div>
+          </section>
+        </article>
       </div>
+
+      {/* SYMMETRIC RIGHT SPACER ON WIDE SCREENS SO SHEET STAYS DEAD CENTER */}
+      <div className="hidden xl:block" aria-hidden="true" />
     </div>
   );
 }

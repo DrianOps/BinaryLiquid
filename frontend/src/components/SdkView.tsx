@@ -1,46 +1,20 @@
 import React, { useState, useMemo } from 'react';
-import { 
-  Code2, 
-  Copy, 
-  Check, 
-  ExternalLink, 
-  Box, 
-  TrendingUp, 
-  Terminal,
-  AtSign,
-  UserCheck,
-  Zap,
-  Globe,
-  ShieldCheck,
-  ArrowRight,
+import {
   ArrowLeft,
-  Search,
-  Wallet,
-  Smartphone,
-  Sparkles,
-  Layers,
-  CheckCircle2,
-  Cpu,
-  BookOpen,
-  ChevronRight,
-  ChevronDown,
-  Menu,
-  X,
-  FileCode,
-  Hash,
-  Share2,
-  Info,
-  Server,
-  Layers3,
-  ListTree
+  ArrowRight,
+  Check,
+  Copy,
+  ExternalLink
 } from 'lucide-react';
 
 interface SdkViewProps {
   lang?: 'en' | 'es';
   onNavigateToIdentity?: () => void;
+  onBackToSwap?: () => void;
+  showToast?: (msg: string, type?: 'success' | 'error') => void;
 }
 
-type DocPageId = 
+type DocPageId =
   | 'welcome'
   | 'quickstart'
   | 'userlink-overview'
@@ -57,10 +31,10 @@ type DocPageId =
 
 interface DocItem {
   id: DocPageId;
-  title: { en: string; es: string };
   category: { en: string; es: string };
-  badge?: string;
-  icon: any;
+  navLabel: { en: string; es: string };
+  title: { en: string; es: string };
+  subtitle: { en: string; es: string };
 }
 
 const DOC_ITEMS: DocItem[] = [
@@ -68,114 +42,313 @@ const DOC_ITEMS: DocItem[] = [
   {
     id: 'welcome',
     category: { en: 'Getting Started', es: 'Introducción' },
-    title: { en: 'Overview & Architecture', es: 'Visión General & Arquitectura' },
-    icon: Globe
+    navLabel: { en: 'Overview', es: 'Visión general' },
+    title: { en: 'SDK & API Overview', es: 'Visión general de SDK & API' },
+    subtitle: {
+      en: 'Non-custodial cross-chain swap engine, human-readable UserLink resolution, and market indexers.',
+      es: 'Motor de swaps sin custodia, resolución de nombres UserLink y endpoints estándar para indexadores DEX.'
+    }
   },
   {
     id: 'quickstart',
     category: { en: 'Getting Started', es: 'Introducción' },
-    title: { en: 'Quickstart & Installation', es: 'Inicio Rápido & Configuración' },
-    badge: '1-min',
-    icon: Zap
+    navLabel: { en: 'Quickstart', es: 'Inicio rápido' },
+    title: { en: '1-Minute Quickstart', es: 'Inicio rápido en 1 minuto' },
+    subtitle: {
+      en: 'Integrate Bitcoin Cash handle lookups and cross-chain payments using standard HTTP and BIP-21 URIs.',
+      es: 'Integra resolución de nombres Bitcoin Cash y pagos BIP-21 con llamadas HTTP estándar sin dependencias.'
+    }
   },
 
-  // 2. UserLink Protocol (Pagos por Usuario)
+  // 2. UserLink Protocol
   {
     id: 'userlink-overview',
-    category: { en: 'UserLink Protocol (Pay by Handle)', es: 'Protocolo UserLink (Pagos por Usuario)' },
-    title: { en: 'Protocol Standards & NIP-05', es: 'Estándares del Protocolo & NIP-05' },
-    badge: 'BCH Mainnet',
-    icon: AtSign
+    category: { en: 'UserLink Protocol', es: 'Protocolo UserLink' },
+    navLabel: { en: 'NIP-05 Standard', es: 'Estándar NIP-05' },
+    title: { en: 'Protocol Standards & NIP-05', es: 'Estándares UserLink & NIP-05' },
+    subtitle: {
+      en: 'Human-readable handles (@user@bliquid.xyz) backed by BCH ECDSA + Nostr Schnorr dual cryptographic proofs.',
+      es: 'Nombres legibles (@usuario) respaldados por doble firma criptográfica ECDSA (BCH) y Schnorr (Nostr).'
+    }
   },
   {
     id: 'userlink-resolver',
-    category: { en: 'UserLink Protocol (Pay by Handle)', es: 'Protocolo UserLink (Pagos por Usuario)' },
-    title: { en: 'Interactive Live Playground', es: 'Probador Interactivo en Vivo' },
-    badge: 'Playground',
-    icon: Search
+    category: { en: 'UserLink Protocol', es: 'Protocolo UserLink' },
+    navLabel: { en: 'Live Resolver', es: 'Probador en vivo' },
+    title: { en: 'Live Handle Resolver Playground', es: 'Probador interactivo de resolución' },
+    subtitle: {
+      en: 'Query the production NIP-05 endpoint directly to inspect BCH address mappings, pubkeys, and relays.',
+      es: 'Consulta en vivo el endpoint NIP-05 para inspeccionar direcciones BCH resueltas, claves públicas y relays.'
+    }
   },
   {
     id: 'userlink-wallets',
-    category: { en: 'UserLink Protocol (Pay by Handle)', es: 'Protocolo UserLink (Pagos por Usuario)' },
-    title: { en: 'TypeScript / JS (Web3 Wallets)', es: 'TypeScript / JS (Wallets Web3)' },
-    badge: 'Client',
-    icon: Smartphone
+    category: { en: 'UserLink Protocol', es: 'Protocolo UserLink' },
+    navLabel: { en: 'TypeScript / JS', es: 'TypeScript / JS' },
+    title: { en: 'TypeScript & Web3 Wallet Client', es: 'Cliente TypeScript / JS para wallets' },
+    subtitle: {
+      en: 'Zero-dependency helper for Paytaca, Cashonize, Zapit, and web dApps to resolve handles into BCH addresses.',
+      es: 'Función ligera sin dependencias para integrar resolución @handle en billeteras web y móviles Bitcoin Cash.'
+    }
   },
   {
     id: 'userlink-api',
-    category: { en: 'UserLink Protocol (Pay by Handle)', es: 'Protocolo UserLink (Pagos por Usuario)' },
-    title: { en: 'REST API & cURL (Exchanges)', es: 'API REST & cURL (Exchanges)' },
-    badge: 'REST',
-    icon: Server
+    category: { en: 'UserLink Protocol', es: 'Protocolo UserLink' },
+    navLabel: { en: 'REST API & cURL', es: 'API REST & cURL' },
+    title: { en: 'REST API & cURL Reference', es: 'Referencia API REST & cURL' },
+    subtitle: {
+      en: 'Standard GET /.well-known/nostr.json endpoint with CORS enabled for backends and microservices.',
+      es: 'Endpoint público GET /.well-known/nostr.json con soporte CORS para microservicios y pasarelas.'
+    }
   },
   {
     id: 'userlink-python',
-    category: { en: 'UserLink Protocol (Pay by Handle)', es: 'Protocolo UserLink (Pagos por Usuario)' },
-    title: { en: 'Python (Telegram & Discord Bots)', es: 'Python (Bots de Telegram / Discord)' },
-    badge: 'Backend',
-    icon: Terminal
+    category: { en: 'UserLink Protocol', es: 'Protocolo UserLink' },
+    navLabel: { en: 'Python (Bots)', es: 'Python (Bots)' },
+    title: { en: 'Python Integration (Bots & Daemons)', es: 'Integración en Python (Telegram / Discord)' },
+    subtitle: {
+      en: 'Resolve @user handles on the fly in tip bots, automated settlement daemons, or withdrawal scripts.',
+      es: 'Resuelve usuarios @handle al instante en bots de propinas o servicios de pago automatizados.'
+    }
   },
   {
     id: 'userlink-nostr',
-    category: { en: 'UserLink Protocol (Pay by Handle)', es: 'Protocolo UserLink (Pagos por Usuario)' },
-    title: { en: 'Decentralized Nostr Relays (P2P)', es: 'Relays Nostr P2P (Sin Servidor)' },
-    badge: 'Serverless',
-    icon: Layers3
+    category: { en: 'UserLink Protocol', es: 'Protocolo UserLink' },
+    navLabel: { en: 'Nostr P2P Relays', es: 'Relays Nostr P2P' },
+    title: { en: 'Serverless P2P Nostr Resolution', es: 'Resolución descentralizada en relays Nostr' },
+    subtitle: {
+      en: 'Query parameterized replaceable Kind 30078 events directly from public WebSocket relays without DNS.',
+      es: 'Consulta eventos Kind 30078 directamente desde relays públicos Nostr vía WebSocket sin servidores centrales.'
+    }
   },
   {
     id: 'userlink-exchanges',
-    category: { en: 'UserLink Protocol (Pay by Handle)', es: 'Protocolo UserLink (Pagos por Usuario)' },
-    title: { en: 'Exchange Integration Guide', es: 'Guía de Integración para Exchanges' },
-    badge: 'Guide',
-    icon: Cpu
+    category: { en: 'UserLink Protocol', es: 'Protocolo UserLink' },
+    navLabel: { en: 'Exchanges', es: 'Exchanges' },
+    title: { en: 'Exchange Integration Guide', es: 'Guía de integración para exchanges' },
+    subtitle: {
+      en: 'Let users withdraw Bitcoin Cash to @handle identifiers with address verification before broadcast.',
+      es: 'Habilita retiros a identificadores @usuario eliminando errores manuales al copiar direcciones.'
+    }
   },
 
   // 3. Cross-Chain Swap SDK
   {
     id: 'swap-widget',
-    category: { en: 'Cross-Chain Swap SDK', es: 'SDK de Swaps Cross-Chain' },
-    title: { en: 'iFrame Widget Generator', es: 'Generador de Widget iFrame' },
-    badge: 'Widget',
-    icon: Box
+    category: { en: 'Cross-Chain SDK', es: 'SDK Cross-Chain' },
+    navLabel: { en: 'iFrame Widget', es: 'Widget iFrame' },
+    title: { en: 'Embeddable Cross-Chain Swap Widget', es: 'Generador de Widget iFrame' },
+    subtitle: {
+      en: 'Configure and embed BinaryLiquid Swap directly inside any CashToken or DeFi web portal.',
+      es: 'Configura e incrusta la pasarela no custodial directamente en cualquier portal CashToken o Web3.'
+    }
   },
   {
     id: 'swap-api',
-    category: { en: 'Cross-Chain Swap SDK', es: 'SDK de Swaps Cross-Chain' },
-    title: { en: 'Programmatic Swaps API', es: 'API de Swaps Programáticos' },
-    badge: 'Covenants',
-    icon: Code2
+    category: { en: 'Cross-Chain SDK', es: 'SDK Cross-Chain' },
+    navLabel: { en: 'Swap REST API', es: 'API de Swaps' },
+    title: { en: 'Programmatic Covenants & Swap API', es: 'API de Swaps Programáticos' },
+    subtitle: {
+      en: 'Fetch oracle quotes, instantiate deterministic P2SH32 escrows, and poll live swap status via REST.',
+      es: 'Consulta cotizaciones del oráculo, instancia escrows P2SH32 y monitorea órdenes mediante HTTP.'
+    }
   },
 
   // 4. Market Indexers & Oracles
   {
     id: 'coingecko-api',
-    category: { en: 'Market Indexers & Oracles', es: 'Indexadores & Oráculos de Mercado' },
-    title: { en: 'CoinGecko DEX Spec', es: 'Especificación CoinGecko DEX' },
-    badge: 'DEX',
-    icon: TrendingUp
+    category: { en: 'Market Indexers', es: 'Indexadores DEX' },
+    navLabel: { en: 'CoinGecko Spec', es: 'CoinGecko Spec' },
+    title: { en: 'CoinGecko DEX Endpoints', es: 'Endpoints estándar CoinGecko DEX' },
+    subtitle: {
+      en: 'Standard /api/coingecko/* market data routes for aggregators, volume trackers, and orderbook feeds.',
+      es: 'Rutas estándar /api/coingecko/* compatibles con agregadores de liquidez, precios y volumen 24h.'
+    }
   },
   {
     id: 'cmc-api',
-    category: { en: 'Market Indexers & Oracles', es: 'Indexadores & Oráculos de Mercado' },
-    title: { en: 'CoinMarketCap DEX Spec', es: 'Especificación CoinMarketCap' },
-    badge: 'CMC',
-    icon: FileCode
+    category: { en: 'Market Indexers', es: 'Indexadores DEX' },
+    navLabel: { en: 'CoinMarketCap Spec', es: 'CoinMarketCap Spec' },
+    title: { en: 'CoinMarketCap DEX Endpoints', es: 'Endpoints estándar CoinMarketCap DEX' },
+    subtitle: {
+      en: 'Standard /api/cmc/* routes exposing canonical pool summaries, tickers, depth, and settled trades.',
+      es: 'Rutas /api/cmc/* que exponen resumen de pares, precios en vivo, profundidad y trades liquidados.'
+    }
   }
 ];
 
-export const SdkView: React.FC<SdkViewProps> = ({ lang = 'en', onNavigateToIdentity }) => {
+interface CodeBlockProps {
+  title: string;
+  code: string;
+  copyId: string;
+  copiedSection: string | null;
+  onCopy: (text: string, id: string) => void;
+  copyLabel: string;
+  copiedLabel: string;
+}
+
+function CodeBlock({
+  title,
+  code,
+  copyId,
+  copiedSection,
+  onCopy,
+  copyLabel,
+  copiedLabel
+}: CodeBlockProps) {
+  const isCopied = copiedSection === copyId;
+  return (
+    <div className="bg-surface-2/50 border border-line rounded-lg overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-line text-[11px] font-mono text-ink-3">
+        <span>{title}</span>
+        <button
+          type="button"
+          onClick={() => onCopy(code, copyId)}
+          className="inline-flex items-center gap-1 font-sans font-medium text-ink-2 hover:text-ink transition-colors cursor-pointer"
+        >
+          {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+          <span>{isCopied ? copiedLabel : copyLabel}</span>
+        </button>
+      </div>
+      <pre className="p-4 font-mono text-[11.5px] text-ink overflow-x-auto leading-relaxed">
+        <code>{code}</code>
+      </pre>
+    </div>
+  );
+}
+
+const TS_WALLET_CODE = `// UserLink Resolution Standard for BCH Wallets
+export async function resolveUserLink(handle: string): Promise<string> {
+  const clean = handle.replace(/^@/, '').trim();
+  const [user, domain = 'bliquid.xyz'] = clean.split('@');
+
+  // Query NIP-05 endpoint with bch_addresses mapping
+  const res = await fetch(\`https://\${domain}/.well-known/nostr.json?name=\${encodeURIComponent(user)}\`);
+  if (!res.ok) throw new Error(\`Failed to resolve UserLink: HTTP \${res.status}\`);
+
+  const data = await res.json();
+  const address = data.bch_addresses?.[user];
+  if (!address) throw new Error(\`Handle @\${user} is not linked to any Bitcoin Cash address\`);
+
+  return address; // => bitcoincash:qr5zz6098wax242qrz3k7dctsx2kd3vszvywzsefgn
+}
+
+// Launch Universal BIP-21 Payment:
+const recipientAddress = await resolveUserLink('@myuser');
+const normalized = recipientAddress.includes(':') ? recipientAddress : \`bitcoincash:\${recipientAddress}\`;
+window.location.href = \`\${normalized}?amount=0.025&label=@myuser\`;`;
+
+const CURL_SPEC_CODE = `# 1. Execute NIP-05 lookup:
+curl -s "https://bliquid.xyz/.well-known/nostr.json?name=myuser"
+
+# 2. HTTP 200 OK Response:
+{
+  "names": {
+    "myuser": "de69276e520917aa8227ba4ab4460edd64b5dc263e6f475b29f33fad3af81990"
+  },
+  "bch_addresses": {
+    "myuser": "bitcoincash:qr5zz6098wax242qrz3k7dctsx2kd3vszvywzsefgn"
+  },
+  "relays": {
+    "de69276e520917aa8227ba4ab4460edd64b5dc263e6f475b29f33fad3af81990": [
+      "wss://relay.primal.net",
+      "wss://relay.snort.social",
+      "wss://nostr.oxtr.dev",
+      "wss://offchain.pub"
+    ]
+  }
+}`;
+
+const PYTHON_CODE = `import requests
+
+def resolve_userlink(handle: str) -> str:
+    """Resolve @handle into an on-chain Bitcoin Cash address via NIP-05."""
+    clean = handle.lstrip('@').strip()
+    parts = clean.split('@')
+    user = parts[0]
+    domain = parts[1] if len(parts) > 1 else 'bliquid.xyz'
+
+    url = f"https://{domain}/.well-known/nostr.json"
+    res = requests.get(url, params={"name": user}, timeout=4)
+    res.raise_for_status()
+
+    bch_address = res.json().get("bch_addresses", {}).get(user)
+    if not bch_address:
+        raise ValueError(f"Handle @{user} is not linked to any BCH address")
+    return bch_address
+
+if __name__ == "__main__":
+    print(resolve_userlink("@myuser"))
+    # => bitcoincash:qr5zz6098wax242qrz3k7dctsx2kd3vszvywzsefgn`;
+
+const NOSTR_P2P_CODE = `import { SimplePool, verifyEvent } from 'nostr-tools';
+
+const pool = new SimplePool();
+const PUBLIC_RELAYS = [
+  'wss://relay.primal.net',
+  'wss://relay.snort.social',
+  'wss://nostr.oxtr.dev',
+  'wss://offchain.pub'
+];
+
+export async function resolveDecentralized(nostrHexPubkey: string) {
+  const event = await pool.get(PUBLIC_RELAYS, {
+    kinds: [30078],
+    '#d': ['bch-identity-binding'],
+    authors: [nostrHexPubkey]
+  });
+
+  if (!event || !verifyEvent(event)) {
+    throw new Error('Valid UserLink record not found on Nostr relays');
+  }
+
+  const passport = JSON.parse(event.content);
+  const bchSig = event.tags.find((t) => t[0] === 'bch_sig')?.[1] || '';
+  const sigScheme = event.tags.find((t) => t[0] === 'sig_scheme')?.[1] || 'bitcoin-signed-message';
+  return { passport, bchSig, sigScheme };
+}`;
+
+const SWAP_API_CODE = `// 1. Fetch real-time oracle quote (includes 0.30% flat protocol fee)
+const quoteRes = await fetch(
+  'https://bliquid.xyz/api/quote?fromToken=PUSD&toToken=USDT&amount=50&network=testnet'
+).then((r) => r.json());
+
+// 2. Instantiate deterministic P2SH32 escrow covenant (senderAddress derives 24h refund script)
+const order = await fetch('https://bliquid.xyz/api/swap/create', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    fromToken: 'PUSD',
+    toToken: 'USDT',
+    fromChain: 'bch_chipnet',
+    toChain: 'amoy_testnet',
+    amount: 50,
+    senderAddress: 'bchtest:qq...',
+    recipientAddress: '0xYOUR_POLYGON_WALLET'
+  })
+}).then((r) => r.json());
+
+console.log('P2SH32 Escrow:', order.instructions.depositAddress);
+console.log('Order ID:', order.swap.id);
+
+// 3. Poll real-time cross-chain settlement status
+const status = await fetch(\`https://bliquid.xyz/api/swap/\${order.swap.id}\`)
+  .then((r) => r.json());`;
+
+export const SdkView: React.FC<SdkViewProps> = ({
+  lang = 'en',
+  onNavigateToIdentity,
+  onBackToSwap,
+  showToast
+}) => {
   const isEs = lang === 'es';
-  const [activeDocId, setActiveDocId] = useState<DocPageId>('userlink-overview');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [activeDocId, setActiveDocId] = useState<DocPageId>('welcome');
   const [copiedSection, setCopiedSection] = useState<string | null>(null);
 
   // Widget States
   const [embedFrom, setEmbedFrom] = useState('PUSD');
   const [embedTo, setEmbedTo] = useState('USDT');
   const [embedTheme, setEmbedTheme] = useState<'dark' | 'light'>('dark');
-  const [embedWidth, setEmbedWidth] = useState('420');
-  const [embedHeight, setEmbedHeight] = useState('640');
 
   // UserLink Playground States
   const [testHandle, setTestHandle] = useState('myuser');
@@ -196,17 +369,20 @@ export const SdkView: React.FC<SdkViewProps> = ({ lang = 'en', onNavigateToIdent
   });
 
   const origin = typeof window !== 'undefined' ? window.location.origin : 'https://bliquid.xyz';
-  const embedUrl = `${origin}/embed?from=${embedFrom}&to=${embedTo}&theme=${embedTheme}`;
+  const embedUrl = `${origin}/embed?from=${embedFrom}&to=${embedTo}&theme=${embedTheme}&lang=${lang}`;
 
-  const iframeSnippet = `<!-- BinaryLiquid Cross-Chain Stablecoin Bridge Widget -->
+  const iframeSnippet = `<!-- BinaryLiquid Cross-Chain Swap Widget -->
 <iframe
   src="${embedUrl}"
-  width="${embedWidth}"
-  height="${embedHeight}"
-  style="border: none; border-radius: 24px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);"
+  width="420"
+  height="640"
+  style="border: none; border-radius: 24px;"
   title="BinaryLiquid Bridge Swap"
   allow="clipboard-write">
 </iframe>`;
+
+  const copyLabel = isEs ? 'Copiar' : 'Copy';
+  const copiedLabel = isEs ? 'Copiado' : 'Copied';
 
   const copyToClipboard = (text: string, id: string) => {
     try {
@@ -224,7 +400,8 @@ export const SdkView: React.FC<SdkViewProps> = ({ lang = 'en', onNavigateToIdent
       }
     } catch {}
     setCopiedSection(id);
-    setTimeout(() => setCopiedSection(null), 2500);
+    showToast?.(isEs ? 'Copiado al portapapeles' : 'Copied to clipboard', 'success');
+    setTimeout(() => setCopiedSection(null), 2000);
   };
 
   const handleResolveTester = async (e?: React.FormEvent) => {
@@ -291,10 +468,9 @@ export const SdkView: React.FC<SdkViewProps> = ({ lang = 'en', onNavigateToIdent
     }
   };
 
-  // Group items by category
   const categories = useMemo(() => {
     const map = new Map<string, DocItem[]>();
-    DOC_ITEMS.forEach(item => {
+    DOC_ITEMS.forEach((item) => {
       const cat = isEs ? item.category.es : item.category.en;
       if (!map.has(cat)) map.set(cat, []);
       map.get(cat)!.push(item);
@@ -302,1144 +478,741 @@ export const SdkView: React.FC<SdkViewProps> = ({ lang = 'en', onNavigateToIdent
     return Array.from(map.entries());
   }, [isEs]);
 
-  // Filtered items
-  const filteredCategories = useMemo(() => {
-    if (!searchQuery.trim()) return categories;
-    const q = searchQuery.toLowerCase();
-    const result: [string, DocItem[]][] = [];
-    categories.forEach(([cat, items]) => {
-      const filtered = items.filter(it => 
-        (isEs ? it.title.es : it.title.en).toLowerCase().includes(q) ||
-        cat.toLowerCase().includes(q)
-      );
-      if (filtered.length > 0) result.push([cat, filtered]);
-    });
-    return result;
-  }, [categories, searchQuery, isEs]);
-
-  // Current doc item
-  const currentDocIndex = DOC_ITEMS.findIndex(d => d.id === activeDocId);
+  const currentDocIndex = DOC_ITEMS.findIndex((d) => d.id === activeDocId);
   const currentDoc = DOC_ITEMS[currentDocIndex] || DOC_ITEMS[0];
   const prevDoc = currentDocIndex > 0 ? DOC_ITEMS[currentDocIndex - 1] : null;
   const nextDoc = currentDocIndex < DOC_ITEMS.length - 1 ? DOC_ITEMS[currentDocIndex + 1] : null;
+
+  const selectDoc = (id: DocPageId) => {
+    setActiveDocId(id);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   const navigateToIdentity = () => {
     if (onNavigateToIdentity) {
       onNavigateToIdentity();
     } else if (typeof window !== 'undefined') {
-      window.location.hash = '#identity';
+      window.location.href = '/identity';
     }
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto px-2 sm:px-4 py-4 space-y-4">
-      {/* GITBOOK HEADER STRIP */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl bg-white dark:bg-[#121622] border border-gray-200 dark:border-gray-800 shadow-sm">
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
-            className="md:hidden p-2 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:text-primary transition-colors cursor-pointer"
-            title="Menu"
-          >
-            {mobileSidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-          </button>
+    <div className="w-full xl:grid xl:grid-cols-[190px_minmax(0,820px)_190px] xl:justify-center xl:gap-8 items-start">
+      {/* BORDERLESS MARGIN OUTLINE (Wide desktop only — matching Whitepaper) */}
+      <aside className="hidden xl:block sticky top-24 pt-10">
+        <nav aria-label="SDK sections" className="border-l border-line pl-3 space-y-4">
+          {categories.map(([catName, items]) => (
+            <div key={catName} className="space-y-1">
+              <div className="text-[11px] font-semibold text-ink-2 pb-0.5">
+                {catName}
+              </div>
+              {items.map((item) => {
+                const active = activeDocId === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => selectDoc(item.id)}
+                    className={`block w-full text-left py-0.5 text-xs transition-colors cursor-pointer ${
+                      active
+                        ? 'text-ink font-semibold'
+                        : 'text-ink-3 hover:text-ink-2 font-normal'
+                    }`}
+                  >
+                    {isEs ? item.navLabel.es : item.navLabel.en}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </nav>
+      </aside>
+
+      {/* CENTERED DOCUMENT COLUMN */}
+      <div className="w-full max-w-[820px] mx-auto space-y-3">
+        {/* SUBTLE CONTROLS ABOVE THE PAPER */}
+        <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+          {onBackToSwap ? (
+            <button
+              type="button"
+              onClick={onBackToSwap}
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-ink-3 hover:text-ink transition-colors cursor-pointer"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>{isEs ? 'Volver al Swap' : 'Back to Swap'}</span>
+            </button>
+          ) : (
+            <span className="text-xs font-medium text-ink-3">SDK &amp; API</span>
+          )}
+
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold">
-              <BookOpen className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-black text-gray-900 dark:text-white uppercase tracking-wider">
-                  BinaryLiquid Docs
-                </span>
-                <span className="text-[10px] font-mono font-bold bg-primary/10 text-primary px-2 py-0.5 rounded-full border border-primary/20">
-                  v2.4 • Mainnet
-                </span>
-              </div>
-              <p className="text-[11px] text-gray-500 dark:text-gray-400">
-                {isEs ? 'Guía oficial para desarrolladores, wallets y exchanges' : 'Official documentation for developers, wallets & exchanges'}
-              </p>
-            </div>
+            <button
+              type="button"
+              onClick={navigateToIdentity}
+              className="ui-btn-secondary ui-btn-sm"
+            >
+              <span>{isEs ? 'Identidad @handle' : '@handle Identity'}</span>
+            </button>
+
+            <a
+              href="https://github.com/DrianOps/BinaryLiquid"
+              target="_blank"
+              rel="noreferrer"
+              className="ui-btn-secondary ui-btn-sm inline-flex items-center gap-1"
+            >
+              <span>GitHub</span>
+              <ExternalLink className="w-3 h-3" />
+            </a>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={navigateToIdentity}
-            className="px-3 py-1.5 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary border border-primary/25 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+        {/* SINGLE CONTINUOUS SDK & API SHEET */}
+        <article className="bg-surface border border-line rounded-xl shadow-soft px-6 py-8 sm:px-14 sm:py-12 space-y-6">
+          {/* DOCUMENT HEADER */}
+          <header className="pb-6 border-b border-line space-y-2.5">
+            <div className="text-[11px] font-mono text-ink-3">
+              SDK &amp; API · {isEs ? currentDoc.category.es : currentDoc.category.en}
+            </div>
+
+            <h1 className="text-2xl sm:text-[28px] font-semibold tracking-tight text-ink leading-tight">
+              {isEs ? currentDoc.title.es : currentDoc.title.en}
+            </h1>
+
+            <p className="text-sm text-ink-2 leading-relaxed">
+              {isEs ? currentDoc.subtitle.es : currentDoc.subtitle.en}
+            </p>
+          </header>
+
+          {/* COMPACT MOBILE / TABLET JUMP BAR */}
+          <nav
+            aria-label="SDK index"
+            className="xl:hidden pb-3 border-b border-line flex items-center gap-1.5 overflow-x-auto no-scrollbar"
           >
-            <AtSign className="w-3.5 h-3.5" />
-            <span>@myuser ID</span>
-          </button>
-
-          <a
-            href="https://github.com/DrianOps/BinaryLiquid"
-            target="_blank"
-            rel="noreferrer"
-            className="px-3 py-1.5 rounded-xl bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs font-bold transition-all flex items-center gap-1.5"
-          >
-            <Code2 className="w-3.5 h-3.5" />
-            <span>GitHub</span>
-            <ExternalLink className="w-3 h-3 text-gray-400" />
-          </a>
-        </div>
-      </div>
-
-      {/* GITBOOK 2-COLUMN MAIN BODY */}
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
-        {/* LEFT GITBOOK SIDEBAR */}
-        <aside
-          className={`md:col-span-4 lg:col-span-3 rounded-2xl bg-white dark:bg-[#121622] border border-gray-200 dark:border-gray-800 p-4 space-y-4 transition-all ${
-            mobileSidebarOpen ? 'block' : 'hidden md:block'
-          } sticky top-20`}
-        >
-          {/* Quick Search in docs */}
-          <div className="relative">
-            <Search className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={isEs ? 'Buscar en la documentación...' : 'Search docs...'}
-              className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-gray-50 dark:bg-[#161c28] border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white text-xs font-medium focus:outline-none focus:border-primary"
-            />
-          </div>
-
-          {/* Nav Categories & Tree */}
-          <div className="space-y-4 max-h-[calc(100vh-240px)] overflow-y-auto pr-1">
-            {filteredCategories.map(([categoryName, items]) => (
-              <div key={categoryName} className="space-y-1.5">
-                <h3 className="text-[10px] uppercase font-black tracking-wider text-gray-400 dark:text-gray-500 px-2 flex items-center gap-1.5">
-                  <ListTree className="w-3 h-3" />
-                  <span>{categoryName}</span>
-                </h3>
-
-                <div className="space-y-0.5">
-                  {items.map(item => {
-                    const Icon = item.icon;
-                    const isActive = activeDocId === item.id;
-                    const itemTitle = isEs ? item.title.es : item.title.en;
-
-                    return (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => {
-                          setActiveDocId(item.id);
-                          setMobileSidebarOpen(false);
-                          window.scrollTo({ top: 0, behavior: 'smooth' });
-                        }}
-                        className={`w-full text-left px-2.5 py-2 rounded-xl text-xs font-medium transition-all flex items-center justify-between cursor-pointer ${
-                          isActive
-                            ? 'bg-primary/10 text-primary font-bold border-l-3 border-primary shadow-xs'
-                            : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-[#161c28] hover:text-gray-900 dark:hover:text-white'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2 truncate">
-                          <Icon className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-primary' : 'text-gray-400'}`} />
-                          <span className="truncate">{itemTitle}</span>
-                        </div>
-                        {item.badge && (
-                          <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded-md shrink-0 font-bold ${
-                            isActive 
-                              ? 'bg-primary text-white' 
-                              : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400'
-                          }`}>
-                            {item.badge}
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+            {DOC_ITEMS.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => selectDoc(item.id)}
+                className={`text-[11px] whitespace-nowrap px-2 py-1 rounded-md transition-colors cursor-pointer ${
+                  activeDocId === item.id
+                    ? 'bg-surface-2 text-ink font-semibold'
+                    : 'text-ink-3 hover:text-ink'
+                }`}
+              >
+                {isEs ? item.navLabel.es : item.navLabel.en}
+              </button>
             ))}
-          </div>
-        </aside>
+          </nav>
 
-        {/* RIGHT GITBOOK DOCUMENT CONTENT */}
-        <main className="md:col-span-8 lg:col-span-9 rounded-3xl bg-white dark:bg-[#121622] border border-gray-200 dark:border-gray-800 p-6 sm:p-10 shadow-xl space-y-8 min-h-[700px]">
-          {/* Breadcrumb Strip */}
-          <div className="flex items-center gap-2 text-xs text-gray-400 border-b border-gray-100 dark:border-gray-800 pb-4">
-            <span className="font-bold text-gray-500 dark:text-gray-400">Docs</span>
-            <ChevronRight className="w-3.5 h-3.5" />
-            <span>{isEs ? currentDoc.category.es : currentDoc.category.en}</span>
-            <ChevronRight className="w-3.5 h-3.5" />
-            <span className="font-bold text-primary">{isEs ? currentDoc.title.es : currentDoc.title.en}</span>
-          </div>
-
-          {/* ========================================================================= */}
-          {/* DOC 1: WELCOME */}
-          {/* ========================================================================= */}
+          {/* =============================================================== */}
+          {/* DOC 1: WELCOME                                                  */}
+          {/* =============================================================== */}
           {activeDocId === 'welcome' && (
             <div className="space-y-6">
-              <div className="space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded-full border border-primary/20">
-                  {isEs ? 'ARQUITECTURA & VISIÓN' : 'ARCHITECTURE & OVERVIEW'}
-                </span>
-                <h1 className="text-2xl sm:text-4xl font-black text-gray-950 dark:text-white">
-                  {isEs ? 'Bienvenido a la Documentación de BinaryLiquid' : 'Welcome to BinaryLiquid Developer Documentation'}
-                </h1>
-                <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
-                  {isEs 
-                    ? 'BinaryLiquid es el primer protocolo de intercambio cross-chain no-custodio y resolución de nombres para Bitcoin Cash (BCH) y redes EVM, combinando Covenants CashScript P2SH32, contratos inteligentes Solidity y el estándar descentralizado UserLink.' 
-                    : 'BinaryLiquid is the premier non-custodial cross-chain exchange and human identity protocol for Bitcoin Cash (BCH) and EVM chains, powered by CashScript P2SH32 covenants, Solidity smart vaults, and the UserLink identity standard.'}
+              <div className="pl-3 border-l-2 border-line space-y-1">
+                <div className="text-xs font-semibold text-ink">
+                  {isEs ? 'Cero custodia y cero llaves privadas centrales' : 'Zero custody and zero central private keys'}
+                </div>
+                <p className="text-xs text-ink-2 leading-relaxed">
+                  {isEs
+                    ? 'Los depósitos se bloquean en covenants P2SH32 con reembolso autónomo tras 24 horas (tx.time >= expiryTimestamp) y resolución NIP-05 verificable.'
+                    : 'All swap funds lock directly into P2SH32 covenants with unilateral 24-hour refund timelocks and verifiable NIP-05 resolution.'}
                 </p>
               </div>
 
-              {/* Callout Info */}
-              <div className="p-4 rounded-2xl bg-blue-500/10 border-l-4 border-blue-500 text-blue-900 dark:text-blue-200 text-xs sm:text-sm space-y-1">
-                <div className="font-bold flex items-center gap-1.5">
-                  <Info className="w-4 h-4 text-blue-500 shrink-0" />
-                  <span>{isEs ? 'Zero Custodia y Cero Llaves Privadas Centrales' : 'Zero Custody & Zero Central Private Keys'}</span>
-                </div>
-                <p className="text-xs text-blue-800 dark:text-blue-300 leading-relaxed">
-                  {isEs 
-                    ? 'Los fondos nunca tocan servidores de terceros. Todas las swaps se resuelven on-chain mediante covenants matemáticos con timelock de reembolso de 24 horas y resolución NIP-05 verificable.' 
-                    : 'Funds never touch third-party servers. All swaps settle on-chain via mathematical covenants with 24-hour refund timelocks and verifiable NIP-05 resolution.'}
-                </p>
-              </div>
-
-              {/* 3 Core Pillars Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
-                <div 
-                  onClick={() => setActiveDocId('userlink-overview')}
-                  className="p-5 rounded-2xl bg-gray-50 dark:bg-[#161c28] border border-gray-200 dark:border-gray-800 space-y-2 hover:border-primary transition-all cursor-pointer group"
-                >
-                  <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold">
-                    <AtSign className="w-5 h-5" />
-                  </div>
-                  <h3 className="font-bold text-gray-900 dark:text-white text-sm group-hover:text-primary transition-colors flex items-center justify-between">
-                    <span>{isEs ? 'Protocolo UserLink' : 'UserLink Protocol'}</span>
-                    <ArrowRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </h3>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
-                    {isEs ? 'Pagos por usuario (@myuser) con resolución NIP-05 y firmas Schnorr.' : 'Human-readable payments (@myuser) with NIP-05 & Schnorr dual proofs.'}
-                  </p>
-                </div>
-
-                <div 
-                  onClick={() => setActiveDocId('swap-widget')}
-                  className="p-5 rounded-2xl bg-gray-50 dark:bg-[#161c28] border border-gray-200 dark:border-gray-800 space-y-2 hover:border-primary transition-all cursor-pointer group"
-                >
-                  <div className="w-10 h-10 rounded-xl bg-orange-500/10 text-orange-500 flex items-center justify-center font-bold">
-                    <Box className="w-5 h-5" />
-                  </div>
-                  <h3 className="font-bold text-gray-900 dark:text-white text-sm group-hover:text-primary transition-colors flex items-center justify-between">
-                    <span>{isEs ? 'Widget Cross-Chain' : 'Cross-Chain Widget'}</span>
-                    <ArrowRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </h3>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
-                    {isEs ? 'Incrusta nuestra pasarela de intercambio en 1 clic en cualquier sitio web.' : 'Embed the cross-chain swap gateway in 1 click into any web project.'}
-                  </p>
-                </div>
-
-                <div 
-                  onClick={() => setActiveDocId('coingecko-api')}
-                  className="p-5 rounded-2xl bg-gray-50 dark:bg-[#161c28] border border-gray-200 dark:border-gray-800 space-y-2 hover:border-primary transition-all cursor-pointer group"
-                >
-                  <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center font-bold">
-                    <TrendingUp className="w-5 h-5" />
-                  </div>
-                  <h3 className="font-bold text-gray-900 dark:text-white text-sm group-hover:text-primary transition-colors flex items-center justify-between">
-                    <span>{isEs ? 'APIs de Mercado' : 'Market Data APIs'}</span>
-                    <ArrowRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </h3>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
-                    {isEs ? 'Endpoints estándar compatibles con CoinGecko y CoinMarketCap.' : 'Standard compliant endpoints for CoinGecko & CoinMarketCap indexers.'}
-                  </p>
-                </div>
+              <div className="divide-y divide-line border-y border-line">
+                {[
+                  {
+                    id: 'userlink-overview' as DocPageId,
+                    title: isEs ? 'Protocolo UserLink (@handle)' : 'UserLink Protocol (@handle)',
+                    desc: isEs
+                      ? 'Pagos por identificador humano con resolución NIP-05 y firmas ECDSA + Schnorr.'
+                      : 'Human-readable BCH payments backed by NIP-05 lookups and dual BCH + Nostr proofs.'
+                  },
+                  {
+                    id: 'swap-widget' as DocPageId,
+                    title: isEs ? 'Widget iFrame cross-chain (/embed)' : 'Cross-Chain iFrame Widget (/embed)',
+                    desc: isEs
+                      ? 'Incrusta el widget de swaps en cualquier web con par inicial y tema configurables.'
+                      : 'Embed the non-custodial swap flow into any site with configurable pairs and theme.'
+                  },
+                  {
+                    id: 'swap-api' as DocPageId,
+                    title: isEs ? 'API REST de Covenants (/api/swap/*)' : 'Covenant Swap REST API (/api/swap/*)',
+                    desc: isEs
+                      ? 'Consulta cotizaciones del oráculo e instancia escrows P2SH32 programáticamente.'
+                      : 'Fetch oracle quotes and instantiate per-order P2SH32 escrows via REST.'
+                  },
+                  {
+                    id: 'coingecko-api' as DocPageId,
+                    title: isEs ? 'Endpoints DEX CoinGecko & CoinMarketCap' : 'CoinGecko & CoinMarketCap DEX Specs',
+                    desc: isEs
+                      ? 'Rutas estándar para indexación de pares, profundidad y volumen 24h.'
+                      : 'Spec-compliant market ticker, orderbook depth, and trade history routes.'
+                  }
+                ].map((mod) => (
+                  <button
+                    key={mod.id}
+                    type="button"
+                    onClick={() => selectDoc(mod.id)}
+                    className="w-full py-3.5 flex items-center justify-between gap-4 text-left hover:opacity-80 transition-opacity cursor-pointer group"
+                  >
+                    <div>
+                      <div className="text-sm font-semibold text-ink group-hover:text-primary transition-colors">
+                        {mod.title}
+                      </div>
+                      <p className="text-xs text-ink-2 mt-0.5">{mod.desc}</p>
+                    </div>
+                    <ArrowRight className="w-4 h-4 text-ink-3 shrink-0 group-hover:text-ink transition-colors" />
+                  </button>
+                ))}
               </div>
             </div>
           )}
 
-          {/* ========================================================================= */}
-          {/* DOC 2: QUICKSTART */}
-          {/* ========================================================================= */}
+          {/* =============================================================== */}
+          {/* DOC 2: QUICKSTART                                               */}
+          {/* =============================================================== */}
           {activeDocId === 'quickstart' && (
             <div className="space-y-6">
-              <div className="space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded-full border border-primary/20">
-                  {isEs ? 'INICIO RÁPIDO' : 'QUICKSTART'}
-                </span>
-                <h1 className="text-2xl sm:text-4xl font-black text-gray-950 dark:text-white">
-                  {isEs ? 'Inicio Rápido en 1 Minuto' : '1-Minute Quickstart'}
-                </h1>
-                <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
-                  {isEs 
-                    ? 'Integra resolución de nombres y swaps de Bitcoin Cash con librerías nativas o llamadas HTTP simples sin dependencias pesadas.' 
-                    : 'Integrate Bitcoin Cash username resolution and cross-chain swaps with native libraries or lightweight HTTP calls.'}
-                </p>
+              <div className="space-y-2.5">
+                <h2 className="text-sm font-semibold text-ink">
+                  {isEs ? '1. Resolver un identificador @handle a dirección BCH' : '1. Resolve a @handle to a Bitcoin Cash address'}
+                </h2>
+                <CodeBlock
+                  title="bash (cURL)"
+                  code={`curl -s "https://bliquid.xyz/.well-known/nostr.json?name=myuser" | jq`}
+                  copyId="qs-curl"
+                  copiedSection={copiedSection}
+                  onCopy={copyToClipboard}
+                  copyLabel={copyLabel}
+                  copiedLabel={copiedLabel}
+                />
               </div>
 
-              {/* Step 1 */}
-              <div className="space-y-3">
-                <h3 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                  <span className="w-6 h-6 rounded-full bg-primary text-white text-xs flex items-center justify-center font-bold">1</span>
-                  <span>{isEs ? 'Resolver un usuario a dirección BCH' : 'Resolve a username to a BCH address'}</span>
-                </h3>
-                <div className="relative">
-                  <div className="flex items-center justify-between px-4 py-2 bg-gray-900 text-gray-400 text-xs font-mono rounded-t-xl border border-b-0 border-gray-800">
-                    <span>bash (cURL)</span>
-                    <button
-                      type="button"
-                      onClick={() => copyToClipboard('curl -s "https://bliquid.xyz/.well-known/nostr.json?name=myuser" | jq', 'qs-curl')}
-                      className="text-primary hover:underline font-sans cursor-pointer flex items-center gap-1"
-                    >
-                      {copiedSection === 'qs-curl' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                      <span>{copiedSection === 'qs-curl' ? 'Copiado' : 'Copiar'}</span>
-                    </button>
-                  </div>
-                  <pre className="p-4 rounded-b-xl bg-gray-950 text-gray-200 font-mono text-xs overflow-x-auto border border-gray-800">
-                    <code>{`curl -s "https://bliquid.xyz/.well-known/nostr.json?name=myuser" | jq`}</code>
-                  </pre>
-                </div>
-              </div>
-
-              {/* Step 2 */}
-              <div className="space-y-3">
-                <h3 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                  <span className="w-6 h-6 rounded-full bg-primary text-white text-xs flex items-center justify-center font-bold">2</span>
-                  <span>{isEs ? 'Disparar pago en wallet instalada (Paytaca / Zapit / Cashonize)' : 'Trigger payment in installed wallet (Paytaca / Zapit / Cashonize)'}</span>
-                </h3>
-                <pre className="p-4 rounded-xl bg-gray-950 text-gray-200 font-mono text-xs overflow-x-auto border border-gray-800">
-                  <code>{`// Universal BIP-21 Deep Link standard supported by all BCH wallets:
-window.location.href = "bitcoincash:qr5zz6098wax242qrz3k7dctsx2kd3vszvywzsefgn?amount=0.015&label=@myuser";`}</code>
-                </pre>
+              <div className="space-y-2.5">
+                <h2 className="text-sm font-semibold text-ink">
+                  {isEs ? '2. Lanzar enlace de pago BIP-21 en la billetera instalada' : '2. Launch universal BIP-21 payment URI'}
+                </h2>
+                <CodeBlock
+                  title="bip21.ts"
+                  code={`// Universal BIP-21 Deep Link supported by Paytaca, Cashonize & Zapit:
+window.location.href = "bitcoincash:qr5zz6098wax242qrz3k7dctsx2kd3vszvywzsefgn?amount=0.015&label=@myuser";`}
+                  copyId="qs-bip21"
+                  copiedSection={copiedSection}
+                  onCopy={copyToClipboard}
+                  copyLabel={copyLabel}
+                  copiedLabel={copiedLabel}
+                />
               </div>
             </div>
           )}
 
-          {/* ========================================================================= */}
-          {/* DOC 3: USERLINK OVERVIEW */}
-          {/* ========================================================================= */}
+          {/* =============================================================== */}
+          {/* DOC 3: USERLINK OVERVIEW                                        */}
+          {/* =============================================================== */}
           {activeDocId === 'userlink-overview' && (
             <div className="space-y-6">
-              <div className="space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded-full border border-primary/20">
-                  {isEs ? 'PROTOCOLO USERLINK • BCH + NOSTR' : 'USERLINK PROTOCOL • BCH + NOSTR'}
-                </span>
-                <h1 className="text-2xl sm:text-4xl font-black text-gray-950 dark:text-white">
-                  {isEs ? 'Estándares del Protocolo & Resolución NIP-05' : 'Protocol Standards & NIP-05 Resolution'}
-                </h1>
-                <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
-                  {isEs 
-                    ? 'UserLink resuelve el mayor dolor de cabeza de las criptomonedas: sustituye direcciones crípticas de 42 caracteres por nombres humanos (@myuser o myuser@bliquid.xyz) con doble prueba criptográfica verificable.' 
-                    : 'UserLink eliminates the friction of crypto by replacing cryptic 42-character alphanumeric addresses with human-readable handles (@myuser or myuser@bliquid.xyz) backed by cryptographic proof.'}
-                </p>
-              </div>
-
-              {/* Callout Warning */}
-              <div className="p-4 rounded-2xl bg-amber-500/10 border-l-4 border-amber-500 text-amber-900 dark:text-amber-200 text-xs sm:text-sm space-y-1">
-                <div className="font-bold flex items-center gap-1.5">
-                  <ShieldCheck className="w-4 h-4 text-amber-500 shrink-0" />
-                  <span>{isEs ? 'Doble Firma Criptográfica Incorruptible' : 'Tamper-Proof Dual Cryptography'}</span>
+              <div className="pl-3 border-l-2 border-line space-y-1">
+                <div className="text-xs font-semibold text-ink">
+                  {isEs ? 'Doble firma criptográfica verificable' : 'Tamper-proof dual cryptographic binding'}
                 </div>
-                <p className="text-xs text-amber-800 dark:text-amber-300 leading-relaxed">
-                  {isEs 
-                    ? 'Cada usuario enlaza su dirección BCH mediante una firma ECDSA de su llave privada Bitcoin Cash y una firma Schnorr de su llave Nostr. Es imposible que un servidor o tercero suplante la identidad.' 
-                    : 'Each handle links a BCH address signed with the user’s BCH ECDSA private key and Nostr Schnorr private key. No third-party or server can spoof or alter the mapping.'}
+                <p className="text-xs text-ink-2 leading-relaxed">
+                  {isEs
+                    ? 'Cada usuario enlaza su dirección BCH mediante firma ECDSA/BSM de su billetera Bitcoin Cash y firma Schnorr de su clave Nostr. Ningún servidor intermediario puede alterar el mapeo sin invalidar la prueba.'
+                    : 'Each binding attaches both a Bitcoin Cash BSM signature and a Nostr Schnorr event signature. No third party can alter the target address without failing verification.'}
                 </p>
               </div>
 
-              {/* Standards Specs Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="p-4 rounded-2xl bg-gray-50 dark:bg-[#161c28] border border-gray-200 dark:border-gray-800 space-y-2">
-                  <div className="flex items-center gap-2 text-primary font-bold text-xs uppercase tracking-wide">
-                    <Globe className="w-4 h-4" />
-                    <span>NIP-05 DNS Endpoint</span>
-                  </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
-                    {isEs 
-                      ? 'Endpoint estándar HTTPS alojado en /.well-known/nostr.json con soporte CORS universal y caché CDN de 40ms.' 
-                      : 'Standard HTTPS endpoint hosted at /.well-known/nostr.json with universal CORS and 40ms CDN caching.'}
+              <div className="py-4 border-y border-line grid grid-cols-1 sm:grid-cols-2 gap-6 text-xs">
+                <div className="space-y-1">
+                  <div className="font-semibold text-ink">NIP-05 HTTP Lookup</div>
+                  <p className="text-ink-2 leading-relaxed">
+                    {isEs
+                      ? 'Endpoint JSON estándar en /.well-known/nostr.json con soporte CORS universal para wallets y exchanges.'
+                      : 'Standard HTTPS JSON mapping at /.well-known/nostr.json with universal CORS headers.'}
                   </p>
                 </div>
 
-                <div className="p-4 rounded-2xl bg-gray-50 dark:bg-[#161c28] border border-gray-200 dark:border-gray-800 space-y-2">
-                  <div className="flex items-center gap-2 text-primary font-bold text-xs uppercase tracking-wide">
-                    <Layers3 className="w-4 h-4" />
-                    <span>Nostr Kind 30078</span>
-                  </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
-                    {isEs 
-                      ? 'Registro reemplazable parametrizado publicado en relays públicos globales (relay.primal.net, relay.snort.social, nostr.oxtr.dev, offchain.pub) 100% descentralizado.' 
-                      : 'Parameterized replaceable event published to global public relays (relay.primal.net, relay.snort.social, nostr.oxtr.dev, offchain.pub) for 100% serverless P2P lookup.'}
+                <div className="space-y-1">
+                  <div className="font-semibold text-ink">Nostr Kind 30078 (d-tag: bch-identity-binding)</div>
+                  <p className="text-ink-2 leading-relaxed">
+                    {isEs
+                      ? 'Evento reemplazable parametrizado en relays públicos globales (Primal, Snort, Oxtr, Offchain) para resolución P2P sin DNS.'
+                      : 'Parameterized replaceable event stored across public WebSocket relays (Primal, Snort, Oxtr, Offchain) for serverless lookup.'}
                   </p>
                 </div>
               </div>
 
-              {/* Next Step CTA */}
-              <div className="flex justify-between items-center pt-4 border-t border-gray-100 dark:border-gray-800">
+              <div>
                 <button
                   type="button"
-                  onClick={() => setActiveDocId('userlink-resolver')}
-                  className="px-4 py-2 rounded-xl bg-primary hover:bg-orange-600 text-white font-bold text-xs shadow-md shadow-primary/20 flex items-center gap-2 cursor-pointer ml-auto"
+                  onClick={() => selectDoc('userlink-resolver')}
+                  className="ui-btn-primary ui-btn-sm inline-flex items-center gap-1.5"
                 >
-                  <span>{isEs ? 'Probar en el Playground' : 'Test in Live Playground'}</span>
+                  <span>{isEs ? 'Probar en el Playground' : 'Open Live Playground'}</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </button>
               </div>
             </div>
           )}
 
-          {/* ========================================================================= */}
-          {/* DOC 4: USERLINK RESOLVER PLAYGROUND */}
-          {/* ========================================================================= */}
+          {/* =============================================================== */}
+          {/* DOC 4: USERLINK RESOLVER PLAYGROUND                             */}
+          {/* =============================================================== */}
           {activeDocId === 'userlink-resolver' && (
-            <div className="space-y-6">
-              <div className="space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded-full border border-primary/20">
-                  {isEs ? 'PLAYGROUND INTERACTIVO' : 'INTERACTIVE PLAYGROUND'}
-                </span>
-                <h1 className="text-2xl sm:text-4xl font-black text-gray-950 dark:text-white">
-                  {isEs ? 'Probador Interactivo de Resolución' : 'Live Interactive Handle Resolver'}
-                </h1>
-                <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
-                  {isEs 
-                    ? 'Escribe un usuario (@myuser) para consultar en vivo el endpoint NIP-05 y verificar cómo responde la infraestructura en producción.' 
-                    : 'Enter any handle (@myuser) to query the production NIP-05 endpoint live and inspect latency, addresses and keys.'}
-                </p>
-              </div>
+            <div className="space-y-5">
+              <form onSubmit={handleResolveTester} className="flex flex-col sm:flex-row gap-2">
+                <input
+                  type="text"
+                  value={testHandle}
+                  onChange={(e) => setTestHandle(e.target.value)}
+                  placeholder="myuser o myuser@bliquid.xyz"
+                  className="ui-input flex-1 font-mono text-xs"
+                />
+                <button
+                  type="submit"
+                  disabled={isResolving}
+                  className="ui-btn-primary ui-btn-sm shrink-0"
+                >
+                  {isResolving
+                    ? (isEs ? 'Resolviendo...' : 'Resolving...')
+                    : (isEs ? 'Resolver usuario' : 'Resolve handle')}
+                </button>
+              </form>
 
-              {/* INTERACTIVE PLAYGROUND BOX */}
-              <div className="p-6 rounded-2xl bg-gray-50 dark:bg-[#0e121a] border-2 border-primary/30 space-y-5">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <Search className="w-4 h-4 text-primary" />
-                    <span className="text-xs font-bold text-gray-900 dark:text-white">
-                      {isEs ? 'Resolver Handle en Vivo' : 'Live Handle Resolver'}
+              {resolveError ? (
+                <div className="border border-rose-500/30 bg-rose-500/5 rounded-lg p-3.5 font-mono text-xs text-rose-500">
+                  {resolveError}
+                </div>
+              ) : resolveResult ? (
+                <div className="divide-y divide-line border-y border-line text-xs">
+                  <div className="py-3 flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-ink-3">{isEs ? 'Identificador' : 'Handle'}:</span>
+                      <span className="font-mono font-semibold text-ink">@{resolveResult.handle}</span>
+                    </div>
+                    <span className="font-mono text-[11px] text-emerald-500 tabular-nums">
+                      NIP-05 · {resolveResult.latencyMs}ms
                     </span>
                   </div>
-                  <span className={`text-[11px] font-mono font-bold px-2.5 py-1 rounded-full flex items-center gap-1.5 border self-start sm:self-auto ${
-                    resolveError
-                      ? 'text-rose-500 bg-rose-500/10 border-rose-500/20'
-                      : 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20'
-                  }`}>
-                    <span className={`w-2 h-2 rounded-full ${resolveError ? 'bg-rose-500' : 'bg-emerald-500 animate-pulse'}`} />
-                    {resolveError ? (isEs ? 'No encontrado / Error' : 'Lookup Failed') : 'BCH Mainnet NIP-05'}
-                  </span>
-                </div>
 
-                <form onSubmit={handleResolveTester} className="flex flex-col sm:flex-row gap-2">
-                  <div className="relative flex-1">
-                    <AtSign className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="text"
-                      value={testHandle}
-                      onChange={(e) => setTestHandle(e.target.value)}
-                      placeholder="myuser o myuser@bliquid.xyz"
-                      className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-white dark:bg-[#161c28] border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white text-xs font-mono font-bold focus:outline-none focus:border-primary shadow-xs"
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    disabled={isResolving}
-                    className="px-5 py-2.5 rounded-xl bg-primary hover:bg-orange-600 disabled:opacity-50 text-white text-xs font-bold transition-all shadow-md shadow-primary/20 flex items-center justify-center gap-2 cursor-pointer shrink-0"
-                  >
-                    {isResolving ? (
-                      <>
-                        <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        <span>{isEs ? 'Resolviendo...' : 'Resolving...'}</span>
-                      </>
-                    ) : (
-                      <>
-                        <Search className="w-3.5 h-3.5" />
-                        <span>{isEs ? 'Resolver Usuario' : 'Resolve Handle'}</span>
-                      </>
-                    )}
-                  </button>
-                </form>
-
-                {/* Output Card */}
-                {resolveError ? (
-                  <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs font-mono text-rose-500">
-                    {resolveError}
-                  </div>
-                ) : resolveResult && (
-                <div className="p-4 rounded-xl bg-white dark:bg-[#141824] border border-gray-200 dark:border-gray-800 space-y-3 font-mono text-xs">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-gray-100 dark:border-gray-800">
-                    <div className="flex items-center gap-2">
-                      <span className="text-gray-500 font-sans">{isEs ? 'Usuario Solicitado:' : 'Target Handle:'}</span>
-                      <span className="font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-md">
-                        @{resolveResult.handle}
-                      </span>
+                  <div className="py-3 space-y-1">
+                    <div className="text-ink-3 text-[11px]">
+                      {isEs ? 'Dirección BCH resuelta' : 'Resolved BCH address'}
                     </div>
-                    <div className="flex items-center gap-1.5 text-emerald-500 font-bold text-[11px]">
-                      <Zap className="w-3.5 h-3.5" />
-                      <span>{isEs ? 'Latencia:' : 'Latency:'} {resolveResult.latencyMs}ms</span>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <div>
-                      <span className="text-gray-500 font-sans block text-[11px] mb-1">
-                        {isEs ? 'Dirección BCH Mainnet Resuelta:' : 'Resolved BCH Mainnet Address:'}
-                      </span>
-                      <div className="flex items-center justify-between gap-2 p-2.5 rounded-lg bg-gray-50 dark:bg-[#0c0f17] border border-gray-200 dark:border-gray-800">
-                        <span className="text-primary font-bold select-all break-all text-xs">
-                          {resolveResult.bchAddress}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => copyToClipboard(resolveResult.bchAddress, 'play-addr')}
-                          className="p-1 rounded text-gray-400 hover:text-primary shrink-0 cursor-pointer"
-                        >
-                          {copiedSection === 'play-addr' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                        </button>
-                      </div>
-                    </div>
-
-                    <div>
-                      <span className="text-gray-500 font-sans block text-[11px] mb-1">
-                        {isEs ? 'Clave Pública Nostr (Hex):' : 'Nostr Hex Pubkey:'}
-                      </span>
-                      <div className="flex items-center justify-between gap-2 p-2.5 rounded-lg bg-gray-50 dark:bg-[#0c0f17] border border-gray-200 dark:border-gray-800 text-[11px]">
-                        <span className="text-gray-700 dark:text-gray-300 select-all break-all">
-                          {resolveResult.pubkey}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => copyToClipboard(resolveResult.pubkey, 'play-pk')}
-                          className="p-1 rounded text-gray-400 hover:text-primary shrink-0 cursor-pointer"
-                        >
-                          {copiedSection === 'play-pk' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="pt-2 flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-gray-400 font-sans">
-                        <span>{isEs ? 'Relays Activos:' : 'Active Relays:'}</span>
-                        {resolveResult.relays.slice(0, 3).map((r, i) => (
-                          <span key={i} className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-mono">
-                            {r.replace('wss://', '')}
-                          </span>
-                        ))}
-                      </div>
-
-                      <a
-                        href={`${resolveResult.bchAddress.includes(':') ? resolveResult.bchAddress : `bitcoincash:${resolveResult.bchAddress}`}?amount=0.01&label=@${resolveResult.handle}`}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary hover:text-white font-sans text-xs font-bold transition-all border border-primary/20"
-                      >
-                        <Wallet className="w-3.5 h-3.5" />
-                        <span>{isEs ? 'Abrir en Paytaca / Wallet' : 'Open in Paytaca / Wallet'}</span>
-                      </a>
-                    </div>
-                  </div>
-                </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* ========================================================================= */}
-          {/* DOC 5: TYPESCRIPT / JS SDK */}
-          {/* ========================================================================= */}
-          {activeDocId === 'userlink-wallets' && (
-            <div className="space-y-6">
-              <div className="space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded-full border border-primary/20">
-                  {isEs ? 'CLIENTE TYPESCRIPT / JS' : 'TYPESCRIPT / JS CLIENT'}
-                </span>
-                <h1 className="text-2xl sm:text-4xl font-black text-gray-950 dark:text-white">
-                  {isEs ? 'Integración para Wallets Web3 y Móviles' : 'Web3 & Mobile Wallet Integration'}
-                </h1>
-                <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
-                  {isEs 
-                    ? 'Añade resolución de nombres a tu billetera Bitcoin Cash (Paytaca, Zapit, Cashonize o dApp) con esta función simple y libre de dependencias.' 
-                    : 'Add username resolution to your Bitcoin Cash wallet (Paytaca, Zapit, Cashonize, or dApp) with this zero-dependency TypeScript snippet.'}
-                </p>
-              </div>
-
-              <div className="relative">
-                <div className="flex items-center justify-between px-4 py-2 bg-gray-900 text-gray-400 text-xs font-mono rounded-t-xl border border-b-0 border-gray-800">
-                  <span>resolveUserLink.ts</span>
-                  <button
-                    type="button"
-                    onClick={() => copyToClipboard(`// UserLink Resolution Standard for BCH Wallets
-export async function resolveUserLink(handle: string): Promise<string> {
-  const clean = handle.replace(/^@/, '').trim();
-  const [user, domain = 'bliquid.xyz'] = clean.split('@');
-
-  // Query NIP-05 endpoint with bch_addresses mapping
-  const res = await fetch(\`https://\${domain}/.well-known/nostr.json?name=\${user}\`);
-  if (!res.ok) throw new Error(\`Failed to resolve UserLink: HTTP \${res.status}\`);
-
-  const data = await res.json();
-  const address = data.bch_addresses?.[user];
-  if (!address) throw new Error(\`Handle @\${user} is not linked to any Bitcoin Cash address\`);
-
-  return address; // => bitcoincash:qr5zz6098wax242qrz3k7dctsx2kd3vszvywzsefgn
-}
-
-// 2. Launch Universal BIP-21 Payment:
-const recipientAddress = await resolveUserLink('@myuser');
-const normalizedAddr = recipientAddress.includes(':') ? recipientAddress : \`bitcoincash:\${recipientAddress}\`;
-const bip21Uri = \`\${normalizedAddr}?amount=0.025&label=@myuser\`;
-window.location.href = bip21Uri;`, 'ts-code')}
-                    className="text-primary hover:underline font-sans cursor-pointer flex items-center gap-1"
-                  >
-                    {copiedSection === 'ts-code' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{copiedSection === 'ts-code' ? 'Copiado' : 'Copiar Código'}</span>
-                  </button>
-                </div>
-                <pre className="p-4 rounded-b-xl bg-gray-950 text-gray-200 font-mono text-xs overflow-x-auto border border-gray-800 leading-relaxed">
-                  <code>{`// UserLink Resolution Standard for BCH Wallets
-export async function resolveUserLink(handle: string): Promise<string> {
-  const clean = handle.replace(/^@/, '').trim();
-  const [user, domain = 'bliquid.xyz'] = clean.split('@');
-
-  // Query NIP-05 endpoint with bch_addresses mapping
-  const res = await fetch(\`https://\${domain}/.well-known/nostr.json?name=\${user}\`);
-  if (!res.ok) throw new Error(\`Failed to resolve UserLink: HTTP \${res.status}\`);
-
-  const data = await res.json();
-  const address = data.bch_addresses?.[user];
-  if (!address) throw new Error(\`Handle @\${user} is not linked to any Bitcoin Cash address\`);
-
-  return address; // => bitcoincash:qr5zz6098wax242qrz3k7dctsx2kd3vszvywzsefgn
-}
-
-// 2. Launch Universal BIP-21 Payment:
-const recipientAddress = await resolveUserLink('@myuser');
-const normalizedAddr = recipientAddress.includes(':') ? recipientAddress : \`bitcoincash:\${recipientAddress}\`;
-const bip21Uri = \`\${normalizedAddr}?amount=0.025&label=@myuser\`;
-window.location.href = bip21Uri;`}</code>
-                </pre>
-              </div>
-            </div>
-          )}
-
-          {/* ========================================================================= */}
-          {/* DOC 6: REST API & CURL */}
-          {/* ========================================================================= */}
-          {activeDocId === 'userlink-api' && (
-            <div className="space-y-6">
-              <div className="space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded-full border border-primary/20">
-                  {isEs ? 'API REST PÚBLICA' : 'PUBLIC REST API'}
-                </span>
-                <h1 className="text-2xl sm:text-4xl font-black text-gray-950 dark:text-white">
-                  {isEs ? 'Especificación API REST & cURL' : 'REST API & cURL Specification'}
-                </h1>
-                <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
-                  {isEs 
-                    ? 'Endpoint público NIP-05 para resolución por microservicios, bots y exchanges centralizados.' 
-                    : 'Standard public NIP-05 endpoint for microservices, backend bots, and centralized exchanges.'}
-                </p>
-              </div>
-
-              <div className="p-4 rounded-xl bg-gray-50 dark:bg-[#161c28] border border-gray-200 dark:border-gray-800 space-y-2 font-mono text-xs">
-                <div className="flex items-center gap-2">
-                  <span className="px-2 py-0.5 rounded bg-emerald-500 text-white font-bold text-[10px]">GET</span>
-                  <span className="text-gray-900 dark:text-white font-bold">/.well-known/nostr.json?name={'{username}'}</span>
-                </div>
-                <p className="text-gray-500 text-[11px] font-sans">
-                  {isEs ? 'Devuelve el mapeo criptográfico de nombres, direcciones BCH y relays recomendados.' : 'Returns cryptographic mapping of names, BCH addresses, and recommended relays.'}
-                </p>
-              </div>
-
-              {/* cURL Snippet */}
-              <div className="relative">
-                <div className="flex items-center justify-between px-4 py-2 bg-gray-900 text-gray-400 text-xs font-mono rounded-t-xl border border-b-0 border-gray-800">
-                  <span>cURL Command & Response</span>
-                  <button
-                    type="button"
-                    onClick={() => copyToClipboard(`curl -s "https://bliquid.xyz/.well-known/nostr.json?name=myuser" | jq`, 'curl-spec')}
-                    className="text-primary hover:underline font-sans cursor-pointer flex items-center gap-1"
-                  >
-                    {copiedSection === 'curl-spec' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{copiedSection === 'curl-spec' ? 'Copiado' : 'Copiar'}</span>
-                  </button>
-                </div>
-                <pre className="p-4 rounded-b-xl bg-gray-950 text-gray-200 font-mono text-xs overflow-x-auto border border-gray-800 leading-relaxed">
-                  <code>{`# 1. Execute request:
-curl -s "https://bliquid.xyz/.well-known/nostr.json?name=myuser"
-
-# 2. HTTP 200 OK Response:
-{
-  "names": {
-    "myuser": "de69276e520917aa8227ba4ab4460edd64b5dc263e6f475b29f33fad3af81990"
-  },
-  "bch_addresses": {
-    "myuser": "bitcoincash:qr5zz6098wax242qrz3k7dctsx2kd3vszvywzsefgn"
-  },
-  "relays": {
-    "de69276e520917aa8227ba4ab4460edd64b5dc263e6f475b29f33fad3af81990": [
-      "wss://relay.primal.net",
-      "wss://relay.snort.social",
-      "wss://nostr.oxtr.dev",
-      "wss://offchain.pub"
-    ]
-  }
-}`}</code>
-                </pre>
-              </div>
-            </div>
-          )}
-
-          {/* ========================================================================= */}
-          {/* DOC 7: PYTHON */}
-          {/* ========================================================================= */}
-          {activeDocId === 'userlink-python' && (
-            <div className="space-y-6">
-              <div className="space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded-full border border-primary/20">
-                  {isEs ? 'PYTHON PARA BOTS & BACKENDS' : 'PYTHON FOR BOTS & BACKENDS'}
-                </span>
-                <h1 className="text-2xl sm:text-4xl font-black text-gray-950 dark:text-white">
-                  {isEs ? 'Integración en Python (Telegram, Discord & Daemons)' : 'Python Integration (Telegram, Discord & Daemons)'}
-                </h1>
-                <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
-                  {isEs 
-                    ? 'Permite que los usuarios de tu bot envíen propinas en Bitcoin Cash con comandos como `/tip @myuser 5 USD` resolviendo la dirección al instante.' 
-                    : 'Enable your bot users to send Bitcoin Cash tips via commands like `/tip @myuser 5 USD` by resolving handles on the fly.'}
-                </p>
-              </div>
-
-              <div className="relative">
-                <div className="flex items-center justify-between px-4 py-2 bg-gray-900 text-gray-400 text-xs font-mono rounded-t-xl border border-b-0 border-gray-800">
-                  <span>userlink_resolver.py</span>
-                  <button
-                    type="button"
-                    onClick={() => copyToClipboard(`import requests
-
-def resolve_userlink(handle: str) -> str:
-    """
-    Resolves human-readable UserLink handles (@myuser) into on-chain BCH addresses.
-    Use in Telegram bots, Discord tip bots, or exchange withdrawal gateways.
-    """
-    clean = handle.lstrip('@')
-    parts = clean.split('@')
-    user = parts[0]
-    domain = parts[1] if len(parts) > 1 else 'bliquid.xyz'
-    
-    url = f"https://{domain}/.well-known/nostr.json"
-    res = requests.get(url, params={"name": user}, timeout=4)
-    res.raise_for_status()
-    
-    data = res.json()
-    bch_address = data.get("bch_addresses", {}).get(user)
-    if not bch_address:
-        raise ValueError(f"Handle @{user} is not linked to any BCH address")
-        
-    return bch_address
-
-# Usage Example:
-if __name__ == "__main__":
-    bch_dest = resolve_userlink("@myuser")
-    print(f"Target on-chain BCH Address: {bch_dest}")`, 'py-code')}
-                    className="text-primary hover:underline font-sans cursor-pointer flex items-center gap-1"
-                  >
-                    {copiedSection === 'py-code' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{copiedSection === 'py-code' ? 'Copiado' : 'Copiar Código'}</span>
-                  </button>
-                </div>
-                <pre className="p-4 rounded-b-xl bg-gray-950 text-gray-200 font-mono text-xs overflow-x-auto border border-gray-800 leading-relaxed">
-                  <code>{`import requests
-
-def resolve_userlink(handle: str) -> str:
-    """
-    Resolves human-readable UserLink handles (@myuser) into on-chain BCH addresses.
-    Use in Telegram bots, Discord tip bots, or exchange withdrawal gateways.
-    """
-    clean = handle.lstrip('@')
-    parts = clean.split('@')
-    user = parts[0]
-    domain = parts[1] if len(parts) > 1 else 'bliquid.xyz'
-    
-    url = f"https://{domain}/.well-known/nostr.json"
-    res = requests.get(url, params={"name": user}, timeout=4)
-    res.raise_for_status()
-    
-    data = res.json()
-    bch_address = data.get("bch_addresses", {}).get(user)
-    if not bch_address:
-        raise ValueError(f"Handle @{user} is not linked to any BCH address")
-        
-    return bch_address
-
-# Usage Example:
-if __name__ == "__main__":
-    bch_dest = resolve_userlink("@myuser")
-    print(f"Target on-chain BCH Address: {bch_dest}")
-    # => bitcoincash:qr5zz6098wax242qrz3k7dctsx2kd3vszvywzsefgn`}</code>
-                </pre>
-              </div>
-            </div>
-          )}
-
-          {/* ========================================================================= */}
-          {/* DOC 8: NOSTR P2P */}
-          {/* ========================================================================= */}
-          {activeDocId === 'userlink-nostr' && (
-            <div className="space-y-6">
-              <div className="space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded-full border border-primary/20">
-                  {isEs ? 'NOSTR P2P SERVERLESS' : 'NOSTR P2P SERVERLESS'}
-                </span>
-                <h1 className="text-2xl sm:text-4xl font-black text-gray-950 dark:text-white">
-                  {isEs ? 'Resolución Descentralizada P2P en Relays' : 'Decentralized P2P Relay Resolution'}
-                </h1>
-                <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
-                  {isEs 
-                    ? 'Cero servidores centrales. Consulta eventos Kind 30078 directamente en relays globales públicos de Nostr mediante WebSockets.' 
-                    : 'Zero centralized servers. Query Kind 30078 events directly on global public Nostr relays over WebSockets.'}
-                </p>
-              </div>
-
-              <pre className="p-4 rounded-xl bg-gray-950 text-gray-200 font-mono text-xs overflow-x-auto border border-gray-800 leading-relaxed">
-                <code>{`import { SimplePool, verifyEvent } from 'nostr-tools';
-
-const pool = new SimplePool();
-const PUBLIC_RELAYS = [
-  'wss://relay.primal.net',
-  'wss://relay.snort.social',
-  'wss://nostr.oxtr.dev',
-  'wss://offchain.pub'
-];
-
-export async function resolveDecentralized(nostrHexPubkey: string) {
-  // Query Nostr Kind 30078 (Application-specific data with d-tag 'bch-identity-binding')
-  const event = await pool.get(PUBLIC_RELAYS, {
-    kinds: [30078],
-    '#d': ['bch-identity-binding'],
-    authors: [nostrHexPubkey]
-  });
-
-  if (!event || !verifyEvent(event)) {
-    throw new Error('Valid UserLink record not found on Nostr relays');
-  }
-
-  const passport = JSON.parse(event.content);
-  const bchSig = event.tags.find((t) => t[0] === 'bch_sig')?.[1] || '';
-  const sigScheme = event.tags.find((t) => t[0] === 'sig_scheme')?.[1] || 'bitcoin-signed-message';
-  console.log('BCH Address:', passport.bchAddress);
-  console.log('BCH Proof (' + sigScheme + '):', bchSig);
-  return { passport, bchSig, sigScheme };
-}`}</code>
-              </pre>
-            </div>
-          )}
-
-          {/* ========================================================================= */}
-          {/* DOC 9: EXCHANGE INTEGRATION */}
-          {/* ========================================================================= */}
-          {activeDocId === 'userlink-exchanges' && (
-            <div className="space-y-6">
-              <div className="space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded-full border border-primary/20">
-                  {isEs ? 'EXCHANGES & PASARELAS' : 'EXCHANGES & GATEWAYS'}
-                </span>
-                <h1 className="text-2xl sm:text-4xl font-black text-gray-950 dark:text-white">
-                  {isEs ? 'Guía de Integración para Exchanges Centralizados' : 'Centralized Exchange Integration Guide'}
-                </h1>
-                <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
-                  {isEs 
-                    ? 'Cómo permitir que tus clientes retiren fondos escribiendo @myuser en lugar de copiar y pegar una dirección alfanumérica propensa a errores.' 
-                    : 'How to allow your exchange clients to withdraw BCH by entering @myuser instead of copying long error-prone strings.'}
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="p-4 rounded-2xl bg-gray-50 dark:bg-[#161c28] border border-gray-200 dark:border-gray-800 space-y-2">
-                  <div className="flex items-center gap-2 text-primary font-bold text-xs">
-                    <span className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center">1</span>
-                    <span>{isEs ? 'Input del Usuario' : 'User Input'}</span>
-                  </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {isEs ? 'El cliente ingresa @myuser en el campo de retiro de Bitcoin Cash.' : 'User enters @myuser in the Bitcoin Cash withdrawal field.'}
-                  </p>
-                </div>
-
-                <div className="p-4 rounded-2xl bg-gray-50 dark:bg-[#161c28] border border-gray-200 dark:border-gray-800 space-y-2">
-                  <div className="flex items-center gap-2 text-primary font-bold text-xs">
-                    <span className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center">2</span>
-                    <span>{isEs ? 'Resolución Backend' : 'Backend Resolution'}</span>
-                  </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {isEs ? 'Tu backend consulta /.well-known/nostr.json y valida la dirección on-chain.' : 'Your backend queries /.well-known/nostr.json and extracts on-chain address.'}
-                  </p>
-                </div>
-
-                <div className="p-4 rounded-2xl bg-gray-50 dark:bg-[#161c28] border border-gray-200 dark:border-gray-800 space-y-2">
-                  <div className="flex items-center gap-2 text-primary font-bold text-xs">
-                    <span className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center">3</span>
-                    <span>{isEs ? 'Broadcast Seguro' : 'Safe Broadcast'}</span>
-                  </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {isEs ? 'Transmites la transacción BCH a la dirección resuelta con cero riesgo de typos.' : 'Broadcast the BCH tx to the resolved address with zero typo risk.'}
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ========================================================================= */}
-          {/* DOC 10: SWAP WIDGET */}
-          {/* ========================================================================= */}
-          {activeDocId === 'swap-widget' && (
-            <div className="space-y-6">
-              <div className="space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wider text-orange-500 bg-orange-500/10 px-2 py-0.5 rounded-full border border-orange-500/20">
-                  {isEs ? 'GENERADOR DE WIDGET' : 'WIDGET GENERATOR'}
-                </span>
-                <h1 className="text-2xl sm:text-4xl font-black text-gray-950 dark:text-white">
-                  {isEs ? 'Incrusta el Widget Cross-Chain en tu Web' : 'Embed the Cross-Chain Widget into your Web'}
-                </h1>
-                <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
-                  {isEs 
-                    ? 'Permite a los usuarios de tu web intercambiar tokens nativos de Bitcoin Cash (PUSD, MUSD, BCH) con USDT/USDC de Polygon sin salir de tu sitio.' 
-                    : 'Allow your website visitors to swap Bitcoin Cash native tokens (PUSD, MUSD, BCH) with Polygon USDT/USDC directly on your site.'}
-                </p>
-              </div>
-
-              {/* Widget Configurator & Preview */}
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start p-6 rounded-2xl bg-gray-50 dark:bg-[#161c28] border border-gray-200 dark:border-gray-800">
-                <div className="lg:col-span-6 space-y-4">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1">
-                        Token Inicial:
-                      </label>
-                      <select
-                        value={embedFrom}
-                        onChange={(e) => setEmbedFrom(e.target.value)}
-                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#121622] border border-gray-200 dark:border-gray-700 text-xs font-bold"
-                      >
-                        <option value="PUSD">PUSD (BCH CashTokens)</option>
-                        <option value="BCH">BCH (Bitcoin Cash Native)</option>
-                        <option value="USDC">USDC (Polygon PoS)</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1">
-                        Token Destino:
-                      </label>
-                      <select
-                        value={embedTo}
-                        onChange={(e) => setEmbedTo(e.target.value)}
-                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-[#121622] border border-gray-200 dark:border-gray-700 text-xs font-bold"
-                      >
-                        <option value="USDC">USDC (Polygon PoS)</option>
-                        <option value="PUSD">PUSD (BCH CashTokens)</option>
-                        <option value="USDT">USDT (Polygon PoS)</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-gray-700 dark:text-gray-300">
-                        {isEs ? 'Código HTML a incrustar:' : 'HTML Embed Code:'}
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono text-ink font-medium select-all break-all">
+                        {resolveResult.bchAddress}
                       </span>
                       <button
                         type="button"
-                        onClick={() => copyToClipboard(iframeSnippet, 'widget-code')}
-                        className="text-xs text-primary font-bold hover:underline cursor-pointer flex items-center gap-1"
+                        onClick={() => copyToClipboard(resolveResult.bchAddress, 'play-addr')}
+                        className="text-ink-3 hover:text-ink shrink-0 cursor-pointer"
+                        title={copyLabel}
                       >
-                        {copiedSection === 'widget-code' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                        <span>{copiedSection === 'widget-code' ? '¡Copiado!' : 'Copiar'}</span>
+                        {copiedSection === 'play-addr' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
                       </button>
                     </div>
-                    <pre className="p-3 rounded-xl bg-gray-950 text-gray-200 font-mono text-[11px] overflow-x-auto border border-gray-800">
-                      <code>{iframeSnippet}</code>
-                    </pre>
+                  </div>
+
+                  <div className="py-3 space-y-1">
+                    <div className="text-ink-3 text-[11px]">
+                      {isEs ? 'Clave pública Nostr (Hex)' : 'Nostr Hex Pubkey'}
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono text-ink-2 text-[11px] select-all break-all">
+                        {resolveResult.pubkey}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(resolveResult.pubkey, 'play-pk')}
+                        className="text-ink-3 hover:text-ink shrink-0 cursor-pointer"
+                        title={copyLabel}
+                      >
+                        {copiedSection === 'play-pk' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="py-3 flex flex-wrap items-center justify-between gap-3">
+                    <div className="text-[11px] text-ink-3 font-mono">
+                      Relays: {resolveResult.relays.slice(0, 3).map((r) => r.replace('wss://', '')).join(' · ')}
+                    </div>
+                    <a
+                      href={`${resolveResult.bchAddress.includes(':') ? resolveResult.bchAddress : `bitcoincash:${resolveResult.bchAddress}`}?amount=0.01&label=@${resolveResult.handle}`}
+                      className="text-xs font-medium text-ink-2 hover:text-ink underline underline-offset-4"
+                    >
+                      {isEs ? 'Abrir en billetera BIP-21 ↗' : 'Open BIP-21 wallet URI ↗'}
+                    </a>
                   </div>
                 </div>
+              ) : null}
+            </div>
+          )}
 
-                <div className="lg:col-span-6 flex flex-col items-center">
-                  <span className="text-[11px] font-bold text-gray-400 mb-2 flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                    Live Preview
-                  </span>
-                  <div className="w-full max-w-[360px] rounded-2xl overflow-hidden border border-gray-300 dark:border-gray-700 shadow-xl bg-gray-900">
-                    <iframe
-                      src={embedUrl}
-                      width="100%"
-                      height="460"
-                      style={{ border: 'none' }}
-                      title="Preview Widget"
-                    />
-                  </div>
+          {/* =============================================================== */}
+          {/* DOC 5: TYPESCRIPT / JS SDK                                      */}
+          {/* =============================================================== */}
+          {activeDocId === 'userlink-wallets' && (
+            <CodeBlock
+              title="resolveUserLink.ts"
+              code={TS_WALLET_CODE}
+              copyId="ts-code"
+              copiedSection={copiedSection}
+              onCopy={copyToClipboard}
+              copyLabel={copyLabel}
+              copiedLabel={copiedLabel}
+            />
+          )}
+
+          {/* =============================================================== */}
+          {/* DOC 6: REST API & CURL                                          */}
+          {/* =============================================================== */}
+          {activeDocId === 'userlink-api' && (
+            <div className="space-y-4">
+              <div className="py-3 border-y border-line flex flex-wrap items-center justify-between gap-2 text-xs">
+                <div className="font-mono">
+                  <span className="text-emerald-500 font-semibold mr-2">GET</span>
+                  <span className="text-ink font-medium">/.well-known/nostr.json?name=&#123;username&#125;</span>
+                </div>
+                <span className="text-ink-3 text-[11px]">CORS: *</span>
+              </div>
+
+              <CodeBlock
+                title="cURL & JSON Response"
+                code={CURL_SPEC_CODE}
+                copyId="curl-spec"
+                copiedSection={copiedSection}
+                onCopy={copyToClipboard}
+                copyLabel={copyLabel}
+                copiedLabel={copiedLabel}
+              />
+            </div>
+          )}
+
+          {/* =============================================================== */}
+          {/* DOC 7: PYTHON                                                   */}
+          {/* =============================================================== */}
+          {activeDocId === 'userlink-python' && (
+            <CodeBlock
+              title="userlink_resolver.py"
+              code={PYTHON_CODE}
+              copyId="py-code"
+              copiedSection={copiedSection}
+              onCopy={copyToClipboard}
+              copyLabel={copyLabel}
+              copiedLabel={copiedLabel}
+            />
+          )}
+
+          {/* =============================================================== */}
+          {/* DOC 8: NOSTR P2P                                                */}
+          {/* =============================================================== */}
+          {activeDocId === 'userlink-nostr' && (
+            <CodeBlock
+              title="resolveDecentralized.ts"
+              code={NOSTR_P2P_CODE}
+              copyId="nostr-code"
+              copiedSection={copiedSection}
+              onCopy={copyToClipboard}
+              copyLabel={copyLabel}
+              copiedLabel={copiedLabel}
+            />
+          )}
+
+          {/* =============================================================== */}
+          {/* DOC 9: EXCHANGE INTEGRATION                                     */}
+          {/* =============================================================== */}
+          {activeDocId === 'userlink-exchanges' && (
+            <div className="py-4 border-y border-line grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+              <div className="space-y-1">
+                <div className="font-mono text-[11px] text-ink-3">01</div>
+                <div className="font-semibold text-ink">{isEs ? 'Input del usuario' : 'User handle input'}</div>
+                <p className="text-ink-2 leading-relaxed">
+                  {isEs
+                    ? 'El cliente ingresa @myuser en el formulario de retiro BCH en lugar de una dirección CashAddr.'
+                    : 'Client enters @myuser in the Bitcoin Cash withdrawal field instead of a raw address.'}
+                </p>
+              </div>
+              <div className="space-y-1">
+                <div className="font-mono text-[11px] text-ink-3">02</div>
+                <div className="font-semibold text-ink">{isEs ? 'Consulta NIP-05' : 'Backend NIP-05 query'}</div>
+                <p className="text-ink-2 leading-relaxed">
+                  {isEs
+                    ? 'El backend consulta /.well-known/nostr.json?name=... y muestra al usuario la dirección on-chain para confirmar.'
+                    : 'Your backend queries /.well-known/nostr.json and previews the verified BCH address before broadcast.'}
+                </p>
+              </div>
+              <div className="space-y-1">
+                <div className="font-mono text-[11px] text-ink-3">03</div>
+                <div className="font-semibold text-ink">{isEs ? 'Broadcast seguro' : 'On-chain broadcast'}</div>
+                <p className="text-ink-2 leading-relaxed">
+                  {isEs
+                    ? 'Transmites la transacción hacia bch_addresses[user] eliminando riesgo de errores al copiar.'
+                    : 'Broadcast the BCH transaction to bch_addresses[user] with zero copy-paste typos.'}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* =============================================================== */}
+          {/* DOC 10: SWAP WIDGET                                             */}
+          {/* =============================================================== */}
+          {activeDocId === 'swap-widget' && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-ink-2 block mb-1">
+                    {isEs ? 'Token origen' : 'From token'}
+                  </label>
+                  <select
+                    value={embedFrom}
+                    onChange={(e) => setEmbedFrom(e.target.value)}
+                    className="ui-input text-xs"
+                  >
+                    <option value="PUSD">PUSD (CashTokens)</option>
+                    <option value="BCH">BCH (Native)</option>
+                    <option value="USDT">USDT (Polygon)</option>
+                    <option value="USDC">USDC (Polygon)</option>
+                    <option value="LIFT">LIFT (CashTokens)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-medium text-ink-2 block mb-1">
+                    {isEs ? 'Token destino' : 'To token'}
+                  </label>
+                  <select
+                    value={embedTo}
+                    onChange={(e) => setEmbedTo(e.target.value)}
+                    className="ui-input text-xs"
+                  >
+                    <option value="USDT">USDT (Polygon)</option>
+                    <option value="USDC">USDC (Polygon)</option>
+                    <option value="PUSD">PUSD (CashTokens)</option>
+                    <option value="BCH">BCH (Native)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-medium text-ink-2 block mb-1">
+                    {isEs ? 'Tema' : 'Theme'}
+                  </label>
+                  <select
+                    value={embedTheme}
+                    onChange={(e) => setEmbedTheme(e.target.value as 'dark' | 'light')}
+                    className="ui-input text-xs"
+                  >
+                    <option value="dark">{isEs ? 'Oscuro' : 'Dark'}</option>
+                    <option value="light">{isEs ? 'Claro' : 'Light'}</option>
+                  </select>
+                </div>
+              </div>
+
+              <CodeBlock
+                title="embed.html"
+                code={iframeSnippet}
+                copyId="widget-code"
+                copiedSection={copiedSection}
+                onCopy={copyToClipboard}
+                copyLabel={copyLabel}
+                copiedLabel={copiedLabel}
+              />
+
+              <div className="space-y-2 pt-2">
+                <div className="text-xs font-medium text-ink-3 text-center">
+                  {isEs ? 'Vista previa en vivo (/embed)' : 'Live embed preview (/embed)'}
+                </div>
+                <div className="w-full max-w-[420px] mx-auto rounded-panel overflow-hidden border border-line bg-canvas shadow-soft">
+                  <iframe
+                    src={embedUrl}
+                    width="100%"
+                    height="580"
+                    style={{ border: 'none' }}
+                    title="BinaryLiquid Swap Preview"
+                  />
                 </div>
               </div>
             </div>
           )}
 
-          {/* ========================================================================= */}
-          {/* DOC 11: SWAP API */}
-          {/* ========================================================================= */}
+          {/* =============================================================== */}
+          {/* DOC 11: SWAP API                                                */}
+          {/* =============================================================== */}
           {activeDocId === 'swap-api' && (
-            <div className="space-y-6">
-              <div className="space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded-full border border-primary/20">
-                  {isEs ? 'SWAPS PROGRAMÁTICOS' : 'PROGRAMMATIC SWAPS'}
-                </span>
-                <h1 className="text-2xl sm:text-4xl font-black text-gray-950 dark:text-white">
-                  {isEs ? 'Crear Swaps por Código (JavaScript / Python)' : 'Programmatic Swap API (JavaScript / Python)'}
-                </h1>
-                <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
-                  {isEs 
-                    ? 'Consulta cotizaciones de liquidez y crea órdenes de intercambio no-custodias directamente mediante nuestra API REST.' 
-                    : 'Fetch quotes and create non-custodial smart covenant orders directly via our REST API.'}
-                </p>
+            <div className="space-y-4">
+              <div className="divide-y divide-line border-y border-line font-mono text-xs">
+                <div className="py-2.5 flex items-center justify-between gap-2">
+                  <div>
+                    <span className="text-emerald-500 font-semibold mr-2">GET</span>
+                    <span className="text-ink">/api/quote</span>
+                  </div>
+                  <span className="text-ink-3 font-sans text-[11px]">
+                    {isEs ? 'Cotización y comisión 0.30%' : 'Quote & 0.30% fee'}
+                  </span>
+                </div>
+                <div className="py-2.5 flex items-center justify-between gap-2">
+                  <div>
+                    <span className="text-ink font-semibold mr-2">POST</span>
+                    <span className="text-ink">/api/swap/create</span>
+                  </div>
+                  <span className="text-ink-3 font-sans text-[11px]">
+                    {isEs ? 'Instanciar escrow P2SH32' : 'Instantiate P2SH32 escrow'}
+                  </span>
+                </div>
+                <div className="py-2.5 flex items-center justify-between gap-2">
+                  <div>
+                    <span className="text-emerald-500 font-semibold mr-2">GET</span>
+                    <span className="text-ink">/api/swap/:id</span>
+                  </div>
+                  <span className="text-ink-3 font-sans text-[11px]">
+                    {isEs ? 'Estado en vivo de liquidación' : 'Live settlement status'}
+                  </span>
+                </div>
               </div>
 
-              <pre className="p-4 rounded-xl bg-gray-950 text-gray-200 font-mono text-xs overflow-x-auto border border-gray-800 leading-relaxed">
-                <code>{`// 1. Fetch real-time market quote
-const quote = await fetch('https://bliquid.xyz/api/quote?fromToken=PUSD&toToken=USDT&amount=50')
-  .then(r => r.json());
-
-// 2. Instantiate isolated Non-Custodial CashScript Covenant / Smart Contract Vault
-const order = await fetch('https://bliquid.xyz/api/swap/create', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    fromToken: 'PUSD',
-    toToken: 'USDT',
-    fromChain: 'bch_chipnet',
-    toChain: 'amoy_testnet',
-    amount: 50,
-    recipientAddress: '0xTU_WALLET_POLYGON'
-  })
-}).then(r => r.json());
-
-// 3. Result: Zero-Private-Key P2SH32 Covenant / Solidity Vault + 24h Timelock
-console.log('Smart Contract Vault:', order.instructions.depositAddress);
-console.log('Contract Spec:', order.instructions.contractType);`}</code>
-              </pre>
+              <CodeBlock
+                title="swapClient.js"
+                code={SWAP_API_CODE}
+                copyId="swap-api-code"
+                copiedSection={copiedSection}
+                onCopy={copyToClipboard}
+                copyLabel={copyLabel}
+                copiedLabel={copiedLabel}
+              />
             </div>
           )}
 
-          {/* ========================================================================= */}
-          {/* DOC 12: COINGECKO API */}
-          {/* ========================================================================= */}
+          {/* =============================================================== */}
+          {/* DOC 12: COINGECKO API                                           */}
+          {/* =============================================================== */}
           {activeDocId === 'coingecko-api' && (
-            <div className="space-y-6">
-              <div className="space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wider text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
-                  🦎 COINGECKO DEX SPEC
-                </span>
-                <h1 className="text-2xl sm:text-4xl font-black text-gray-950 dark:text-white">
-                  {isEs ? 'Endpoints Estándar para CoinGecko' : 'CoinGecko DEX Endpoints'}
-                </h1>
-                <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
-                  {isEs 
-                    ? 'Endpoints compatibles con la especificación oficial de integración DEX de CoinGecko para agregadores de volumen y bots de arbitraje.' 
-                    : 'Endpoints strictly compliant with the official CoinGecko DEX integration specification.'}
-                </p>
-              </div>
-
-              <div className="space-y-2 font-mono text-xs">
-                {[
-                  { method: 'GET', path: '/api/coingecko/pairs', desc: 'Lista de pares activos (PUSD/USDC, MUSD/USDT)' },
-                  { method: 'GET', path: '/api/coingecko/tickers', desc: 'Precios, volumenes de 24h y profundidad' },
-                  { method: 'GET', path: '/api/coingecko/orderbook?ticker_id=PUSD_USDC', desc: 'Libro de órdenes bids y asks' },
-                  { method: 'GET', path: '/api/coingecko/historical_trades?ticker_id=PUSD_USDC', desc: 'Historial de ejecuciones y swaps' }
-                ].map((ep, idx) => (
-                  <div key={idx} className="p-3 rounded-xl bg-gray-50 dark:bg-[#161c28] border border-gray-200 dark:border-gray-800 flex items-center justify-between">
-                    <div>
-                      <span className="text-emerald-500 font-bold mr-2">{ep.method}</span>
-                      <span className="text-gray-900 dark:text-white font-bold">{ep.path}</span>
-                      <p className="text-gray-400 text-[11px] font-sans mt-0.5">{ep.desc}</p>
+            <div className="divide-y divide-line border-y border-line">
+              {[
+                {
+                  path: '/api/coingecko/pairs',
+                  desc: isEs ? 'Lista de pares activos (PUSD_USDT, PUSD_USDC, BCH_USDT)' : 'Active pool pairs list (PUSD_USDT, PUSD_USDC, BCH_USDT)'
+                },
+                {
+                  path: '/api/coingecko/tickers',
+                  desc: isEs ? 'Último precio, bid/ask, volumen 24h y liquidez USD' : 'Latest prices, bid/ask, 24h volume and USD liquidity'
+                },
+                {
+                  path: '/api/coingecko/orderbook?ticker_id=PUSD_USDT',
+                  desc: isEs ? 'Profundidad de bids y asks por par' : 'Simulated liquidity depth bids and asks per ticker'
+                },
+                {
+                  path: '/api/coingecko/historical_trades?ticker_id=PUSD_USDT',
+                  desc: isEs ? 'Historial de swaps recientes liquidados on-chain' : 'Historical settled cross-chain trades'
+                }
+              ].map((ep) => (
+                <div key={ep.path} className="py-3 flex items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className="font-mono text-xs font-medium text-ink break-all">
+                      <span className="text-emerald-500 mr-2">GET</span>
+                      {ep.path}
                     </div>
-                    <a href={ep.path} target="_blank" rel="noreferrer" className="text-primary hover:text-orange-500 shrink-0">
-                      <ExternalLink className="w-4 h-4" />
-                    </a>
+                    <p className="text-xs text-ink-3 mt-0.5">{ep.desc}</p>
                   </div>
-                ))}
-              </div>
+                  <a
+                    href={ep.path}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-xs text-ink-3 hover:text-ink shrink-0"
+                  >
+                    <span>JSON</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                </div>
+              ))}
             </div>
           )}
 
-          {/* ========================================================================= */}
-          {/* DOC 13: COINMARKETCAP API */}
-          {/* ========================================================================= */}
+          {/* =============================================================== */}
+          {/* DOC 13: COINMARKETCAP API                                       */}
+          {/* =============================================================== */}
           {activeDocId === 'cmc-api' && (
-            <div className="space-y-6">
-              <div className="space-y-2">
-                <span className="text-[11px] font-black uppercase tracking-wider text-blue-500 bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/20">
-                  Ⓜ️ COINMARKETCAP DEX DATA
-                </span>
-                <h1 className="text-2xl sm:text-4xl font-black text-gray-950 dark:text-white">
-                  {isEs ? 'Endpoints para CoinMarketCap' : 'CoinMarketCap DEX Endpoints'}
-                </h1>
-                <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
-                  {isEs 
-                    ? 'Endpoints estructurados bajo la especificación oficial de listado de DEXes de CoinMarketCap.' 
-                    : 'Endpoints structured according to the official CoinMarketCap DEX listing spec.'}
-                </p>
-              </div>
-
-              <div className="space-y-2 font-mono text-xs">
-                {[
-                  { method: 'GET', path: '/api/cmc/summary', desc: 'Resumen consolidado de pares, liquidez y volúmenes 24h' },
-                  { method: 'GET', path: '/api/cmc/ticker', desc: 'Cotizaciones en tiempo real' },
-                  { method: 'GET', path: '/api/cmc/orderbook?pair=PUSD_USDC', desc: 'Profundidad de liquidez P2SH32' },
-                  { method: 'GET', path: '/api/cmc/trades?pair=PUSD_USDC', desc: 'Trades recientes liquidados on-chain' }
-                ].map((ep, idx) => (
-                  <div key={idx} className="p-3 rounded-xl bg-gray-50 dark:bg-[#161c28] border border-gray-200 dark:border-gray-800 flex items-center justify-between">
-                    <div>
-                      <span className="text-blue-500 font-bold mr-2">{ep.method}</span>
-                      <span className="text-gray-900 dark:text-white font-bold">{ep.path}</span>
-                      <p className="text-gray-400 text-[11px] font-sans mt-0.5">{ep.desc}</p>
+            <div className="divide-y divide-line border-y border-line">
+              {[
+                {
+                  path: '/api/cmc/summary',
+                  desc: isEs ? 'Resumen consolidado de pares, liquidez y volúmenes 24h' : 'Consolidated summary of pairs, prices, and 24h volume'
+                },
+                {
+                  path: '/api/cmc/ticker',
+                  desc: isEs ? 'Cotizaciones por par en formato DEX CoinMarketCap' : 'Real-time market tickers following CMC DEX spec'
+                },
+                {
+                  path: '/api/cmc/orderbook?pair=PUSD_USDT',
+                  desc: isEs ? 'Profundidad de liquidez P2SH32 para el par indicado' : 'Orderbook depth snapshot for the specified pair'
+                },
+                {
+                  path: '/api/cmc/trades?pair=PUSD_USDT',
+                  desc: isEs ? 'Trades recientes liquidados on-chain' : 'Recent settled cross-chain trades'
+                }
+              ].map((ep) => (
+                <div key={ep.path} className="py-3 flex items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className="font-mono text-xs font-medium text-ink break-all">
+                      <span className="text-emerald-500 mr-2">GET</span>
+                      {ep.path}
                     </div>
-                    <a href={ep.path} target="_blank" rel="noreferrer" className="text-primary hover:text-orange-500 shrink-0">
-                      <ExternalLink className="w-4 h-4" />
-                    </a>
+                    <p className="text-xs text-ink-3 mt-0.5">{ep.desc}</p>
                   </div>
-                ))}
-              </div>
+                  <a
+                    href={ep.path}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-xs text-ink-3 hover:text-ink shrink-0"
+                  >
+                    <span>JSON</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                </div>
+              ))}
             </div>
           )}
 
-          {/* GITBOOK BOTTOM PAGINATION (ANTERIOR / SIGUIENTE) */}
-          <div className="pt-8 border-t border-gray-100 dark:border-gray-800 flex flex-col sm:flex-row items-center justify-between gap-4">
+          {/* MINIMAL HAIRLINE BOTTOM PAGINATION */}
+          <footer className="pt-6 border-t border-line flex items-center justify-between gap-4 text-xs">
             {prevDoc ? (
               <button
                 type="button"
-                onClick={() => {
-                  setActiveDocId(prevDoc.id);
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}
-                className="w-full sm:w-auto p-3.5 rounded-2xl bg-gray-50 dark:bg-[#161c28] border border-gray-200 dark:border-gray-800 hover:border-primary transition-all text-left cursor-pointer group"
+                onClick={() => selectDoc(prevDoc.id)}
+                className="text-left text-ink-2 hover:text-ink transition-colors cursor-pointer group"
               >
-                <span className="text-[10px] text-gray-400 uppercase font-bold flex items-center gap-1">
-                  <ArrowLeft className="w-3 h-3 group-hover:-translate-x-0.5 transition-transform" />
-                  <span>{isEs ? 'Anterior' : 'Previous'}</span>
+                <span className="text-[11px] text-ink-3 block">
+                  ← {isEs ? 'Anterior' : 'Previous'}
                 </span>
-                <span className="text-xs font-bold text-gray-900 dark:text-white block mt-0.5 group-hover:text-primary transition-colors">
-                  {isEs ? prevDoc.title.es : prevDoc.title.en}
+                <span className="font-medium text-ink group-hover:underline underline-offset-4">
+                  {isEs ? prevDoc.navLabel.es : prevDoc.navLabel.en}
                 </span>
               </button>
-            ) : <div />}
+            ) : (
+              <div />
+            )}
 
             {nextDoc && (
               <button
                 type="button"
-                onClick={() => {
-                  setActiveDocId(nextDoc.id);
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}
-                className="w-full sm:w-auto p-3.5 rounded-2xl bg-gray-50 dark:bg-[#161c28] border border-gray-200 dark:border-gray-800 hover:border-primary transition-all text-right cursor-pointer group sm:ml-auto"
+                onClick={() => selectDoc(nextDoc.id)}
+                className="text-right text-ink-2 hover:text-ink transition-colors cursor-pointer group ml-auto"
               >
-                <span className="text-[10px] text-gray-400 uppercase font-bold flex items-center justify-end gap-1">
-                  <span>{isEs ? 'Siguiente' : 'Next'}</span>
-                  <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+                <span className="text-[11px] text-ink-3 block">
+                  {isEs ? 'Siguiente' : 'Next'} →
                 </span>
-                <span className="text-xs font-bold text-gray-900 dark:text-white block mt-0.5 group-hover:text-primary transition-colors">
-                  {isEs ? nextDoc.title.es : nextDoc.title.en}
+                <span className="font-medium text-ink group-hover:underline underline-offset-4">
+                  {isEs ? nextDoc.navLabel.es : nextDoc.navLabel.en}
                 </span>
               </button>
             )}
-          </div>
-        </main>
+          </footer>
+        </article>
       </div>
+
+      {/* SYMMETRIC RIGHT SPACER ON WIDE SCREENS SO SHEET STAYS DEAD CENTER */}
+      <div className="hidden xl:block" aria-hidden="true" />
     </div>
   );
 };

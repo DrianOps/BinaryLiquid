@@ -335,6 +335,16 @@ function getTokenChainId(symbol: string, isBch: boolean, isTestnet: boolean, isS
   return isTestnet ? 'polygon_amoy' : 'polygon_mainnet';
 }
 
+function resolveTokenFromQuery(paramKey: 'from' | 'to', fallback: TokenInfo): TokenInfo {
+  if (typeof window === 'undefined') return fallback;
+  const raw = new URLSearchParams(window.location.search).get(paramKey)?.trim().toLowerCase();
+  if (!raw) return fallback;
+  return (
+    SUPPORTED_TOKENS.find((tk) => !tk.disabled && (tk.id?.toLowerCase() === raw || tk.symbol.toLowerCase() === raw)) ||
+    fallback
+  );
+}
+
 export default function BridgeSwap({
   userAddress,
   bchAddress = '',
@@ -367,9 +377,9 @@ export default function BridgeSwap({
 
   // Core Mode & Token Pair (Default: PUSD -> Polygon USDT)
   const [activeTab, setActiveTab] = useState<'swap' | 'limit'>('swap');
-  const [sellToken, setSellToken] = useState<TokenInfo>(SUPPORTED_TOKENS[0]); // PUSD
-  const [buyToken, setBuyToken] = useState<TokenInfo>(
-    () => SUPPORTED_TOKENS.find(tk => tk.id === 'usdt_polygon') || SUPPORTED_TOKENS[4]
+  const [sellToken, setSellToken] = useState<TokenInfo>(() => resolveTokenFromQuery('from', SUPPORTED_TOKENS[0])); // PUSD
+  const [buyToken, setBuyToken] = useState<TokenInfo>(() =>
+    resolveTokenFromQuery('to', SUPPORTED_TOKENS.find(tk => tk.id === 'usdt_polygon') || SUPPORTED_TOKENS[4])
   ); // USDT (Polygon)
   const sellMeta = useMemo(() => getTokenChainMeta(sellToken, isTestnet), [sellToken, isTestnet]);
   const buyMeta = useMemo(() => getTokenChainMeta(buyToken, isTestnet), [buyToken, isTestnet]);
