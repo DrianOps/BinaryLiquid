@@ -247,33 +247,103 @@ export async function getWalletConnectProvider(): Promise<InstanceType<typeof Et
   return evmWcInitPromise;
 }
 
+function payloadHasNamespaceSession(raw: unknown, namespace: 'eip155' | 'bch'): boolean {
+  if (!raw) return false;
+  try {
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    const sessions = Array.isArray(parsed)
+      ? parsed
+      : parsed && typeof parsed === 'object'
+      ? Object.values(parsed)
+      : [];
+    return sessions.some((sess: any) => Boolean(sess?.namespaces?.[namespace]?.accounts?.length));
+  } catch {
+    return typeof raw === 'string' && raw.includes(`"${namespace}"`);
+  }
+}
+
 /**
- * Inspects persisted WalletConnect v2 storage entries to check whether a session exists for
- * the specific CAIP-2 namespace (`eip155` vs `bch`) without cross-namespace collisions.
+ * Inspects persisted WalletConnect v2 storage entries (`localStorage` + `WALLET_CONNECT_V2_INDEXED_DB`)
+ * to check whether a session exists for the specific CAIP-2 namespace (`eip155` vs `bch`)
+ * without triggering unnecessary SignClient/EthereumProvider initialization on cold visits.
  */
 function hasLocalWc2NamespaceSession(namespace: 'eip155' | 'bch'): boolean {
   if (typeof window === 'undefined') return false;
   try {
     for (const key of Object.keys(localStorage)) {
       if (!key.startsWith('wc@2:') || !key.includes('session')) continue;
-      const raw = localStorage.getItem(key);
-      if (!raw) continue;
-      try {
-        const parsed = JSON.parse(raw);
-        const sessions = Array.isArray(parsed)
-          ? parsed
-          : parsed && typeof parsed === 'object'
-          ? Object.values(parsed)
-          : [];
-        if (sessions.some((sess: any) => Boolean(sess?.namespaces?.[namespace]?.accounts?.length))) {
-          return true;
-        }
-      } catch {
-        if (raw.includes(`"${namespace}"`)) return true;
+      if (payloadHasNamespaceSession(localStorage.getItem(key), namespace)) {
+        return true;
       }
     }
   } catch {}
   return false;
+}
+
+async function hasPersistedWc2NamespaceSession(namespace: 'eip155' | 'bch'): Promise<boolean> {
+  if (hasLocalWc2NamespaceSession(namespace)) return true;
+  if (typeof window === 'undefined' || typeof indexedDB === 'undefined') return false;
+
+  try {
+    if (typeof indexedDB.databases === 'function') {
+      const dbs = await indexedDB.databases();
+      if (!dbs.some(db => db?.name === 'WALLET_CONNECT_V2_INDEXED_DB')) {
+        return false;
+      }
+    }
+    return await new Promise<boolean>(resolve => {
+      let settled = false;
+      const done = (val: boolean) => {
+        if (!settled) {
+          settled = true;
+          resolve(val);
+        }
+      };
+      const timer = setTimeout(() => done(false), 600);
+      const req = indexedDB.open('WALLET_CONNECT_V2_INDEXED_DB');
+      req.onupgradeneeded = () => {
+        // DB did not exist prior to open; abort creation and avoid leaving an empty DB behind
+        try { req.transaction?.abort(); } catch {}
+        clearTimeout(timer);
+        done(false);
+      };
+      req.onerror = () => {
+        clearTimeout(timer);
+        done(false);
+      };
+      req.onsuccess = () => {
+        const db = req.result;
+        try {
+          if (!db.objectStoreNames.contains('keyvaluestorage')) {
+            db.close();
+            clearTimeout(timer);
+            done(false);
+            return;
+          }
+          const tx = db.transaction('keyvaluestorage', 'readonly');
+          const store = tx.objectStore('keyvaluestorage');
+          const getReq = store.get('wc@2:client:0.3//session');
+          getReq.onsuccess = () => {
+            const matched = payloadHasNamespaceSession(getReq.result, namespace);
+            try { db.close(); } catch {}
+            clearTimeout(timer);
+            done(matched);
+          };
+          getReq.onerror = () => {
+            try { db.close(); } catch {}
+            clearTimeout(timer);
+            done(false);
+          };
+        } catch {
+          try { db.close(); } catch {}
+          clearTimeout(timer);
+          done(false);
+        }
+      };
+    });
+  } catch {
+    return false;
+  }
 }
 
 function purgeWc2NamespaceStorage(namespace: 'eip155' | 'bch'): void {
@@ -326,11 +396,12 @@ function purgeWc2NamespaceStorage(namespace: 'eip155' | 'bch'): void {
 }
 
 export async function restoreEvmWalletConnectSession(
-  callbacks?: EvmWalletEventCallbacks
+  callbacks?: EvmWalletEventCallbacks,
+  options?: { forceCheck?: boolean }
 ): Promise<{ address: string; chainId: number; providerName: string } | null> {
   try {
-    // Only initialize WalletConnect provider if an active EVM session exists in localStorage
-    if (!hasLocalWc2NamespaceSession('eip155')) return null;
+    // Only initialize WalletConnect provider if an active EVM session exists (localStorage or IndexedDB)
+    if (!options?.forceCheck && !(await hasPersistedWc2NamespaceSession('eip155'))) return null;
 
     const provider = await getWalletConnectProvider();
     if (provider.session && provider.accounts && provider.accounts.length > 0) {
@@ -715,11 +786,12 @@ function extractBchAddressFromSession(session: SessionTypes.Struct, isTestnet: b
 
 export async function restoreBchWalletConnectSession(
   isTestnet: boolean,
-  onSessionDeleted?: () => void
+  onSessionDeleted?: () => void,
+  options?: { forceCheck?: boolean }
 ): Promise<BchWcSessionResult | null> {
   try {
-    // Only initialize BCH SignClient if an active BCH session exists in localStorage
-    if (!hasLocalWc2NamespaceSession('bch')) return null;
+    // Only initialize BCH SignClient if an active BCH session exists in localStorage/IndexedDB or caller forces check
+    if (!options?.forceCheck && !(await hasPersistedWc2NamespaceSession('bch'))) return null;
 
     const client = await getBchSignClient(onSessionDeleted);
     const sessions = client.session.getAll();
@@ -865,7 +937,7 @@ export async function disconnectBchWalletConnect(): Promise<void> {
   }
 }
 
-function resolveHydratedBchSession() {
+export function resolveHydratedBchSession() {
   if (bchSignClient && !activeBchSession) {
     try {
       const sessions = bchSignClient.session.getAll();
@@ -876,6 +948,15 @@ function resolveHydratedBchSession() {
   return bchSignClient && activeBchSession && activeBchSession.namespaces?.bch?.accounts?.length
     ? activeBchSession
     : null;
+}
+
+export function isBchWc2SessionConnected(): boolean {
+  return Boolean(resolveHydratedBchSession());
+}
+
+export function getBchWc2SessionMethods(): string[] {
+  const session = resolveHydratedBchSession();
+  return session?.namespaces?.bch?.methods || [];
 }
 
 /**

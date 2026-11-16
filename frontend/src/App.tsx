@@ -161,6 +161,8 @@ import {
   signBchMessage,
   hasActiveBchMessageSigningCapability,
   hasActiveEvmSigningCapability,
+  isBchWc2SessionConnected,
+  getBchWc2SessionMethods,
   EnsureAuthSessionOptions
 } from './services/walletConnectService';
 
@@ -1139,7 +1141,9 @@ export default function App() {
 
     // 1. Restore EVM WalletConnect V2 or Injected session (preserve URL read-only manual inspection)
     if (evmWallet?.source !== 'manual') {
-      restoreEvmWalletConnectSession(evmEventCallbacks).then(restoredWc => {
+      restoreEvmWalletConnectSession(evmEventCallbacks, {
+        forceCheck: evmWallet?.source === 'wc2-evm'
+      }).then(restoredWc => {
         if (restoredWc && !manualEvmDisconnect) {
           setEvmWallet({
             address: restoredWc.address,
@@ -1170,9 +1174,13 @@ export default function App() {
 
     // 2. Restore BCH WalletConnect V2 (Cashonize / Paytaca WC2) session
     if (bchWallet?.source !== 'manual') {
-      restoreBchWalletConnectSession(isTest, () => {
-        setBchWallet(prev => (prev?.source === 'wc2-bch' ? null : prev));
-      }).then(restoredBch => {
+      restoreBchWalletConnectSession(
+        isTest,
+        () => {
+          setBchWallet(prev => (prev?.source === 'wc2-bch' ? null : prev));
+        },
+        { forceCheck: bchWallet?.source === 'wc2-bch' }
+      ).then(restoredBch => {
         if (restoredBch && !restoredBch.networkMismatch) {
           setBchWallet({
             address: restoredBch.address,
@@ -1589,6 +1597,20 @@ export default function App() {
     const wantEvm = !scopedChains || scopedChains.has('evm');
     const wantSol = !scopedChains || scopedChains.has('solana');
 
+    // Hydrate persisted WalletConnect v2 sessions lazily on demand (e.g. immediately after page reload)
+    if (wantBch && cleanBch && bchWallet?.source === 'wc2-bch' && !hasActiveBchMessageSigningCapability('wc2-bch')) {
+      await restoreBchWalletConnectSession(
+        platformNetwork === 'testnet',
+        () => {
+          setBchWallet(prev => (prev?.source === 'wc2-bch' ? null : prev));
+        },
+        { forceCheck: true }
+      ).catch(() => null);
+    }
+    if (wantEvm && cleanEvm && evmWallet?.source === 'wc2-evm' && !hasActiveEvmSigningCapability()) {
+      await restoreEvmWalletConnectSession(evmEventCallbacks, { forceCheck: true }).catch(() => null);
+    }
+
     const canSignBch = Boolean(wantBch && cleanBch && hasActiveBchMessageSigningCapability(bchWallet?.source));
     const canSignEvm = Boolean(wantEvm && cleanEvm && hasActiveEvmSigningCapability());
     const canSignSol = Boolean(wantSol && cleanSol);
@@ -1618,11 +1640,18 @@ export default function App() {
 
       let msg: string;
       if (bchOnly) {
-        if (cleanBch && !canSignBch) {
+        if (cleanBch && bchWallet?.source === 'wc2-bch' && !isBchWc2SessionConnected()) {
           msg =
             lang === 'es'
-              ? `Tu conexión BCH actual (${bchWallet?.provider || bchWallet?.source}) no soporta firma de mensajes (bch_signMessage). Conecta Cashonize o la extensión de Paytaca para autenticar acciones BCH/PUSD.`
-              : `Your current BCH connection (${bchWallet?.provider || bchWallet?.source}) does not support message signing (bch_signMessage). Connect Cashonize or the Paytaca extension to authenticate BCH/PUSD actions.`;
+              ? `La sesión WalletConnect de ${bchWallet?.provider || 'Cashonize'} expiró o no está activa tras recargar. Vuelve a conectar Cashonize (QR) para firmar esta acción BCH/PUSD.`
+              : `Your ${bchWallet?.provider || 'Cashonize'} WalletConnect session expired or is inactive after reloading. Reconnect Cashonize (WC2 QR) to authenticate this BCH/PUSD action.`;
+        } else if (cleanBch && !canSignBch) {
+          const sessionMethods = bchWallet?.source === 'wc2-bch' ? getBchWc2SessionMethods() : [];
+          const methodsSuffix = sessionMethods.length > 0 ? ` [${sessionMethods.join(', ')}]` : '';
+          msg =
+            lang === 'es'
+              ? `Tu conexión BCH actual (${bchWallet?.provider || bchWallet?.source}${methodsSuffix}) no autorizó firma de mensajes (bch_signMessage). Reconecta Cashonize o usa la extensión de Paytaca para acciones BCH/PUSD.`
+              : `Your current BCH connection (${bchWallet?.provider || bchWallet?.source}${methodsSuffix}) did not authorize message signing (bch_signMessage). Reconnect Cashonize or use the Paytaca extension for BCH/PUSD actions.`;
         } else {
           msg =
             lang === 'es'
