@@ -2482,13 +2482,10 @@ export default function App() {
                 ? 'bg-primary/10 border-primary/40 text-primary font-bold'
                 : 'bg-surface hover:bg-surface-2 border-line text-ink-2 hover:text-ink'
             }`}
-            title={lang === 'es' ? 'UserLink: Identidad BCH ↔ Nostr (Bounty Paytaca $500 PUSD)' : 'UserLink: BCH ↔ Nostr Identity (Paytaca $500 PUSD Bounty)'}
+            title={lang === 'es' ? 'UserLink: Identidad BCH ↔ Nostr' : 'UserLink: BCH ↔ Nostr Identity'}
           >
             <Fingerprint className="w-3.5 h-3.5 text-primary" />
             <span>{t.navIdentity}</span>
-            <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-primary/20 text-primary font-bold">
-              $500
-            </span>
           </button>
 
           {/* Network Switcher Pill (Desktop/Tablet: hidden on mobile to avoid navbar crowding) */}
@@ -2739,7 +2736,7 @@ export default function App() {
                     { id: 'pools', label: 'Pools', icon: Droplets },
                     { id: 'lend', label: 'Lend', icon: Lock },
                     { id: 'portfolio', label: lang === 'es' ? 'Portafolio' : 'Portfolio', icon: PieChart },
-                    { id: 'identity', label: lang === 'es' ? 'Identidad Soberana ($500)' : 'Sovereign ID ($500)', icon: Fingerprint },
+                    { id: 'identity', label: lang === 'es' ? 'Identidad Soberana' : 'Sovereign Identity', icon: Fingerprint },
                     { id: 'gateway', label: 'Gateway', icon: Sparkles },
                     { id: 'whitepaper', label: 'Whitepaper', icon: BookOpen },
                     { id: 'docs', label: 'Docs', icon: FileText },
