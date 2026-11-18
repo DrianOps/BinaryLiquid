@@ -36,6 +36,7 @@ class BchService {
     this.escrowV2Artifact = null;
     this.collateralVaultArtifact = null;
     this.recentlyBroadcastTxs = new Map();
+    this.historyCache = new Map();
     this.isReady = false;
     this.readyPromise = this.init();
   }
@@ -1478,6 +1479,280 @@ class BchService {
         throw err;
       }
     });
+  }
+
+  /**
+   * Non-custodial read-only UTXO & CashTokens metadata query for Wallet UI.
+   */
+  async getAddressUtxos(cashaddr, forceTestnet = null) {
+    const parts = splitCashAddresses(String(cashaddr || ''));
+    const primaryAddr = parts[0] || String(cashaddr || '').trim();
+    const parsed = parseCashAddress(primaryAddr, forceTestnet);
+    if (!parsed) {
+      throw new Error('Dirección BCH inválida');
+    }
+
+    const isChipnet = forceTestnet !== null ? Boolean(forceTestnet) : parsed.isTestnet;
+    const activeProvider = isChipnet ? this.chipnetProvider : this.mainnetProvider;
+    if (!activeProvider) {
+      throw new Error(`Electrum provider no disponible para ${isChipnet ? 'chipnet' : 'mainnet'}`);
+    }
+
+    const pusdCat = String(this.getTokenCategory('PUSD', isChipnet) || '').toLowerCase();
+    const musdCat = String(this.getTokenCategory('MUSD', isChipnet) || '').toLowerCase();
+    const liftCat = String(this.getTokenCategory('LIFT', isChipnet) || '').toLowerCase();
+
+    const pusdDec = config.bch.tokens.PUSD?.decimals ?? 6;
+    const musdDec = config.bch.tokens.MUSD?.decimals ?? 6;
+    const liftDec = config.bch.tokens.LIFT?.decimals ?? 2;
+
+    const categoryMap = new Map();
+    if (pusdCat) categoryMap.set(pusdCat, { symbol: 'PUSD', decimals: pusdDec });
+    if (musdCat) categoryMap.set(musdCat, { symbol: 'MUSD', decimals: musdDec });
+    if (liftCat) categoryMap.set(liftCat, { symbol: 'LIFT', decimals: liftDec });
+
+    const seen = new Set();
+    const utxos = [];
+    const targetAddrs = parts.length > 0 ? parts : [parsed.baseAddress];
+
+    for (const part of targetAddrs) {
+      const p = parseCashAddress(part, isChipnet);
+      if (!p) continue;
+      const rawUtxos = await activeProvider.getUtxos(p.baseAddress);
+      for (const u of rawUtxos || []) {
+        const key = `${u.txid}:${u.vout}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+
+        let tokenInfo = null;
+        let symbol = 'BCH';
+        let decimals = 8;
+
+        if (u.token) {
+          const cat = String(u.token.category || '').toLowerCase();
+          const matched = categoryMap.get(cat);
+          symbol = matched ? matched.symbol : 'UNKNOWN';
+          decimals = matched ? matched.decimals : 0;
+          tokenInfo = {
+            amount: u.token.amount !== undefined ? u.token.amount.toString() : '0',
+            category: cat,
+            ...(u.token.nft
+              ? {
+                  nft: {
+                    capability: u.token.nft.capability,
+                    commitment:
+                      typeof u.token.nft.commitment === 'string'
+                        ? u.token.nft.commitment
+                        : binToHex(u.token.nft.commitment)
+                  }
+                }
+              : {})
+          };
+        }
+
+        utxos.push({
+          txid: u.txid,
+          vout: Number(u.vout),
+          satoshis: Number(u.satoshis),
+          token: tokenInfo,
+          symbol,
+          decimals
+        });
+      }
+    }
+
+    return {
+      network: isChipnet ? 'testnet' : 'mainnet',
+      address: parsed.baseAddress,
+      tokenAddress: parsed.tokenAddress,
+      tokensMeta: {
+        PUSD: { symbol: 'PUSD', category: pusdCat, decimals: pusdDec },
+        MUSD: { symbol: 'MUSD', category: musdCat, decimals: musdDec },
+        LIFT: { symbol: 'LIFT', category: liftCat, decimals: liftDec }
+      },
+      utxos
+    };
+  }
+
+  /**
+   * Non-custodial Electrum transaction history for a BCH CashAddress (with 15s cache).
+   */
+  async getAddressHistory(cashaddr, forceTestnet = null, limit = 20) {
+    const primaryAddr = splitCashAddresses(String(cashaddr || ''))[0] || String(cashaddr || '').trim();
+    const parsed = parseCashAddress(primaryAddr, forceTestnet);
+    if (!parsed) {
+      throw new Error('Dirección BCH inválida');
+    }
+
+    const isChipnet = forceTestnet !== null ? Boolean(forceTestnet) : parsed.isTestnet;
+    const activeProvider = isChipnet ? this.chipnetProvider : this.mainnetProvider;
+    if (!activeProvider) {
+      throw new Error(`Electrum provider no disponible para ${isChipnet ? 'chipnet' : 'mainnet'}`);
+    }
+
+    const safeLimit = Math.max(1, Math.min(Number(limit) || 20, 30));
+    const cacheKey = `${isChipnet ? 'chipnet' : 'mainnet'}:${parsed.baseAddress}:${safeLimit}`;
+    const cached = this.historyCache.get(cacheKey);
+    if (cached && Date.now() - cached.ts < 15_000) {
+      return cached.data;
+    }
+
+    const pusdCat = String(this.getTokenCategory('PUSD', isChipnet) || '').toLowerCase();
+    const musdCat = String(this.getTokenCategory('MUSD', isChipnet) || '').toLowerCase();
+    const liftCat = String(this.getTokenCategory('LIFT', isChipnet) || '').toLowerCase();
+    const categoryMap = new Map();
+    if (pusdCat) categoryMap.set(pusdCat, { symbol: 'PUSD', decimals: config.bch.tokens.PUSD?.decimals ?? 6 });
+    if (musdCat) categoryMap.set(musdCat, { symbol: 'MUSD', decimals: config.bch.tokens.MUSD?.decimals ?? 6 });
+    if (liftCat) categoryMap.set(liftCat, { symbol: 'LIFT', decimals: config.bch.tokens.LIFT?.decimals ?? 2 });
+
+    const scriptHash = Buffer.from(
+      crypto.createHash('sha256').update(Buffer.from(parsed.bytecode)).digest()
+    )
+      .reverse()
+      .toString('hex');
+
+    const rawHistory = await activeProvider.performRequest('blockchain.scripthash.get_history', scriptHash);
+    const sorted = (Array.isArray(rawHistory) ? rawHistory : [])
+      .sort((a, b) => {
+        const ah = a.height <= 0 ? Number.MAX_SAFE_INTEGER : a.height;
+        const bh = b.height <= 0 ? Number.MAX_SAFE_INTEGER : b.height;
+        return bh - ah;
+      })
+      .slice(0, safeLimit);
+
+    const txExplorerBase = isChipnet
+      ? 'https://chipnet.imaginary.cash/tx'
+      : 'https://3xpl.com/bitcoin-cash/transaction';
+
+    const txCache = new Map();
+    const fetchVerboseTx = async (txid) => {
+      if (txCache.has(txid)) return txCache.get(txid);
+      try {
+        const detail = await activeProvider.performRequest('blockchain.transaction.get', txid, true);
+        txCache.set(txid, detail || null);
+        return detail || null;
+      } catch {
+        txCache.set(txid, null);
+        return null;
+      }
+    };
+
+    const items = [];
+    for (const entry of sorted) {
+      const tx = await fetchVerboseTx(entry.tx_hash);
+      if (!tx) continue;
+
+      let outSatsSelf = 0n;
+      let totalOutSats = 0n;
+      const outTokensSelf = new Map();
+
+      for (const vout of tx.vout || []) {
+        const sats = BigInt(Math.round((Number(vout.value) || 0) * 100_000_000));
+        totalOutSats += sats;
+        const spkHex = String(vout.scriptPubKey?.hex || '').toLowerCase();
+        if (spkHex === parsed.bytecodeHex.toLowerCase()) {
+          outSatsSelf += sats;
+          if (vout.tokenData?.category) {
+            const cat = String(vout.tokenData.category).toLowerCase();
+            const amt = BigInt(vout.tokenData.amount || '0');
+            outTokensSelf.set(cat, (outTokensSelf.get(cat) || 0n) + amt);
+          }
+        }
+      }
+
+      let inSatsSelf = 0n;
+      let totalInSats = 0n;
+      const inTokensSelf = new Map();
+      let resolvedInputs = false;
+
+      const vins = Array.isArray(tx.vin) ? tx.vin : [];
+      if (vins.length > 0 && vins.length <= 12 && !vins[0]?.coinbase) {
+        resolvedInputs = true;
+        for (const vin of vins) {
+          if (!vin.txid || vin.vout === undefined) continue;
+          const prevTx = await fetchVerboseTx(vin.txid);
+          const prevOut = prevTx?.vout?.[vin.vout];
+          if (!prevOut) {
+            resolvedInputs = false;
+            continue;
+          }
+          const sats = BigInt(Math.round((Number(prevOut.value) || 0) * 100_000_000));
+          totalInSats += sats;
+          const spkHex = String(prevOut.scriptPubKey?.hex || '').toLowerCase();
+          if (spkHex === parsed.bytecodeHex.toLowerCase()) {
+            inSatsSelf += sats;
+            if (prevOut.tokenData?.category) {
+              const cat = String(prevOut.tokenData.category).toLowerCase();
+              const amt = BigInt(prevOut.tokenData.amount || '0');
+              inTokensSelf.set(cat, (inTokensSelf.get(cat) || 0n) + amt);
+            }
+          }
+        }
+      }
+
+      // Determine primary asset moved (CashToken takes precedence if net token delta != 0)
+      let primarySymbol = 'BCH';
+      let primaryDecimals = 8;
+      let netSignedBase = outSatsSelf - inSatsSelf;
+
+      const allCats = new Set([...outTokensSelf.keys(), ...inTokensSelf.keys()]);
+      for (const cat of allCats) {
+        const meta = categoryMap.get(cat);
+        if (!meta) continue;
+        const delta = (outTokensSelf.get(cat) || 0n) - (inTokensSelf.get(cat) || 0n);
+        if (delta !== 0n || (inTokensSelf.get(cat) || 0n) > 0n) {
+          primarySymbol = meta.symbol;
+          primaryDecimals = meta.decimals;
+          netSignedBase = delta !== 0n ? delta : -(inTokensSelf.get(cat) || 0n);
+          break;
+        }
+      }
+
+      let direction = 'in';
+      if (resolvedInputs) {
+        if (inSatsSelf > 0n && netSignedBase <= 0n) {
+          direction = 'out';
+        } else if (inSatsSelf > 0n && netSignedBase > 0n) {
+          direction = 'in';
+        } else {
+          direction = 'in';
+        }
+      } else {
+        direction = outSatsSelf > 0n ? 'in' : 'out';
+      }
+
+      const absBase = netSignedBase < 0n ? -netSignedBase : netSignedBase;
+      const amount = Number(absBase) / 10 ** primaryDecimals;
+      const satsDelta = Number(outSatsSelf - inSatsSelf);
+      const feeSats = resolvedInputs && totalInSats >= totalOutSats ? Number(totalInSats - totalOutSats) : undefined;
+      const tsSec = Number(tx.time || tx.blocktime || 0);
+      const height = Number(entry.height || 0);
+      const confirmations = Number(tx.confirmations || (height > 0 ? 1 : 0));
+
+      items.push({
+        id: entry.tx_hash,
+        txid: entry.tx_hash,
+        type: direction === 'out' ? 'send' : 'receive',
+        direction,
+        symbol: primarySymbol,
+        amount,
+        satsDelta,
+        status: height > 0 ? 'confirmed' : 'pending',
+        timestamp: tsSec > 0 ? tsSec * 1000 : Date.now(),
+        height,
+        confirmations,
+        feeSats,
+        explorerUrl: `${txExplorerBase}/${entry.tx_hash}`
+      });
+    }
+
+    const result = {
+      network: isChipnet ? 'testnet' : 'mainnet',
+      address: parsed.baseAddress,
+      items
+    };
+    this.historyCache.set(cacheKey, { ts: Date.now(), data: result });
+    return result;
   }
 }
 

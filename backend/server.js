@@ -41,6 +41,7 @@ app.use(helmet({
 const defaultCorsOrigins = [
   'https://bliquid.xyz',
   'https://www.bliquid.xyz',
+  'https://wallet.bliquid.xyz',
   'http://localhost:5173',
   'http://127.0.0.1:5173',
   'http://localhost:3000',
@@ -642,6 +643,60 @@ app.post('/api/bch/broadcast', async (req, res) => {
 });
 
 // Verify Smart Contract Deposit & Trigger Immediate Watchman + Vault Execution
+// Read-only Non-Custodial BCH UTXO & Token Category Metadata endpoint (for BinaryLiquid Wallet)
+app.get('/api/bch/utxos/:address', async (req, res) => {
+  try {
+    const rawAddr = String(req.params.address || '').trim();
+    const netParam = String(req.query.network || '').toLowerCase();
+    const forceTestnet = netParam === 'testnet' || netParam === 'chipnet'
+      ? true
+      : netParam === 'mainnet'
+        ? false
+        : null;
+
+    const [utxoData, bchPrice, liftPrice] = await Promise.all([
+      bchService.getAddressUtxos(rawAddr, forceTestnet),
+      oraclePool.getPriceUsd('BCH').catch(() => 480),
+      oraclePool.getPriceUsd('LIFT').catch(() => 0.01636)
+    ]);
+
+    res.json({
+      success: true,
+      ...utxoData,
+      prices: {
+        BCH: bchPrice,
+        PUSD: 1.0,
+        MUSD: 1.0,
+        LIFT: liftPrice
+      }
+    });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+// Read-only Non-Custodial BCH Electrum Transaction History endpoint (for BinaryLiquid Wallet)
+app.get('/api/bch/history/:address', async (req, res) => {
+  try {
+    const rawAddr = String(req.params.address || '').trim();
+    const netParam = String(req.query.network || '').toLowerCase();
+    const forceTestnet = netParam === 'testnet' || netParam === 'chipnet'
+      ? true
+      : netParam === 'mainnet'
+        ? false
+        : null;
+    const limit = parseInt(String(req.query.limit || '20'), 10);
+
+    const historyData = await bchService.getAddressHistory(rawAddr, forceTestnet, limit);
+    res.json({
+      success: true,
+      ...historyData
+    });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
 app.post('/api/swap/:id/verify-tx', async (req, res) => {
   try {
     const { txHash } = req.body;
@@ -1970,6 +2025,8 @@ app.get('/api/wallet/balances/:address', async (req, res) => {
 
     const balances = {
       PUSD: bchOnChain.PUSD || 0,
+      MUSD: bchOnChain.MUSD || 0,
+      LIFT: bchOnChain.LIFT || 0,
       BCH: bchOnChain.BCH || 0,
       USDT: evmOnChain.USDT || 0,
       USDC: evmOnChain.USDC || 0,
