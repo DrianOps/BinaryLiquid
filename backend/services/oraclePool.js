@@ -490,6 +490,63 @@ class OraclePoolManager {
     };
   }
 
+  /**
+   * Multi-currency USD -> Fiat conversion rates (30m cached with safe fallbacks).
+   */
+  async getFiatRates() {
+    const fallback = {
+      USD: 1,
+      EUR: 0.92,
+      VES: 46.5,
+      COP: 4320,
+      MXN: 20.1,
+      ARS: 1015,
+      BRL: 5.75
+    };
+    const now = Date.now();
+    if (this.fiatCache && now - this.fiatCache.ts < 30 * 60_000) {
+      return this.fiatCache.rates;
+    }
+
+    if (this.redis) {
+      try {
+        const cachedRaw = await this.redis.get('oracle:fiat:rates');
+        if (cachedRaw) {
+          const parsed = JSON.parse(cachedRaw);
+          this.fiatCache = { ts: now, rates: parsed };
+          return parsed;
+        }
+      } catch {}
+    }
+
+    try {
+      const res = await fetch('https://open.er-api.com/v6/latest/USD', {
+        signal: AbortSignal.timeout(3500)
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const r = data?.rates || {};
+        const rates = {
+          USD: 1,
+          EUR: Number(r.EUR) || fallback.EUR,
+          VES: Number(r.VES) || fallback.VES,
+          COP: Number(r.COP) || fallback.COP,
+          MXN: Number(r.MXN) || fallback.MXN,
+          ARS: Number(r.ARS) || fallback.ARS,
+          BRL: Number(r.BRL) || fallback.BRL
+        };
+        this.fiatCache = { ts: now, rates };
+        if (this.redis) {
+          this.redis.set('oracle:fiat:rates', JSON.stringify(rates), 'EX', 1800).catch(() => {});
+        }
+        return rates;
+      }
+    } catch {}
+
+    this.fiatCache = { ts: now - 25 * 60_000, rates: fallback };
+    return fallback;
+  }
+
   getHealth() {
     return {
       activeOracle: this.activeProvider,

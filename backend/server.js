@@ -643,6 +643,16 @@ app.post('/api/bch/broadcast', async (req, res) => {
 });
 
 // Verify Smart Contract Deposit & Trigger Immediate Watchman + Vault Execution
+// Public Fiat Conversion Rates (USD -> EUR, VES, COP, MXN, ARS, BRL)
+app.get('/api/fiat/rates', async (req, res) => {
+  try {
+    const rates = await oraclePool.getFiatRates();
+    res.json({ success: true, base: 'USD', rates });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Read-only Non-Custodial BCH UTXO & Token Category Metadata endpoint (for BinaryLiquid Wallet)
 app.get('/api/bch/utxos/:address', async (req, res) => {
   try {
@@ -654,10 +664,11 @@ app.get('/api/bch/utxos/:address', async (req, res) => {
         ? false
         : null;
 
-    const [utxoData, bchPrice, liftPrice] = await Promise.all([
+    const [utxoData, bchPrice, liftPrice, fiatRates] = await Promise.all([
       bchService.getAddressUtxos(rawAddr, forceTestnet),
       oraclePool.getPriceUsd('BCH').catch(() => 480),
-      oraclePool.getPriceUsd('LIFT').catch(() => 0.01636)
+      oraclePool.getPriceUsd('LIFT').catch(() => 0.01636),
+      oraclePool.getFiatRates().catch(() => ({ USD: 1, EUR: 0.92, VES: 46.5, COP: 4320, MXN: 20.1, ARS: 1015, BRL: 5.75 }))
     ]);
 
     res.json({
@@ -668,7 +679,8 @@ app.get('/api/bch/utxos/:address', async (req, res) => {
         PUSD: 1.0,
         MUSD: 1.0,
         LIFT: liftPrice
-      }
+      },
+      fiatRates
     });
   } catch (err) {
     res.status(400).json({ success: false, error: err.message });

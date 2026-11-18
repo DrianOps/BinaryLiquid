@@ -1554,6 +1554,7 @@ class BchService {
           txid: u.txid,
           vout: Number(u.vout),
           satoshis: Number(u.satoshis),
+          address: p.baseAddress,
           token: tokenInfo,
           symbol,
           decimals
@@ -1575,10 +1576,11 @@ class BchService {
   }
 
   /**
-   * Non-custodial Electrum transaction history for a BCH CashAddress (with 15s cache).
+   * Non-custodial Electrum transaction history for single or comma-separated HD BCH addresses (15s cache).
    */
   async getAddressHistory(cashaddr, forceTestnet = null, limit = 20) {
-    const primaryAddr = splitCashAddresses(String(cashaddr || ''))[0] || String(cashaddr || '').trim();
+    const parts = splitCashAddresses(String(cashaddr || ''));
+    const primaryAddr = parts[0] || String(cashaddr || '').trim();
     const parsed = parseCashAddress(primaryAddr, forceTestnet);
     if (!parsed) {
       throw new Error('Dirección BCH inválida');
@@ -1591,7 +1593,11 @@ class BchService {
     }
 
     const safeLimit = Math.max(1, Math.min(Number(limit) || 20, 30));
-    const cacheKey = `${isChipnet ? 'chipnet' : 'mainnet'}:${parsed.baseAddress}:${safeLimit}`;
+    const parsedTargets = (parts.length > 0 ? parts : [parsed.baseAddress])
+      .map((a) => parseCashAddress(a, isChipnet))
+      .filter(Boolean);
+    const selfBytecodes = new Set(parsedTargets.map((p) => p.bytecodeHex.toLowerCase()));
+    const cacheKey = `${isChipnet ? 'chipnet' : 'mainnet'}:${parsed.baseAddress}:${parsedTargets.length}:${safeLimit}`;
     const cached = this.historyCache.get(cacheKey);
     if (cached && Date.now() - cached.ts < 15_000) {
       return cached.data;
@@ -1605,14 +1611,24 @@ class BchService {
     if (musdCat) categoryMap.set(musdCat, { symbol: 'MUSD', decimals: config.bch.tokens.MUSD?.decimals ?? 6 });
     if (liftCat) categoryMap.set(liftCat, { symbol: 'LIFT', decimals: config.bch.tokens.LIFT?.decimals ?? 2 });
 
-    const scriptHash = Buffer.from(
-      crypto.createHash('sha256').update(Buffer.from(parsed.bytecode)).digest()
-    )
-      .reverse()
-      .toString('hex');
+    const seenTx = new Map();
+    for (const p of parsedTargets) {
+      try {
+        const scriptHash = Buffer.from(
+          crypto.createHash('sha256').update(Buffer.from(p.bytecode)).digest()
+        )
+          .reverse()
+          .toString('hex');
+        const rawHistory = await activeProvider.performRequest('blockchain.scripthash.get_history', scriptHash);
+        for (const item of Array.isArray(rawHistory) ? rawHistory : []) {
+          if (item?.tx_hash && !seenTx.has(item.tx_hash)) {
+            seenTx.set(item.tx_hash, item);
+          }
+        }
+      } catch {}
+    }
 
-    const rawHistory = await activeProvider.performRequest('blockchain.scripthash.get_history', scriptHash);
-    const sorted = (Array.isArray(rawHistory) ? rawHistory : [])
+    const sorted = Array.from(seenTx.values())
       .sort((a, b) => {
         const ah = a.height <= 0 ? Number.MAX_SAFE_INTEGER : a.height;
         const bh = b.height <= 0 ? Number.MAX_SAFE_INTEGER : b.height;
@@ -1650,7 +1666,7 @@ class BchService {
         const sats = BigInt(Math.round((Number(vout.value) || 0) * 100_000_000));
         totalOutSats += sats;
         const spkHex = String(vout.scriptPubKey?.hex || '').toLowerCase();
-        if (spkHex === parsed.bytecodeHex.toLowerCase()) {
+        if (selfBytecodes.has(spkHex)) {
           outSatsSelf += sats;
           if (vout.tokenData?.category) {
             const cat = String(vout.tokenData.category).toLowerCase();
@@ -1679,7 +1695,7 @@ class BchService {
           const sats = BigInt(Math.round((Number(prevOut.value) || 0) * 100_000_000));
           totalInSats += sats;
           const spkHex = String(prevOut.scriptPubKey?.hex || '').toLowerCase();
-          if (spkHex === parsed.bytecodeHex.toLowerCase()) {
+          if (selfBytecodes.has(spkHex)) {
             inSatsSelf += sats;
             if (prevOut.tokenData?.category) {
               const cat = String(prevOut.tokenData.category).toLowerCase();
