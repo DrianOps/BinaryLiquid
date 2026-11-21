@@ -6,7 +6,7 @@
 [![Web Wallet](https://img.shields.io/badge/Web_Wallet-wallet.bliquid.xyz-F7931A?style=flat-square)](https://wallet.bliquid.xyz)
 [![BCH Blaze 2026](https://img.shields.io/badge/BCH_BLAZE_2026-Mainnet_%26_Media_Tracks-00b894?style=flat-square)](https://bliquid.xyz)
 [![Chains](https://img.shields.io/badge/Chains-BCH_%7C_Polygon_%7C_BSC_%7C_Solana_%7C_TON_%7C_LTC-1e293b?style=flat-square)](https://bliquid.xyz/swap)
-[![License: MIT](https://img.shields.io/badge/License-MIT-334155?style=flat-square)](LICENSE)
+[![License: AGPL-3.0 / MIT](https://img.shields.io/badge/License-AGPL--3.0_%2F_MIT-334155?style=flat-square)](LICENSE)
 
 > **Engineering & Architecture:** **Drian Stack Labs** ([@drianops](https://t.me/drianops))  
 > **Hackathon Tracks (BCH BLAZE 2026):** Mainnet Track (`$3,500 PUSD`) + Media Track (`$1,000 PUSD`) — Sponsored by **ParyonUSD (`PUSD`)**  
@@ -168,7 +168,8 @@ BinaryLiquid/
 ├── explainer/                             # Source studio assets & MP4 rendering scripts
 ├── scripts/                               # Deployment, SSL, status check & DB backup scripts
 ├── SECURITY_AUDIT.md                      # Formal security invariants & attack mitigation matrix
-└── LICENSE                                # MIT License
+├── TRADEMARK.md                           # Dual-licensing scope & brand/trademark reservation
+└── LICENSE                                # GNU AGPL-3.0 (contracts/ under MIT in contracts/LICENSE)
 ```
 
 ---
@@ -221,6 +222,10 @@ Developed by **Drian Stack Labs**
 
 ---
 
-## License
+## License & Trademarks
 
-Copyright © 2026 **Drian Stack Labs**. Released under the [MIT License](LICENSE).
+Copyright © 2026 **Drian Stack Labs**.
+
+- **Application, Backend, Relayer, Watchman & Media (`frontend/`, `backend/`, `watchman/`, `explainer/`):** Licensed under the [**GNU Affero General Public License v3.0 (AGPL-3.0)**](./LICENSE). Any hosted network deployment must preserve attribution and publish complete corresponding source code under AGPL-3.0.
+- **Smart Contracts (`contracts/`):** Licensed under the [**MIT License**](./contracts/LICENSE) for frictionless auditability and composability.
+- **Trademarks & Brand Assets:** All rights reserved — see [`TRADEMARK.md`](./TRADEMARK.md). Commercial licensing inquiries: [@drianops](https://t.me/drianops).

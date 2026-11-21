@@ -20,7 +20,7 @@
     "usdc"
   ],
   "author": "Drian Stack Labs <@drianops>",
-  "license": "MIT",
+  "license": "AGPL-3.0-or-later",
   "dependencies": {
     "@solana/spl-token": "^0.4.9",
     "@solana/web3.js": "^1.95.8",
