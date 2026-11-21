@@ -369,7 +369,21 @@ async function runSecuritySuite() {
   });
   assert.strictEqual(portComputes, 1, 'Warm portfolio cache must serve immediately');
   assert.strictEqual(cachedPort.cached, true);
-  console.log('✅ [11/11] High-Traffic Balance & Portfolio Cache (Single-Flight + L1/Redis + Stale Rescue) verified');
+
+  let bchUtxoCalls = 0;
+  const bchKey = balanceCache.buildBchQueryKey('utxos', `${testCacheAddr},bitcoincash:qrtest2`, 'mainnet');
+  const utxoBatch = await Promise.all(
+    Array.from({ length: 15 }, () =>
+      balanceCache.getOrCompute(bchKey, async () => {
+        bchUtxoCalls++;
+        await new Promise(r => setTimeout(r, 20));
+        return { success: true, utxos: [{ txid: 'abc', vout: 0, satoshis: 5000 }] };
+      })
+    )
+  );
+  assert.strictEqual(bchUtxoCalls, 1, '15 concurrent Wallet UTXO reads must coalesce into 1 Electrum wave');
+  assert.strictEqual(utxoBatch[0].utxos.length, 1);
+  console.log('✅ [11/11] High-Traffic Balance, Wallet UTXO & Portfolio Cache (Single-Flight + L1/Redis + Stale Rescue) verified');
 
   console.log('\n🎉 ALL_SECURITY_REGRESSION_TESTS_PASSED');
   process.exit(0);

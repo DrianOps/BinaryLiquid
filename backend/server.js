@@ -664,57 +664,77 @@ app.get('/api/fiat/rates', async (req, res) => {
   }
 });
 
-// Read-only Non-Custodial BCH UTXO & Token Category Metadata endpoint (for BinaryLiquid Wallet)
-app.get('/api/bch/utxos/:address', async (req, res) => {
+// Read-only Non-Custodial BCH UTXO & Token Category Metadata endpoint (Redis + L1 + single-flight)
+app.get('/api/bch/utxos/:address', balanceReadLimiter, async (req, res) => {
   try {
     const rawAddr = String(req.params.address || '').trim();
     const netParam = String(req.query.network || '').toLowerCase();
+    const fresh = req.query.fresh === '1' || req.query.refresh === '1';
     const forceTestnet = netParam === 'testnet' || netParam === 'chipnet'
       ? true
       : netParam === 'mainnet'
         ? false
         : null;
 
-    const [utxoData, bchPrice, liftPrice, fiatRates] = await Promise.all([
-      bchService.getAddressUtxos(rawAddr, forceTestnet),
-      oraclePool.getPriceUsd('BCH').catch(() => 480),
-      oraclePool.getPriceUsd('LIFT').catch(() => 0.01636),
-      oraclePool.getFiatRates().catch(() => ({ USD: 1, EUR: 0.92, VES: 46.5, COP: 4320, MXN: 20.1, ARS: 1015, BRL: 5.75 }))
-    ]);
+    const cacheKey = balanceCache.buildBchQueryKey('utxos', rawAddr, netParam || 'auto');
+    const payload = await balanceCache.getOrCompute(
+      cacheKey,
+      async () => {
+        const [utxoData, bchPrice, liftPrice, fiatRates] = await Promise.all([
+          bchService.getAddressUtxos(rawAddr, forceTestnet),
+          oraclePool.getPriceUsd('BCH').catch(() => 480),
+          oraclePool.getPriceUsd('LIFT').catch(() => 0.01636),
+          oraclePool.getFiatRates().catch(() => ({ USD: 1, EUR: 0.92, VES: 46.5, COP: 4320, MXN: 20.1, ARS: 1015, BRL: 5.75 }))
+        ]);
 
-    res.json({
-      success: true,
-      ...utxoData,
-      prices: {
-        BCH: bchPrice,
-        PUSD: 1.0,
-        MUSD: 1.0,
-        LIFT: liftPrice
+        return {
+          success: true,
+          ...utxoData,
+          prices: {
+            BCH: bchPrice,
+            PUSD: 1.0,
+            MUSD: 1.0,
+            LIFT: liftPrice
+          },
+          fiatRates
+        };
       },
-      fiatRates
-    });
+      { ttlMs: 15_000, fresh }
+    );
+
+    res.json(payload);
   } catch (err) {
     res.status(400).json({ success: false, error: err.message });
   }
 });
 
-// Read-only Non-Custodial BCH Electrum Transaction History endpoint (for BinaryLiquid Wallet)
-app.get('/api/bch/history/:address', async (req, res) => {
+// Read-only Non-Custodial BCH Electrum Transaction History endpoint (Redis + L1 + single-flight)
+app.get('/api/bch/history/:address', balanceReadLimiter, async (req, res) => {
   try {
     const rawAddr = String(req.params.address || '').trim();
     const netParam = String(req.query.network || '').toLowerCase();
+    const fresh = req.query.fresh === '1' || req.query.refresh === '1';
     const forceTestnet = netParam === 'testnet' || netParam === 'chipnet'
       ? true
       : netParam === 'mainnet'
         ? false
         : null;
-    const limit = parseInt(String(req.query.limit || '20'), 10);
+    const limit = Math.max(1, Math.min(parseInt(String(req.query.limit || '20'), 10) || 20, 30));
 
-    const historyData = await bchService.getAddressHistory(rawAddr, forceTestnet, limit);
-    res.json({
-      success: true,
-      ...historyData
-    });
+    const cacheKey = balanceCache.buildBchQueryKey('history', rawAddr, netParam || 'auto', String(limit));
+    const payload = await balanceCache.getOrCompute(
+      cacheKey,
+      async () => {
+        const historyData = await bchService.getAddressHistory(rawAddr, forceTestnet, limit);
+        return {
+          success: true,
+          ...historyData
+        };
+      },
+      { ttlMs: 15_000, fresh }
+    );
+
+    res.json(payload);
   } catch (err) {
     res.status(400).json({ success: false, error: err.message });
   }

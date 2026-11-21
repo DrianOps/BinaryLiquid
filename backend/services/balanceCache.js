@@ -267,10 +267,24 @@ class BalanceCacheManager {
     return `portfolio:v1:${net}:${parts.join('|')}`;
   }
 
+  buildBchQueryKey(kind, rawAddresses, networkHint, extra = '') {
+    const parts = String(rawAddresses || '')
+      .split(',')
+      .map(s => s.trim().toLowerCase())
+      .filter(Boolean)
+      .sort();
+    const net = String(networkHint || 'auto').trim().toLowerCase();
+    return `bch:${kind}:v1:${net}:${extra}:${parts.join(',')}`;
+  }
+
   /**
-   * Caches and coalesces full `/api/portfolio/:address` payloads across concurrent requests.
+   * Generic L1 + Redis + single-flight coalescing cache with stale rescue fallback.
    */
-  async getOrComputePortfolio(cacheKey, computeFn, { fresh = false } = {}) {
+  async getOrCompute(
+    cacheKey,
+    computeFn,
+    { ttlMs = this.portfolioTtlMs, fresh = false, isDegradedFn = null } = {}
+  ) {
     const now = Date.now();
     let allowBypass = Boolean(fresh);
     if (allowBypass) {
@@ -311,30 +325,33 @@ class BalanceCacheManager {
       try {
         const payload = await computeFn();
         const doneAt = Date.now();
-        const anyChainDegraded = Boolean(
-          payload?.degradedChains &&
-            Object.values(payload.degradedChains).some(Boolean)
-        );
-        const ttl = anyChainDegraded ? this.degradedCooldownMs : this.portfolioTtlMs;
-        const expiresAt = doneAt + ttl;
+        const degraded = typeof isDegradedFn === 'function' ? Boolean(isDegradedFn(payload)) : false;
+        const effectiveTtl = degraded ? this.degradedCooldownMs : ttlMs;
+        const expiresAt = doneAt + effectiveTtl;
 
         this._setBounded(this.l1Cache, cacheKey, { data: payload, expiresAt, savedAt: doneAt });
-        this._redisSetJson(cacheKey, { data: payload, expiresAt, savedAt: doneAt }, ttl);
+        this._redisSetJson(cacheKey, { data: payload, expiresAt, savedAt: doneAt }, effectiveTtl);
 
-        if (!anyChainDegraded) {
+        if (!degraded) {
           this._setBounded(this.staleCache, `${cacheKey}:stale`, { data: payload, savedAt: doneAt });
+          this._redisSetJson(`${cacheKey}:stale`, { data: payload, savedAt: doneAt }, this.staleFallbackTtlMs);
         }
 
         return { ...payload, cached: false, cacheAgeMs: 0 };
       } catch (err) {
-        const staleEntry = this.staleCache.get(`${cacheKey}:stale`);
         const doneAt = Date.now();
-        if (staleEntry && doneAt - staleEntry.savedAt <= this.staleFallbackTtlMs) {
+        const staleL1 = this.staleCache.get(`${cacheKey}:stale`);
+        const staleEntry =
+          staleL1 && doneAt - staleL1.savedAt <= this.staleFallbackTtlMs
+            ? staleL1
+            : await this._redisGetJson(`${cacheKey}:stale`);
+
+        if (staleEntry?.data && doneAt - Number(staleEntry.savedAt || 0) <= this.staleFallbackTtlMs) {
           return {
             ...staleEntry.data,
             cached: true,
             stale: true,
-            cacheAgeMs: doneAt - staleEntry.savedAt
+            cacheAgeMs: doneAt - Number(staleEntry.savedAt || doneAt)
           };
         }
         throw err;
@@ -345,6 +362,18 @@ class BalanceCacheManager {
 
     this.inFlight.set(cacheKey, job);
     return job;
+  }
+
+  /**
+   * Caches and coalesces full `/api/portfolio/:address` payloads across concurrent requests.
+   */
+  async getOrComputePortfolio(cacheKey, computeFn, { fresh = false } = {}) {
+    return this.getOrCompute(cacheKey, computeFn, {
+      ttlMs: this.portfolioTtlMs,
+      fresh,
+      isDegradedFn: (payload) =>
+        Boolean(payload?.degradedChains && Object.values(payload.degradedChains).some(Boolean))
+    });
   }
 }
 

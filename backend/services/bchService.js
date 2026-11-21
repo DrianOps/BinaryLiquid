@@ -37,7 +37,6 @@ class BchService {
     this.collateralVaultArtifact = null;
     this.p2pEscrowArtifact = null;
     this.recentlyBroadcastTxs = new Map();
-    this.historyCache = new Map();
     this.isReady = false;
     this.readyPromise = this.init();
   }
@@ -1715,12 +1714,24 @@ class BchService {
     const seen = new Set();
     const utxos = [];
     const targetAddrs = parts.length > 0 ? parts : [parsed.baseAddress];
+    const parsedAddrs = targetAddrs
+      .map((part) => parseCashAddress(part, isChipnet))
+      .filter(Boolean);
 
-    for (const part of targetAddrs) {
-      const p = parseCashAddress(part, isChipnet);
-      if (!p) continue;
-      const rawUtxos = await activeProvider.getUtxos(p.baseAddress);
-      for (const u of rawUtxos || []) {
+    // Query all HD receive addresses concurrently instead of looping sequentially
+    const addressUtxoSets = await Promise.all(
+      parsedAddrs.map(async (p) => {
+        const rawUtxos = await this._withTimeout(
+          activeProvider.getUtxos(p.baseAddress),
+          5000,
+          `Electrum getUtxos(${p.baseAddress})`
+        );
+        return { p, rawUtxos: rawUtxos || [] };
+      })
+    );
+
+    for (const { p, rawUtxos } of addressUtxoSets) {
+      for (const u of rawUtxos) {
         const key = `${u.txid}:${u.vout}`;
         if (seen.has(key)) continue;
         seen.add(key);
@@ -1777,7 +1788,7 @@ class BchService {
   }
 
   /**
-   * Non-custodial Electrum transaction history for single or comma-separated HD BCH addresses (15s cache).
+   * Non-custodial Electrum transaction history for single or comma-separated HD BCH addresses.
    */
   async getAddressHistory(cashaddr, forceTestnet = null, limit = 20) {
     const parts = splitCashAddresses(String(cashaddr || ''));
@@ -1798,11 +1809,6 @@ class BchService {
       .map((a) => parseCashAddress(a, isChipnet))
       .filter(Boolean);
     const selfBytecodes = new Set(parsedTargets.map((p) => p.bytecodeHex.toLowerCase()));
-    const cacheKey = `${isChipnet ? 'chipnet' : 'mainnet'}:${parsed.baseAddress}:${parsedTargets.length}:${safeLimit}`;
-    const cached = this.historyCache.get(cacheKey);
-    if (cached && Date.now() - cached.ts < 15_000) {
-      return cached.data;
-    }
 
     const pusdCat = String(this.getTokenCategory('PUSD', isChipnet) || '').toLowerCase();
     const musdCat = String(this.getTokenCategory('MUSD', isChipnet) || '').toLowerCase();
@@ -1813,20 +1819,32 @@ class BchService {
     if (liftCat) categoryMap.set(liftCat, { symbol: 'LIFT', decimals: config.bch.tokens.LIFT?.decimals ?? 2 });
 
     const seenTx = new Map();
-    for (const p of parsedTargets) {
-      try {
+    const scripthashResults = await Promise.allSettled(
+      parsedTargets.map(async (p) => {
         const scriptHash = Buffer.from(
           crypto.createHash('sha256').update(Buffer.from(p.bytecode)).digest()
         )
           .reverse()
           .toString('hex');
-        const rawHistory = await activeProvider.performRequest('blockchain.scripthash.get_history', scriptHash);
-        for (const item of Array.isArray(rawHistory) ? rawHistory : []) {
-          if (item?.tx_hash && !seenTx.has(item.tx_hash)) {
-            seenTx.set(item.tx_hash, item);
-          }
+        return this._withTimeout(
+          activeProvider.performRequest('blockchain.scripthash.get_history', scriptHash),
+          4500,
+          `Electrum get_history(${p.baseAddress})`
+        );
+      })
+    );
+    let fulfilledCount = 0;
+    for (const res of scripthashResults) {
+      if (res.status !== 'fulfilled') continue;
+      fulfilledCount++;
+      for (const item of Array.isArray(res.value) ? res.value : []) {
+        if (item?.tx_hash && !seenTx.has(item.tx_hash)) {
+          seenTx.set(item.tx_hash, item);
         }
-      } catch {}
+      }
+    }
+    if (parsedTargets.length > 0 && fulfilledCount === 0) {
+      throw new Error('Electrum scripthash history unreachable across all HD addresses');
     }
 
     const sorted = Array.from(seenTx.values())
@@ -1841,135 +1859,142 @@ class BchService {
       ? 'https://chipnet.imaginary.cash/tx'
       : 'https://3xpl.com/bitcoin-cash/transaction';
 
-    const txCache = new Map();
-    const fetchVerboseTx = async (txid) => {
-      if (txCache.has(txid)) return txCache.get(txid);
-      try {
-        const detail = await activeProvider.performRequest('blockchain.transaction.get', txid, true);
-        txCache.set(txid, detail || null);
-        return detail || null;
-      } catch {
-        txCache.set(txid, null);
-        return null;
-      }
+    // Deduplicate concurrent verbose tx lookups across outputs and input parents
+    const txPromiseCache = new Map();
+    const fetchVerboseTx = (txid) => {
+      if (txPromiseCache.has(txid)) return txPromiseCache.get(txid);
+      const p = this._withTimeout(
+        activeProvider.performRequest('blockchain.transaction.get', txid, true),
+        4500,
+        `Electrum tx.get(${txid})`
+      )
+        .then((detail) => detail || null)
+        .catch(() => null);
+      txPromiseCache.set(txid, p);
+      return p;
     };
 
-    const items = [];
-    for (const entry of sorted) {
-      const tx = await fetchVerboseTx(entry.tx_hash);
-      if (!tx) continue;
+    const rawVerboseTxs = await Promise.all(sorted.map((entry) => fetchVerboseTx(entry.tx_hash)));
 
-      let outSatsSelf = 0n;
-      let totalOutSats = 0n;
-      const outTokensSelf = new Map();
+    const items = await Promise.all(
+      sorted.map(async (entry, idx) => {
+        const tx = rawVerboseTxs[idx];
+        if (!tx) return null;
 
-      for (const vout of tx.vout || []) {
-        const sats = BigInt(Math.round((Number(vout.value) || 0) * 100_000_000));
-        totalOutSats += sats;
-        const spkHex = String(vout.scriptPubKey?.hex || '').toLowerCase();
-        if (selfBytecodes.has(spkHex)) {
-          outSatsSelf += sats;
-          if (vout.tokenData?.category) {
-            const cat = String(vout.tokenData.category).toLowerCase();
-            const amt = BigInt(vout.tokenData.amount || '0');
-            outTokensSelf.set(cat, (outTokensSelf.get(cat) || 0n) + amt);
-          }
-        }
-      }
+        let outSatsSelf = 0n;
+        let totalOutSats = 0n;
+        const outTokensSelf = new Map();
 
-      let inSatsSelf = 0n;
-      let totalInSats = 0n;
-      const inTokensSelf = new Map();
-      let resolvedInputs = false;
-
-      const vins = Array.isArray(tx.vin) ? tx.vin : [];
-      if (vins.length > 0 && vins.length <= 12 && !vins[0]?.coinbase) {
-        resolvedInputs = true;
-        for (const vin of vins) {
-          if (!vin.txid || vin.vout === undefined) continue;
-          const prevTx = await fetchVerboseTx(vin.txid);
-          const prevOut = prevTx?.vout?.[vin.vout];
-          if (!prevOut) {
-            resolvedInputs = false;
-            continue;
-          }
-          const sats = BigInt(Math.round((Number(prevOut.value) || 0) * 100_000_000));
-          totalInSats += sats;
-          const spkHex = String(prevOut.scriptPubKey?.hex || '').toLowerCase();
+        for (const vout of tx.vout || []) {
+          const sats = BigInt(Math.round((Number(vout.value) || 0) * 100_000_000));
+          totalOutSats += sats;
+          const spkHex = String(vout.scriptPubKey?.hex || '').toLowerCase();
           if (selfBytecodes.has(spkHex)) {
-            inSatsSelf += sats;
-            if (prevOut.tokenData?.category) {
-              const cat = String(prevOut.tokenData.category).toLowerCase();
-              const amt = BigInt(prevOut.tokenData.amount || '0');
-              inTokensSelf.set(cat, (inTokensSelf.get(cat) || 0n) + amt);
+            outSatsSelf += sats;
+            if (vout.tokenData?.category) {
+              const cat = String(vout.tokenData.category).toLowerCase();
+              const amt = BigInt(vout.tokenData.amount || '0');
+              outTokensSelf.set(cat, (outTokensSelf.get(cat) || 0n) + amt);
             }
           }
         }
-      }
 
-      // Determine primary asset moved (CashToken takes precedence if net token delta != 0)
-      let primarySymbol = 'BCH';
-      let primaryDecimals = 8;
-      let netSignedBase = outSatsSelf - inSatsSelf;
+        let inSatsSelf = 0n;
+        let totalInSats = 0n;
+        const inTokensSelf = new Map();
+        let resolvedInputs = false;
 
-      const allCats = new Set([...outTokensSelf.keys(), ...inTokensSelf.keys()]);
-      for (const cat of allCats) {
-        const meta = categoryMap.get(cat);
-        if (!meta) continue;
-        const delta = (outTokensSelf.get(cat) || 0n) - (inTokensSelf.get(cat) || 0n);
-        if (delta !== 0n || (inTokensSelf.get(cat) || 0n) > 0n) {
-          primarySymbol = meta.symbol;
-          primaryDecimals = meta.decimals;
-          netSignedBase = delta !== 0n ? delta : -(inTokensSelf.get(cat) || 0n);
-          break;
+        const vins = Array.isArray(tx.vin) ? tx.vin : [];
+        if (vins.length > 0 && vins.length <= 12 && !vins[0]?.coinbase) {
+          resolvedInputs = true;
+          const prevTxs = await Promise.all(
+            vins.map((vin) =>
+              vin.txid && vin.vout !== undefined ? fetchVerboseTx(vin.txid) : Promise.resolve(null)
+            )
+          );
+          for (let i = 0; i < vins.length; i++) {
+            const vin = vins[i];
+            if (!vin.txid || vin.vout === undefined) continue;
+            const prevTx = prevTxs[i];
+            const prevOut = prevTx?.vout?.[vin.vout];
+            if (!prevOut) {
+              resolvedInputs = false;
+              continue;
+            }
+            const sats = BigInt(Math.round((Number(prevOut.value) || 0) * 100_000_000));
+            totalInSats += sats;
+            const spkHex = String(prevOut.scriptPubKey?.hex || '').toLowerCase();
+            if (selfBytecodes.has(spkHex)) {
+              inSatsSelf += sats;
+              if (prevOut.tokenData?.category) {
+                const cat = String(prevOut.tokenData.category).toLowerCase();
+                const amt = BigInt(prevOut.tokenData.amount || '0');
+                inTokensSelf.set(cat, (inTokensSelf.get(cat) || 0n) + amt);
+              }
+            }
+          }
         }
-      }
 
-      let direction = 'in';
-      if (resolvedInputs) {
-        if (inSatsSelf > 0n && netSignedBase <= 0n) {
-          direction = 'out';
-        } else if (inSatsSelf > 0n && netSignedBase > 0n) {
-          direction = 'in';
+        // Determine primary asset moved (CashToken takes precedence if net token delta != 0)
+        let primarySymbol = 'BCH';
+        let primaryDecimals = 8;
+        let netSignedBase = outSatsSelf - inSatsSelf;
+
+        const allCats = new Set([...outTokensSelf.keys(), ...inTokensSelf.keys()]);
+        for (const cat of allCats) {
+          const meta = categoryMap.get(cat);
+          if (!meta) continue;
+          const delta = (outTokensSelf.get(cat) || 0n) - (inTokensSelf.get(cat) || 0n);
+          if (delta !== 0n || (inTokensSelf.get(cat) || 0n) > 0n) {
+            primarySymbol = meta.symbol;
+            primaryDecimals = meta.decimals;
+            netSignedBase = delta !== 0n ? delta : -(inTokensSelf.get(cat) || 0n);
+            break;
+          }
+        }
+
+        let direction = 'in';
+        if (resolvedInputs) {
+          if (inSatsSelf > 0n && netSignedBase <= 0n) {
+            direction = 'out';
+          } else {
+            direction = 'in';
+          }
         } else {
-          direction = 'in';
+          direction = outSatsSelf > 0n ? 'in' : 'out';
         }
-      } else {
-        direction = outSatsSelf > 0n ? 'in' : 'out';
-      }
 
-      const absBase = netSignedBase < 0n ? -netSignedBase : netSignedBase;
-      const amount = Number(absBase) / 10 ** primaryDecimals;
-      const satsDelta = Number(outSatsSelf - inSatsSelf);
-      const feeSats = resolvedInputs && totalInSats >= totalOutSats ? Number(totalInSats - totalOutSats) : undefined;
-      const tsSec = Number(tx.time || tx.blocktime || 0);
-      const height = Number(entry.height || 0);
-      const confirmations = Number(tx.confirmations || (height > 0 ? 1 : 0));
+        const absBase = netSignedBase < 0n ? -netSignedBase : netSignedBase;
+        const amount = Number(absBase) / 10 ** primaryDecimals;
+        const satsDelta = Number(outSatsSelf - inSatsSelf);
+        const feeSats = resolvedInputs && totalInSats >= totalOutSats ? Number(totalInSats - totalOutSats) : undefined;
+        const tsSec = Number(tx.time || tx.blocktime || 0);
+        const height = Number(entry.height || 0);
+        const confirmations = Number(tx.confirmations || (height > 0 ? 1 : 0));
 
-      items.push({
-        id: entry.tx_hash,
-        txid: entry.tx_hash,
-        type: direction === 'out' ? 'send' : 'receive',
-        direction,
-        symbol: primarySymbol,
-        amount,
-        satsDelta,
-        status: height > 0 ? 'confirmed' : 'pending',
-        timestamp: tsSec > 0 ? tsSec * 1000 : Date.now(),
-        height,
-        confirmations,
-        feeSats,
-        explorerUrl: `${txExplorerBase}/${entry.tx_hash}`
-      });
-    }
+        return {
+          id: entry.tx_hash,
+          txid: entry.tx_hash,
+          type: direction === 'out' ? 'send' : 'receive',
+          direction,
+          symbol: primarySymbol,
+          amount,
+          satsDelta,
+          status: height > 0 ? 'confirmed' : 'pending',
+          timestamp: tsSec > 0 ? tsSec * 1000 : Date.now(),
+          height,
+          confirmations,
+          feeSats,
+          explorerUrl: `${txExplorerBase}/${entry.tx_hash}`
+        };
+      })
+    );
 
-    const result = {
+    return {
       network: isChipnet ? 'testnet' : 'mainnet',
       address: parsed.baseAddress,
-      items
+      items: items.filter(Boolean)
     };
-    this.historyCache.set(cacheKey, { ts: Date.now(), data: result });
-    return result;
   }
 }
 
