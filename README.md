@@ -183,8 +183,9 @@ BinaryLiquid/
 # Install backend dependencies (includes solc and cashc compilers)
 npm --prefix backend install
 
-# Link shared compiler modules for contracts/compile.js and compile all Solidity & CashScript contracts
+# Link shared modules for contracts and watchman, then compile all Solidity & CashScript contracts
 ln -sfn ../backend/node_modules contracts/node_modules
+ln -sfn ../backend/node_modules watchman/node_modules
 node contracts/compile.js
 ```
 

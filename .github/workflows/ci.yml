@@ -32,6 +32,7 @@ jobs:
         run: |
           npm --prefix backend install --no-audit --no-fund
           ln -sfn ../backend/node_modules contracts/node_modules
+          ln -sfn ../backend/node_modules watchman/node_modules
 
       - name: Compile EVM & CashScript V2 / P2P Smart Contracts
         run: node contracts/compile.js
