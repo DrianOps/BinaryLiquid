@@ -13,6 +13,7 @@ import { evmService } from './services/evmService.js';
 import { solanaService } from './services/solanaService.js';
 import { ltcService } from './services/ltcService.js';
 import { tonService } from './services/tonService.js';
+import { balanceCache } from './services/balanceCache.js';
 import { relayerEngine } from './services/relayerEngine.js';
 import { poolService } from './services/poolService.js';
 import { bcmrService, normalizeCategoryId } from './services/bcmrService.js';
@@ -132,6 +133,15 @@ const swapCreationLimiter = rateLimit({
   message: { success: false, error: 'Swap creation limit exceeded. Please wait a moment.' }
 });
 app.use('/api/swap/create', swapCreationLimiter);
+
+// Rate Limiter for multi-chain balance/portfolio reads (Redis + L1 coalescing absorbs spikes; blocks abuse)
+const balanceReadLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: 'Demasiadas consultas de balances seguidas. Espera un momento.' }
+});
 
 // Request logger
 app.use((req, res, next) => {
@@ -2179,24 +2189,22 @@ function resolveRequestAddresses(primaryRaw, extras = {}, isTestnet = true) {
 }
 
 // Non-Custodial Live On-Chain Wallet Balances & Authentication
-app.get('/api/wallet/balances/:address', async (req, res) => {
+app.get('/api/wallet/balances/:address', balanceReadLimiter, async (req, res) => {
   try {
     const { address } = req.params;
     const isTestnet = String(req.query.network || 'testnet').trim().toLowerCase() === 'testnet';
+    const fresh = req.query.fresh === '1' || req.query.refresh === '1';
+    const resolved = resolveRequestAddresses(address, req.query, isTestnet);
     const {
       targetBch,
       targetEvm,
       targetSol,
       targetLtc,
       targetTon
-    } = resolveRequestAddresses(address, req.query, isTestnet);
+    } = resolved;
 
     const [
-      bchOnChain,
-      evmOnChain,
-      solOnChain,
-      ltcOnChain,
-      tonOnChain,
+      chainBalances,
       bchPrice,
       polPrice,
       solPrice,
@@ -2204,11 +2212,7 @@ app.get('/api/wallet/balances/:address', async (req, res) => {
       tonPrice,
       ltcPrice
     ] = await Promise.all([
-      targetBch ? bchService.getAddressBalances(targetBch, isTestnet) : Promise.resolve({ BCH: 0, PUSD: 0 }),
-      targetEvm ? evmService.getAddressBalances(targetEvm, isTestnet) : Promise.resolve({ POL: 0, USDT: 0, USDC: 0, BNB: 0, USDT_BSC: 0 }),
-      targetSol ? solanaService.getAddressBalances(targetSol, isTestnet) : Promise.resolve({ SOL: 0, USDT: 0, USDC: 0 }),
-      targetLtc ? ltcService.getBalance(targetLtc, isTestnet) : Promise.resolve({ ltc: 0, litoshis: 0 }),
-      targetTon ? tonService.getAddressBalances(targetTon, isTestnet) : Promise.resolve({ TON: 0, USDT: 0 }),
+      balanceCache.getMultiChainBalances(resolved, isTestnet, { fresh }),
       oraclePool.getPriceUsd('BCH').catch(() => 480),
       oraclePool.getPriceUsd('POL').catch(() => 0.45),
       oraclePool.getPriceUsd('SOL').catch(() => 180),
@@ -2216,6 +2220,12 @@ app.get('/api/wallet/balances/:address', async (req, res) => {
       oraclePool.getPriceUsd('TON').catch(() => 5.2),
       oraclePool.getPriceUsd('LTC').catch(() => 85)
     ]);
+
+    const bchOnChain = chainBalances.bch || { BCH: 0, PUSD: 0 };
+    const evmOnChain = chainBalances.evm || { POL: 0, USDT: 0, USDC: 0, BNB: 0, USDT_BSC: 0 };
+    const solOnChain = chainBalances.sol || { SOL: 0, USDT: 0, USDC: 0 };
+    const ltcOnChain = chainBalances.ltc || { ltc: 0, litoshis: 0 };
+    const tonOnChain = chainBalances.ton || { TON: 0, USDT: 0 };
 
     const balances = {
       PUSD: bchOnChain.PUSD || 0,
@@ -2342,11 +2352,12 @@ app.post('/api/auth/login', async (req, res) => {
       isTestnet
     );
 
-    const [bchOnChain, evmOnChain, solOnChain] = await Promise.all([
-      resolved.targetBch ? bchService.getAddressBalances(resolved.targetBch, isTestnet) : Promise.resolve({ BCH: 0, PUSD: 0 }),
-      resolved.targetEvm ? evmService.getAddressBalances(resolved.targetEvm, isTestnet) : Promise.resolve({ POL: 0, USDT: 0, USDC: 0, BNB: 0, USDT_BSC: 0 }),
-      resolved.targetSol ? solanaService.getAddressBalances(resolved.targetSol, isTestnet) : Promise.resolve({ SOL: 0, USDT: 0, USDC: 0 })
-    ]);
+    const resolvedBalances = await balanceCache.getMultiChainBalances(resolved, isTestnet, {
+      chains: ['bch', 'evm', 'sol']
+    });
+    const bchOnChain = resolvedBalances.bch || { BCH: 0, PUSD: 0 };
+    const evmOnChain = resolvedBalances.evm || { POL: 0, USDT: 0, USDC: 0, BNB: 0, USDT_BSC: 0 };
+    const solOnChain = resolvedBalances.sol || { SOL: 0, USDT: 0, USDC: 0 };
 
     const user = {
       address: resolved.primaryUser || primary,
@@ -2383,13 +2394,15 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 // ==============================================================================
-// UNIFIED NON-CUSTODIAL PORTFOLIO API (Real On-Chain Balances, Pools, Lend, Perps)
+// UNIFIED NON-CUSTODIAL PORTFOLIO API (Redis/L1 Cached + Single-Flight Parallel)
 // ==============================================================================
-app.get('/api/portfolio/:address', async (req, res) => {
+app.get('/api/portfolio/:address', balanceReadLimiter, async (req, res) => {
   try {
     const { address } = req.params;
     const network = String(req.query.network || 'testnet').trim().toLowerCase();
     const isTestnet = network === 'testnet';
+    const fresh = req.query.fresh === '1' || req.query.refresh === '1';
+    const resolved = resolveRequestAddresses(address, req.query, isTestnet);
     const {
       targetBch,
       targetBchPrimary,
@@ -2398,393 +2411,412 @@ app.get('/api/portfolio/:address', async (req, res) => {
       targetLtc,
       targetTon,
       primaryUser
-    } = resolveRequestAddresses(address, req.query, isTestnet);
+    } = resolved;
 
-    // 1. Live Balances & Prices
-    const [bchOnChain, evmOnChain, solOnChain, ltcOnChain, tonOnChain, bchPrice, polPrice, solPrice, bnbPrice, ltcPrice, tonPrice] = await Promise.all([
-      targetBch ? bchService.getAddressBalances(targetBch, isTestnet) : Promise.resolve({ BCH: 0, PUSD: 0 }),
-      targetEvm ? evmService.getAddressBalances(targetEvm, isTestnet) : Promise.resolve({ POL: 0, USDT: 0, USDC: 0, BNB: 0, USDT_BSC: 0 }),
-      targetSol ? solanaService.getAddressBalances(targetSol, isTestnet) : Promise.resolve({ SOL: 0, USDT: 0, USDC: 0 }),
-      targetLtc ? ltcService.getBalance(targetLtc, isTestnet) : Promise.resolve({ ltc: 0, litoshis: 0 }),
-      targetTon ? tonService.getAddressBalances(targetTon, isTestnet) : Promise.resolve({ TON: 0, USDT: 0 }),
-      oraclePool.getPriceUsd('BCH').catch(() => 450.0),
-      oraclePool.getPriceUsd('POL').catch(() => 0.40),
-      oraclePool.getPriceUsd('SOL').catch(() => 101.5),
-      oraclePool.getPriceUsd('BNB').catch(() => 620.0),
-      oraclePool.getPriceUsd('LTC').catch(() => 85.0),
-      oraclePool.getPriceUsd('TON').catch(() => 5.20)
-    ]);
+    const portfolioCacheKey = balanceCache.buildPortfolioKey(resolved, isTestnet);
 
-    const tokenList = [
-      {
-        symbol: 'PUSD',
-        name: 'Paryon USD',
-        chain: isTestnet ? 'BCH Chipnet' : 'Bitcoin Cash',
-        chainType: 'BCH',
-        chainBadge: 'BCH CashTokens',
-        balance: bchOnChain.PUSD || 0,
-        priceUsd: 1.0,
-        valueUsd: Number(((bchOnChain.PUSD || 0) * 1.0).toFixed(2)),
-        change24h: 0.0,
-        icon: '/PUSD.png',
-        isCashToken: true
-      },
-      {
-        symbol: 'BCH',
-        name: 'Bitcoin Cash',
-        chain: isTestnet ? 'BCH Chipnet' : 'Bitcoin Cash',
-        chainType: 'BCH',
-        chainBadge: 'BCH Native',
-        balance: bchOnChain.BCH || 0,
-        priceUsd: Number(bchPrice.toFixed(2)),
-        valueUsd: Number(((bchOnChain.BCH || 0) * bchPrice).toFixed(2)),
-        change24h: 1.85,
-        icon: '/BCH.png',
-        isNative: true
-      },
-      {
-        symbol: 'USDT',
-        name: 'Tether USD (Polygon)',
-        chain: isTestnet ? 'Polygon Amoy' : 'Polygon PoS',
-        chainType: 'EVM',
-        chainBadge: 'Polygon PoS',
-        balance: evmOnChain.USDT || 0,
-        priceUsd: 1.0,
-        valueUsd: Number(((evmOnChain.USDT || 0) * 1.0).toFixed(2)),
-        change24h: 0.01,
-        icon: '/USDT.png'
-      },
-      {
-        symbol: 'USDC',
-        name: 'USD Coin (Polygon)',
-        chain: isTestnet ? 'Polygon Amoy' : 'Polygon PoS',
-        chainType: 'EVM',
-        chainBadge: 'Polygon PoS',
-        balance: evmOnChain.USDC || 0,
-        priceUsd: 1.0,
-        valueUsd: Number(((evmOnChain.USDC || 0) * 1.0).toFixed(2)),
-        change24h: 0.0,
-        icon: '/USDC.png'
-      },
-      {
-        symbol: 'POL',
-        name: 'Polygon Ecosystem Token',
-        chain: isTestnet ? 'Polygon Amoy' : 'Polygon PoS',
-        chainType: 'EVM',
-        chainBadge: 'Polygon Native',
-        balance: evmOnChain.POL || 0,
-        priceUsd: Number(polPrice.toFixed(3)),
-        valueUsd: Number(((evmOnChain.POL || 0) * polPrice).toFixed(2)),
-        change24h: -0.45,
-        icon: '/POL.png',
-        isNative: true
-      },
-      {
-        symbol: 'BNB',
-        name: 'BNB Smart Chain',
-        chain: isTestnet ? 'BSC Testnet' : 'BNB Smart Chain',
-        chainType: 'BSC',
-        chainBadge: 'BSC Native',
-        balance: evmOnChain.BNB || 0,
-        priceUsd: Number(bnbPrice.toFixed(2)),
-        valueUsd: Number(((evmOnChain.BNB || 0) * bnbPrice).toFixed(2)),
-        change24h: 0.35,
-        icon: '/BNB.png',
-        isNative: true
-      },
-      {
-        symbol: 'USDT',
-        name: 'Tether USD (BSC)',
-        chain: isTestnet ? 'BSC Testnet' : 'BNB Smart Chain',
-        chainType: 'BSC',
-        chainBadge: 'BEP-20',
-        balance: evmOnChain.USDT_BSC || 0,
-        priceUsd: 1.0,
-        valueUsd: Number(((evmOnChain.USDT_BSC || 0) * 1.0).toFixed(2)),
-        change24h: 0.0,
-        icon: '/USDT.png'
-      },
-      {
-        symbol: 'USDT',
-        name: 'Tether USD (Solana)',
-        chain: isTestnet ? 'Solana Devnet' : 'Solana Mainnet',
-        chainType: 'SVM',
-        chainBadge: 'Solana SPL',
-        balance: solOnChain.USDT || 0,
-        priceUsd: 1.0,
-        valueUsd: Number(((solOnChain.USDT || 0) * 1.0).toFixed(2)),
-        change24h: 0.01,
-        icon: '/USDT.png'
-      },
-      {
-        symbol: 'USDC',
-        name: 'USD Coin (Solana)',
-        chain: isTestnet ? 'Solana Devnet' : 'Solana Mainnet',
-        chainType: 'SVM',
-        chainBadge: 'Solana SPL',
-        balance: solOnChain.USDC || 0,
-        priceUsd: 1.0,
-        valueUsd: Number(((solOnChain.USDC || 0) * 1.0).toFixed(2)),
-        change24h: 0.0,
-        icon: '/USDC.png'
-      },
-      {
-        symbol: 'SOL',
-        name: 'Solana',
-        chain: isTestnet ? 'Solana Devnet' : 'Solana Mainnet',
-        chainType: 'SVM',
-        chainBadge: 'Solana Native',
-        balance: solOnChain.SOL || 0,
-        priceUsd: Number(solPrice.toFixed(2)),
-        valueUsd: Number(((solOnChain.SOL || 0) * solPrice).toFixed(2)),
-        change24h: 3.2,
-        icon: '/SOL.png',
-        isNative: true
-      },
-      {
-        symbol: 'LTC',
-        name: 'Litecoin',
-        chain: isTestnet ? 'Litecoin Testnet4' : 'Litecoin',
-        chainType: 'LTC',
-        chainBadge: 'LTC Native',
-        balance: ltcOnChain.ltc || 0,
-        priceUsd: Number(ltcPrice.toFixed(2)),
-        valueUsd: Number(((ltcOnChain.ltc || 0) * ltcPrice).toFixed(2)),
-        change24h: 0.5,
-        icon: '/LTC.png',
-        isNative: true
-      },
-      {
-        symbol: 'TON',
-        name: 'Toncoin',
-        chain: isTestnet ? 'TON Testnet' : 'TON Mainnet',
-        chainType: 'TON',
-        chainBadge: 'TON Native',
-        balance: tonOnChain.TON || 0,
-        priceUsd: Number(tonPrice.toFixed(2)),
-        valueUsd: Number(((tonOnChain.TON || 0) * tonPrice).toFixed(2)),
-        change24h: 0.4,
-        icon: '/TON.png',
-        isNative: true
-      },
-      {
-        symbol: 'USDT',
-        name: 'Tether USD (TON)',
-        chain: isTestnet ? 'TON Testnet' : 'TON Mainnet',
-        chainType: 'TON',
-        chainBadge: 'TON Jetton',
-        balance: tonOnChain.USDT || 0,
-        priceUsd: 1.0,
-        valueUsd: Number(((tonOnChain.USDT || 0) * 1.0).toFixed(2)),
-        change24h: 0.0,
-        icon: '/USDT.png'
-      }
-    ];
+    const payload = await balanceCache.getOrComputePortfolio(portfolioCacheKey, async () => {
+      // 1-4. Execute multi-chain RPCs, oracles, Pools, Lending & Perps in one parallel wave
+      const [
+        chainBalances,
+        bchPrice,
+        polPrice,
+        solPrice,
+        bnbPrice,
+        ltcPrice,
+        tonPrice,
+        lpPositions,
+        lendingData,
+        perpsData
+      ] = await Promise.all([
+        balanceCache.getMultiChainBalances(resolved, isTestnet, { fresh }),
+        oraclePool.getPriceUsd('BCH').catch(() => 450.0),
+        oraclePool.getPriceUsd('POL').catch(() => 0.40),
+        oraclePool.getPriceUsd('SOL').catch(() => 101.5),
+        oraclePool.getPriceUsd('BNB').catch(() => 620.0),
+        oraclePool.getPriceUsd('LTC').catch(() => 85.0),
+        oraclePool.getPriceUsd('TON').catch(() => 5.20),
+        poolService.getPositionsForAddress(primaryUser, {
+          bchAddress: targetBch,
+          evmAddress: targetEvm,
+          network
+        }).catch(() => []),
+        lendingService.getUserVault(primaryUser, {
+          bchAddress: targetBchPrimary || targetBch,
+          evmAddress: targetEvm,
+          network
+        }).catch(() => null),
+        perpsService.getUserPositions({
+          userAddress: primaryUser,
+          bchAddress: targetBch,
+          evmAddress: targetEvm,
+          network
+        }).catch(() => ({ positions: [], history: [] }))
+      ]);
 
-    const walletTokensValueUsd = tokenList.reduce((acc, t) => acc + t.valueUsd, 0);
+      const bchOnChain = chainBalances.bch || { BCH: 0, PUSD: 0 };
+      const evmOnChain = chainBalances.evm || { POL: 0, USDT: 0, USDC: 0, BNB: 0, USDT_BSC: 0 };
+      const solOnChain = chainBalances.sol || { SOL: 0, USDT: 0, USDC: 0 };
+      const ltcOnChain = chainBalances.ltc || { ltc: 0, litoshis: 0 };
+      const tonOnChain = chainBalances.ton || { TON: 0, USDT: 0 };
 
-    // 2. LP Positions from PoolService
-    const lpPositions = await poolService.getPositionsForAddress(primaryUser, {
-      bchAddress: targetBch,
-      evmAddress: targetEvm,
-      network
-    }).catch(() => []);
-
-    const lpTotalValueUsd = lpPositions.reduce((acc, p) => acc + (p.totalValueUsd || 0), 0);
-    const lpTotalProfitUsd = lpPositions.reduce((acc, p) => acc + (p.profitUsd || 0), 0);
-
-    // 3. Lending Vault & Supply from LendingService
-    const lendingData = await lendingService.getUserVault(primaryUser, {
-      bchAddress: targetBchPrimary || targetBch,
-      evmAddress: targetEvm,
-      network
-    }).catch(() => null);
-
-    const lendingCollateralUsd = lendingData?.vault?.collateralUsd || 0;
-    const lendingDebtUsd = lendingData?.vault?.totalDebtUsd || 0;
-    const lendingSuppliedUsd = lendingData?.supply?.totalSuppliedUsd || 0;
-    const lendingYieldEarnedUsd = (lendingData?.supply?.yieldEarnedPusd || 0) + (lendingData?.supply?.yieldEarnedUsdt || 0);
-
-    // 4. Perps Positions from PerpsService (isolated margin positions cannot go below $0 equity)
-    const perpsData = await perpsService.getUserPositions({
-      userAddress: primaryUser,
-      bchAddress: targetBch,
-      evmAddress: targetEvm,
-      network
-    }).catch(() => ({ positions: [], history: [] }));
-
-    const perpsMarginLockedUsd = (perpsData.positions || []).reduce((acc, p) => acc + Math.max(0, Number(p.marginUsd || 0)), 0);
-    const perpsUnrealizedPnlUsd = (perpsData.positions || []).reduce(
-      (acc, p) => acc + Math.max(-Number(p.marginUsd || 0), Number(p.unrealizedPnlUsd || 0)),
-      0
-    );
-    const perpsEquityUsd = (perpsData.positions || []).reduce(
-      (acc, p) => acc + Math.max(0, Number(p.marginUsd || 0) + Number(p.unrealizedPnlUsd || 0)),
-      0
-    );
-    const perpsRealizedPnlUsd = (perpsData.history || []).reduce((acc, h) => acc + Number(h.pnlUsd || 0), 0);
-
-    // 5. Aggregate Net Worth (isolated Perps equity bounded >= 0 per position)
-    const netWorthUsd = Number((
-      walletTokensValueUsd +
-      lpTotalValueUsd +
-      lendingCollateralUsd +
-      lendingSuppliedUsd -
-      lendingDebtUsd +
-      perpsEquityUsd
-    ).toFixed(2));
-
-    // 6. User Activity Unified (network-scoped + BCH q/z variant aware + chain-accurate USD/explorers)
-    const targetBchList = splitCashAddresses(targetBch || '', isTestnet);
-    const bchSet = new Set();
-    for (const ba of targetBchList) {
-      for (const variant of expandBchAddressVariants(ba)) bchSet.add(variant);
-    }
-    const matchesUserAddress = (addr) => {
-      if (!addr) return false;
-      const lower = String(addr).trim().toLowerCase();
-      if (targetEvm && lower === targetEvm.toLowerCase()) return true;
-      if (targetSol && String(addr).trim() === targetSol) return true;
-      if (targetLtc && lower === targetLtc.toLowerCase()) return true;
-      if (targetTon && String(addr).trim() === targetTon) return true;
-      if (bchSet.size > 0 && bchSet.has(lower)) return true;
-      if (targetBchList.some(b => isSameBchAddress(b, addr))) return true;
-      return false;
-    };
-
-    const tokenUsdPriceMap = {
-      PUSD: 1.0, USDT: 1.0, USDC: 1.0, MUSD: 1.0,
-      USDT_SOL: 1.0, USDC_SOL: 1.0, USDT_BSC: 1.0, USDT_TON: 1.0,
-      BCH: bchPrice, POL: polPrice, SOL: solPrice, BNB: bnbPrice, LTC: ltcPrice, TON: tonPrice
-    };
-    const resolveSwapExplorerUrl = (s) => {
-      if (s.payoutExplorerUrl) return s.payoutExplorerUrl;
-      if (!s.depositTxHash) return null;
-      const ch = String(s.fromChain || '').toLowerCase();
-      if (ch.includes('solana')) return `https://solscan.io/tx/${s.depositTxHash}${isTestnet ? '?cluster=devnet' : ''}`;
-      if (ch.includes('polygon') || ch.includes('amoy')) return `https://${isTestnet ? 'amoy.' : ''}polygonscan.com/tx/${s.depositTxHash}`;
-      if (ch.includes('bsc')) return `https://${isTestnet ? 'testnet.' : ''}bscscan.com/tx/${s.depositTxHash}`;
-      if (ch.includes('ton')) return `https://${isTestnet ? 'testnet.' : ''}tonviewer.com/transaction/${s.depositTxHash}`;
-      if (ch.includes('ltc') || ch.includes('litecoin')) return isTestnet ? `https://mempool.space/testnet4/tx/${s.depositTxHash}` : `https://blockchair.com/litecoin/transaction/${s.depositTxHash}`;
-      return isTestnet ? `https://chipnet.imaginary.cash/tx/${s.depositTxHash}` : `https://blockchair.com/bitcoin-cash/transaction/${s.depositTxHash}`;
-    };
-
-    const userSwaps = (db.memoryState.swaps || [])
-      .filter(s => {
-        const swapNet = String(s.network || 'testnet').toLowerCase();
-        if (swapNet !== (isTestnet ? 'testnet' : 'mainnet')) return false;
-        return matchesUserAddress(s.senderAddress) || matchesUserAddress(s.recipientAddress);
-      })
-      .map(s => {
-        const px = tokenUsdPriceMap[String(s.fromToken || '').toUpperCase()] ?? 1.0;
-        const amt = Number(s.fromAmount || 0);
-        return {
-          id: s.id,
-          type: 'SWAP',
-          title: `Bridge Swap ${s.fromAmount} ${s.fromToken} → ${s.toAmount} ${s.toToken}`,
-          status: s.status,
-          timestamp: s.createdAt,
-          txHash: s.payoutTxHash || s.depositTxHash,
-          explorerUrl: resolveSwapExplorerUrl(s),
-          amountUsd: Number((amt * px).toFixed(2))
-        };
-      });
-
-    const lendingTxs = (db.memoryState.lendingTransactions || [])
-      .filter(t => {
-        const txNet = String(t.network || 'testnet').toLowerCase();
-        if (txNet !== (isTestnet ? 'testnet' : 'mainnet')) return false;
-        const vk = String(t.vaultKey || '');
-        const keyAddr = vk.includes(':') ? vk.slice(vk.indexOf(':') + 1) : vk;
-        if (matchesUserAddress(keyAddr)) return true;
-        const cEvm = (targetEvm || '').toLowerCase();
-        if (cEvm && vk.toLowerCase().includes(cEvm)) return true;
-        for (const variant of bchSet) {
-          if (vk.toLowerCase().includes(variant)) return true;
-        }
-        return false;
-      })
-      .map(t => {
-        const px = tokenUsdPriceMap[String(t.token || '').toUpperCase()] ?? 1.0;
-        return {
-          id: t.id,
-          type: 'LEND',
-          title: `Lend: ${t.action} ${t.amount} ${t.token}`,
-          status: 'COMPLETED',
-          timestamp: t.createdAt,
-          txHash: t.txHash,
-          explorerUrl: t.explorerUrl,
-          amountUsd: Number((Number(t.amount || 0) * px).toFixed(2))
-        };
-      });
-
-    const perpTxs = (perpsData.history || []).map(h => ({
-      id: h.id,
-      type: 'PERP',
-      title: `Perp ${h.side?.toUpperCase()} ${h.symbol} (${h.leverage}x)`,
-      status: h.status === 'LIQUIDATED' ? 'LIQUIDATED' : (h.pnlUsd >= 0 ? 'PROFIT' : 'LOSS'),
-      timestamp: new Date(h.closedAt || Date.now()).toISOString(),
-      txHash: h.closeTxHash || h.openTxHash,
-      explorerUrl: h.closeExplorerUrl || h.openExplorerUrl,
-      amountUsd: h.sizeUsd,
-      pnlUsd: h.pnlUsd
-    }));
-
-    const unifiedActivity = [...userSwaps, ...lendingTxs, ...perpTxs]
-      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-      .slice(0, 30);
-
-    // 7. Timeline chart data points anchored cleanly to real netWorthUsd on the final point
-    const now = Date.now();
-    const buildSeries = (len, stepMs, driftFn, timeFmt) => Array.from({ length: len }).map((_, i) => {
-      const t = now - (len - 1 - i) * stepMs;
-      const mult = i === len - 1 ? 1.0 : (1.0 + driftFn(i, len));
-      return {
-        time: timeFmt(new Date(t)),
-        value: Number(Math.max(0, netWorthUsd * mult).toFixed(2))
+      const degradedChains = {
+        bch: Boolean(bchOnChain?.electrumError || bchOnChain?.rpcDegraded),
+        evm: Boolean(evmOnChain?.rpcDegraded),
+        solana: Boolean(solOnChain?.rpcDegraded),
+        ltc: Boolean(ltcOnChain?.rpcDegraded),
+        ton: Boolean(tonOnChain?.rpcDegraded)
       };
-    });
-    const intervals = {
-      '1h': buildSeries(12, 5 * 60 * 1000, (i) => -0.005 + Math.sin(i / 2) * 0.004, (d) => d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })),
-      '1d': buildSeries(24, 3600 * 1000, (i) => -0.02 + Math.sin(i / 3) * 0.012 + (i / 24) * 0.015, (d) => d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })),
-      '1w': buildSeries(7, 86400 * 1000, (i) => -0.04 + Math.cos(i / 2) * 0.02 + (i / 7) * 0.03, (d) => d.toLocaleDateString([], { weekday: 'short' })),
-      '1m': buildSeries(30, 86400 * 1000, (i) => -0.07 + Math.sin(i / 5) * 0.035 + (i / 30) * 0.05, (d) => d.toLocaleDateString([], { month: 'short', day: 'numeric' })),
-      '1y': buildSeries(12, 30 * 86400 * 1000, (i) => -0.12 + (i / 11) * 0.12, (d) => d.toLocaleDateString([], { month: 'short' })),
-      'all': buildSeries(16, 20 * 86400 * 1000, (i) => -0.18 + (i / 15) * 0.18, (d) => d.toLocaleDateString([], { month: 'short', year: '2-digit' }))
-    };
 
-    res.json({
-      success: true,
-      network,
-      address: primaryUser,
-      bchAddress: targetBch,
-      evmAddress: targetEvm,
-      solanaAddress: targetSol,
-      ltcAddress: targetLtc,
-      tonAddress: targetTon,
-      netWorthUsd,
-      breakdown: {
-        walletTokensUsd: Number(walletTokensValueUsd.toFixed(2)),
-        lpTotalValueUsd: Number(lpTotalValueUsd.toFixed(2)),
-        lendingCollateralUsd: Number(lendingCollateralUsd.toFixed(2)),
-        lendingSuppliedUsd: Number(lendingSuppliedUsd.toFixed(2)),
-        lendingDebtUsd: Number(lendingDebtUsd.toFixed(2)),
-        perpsMarginLockedUsd: Number(perpsMarginLockedUsd.toFixed(2)),
-        perpsUnrealizedPnlUsd: Number(perpsUnrealizedPnlUsd.toFixed(2))
-      },
-      performance: {
-        unrealizedPnlUsd: Number((perpsUnrealizedPnlUsd + lpTotalProfitUsd).toFixed(2)),
-        realizedPnlUsd: Number(perpsRealizedPnlUsd.toFixed(2)),
-        totalYieldEarnedUsd: Number(lendingYieldEarnedUsd.toFixed(2)),
-        totalReturnUsd: Number((perpsUnrealizedPnlUsd + lpTotalProfitUsd + perpsRealizedPnlUsd + lendingYieldEarnedUsd).toFixed(2))
-      },
-      tokens: tokenList,
-      pools: lpPositions,
-      lending: lendingData,
-      perps: perpsData,
-      activity: unifiedActivity,
-      chart: intervals
-    });
+      const tokenList = [
+        {
+          symbol: 'PUSD',
+          name: 'Paryon USD',
+          chain: isTestnet ? 'BCH Chipnet' : 'Bitcoin Cash',
+          chainType: 'BCH',
+          chainBadge: 'BCH CashTokens',
+          balance: bchOnChain.PUSD || 0,
+          priceUsd: 1.0,
+          valueUsd: Number(((bchOnChain.PUSD || 0) * 1.0).toFixed(2)),
+          change24h: 0.0,
+          icon: '/PUSD.png',
+          isCashToken: true
+        },
+        {
+          symbol: 'BCH',
+          name: 'Bitcoin Cash',
+          chain: isTestnet ? 'BCH Chipnet' : 'Bitcoin Cash',
+          chainType: 'BCH',
+          chainBadge: 'BCH Native',
+          balance: bchOnChain.BCH || 0,
+          priceUsd: Number(bchPrice.toFixed(2)),
+          valueUsd: Number(((bchOnChain.BCH || 0) * bchPrice).toFixed(2)),
+          change24h: 1.85,
+          icon: '/BCH.png',
+          isNative: true
+        },
+        {
+          symbol: 'USDT',
+          name: 'Tether USD (Polygon)',
+          chain: isTestnet ? 'Polygon Amoy' : 'Polygon PoS',
+          chainType: 'EVM',
+          chainBadge: 'Polygon PoS',
+          balance: evmOnChain.USDT || 0,
+          priceUsd: 1.0,
+          valueUsd: Number(((evmOnChain.USDT || 0) * 1.0).toFixed(2)),
+          change24h: 0.01,
+          icon: '/USDT.png'
+        },
+        {
+          symbol: 'USDC',
+          name: 'USD Coin (Polygon)',
+          chain: isTestnet ? 'Polygon Amoy' : 'Polygon PoS',
+          chainType: 'EVM',
+          chainBadge: 'Polygon PoS',
+          balance: evmOnChain.USDC || 0,
+          priceUsd: 1.0,
+          valueUsd: Number(((evmOnChain.USDC || 0) * 1.0).toFixed(2)),
+          change24h: 0.0,
+          icon: '/USDC.png'
+        },
+        {
+          symbol: 'POL',
+          name: 'Polygon Ecosystem Token',
+          chain: isTestnet ? 'Polygon Amoy' : 'Polygon PoS',
+          chainType: 'EVM',
+          chainBadge: 'Polygon Native',
+          balance: evmOnChain.POL || 0,
+          priceUsd: Number(polPrice.toFixed(3)),
+          valueUsd: Number(((evmOnChain.POL || 0) * polPrice).toFixed(2)),
+          change24h: -0.45,
+          icon: '/POL.png',
+          isNative: true
+        },
+        {
+          symbol: 'BNB',
+          name: 'BNB Smart Chain',
+          chain: isTestnet ? 'BSC Testnet' : 'BNB Smart Chain',
+          chainType: 'BSC',
+          chainBadge: 'BSC Native',
+          balance: evmOnChain.BNB || 0,
+          priceUsd: Number(bnbPrice.toFixed(2)),
+          valueUsd: Number(((evmOnChain.BNB || 0) * bnbPrice).toFixed(2)),
+          change24h: 0.35,
+          icon: '/BNB.png',
+          isNative: true
+        },
+        {
+          symbol: 'USDT',
+          name: 'Tether USD (BSC)',
+          chain: isTestnet ? 'BSC Testnet' : 'BNB Smart Chain',
+          chainType: 'BSC',
+          chainBadge: 'BEP-20',
+          balance: evmOnChain.USDT_BSC || 0,
+          priceUsd: 1.0,
+          valueUsd: Number(((evmOnChain.USDT_BSC || 0) * 1.0).toFixed(2)),
+          change24h: 0.0,
+          icon: '/USDT.png'
+        },
+        {
+          symbol: 'USDT',
+          name: 'Tether USD (Solana)',
+          chain: isTestnet ? 'Solana Devnet' : 'Solana Mainnet',
+          chainType: 'SVM',
+          chainBadge: 'Solana SPL',
+          balance: solOnChain.USDT || 0,
+          priceUsd: 1.0,
+          valueUsd: Number(((solOnChain.USDT || 0) * 1.0).toFixed(2)),
+          change24h: 0.01,
+          icon: '/USDT.png'
+        },
+        {
+          symbol: 'USDC',
+          name: 'USD Coin (Solana)',
+          chain: isTestnet ? 'Solana Devnet' : 'Solana Mainnet',
+          chainType: 'SVM',
+          chainBadge: 'Solana SPL',
+          balance: solOnChain.USDC || 0,
+          priceUsd: 1.0,
+          valueUsd: Number(((solOnChain.USDC || 0) * 1.0).toFixed(2)),
+          change24h: 0.0,
+          icon: '/USDC.png'
+        },
+        {
+          symbol: 'SOL',
+          name: 'Solana',
+          chain: isTestnet ? 'Solana Devnet' : 'Solana Mainnet',
+          chainType: 'SVM',
+          chainBadge: 'Solana Native',
+          balance: solOnChain.SOL || 0,
+          priceUsd: Number(solPrice.toFixed(2)),
+          valueUsd: Number(((solOnChain.SOL || 0) * solPrice).toFixed(2)),
+          change24h: 3.2,
+          icon: '/SOL.png',
+          isNative: true
+        },
+        {
+          symbol: 'LTC',
+          name: 'Litecoin',
+          chain: isTestnet ? 'Litecoin Testnet4' : 'Litecoin',
+          chainType: 'LTC',
+          chainBadge: 'LTC Native',
+          balance: ltcOnChain.ltc || 0,
+          priceUsd: Number(ltcPrice.toFixed(2)),
+          valueUsd: Number(((ltcOnChain.ltc || 0) * ltcPrice).toFixed(2)),
+          change24h: 0.5,
+          icon: '/LTC.png',
+          isNative: true
+        },
+        {
+          symbol: 'TON',
+          name: 'Toncoin',
+          chain: isTestnet ? 'TON Testnet' : 'TON Mainnet',
+          chainType: 'TON',
+          chainBadge: 'TON Native',
+          balance: tonOnChain.TON || 0,
+          priceUsd: Number(tonPrice.toFixed(2)),
+          valueUsd: Number(((tonOnChain.TON || 0) * tonPrice).toFixed(2)),
+          change24h: 0.4,
+          icon: '/TON.png',
+          isNative: true
+        },
+        {
+          symbol: 'USDT',
+          name: 'Tether USD (TON)',
+          chain: isTestnet ? 'TON Testnet' : 'TON Mainnet',
+          chainType: 'TON',
+          chainBadge: 'TON Jetton',
+          balance: tonOnChain.USDT || 0,
+          priceUsd: 1.0,
+          valueUsd: Number(((tonOnChain.USDT || 0) * 1.0).toFixed(2)),
+          change24h: 0.0,
+          icon: '/USDT.png'
+        }
+      ];
+
+      const walletTokensValueUsd = tokenList.reduce((acc, t) => acc + t.valueUsd, 0);
+
+      const lpTotalValueUsd = lpPositions.reduce((acc, p) => acc + (p.totalValueUsd || 0), 0);
+      const lpTotalProfitUsd = lpPositions.reduce((acc, p) => acc + (p.profitUsd || 0), 0);
+
+      const lendingCollateralUsd = lendingData?.vault?.collateralUsd || 0;
+      const lendingDebtUsd = lendingData?.vault?.totalDebtUsd || 0;
+      const lendingSuppliedUsd = lendingData?.supply?.totalSuppliedUsd || 0;
+      const lendingYieldEarnedUsd = (lendingData?.supply?.yieldEarnedPusd || 0) + (lendingData?.supply?.yieldEarnedUsdt || 0);
+
+      const perpsMarginLockedUsd = (perpsData.positions || []).reduce((acc, p) => acc + Math.max(0, Number(p.marginUsd || 0)), 0);
+      const perpsUnrealizedPnlUsd = (perpsData.positions || []).reduce(
+        (acc, p) => acc + Math.max(-Number(p.marginUsd || 0), Number(p.unrealizedPnlUsd || 0)),
+        0
+      );
+      const perpsEquityUsd = (perpsData.positions || []).reduce(
+        (acc, p) => acc + Math.max(0, Number(p.marginUsd || 0) + Number(p.unrealizedPnlUsd || 0)),
+        0
+      );
+      const perpsRealizedPnlUsd = (perpsData.history || []).reduce((acc, h) => acc + Number(h.pnlUsd || 0), 0);
+
+      const netWorthUsd = Number((
+        walletTokensValueUsd +
+        lpTotalValueUsd +
+        lendingCollateralUsd +
+        lendingSuppliedUsd -
+        lendingDebtUsd +
+        perpsEquityUsd
+      ).toFixed(2));
+
+      const targetBchList = splitCashAddresses(targetBch || '', isTestnet);
+      const bchSet = new Set();
+      for (const ba of targetBchList) {
+        for (const variant of expandBchAddressVariants(ba)) bchSet.add(variant);
+      }
+      const matchesUserAddress = (addr) => {
+        if (!addr) return false;
+        const lower = String(addr).trim().toLowerCase();
+        if (targetEvm && lower === targetEvm.toLowerCase()) return true;
+        if (targetSol && String(addr).trim() === targetSol) return true;
+        if (targetLtc && lower === targetLtc.toLowerCase()) return true;
+        if (targetTon && String(addr).trim() === targetTon) return true;
+        if (bchSet.size > 0 && bchSet.has(lower)) return true;
+        if (targetBchList.some(b => isSameBchAddress(b, addr))) return true;
+        return false;
+      };
+
+      const tokenUsdPriceMap = {
+        PUSD: 1.0, USDT: 1.0, USDC: 1.0, MUSD: 1.0,
+        USDT_SOL: 1.0, USDC_SOL: 1.0, USDT_BSC: 1.0, USDT_TON: 1.0,
+        BCH: bchPrice, POL: polPrice, SOL: solPrice, BNB: bnbPrice, LTC: ltcPrice, TON: tonPrice
+      };
+      const resolveSwapExplorerUrl = (s) => {
+        if (s.payoutExplorerUrl) return s.payoutExplorerUrl;
+        if (!s.depositTxHash) return null;
+        const ch = String(s.fromChain || '').toLowerCase();
+        if (ch.includes('solana')) return `https://solscan.io/tx/${s.depositTxHash}${isTestnet ? '?cluster=devnet' : ''}`;
+        if (ch.includes('polygon') || ch.includes('amoy')) return `https://${isTestnet ? 'amoy.' : ''}polygonscan.com/tx/${s.depositTxHash}`;
+        if (ch.includes('bsc')) return `https://${isTestnet ? 'testnet.' : ''}bscscan.com/tx/${s.depositTxHash}`;
+        if (ch.includes('ton')) return `https://${isTestnet ? 'testnet.' : ''}tonviewer.com/transaction/${s.depositTxHash}`;
+        if (ch.includes('ltc') || ch.includes('litecoin')) return isTestnet ? `https://mempool.space/testnet4/tx/${s.depositTxHash}` : `https://blockchair.com/litecoin/transaction/${s.depositTxHash}`;
+        return isTestnet ? `https://chipnet.imaginary.cash/tx/${s.depositTxHash}` : `https://blockchair.com/bitcoin-cash/transaction/${s.depositTxHash}`;
+      };
+
+      const userSwaps = (db.memoryState.swaps || [])
+        .filter(s => {
+          const swapNet = String(s.network || 'testnet').toLowerCase();
+          if (swapNet !== (isTestnet ? 'testnet' : 'mainnet')) return false;
+          return matchesUserAddress(s.senderAddress) || matchesUserAddress(s.recipientAddress);
+        })
+        .map(s => {
+          const px = tokenUsdPriceMap[String(s.fromToken || '').toUpperCase()] ?? 1.0;
+          const amt = Number(s.fromAmount || 0);
+          return {
+            id: s.id,
+            type: 'SWAP',
+            title: `Bridge Swap ${s.fromAmount} ${s.fromToken} → ${s.toAmount} ${s.toToken}`,
+            status: s.status,
+            timestamp: s.createdAt,
+            txHash: s.payoutTxHash || s.depositTxHash,
+            explorerUrl: resolveSwapExplorerUrl(s),
+            amountUsd: Number((amt * px).toFixed(2))
+          };
+        });
+
+      const lendingTxs = (db.memoryState.lendingTransactions || [])
+        .filter(t => {
+          const txNet = String(t.network || 'testnet').toLowerCase();
+          if (txNet !== (isTestnet ? 'testnet' : 'mainnet')) return false;
+          const vk = String(t.vaultKey || '');
+          const keyAddr = vk.includes(':') ? vk.slice(vk.indexOf(':') + 1) : vk;
+          if (matchesUserAddress(keyAddr)) return true;
+          const cEvm = (targetEvm || '').toLowerCase();
+          if (cEvm && vk.toLowerCase().includes(cEvm)) return true;
+          for (const variant of bchSet) {
+            if (vk.toLowerCase().includes(variant)) return true;
+          }
+          return false;
+        })
+        .map(t => {
+          const px = tokenUsdPriceMap[String(t.token || '').toUpperCase()] ?? 1.0;
+          return {
+            id: t.id,
+            type: 'LEND',
+            title: `Lend: ${t.action} ${t.amount} ${t.token}`,
+            status: 'COMPLETED',
+            timestamp: t.createdAt,
+            txHash: t.txHash,
+            explorerUrl: t.explorerUrl,
+            amountUsd: Number((Number(t.amount || 0) * px).toFixed(2))
+          };
+        });
+
+      const perpTxs = (perpsData.history || []).map(h => ({
+        id: h.id,
+        type: 'PERP',
+        title: `Perp ${h.side?.toUpperCase()} ${h.symbol} (${h.leverage}x)`,
+        status: h.status === 'LIQUIDATED' ? 'LIQUIDATED' : (h.pnlUsd >= 0 ? 'PROFIT' : 'LOSS'),
+        timestamp: new Date(h.closedAt || Date.now()).toISOString(),
+        txHash: h.closeTxHash || h.openTxHash,
+        explorerUrl: h.closeExplorerUrl || h.openExplorerUrl,
+        amountUsd: h.sizeUsd,
+        pnlUsd: h.pnlUsd
+      }));
+
+      const unifiedActivity = [...userSwaps, ...lendingTxs, ...perpTxs]
+        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+        .slice(0, 30);
+
+      const now = Date.now();
+      const buildSeries = (len, stepMs, driftFn, timeFmt) => Array.from({ length: len }).map((_, i) => {
+        const t = now - (len - 1 - i) * stepMs;
+        const mult = i === len - 1 ? 1.0 : (1.0 + driftFn(i, len));
+        return {
+          time: timeFmt(new Date(t)),
+          value: Number(Math.max(0, netWorthUsd * mult).toFixed(2))
+        };
+      });
+      const intervals = {
+        '1h': buildSeries(12, 5 * 60 * 1000, (i) => -0.005 + Math.sin(i / 2) * 0.004, (d) => d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })),
+        '1d': buildSeries(24, 3600 * 1000, (i) => -0.02 + Math.sin(i / 3) * 0.012 + (i / 24) * 0.015, (d) => d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })),
+        '1w': buildSeries(7, 86400 * 1000, (i) => -0.04 + Math.cos(i / 2) * 0.02 + (i / 7) * 0.03, (d) => d.toLocaleDateString([], { weekday: 'short' })),
+        '1m': buildSeries(30, 86400 * 1000, (i) => -0.07 + Math.sin(i / 5) * 0.035 + (i / 30) * 0.05, (d) => d.toLocaleDateString([], { month: 'short', day: 'numeric' })),
+        '1y': buildSeries(12, 30 * 86400 * 1000, (i) => -0.12 + (i / 11) * 0.12, (d) => d.toLocaleDateString([], { month: 'short' })),
+        'all': buildSeries(16, 20 * 86400 * 1000, (i) => -0.18 + (i / 15) * 0.18, (d) => d.toLocaleDateString([], { month: 'short', year: '2-digit' }))
+      };
+
+      return {
+        success: true,
+        network,
+        address: primaryUser,
+        bchAddress: targetBch,
+        evmAddress: targetEvm,
+        solanaAddress: targetSol,
+        ltcAddress: targetLtc,
+        tonAddress: targetTon,
+        degradedChains,
+        netWorthUsd,
+        breakdown: {
+          walletTokensUsd: Number(walletTokensValueUsd.toFixed(2)),
+          lpTotalValueUsd: Number(lpTotalValueUsd.toFixed(2)),
+          lendingCollateralUsd: Number(lendingCollateralUsd.toFixed(2)),
+          lendingSuppliedUsd: Number(lendingSuppliedUsd.toFixed(2)),
+          lendingDebtUsd: Number(lendingDebtUsd.toFixed(2)),
+          perpsMarginLockedUsd: Number(perpsMarginLockedUsd.toFixed(2)),
+          perpsUnrealizedPnlUsd: Number(perpsUnrealizedPnlUsd.toFixed(2))
+        },
+        performance: {
+          unrealizedPnlUsd: Number((perpsUnrealizedPnlUsd + lpTotalProfitUsd).toFixed(2)),
+          realizedPnlUsd: Number(perpsRealizedPnlUsd.toFixed(2)),
+          totalYieldEarnedUsd: Number(lendingYieldEarnedUsd.toFixed(2)),
+          totalReturnUsd: Number((perpsUnrealizedPnlUsd + lpTotalProfitUsd + perpsRealizedPnlUsd + lendingYieldEarnedUsd).toFixed(2))
+        },
+        tokens: tokenList,
+        pools: lpPositions,
+        lending: lendingData,
+        perps: perpsData,
+        activity: unifiedActivity,
+        chart: intervals
+      };
+    }, { fresh });
+
+    res.json(payload);
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

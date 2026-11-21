@@ -239,11 +239,58 @@ export default function PortfolioView({
   const [receiveModalOpen, setReceiveModalOpen] = useState<boolean>(false);
 
   const [portfolio, setPortfolio] = useState<PortfolioData | null>(null);
+  const fetchSeqRef = useRef<number>(0);
+  const lastFetchedAtRef = useRef<number>(0);
 
   const isConnected = Boolean(userAddress || bchAddress || evmAddress || solanaAddress || tonAddress || ltcAddress);
   const primaryDisplayAddress = bchAddress || evmAddress || solanaAddress || tonAddress || ltcAddress || userAddress;
 
-  const fetchPortfolio = async (isManual = false) => {
+  const portfolioScopeKey = useMemo(() => {
+    return [
+      platformNetwork,
+      (bchAddress || '').trim().toLowerCase(),
+      (evmAddress || '').trim().toLowerCase(),
+      (solanaAddress || '').trim(),
+      (tonAddress || '').trim(),
+      (ltcAddress || '').trim().toLowerCase(),
+      (userAddress || '').trim().toLowerCase()
+    ].join('|');
+  }, [platformNetwork, bchAddress, evmAddress, solanaAddress, tonAddress, ltcAddress, userAddress]);
+
+  const readPortfolioSnapshot = (scopeKey: string): PortfolioData | null => {
+    try {
+      const raw = localStorage.getItem('bliq_portfolio_snapshots_v1');
+      if (!raw) return null;
+      const store = JSON.parse(raw);
+      const entry = store?.[scopeKey];
+      if (!entry?.data || !entry?.ts) return null;
+      // Only hydrate snapshots newer than 5 minutes so stale wallet/network balances are never shown
+      if (Date.now() - Number(entry.ts) > 5 * 60_000) return null;
+      return entry.data as PortfolioData;
+    } catch {
+      return null;
+    }
+  };
+
+  const writePortfolioSnapshot = (scopeKey: string, data: PortfolioData) => {
+    try {
+      const raw = localStorage.getItem('bliq_portfolio_snapshots_v1');
+      const store = raw ? JSON.parse(raw) : {};
+      store[scopeKey] = { data, ts: Date.now() };
+      const keys = Object.keys(store);
+      if (keys.length > 5) {
+        keys.sort((a, b) => Number(store[b]?.ts || 0) - Number(store[a]?.ts || 0));
+        for (const oldKey of keys.slice(5)) delete store[oldKey];
+      }
+      localStorage.setItem('bliq_portfolio_snapshots_v1', JSON.stringify(store));
+    } catch {
+      // Ignore quota / private browsing errors
+    }
+  };
+
+  const fetchPortfolio = async (isManual = false, hasCachedHydration = false) => {
+    const seq = ++fetchSeqRef.current;
+
     if (!isConnected || !primaryDisplayAddress) {
       setPortfolio({
         netWorthUsd: 0,
@@ -289,12 +336,13 @@ export default function PortfolioView({
       return;
     }
 
-    if (isManual) setRefreshing(true);
+    if (isManual || hasCachedHydration) setRefreshing(true);
     else setLoading(true);
 
     try {
       const q = new URLSearchParams({
         network: platformNetwork,
+        ...(isManual ? { fresh: '1' } : {}),
         ...(bchAddress ? { bchAddress } : {}),
         ...(evmAddress ? { evmAddress } : {}),
         ...(solanaAddress ? { solanaAddress } : {}),
@@ -303,24 +351,50 @@ export default function PortfolioView({
       });
       const res = await fetch(`${backendUrl}/api/portfolio/${encodeURIComponent(primaryDisplayAddress)}?${q.toString()}`);
       const data = await res.json();
+      if (seq !== fetchSeqRef.current) return;
       if (data.success) {
         setPortfolio(data);
+        writePortfolioSnapshot(portfolioScopeKey, data);
+        lastFetchedAtRef.current = Date.now();
       }
     } catch (err) {
       console.error('[Portfolio] Fetch error:', err);
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (seq === fetchSeqRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   };
 
   useEffect(() => {
-    fetchPortfolio();
+    const cached = isConnected ? readPortfolioSnapshot(portfolioScopeKey) : null;
+    if (cached) {
+      setPortfolio(cached);
+      setLoading(false);
+    } else if (isConnected) {
+      setPortfolio(null);
+      setLoading(true);
+    }
+    fetchPortfolio(false, Boolean(cached));
+
     const interval = setInterval(() => {
-      fetchPortfolio(true);
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      fetchPortfolio(false, true);
     }, 25000);
-    return () => clearInterval(interval);
-  }, [userAddress, bchAddress, evmAddress, solanaAddress, tonAddress, ltcAddress, platformNetwork]);
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible' && Date.now() - lastFetchedAtRef.current >= 20000) {
+        fetchPortfolio(false, true);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [portfolioScopeKey, isConnected]);
 
   const handleCopy = (text: string) => {
     if (!text) return;

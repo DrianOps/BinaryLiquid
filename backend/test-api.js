@@ -18,6 +18,7 @@ import { relayerEngine } from './services/relayerEngine.js';
 import { oraclePool } from './services/oraclePool.js';
 import { perpsService } from './services/perpsService.js';
 import { detectFiatFromContext } from './services/p2pService.js';
+import { balanceCache } from './services/balanceCache.js';
 import { CircuitBreaker } from '../watchman/circuitBreaker.js';
 
 async function runSecuritySuite() {
@@ -303,6 +304,72 @@ async function runSecuritySuite() {
   db.memoryState.p2pTrades = db.memoryState.p2pTrades.filter(t => t.id !== testTrade.id);
   db.persist();
   console.log('✅ [10/10] P2P Audit verified: No test ads, Mandatory @username Identity, Escrow-Gated Bank Details, 5★ Reviews & $LIFT Cashback');
+
+  // 11. Balance & Portfolio Cache Coalescing + Stale Fallback (High-Traffic Protection)
+  let mockRpcCalls = 0;
+  const mockChainFetcher = async () => {
+    mockRpcCalls++;
+    await new Promise(r => setTimeout(r, 30));
+    return { BCH: 2.25, PUSD: 100 };
+  };
+  const testCacheAddr = 'bitcoincash:qpptestcachecoalesce00000000000000000000000';
+  const batch = await Promise.all(
+    Array.from({ length: 20 }, () =>
+      balanceCache.resolveChainBalance({
+        chain: 'bch',
+        address: testCacheAddr,
+        isTestnet: false,
+        fetcher: mockChainFetcher,
+        emptyValue: { BCH: 0, PUSD: 0 }
+      })
+    )
+  );
+  assert.strictEqual(mockRpcCalls, 1, '20 simultaneous balance reads must coalesce into 1 upstream RPC call');
+  assert.strictEqual(batch[0].BCH, 2.25);
+
+  const warmHit = await balanceCache.resolveChainBalance({
+    chain: 'bch',
+    address: testCacheAddr,
+    isTestnet: false,
+    fetcher: mockChainFetcher,
+    emptyValue: { BCH: 0, PUSD: 0 }
+  });
+  assert.strictEqual(mockRpcCalls, 1, 'Warm cache hit must not invoke RPC');
+  assert.strictEqual(warmHit.PUSD, 100);
+
+  const prevFreshCooldown = balanceCache.manualFreshCooldownMs;
+  balanceCache.manualFreshCooldownMs = 0;
+  const staleRescued = await balanceCache.resolveChainBalance({
+    chain: 'bch',
+    address: testCacheAddr,
+    isTestnet: false,
+    fetcher: async () => { throw new Error('Simulated 429'); },
+    emptyValue: { BCH: 0, PUSD: 0 },
+    fresh: true
+  });
+  balanceCache.manualFreshCooldownMs = prevFreshCooldown;
+  assert.strictEqual(staleRescued.BCH, 2.25, 'RPC outage must preserve last healthy balance instead of zeroing UI');
+  assert.strictEqual(staleRescued.stale, true);
+
+  let portComputes = 0;
+  const portKey = balanceCache.buildPortfolioKey({ targetBch: testCacheAddr, targetEvm: null }, false);
+  await Promise.all(
+    Array.from({ length: 12 }, () =>
+      balanceCache.getOrComputePortfolio(portKey, async () => {
+        portComputes++;
+        await new Promise(r => setTimeout(r, 25));
+        return { success: true, netWorthUsd: 555.5, degradedChains: {} };
+      })
+    )
+  );
+  assert.strictEqual(portComputes, 1, 'Concurrent portfolio loads must coalesce into 1 compute wave');
+  const cachedPort = await balanceCache.getOrComputePortfolio(portKey, async () => {
+    portComputes++;
+    return {};
+  });
+  assert.strictEqual(portComputes, 1, 'Warm portfolio cache must serve immediately');
+  assert.strictEqual(cachedPort.cached, true);
+  console.log('✅ [11/11] High-Traffic Balance & Portfolio Cache (Single-Flight + L1/Redis + Stale Rescue) verified');
 
   console.log('\n🎉 ALL_SECURITY_REGRESSION_TESTS_PASSED');
   process.exit(0);
