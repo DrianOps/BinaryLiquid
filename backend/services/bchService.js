@@ -35,6 +35,7 @@ class BchService {
     this.escrowArtifact = null;
     this.escrowV2Artifact = null;
     this.collateralVaultArtifact = null;
+    this.p2pEscrowArtifact = null;
     this.recentlyBroadcastTxs = new Map();
     this.historyCache = new Map();
     this.isReady = false;
@@ -47,6 +48,7 @@ class BchService {
       const escrowArtifactPath = path.join(config.contractsDir, 'bch/artifacts/BinaryLiquidEscrow.json');
       const escrowV2ArtifactPath = path.join(config.contractsDir, 'bch/artifacts/BinaryLiquidEscrowV2.json');
       const collateralArtifactPath = path.join(config.contractsDir, 'bch/artifacts/BinaryLiquidCollateralVault.json');
+      const p2pEscrowArtifactPath = path.join(config.contractsDir, 'bch/artifacts/BinaryLiquidP2PEscrow.json');
       this.vaultArtifact = JSON.parse(fs.readFileSync(vaultArtifactPath, 'utf8'));
       this.escrowArtifact = JSON.parse(fs.readFileSync(escrowArtifactPath, 'utf8'));
       if (fs.existsSync(escrowV2ArtifactPath)) {
@@ -54,6 +56,9 @@ class BchService {
       }
       if (fs.existsSync(collateralArtifactPath)) {
         this.collateralVaultArtifact = JSON.parse(fs.readFileSync(collateralArtifactPath, 'utf8'));
+      }
+      if (fs.existsSync(p2pEscrowArtifactPath)) {
+        this.p2pEscrowArtifact = JSON.parse(fs.readFileSync(p2pEscrowArtifactPath, 'utf8'));
       }
     } catch (err) {
       console.error('[BCH Covenant] Failed to load CashScript artifacts:', err.message);
@@ -149,6 +154,15 @@ class BchService {
    */
   async createSwapEscrowCovenant({ orderId, refundAddress = null, isChipnet = false, isCashToken = true }) {
     await this.readyPromise;
+    const primaryRefundAddr = refundAddress ? String(refundAddress).split(',')[0].trim() : null;
+    const parsedRefund = parseCashAddress(primaryRefundAddr, isChipnet);
+    if (!parsedRefund || !parsedRefund.bytecode) {
+      throw new Error(
+        `Valid BCH senderAddress (${isChipnet ? 'bchtest:' : 'bitcoincash:'}) is required to derive the non-custodial 24h refund covenant.`
+      );
+    }
+    const refundLockingBytecode = parsedRefund.bytecode;
+
     const activeVault = isChipnet ? this.chipnetVault : this.mainnetVault;
     const activeSigner = isChipnet ? this.chipnetSigner : this.mainnetSigner;
     const activeProvider = isChipnet ? this.chipnetProvider : this.mainnetProvider;
@@ -165,15 +179,6 @@ class BchService {
 
     const vaultDecoded = cashAddressToLockingBytecode(activeVault.address);
     const vaultLockingBytecode = vaultDecoded.bytecode;
-
-    const primaryRefundAddr = refundAddress ? String(refundAddress).split(',')[0].trim() : null;
-    const parsedRefund = parseCashAddress(primaryRefundAddr, isChipnet);
-    if (!parsedRefund || !parsedRefund.bytecode) {
-      throw new Error(
-        `Valid BCH senderAddress (${isChipnet ? 'bchtest:' : 'bitcoincash:'}) is required to derive the non-custodial 24h refund covenant.`
-      );
-    }
-    const refundLockingBytecode = parsedRefund.bytecode;
 
     const expiryTimestamp = BigInt(Math.floor(Date.now() / 1000) + 86400);
     const orderSalt = ethers.getBytes(ethers.id(String(orderId))).slice(0, 16);
@@ -207,6 +212,202 @@ class BchService {
       expiryTimestamp: Number(expiryTimestamp),
       explorerUrl: `${explorerBase}/${escrowContract.address}`
     };
+  }
+
+  /**
+   * Instantiates an isolated, destination-locked P2SH32 P2P Escrow Covenant (`BinaryLiquidP2PEscrow.cash`)
+   * bound strictly to (seller, buyer, arbiter) with 24h permissionless timelock refund.
+   */
+  async createP2PEscrowCovenant({
+    tradeId,
+    sellerAddress,
+    buyerAddress,
+    isChipnet = true,
+    isCashToken = true,
+    expiryTimestamp = null
+  }) {
+    await this.readyPromise;
+    const activeSigner = isChipnet ? this.chipnetSigner : this.mainnetSigner;
+    const activeProvider = isChipnet ? this.chipnetProvider : this.mainnetProvider;
+
+    if (!activeSigner || !activeProvider || !this.p2pEscrowArtifact) {
+      throw new Error(`Contrato BinaryLiquidP2PEscrow.cash no inicializado para ${isChipnet ? 'Chipnet' : 'Mainnet'}.`);
+    }
+
+    const cleanSeller = String(sellerAddress || '').split(',')[0].trim();
+    const cleanBuyer = String(buyerAddress || '').split(',')[0].trim();
+    const parsedSeller = parseCashAddress(cleanSeller, isChipnet);
+    const parsedBuyer = parseCashAddress(cleanBuyer, isChipnet);
+
+    if (!parsedSeller || !parsedSeller.bytecode) {
+      throw new Error(`Dirección BCH del vendedor inválida para ${isChipnet ? 'Chipnet (bchtest:)' : 'Mainnet (bitcoincash:)'}.`);
+    }
+    if (!parsedBuyer || !parsedBuyer.bytecode) {
+      throw new Error(`Dirección BCH del comprador inválida para ${isChipnet ? 'Chipnet (bchtest:)' : 'Mainnet (bitcoincash:)'}.`);
+    }
+
+    // Extract 20-byte pubkey hash from standard 25-byte P2PKH bytecode (76 a9 14 <20 bytes> 88 ac)
+    const sellerPkh =
+      parsedSeller.bytecode.length === 25 &&
+      parsedSeller.bytecode[0] === 0x76 &&
+      parsedSeller.bytecode[1] === 0xa9 &&
+      parsedSeller.bytecode[2] === 0x14
+        ? parsedSeller.bytecode.slice(3, 23)
+        : ethers.getBytes(ethers.id(cleanSeller)).slice(0, 20);
+
+    const expiry = BigInt(expiryTimestamp || (Math.floor(Date.now() / 1000) + 86400));
+    const tradeSalt = ethers.getBytes(ethers.id(`P2P:${String(tradeId)}`)).slice(0, 16);
+
+    const escrowContract = new CashContract(
+      this.p2pEscrowArtifact,
+      [
+        activeSigner.publicKeyCompressed,
+        sellerPkh,
+        parsedBuyer.bytecode,
+        parsedSeller.bytecode,
+        expiry,
+        tradeSalt
+      ],
+      { provider: activeProvider }
+    );
+
+    const depositAddr = isCashToken ? escrowContract.tokenAddress : escrowContract.address;
+    const explorerBase = isChipnet
+      ? 'https://chipnet.imaginary.cash/address'
+      : 'https://3xpl.com/bitcoin-cash/address';
+
+    return {
+      address: depositAddr,
+      baseAddress: escrowContract.address,
+      tokenAddress: escrowContract.tokenAddress,
+      sellerAddress: parsedSeller.baseAddress,
+      sellerTokenAddress: parsedSeller.tokenAddress,
+      buyerAddress: parsedBuyer.baseAddress,
+      buyerTokenAddress: parsedBuyer.tokenAddress,
+      contractName: 'BinaryLiquidP2PEscrow.cash',
+      contractType: 'P2SH32 Non-Custodial P2P Covenant (Buyer/Seller Locked + 24h Timelock)',
+      expiryTimestamp: Number(expiry),
+      explorerUrl: `${explorerBase}/${escrowContract.address}`
+    };
+  }
+
+  /**
+   * Executes real on-chain settlement of `BinaryLiquidP2PEscrow.cash`:
+   * - action === 'release': calls `releaseToBuyer(arbiterSig)` -> VM enforces 100% strictly to Buyer.
+   * - action === 'refund': calls `refundToSeller(arbiterSig)` -> VM enforces 100% strictly to Seller.
+   */
+  async settleP2PEscrow({
+    tradeId,
+    sellerAddress,
+    buyerAddress,
+    expiryTimestamp,
+    action = 'release',
+    isChipnet = true
+  }) {
+    await this.readyPromise;
+    const activeSigner = isChipnet ? this.chipnetSigner : this.mainnetSigner;
+    const activeProvider = isChipnet ? this.chipnetProvider : this.mainnetProvider;
+    const activeWif = isChipnet ? config.bch.watchmanChipnetWif : config.bch.watchmanMainnetWif;
+    const explorerTxBase = isChipnet
+      ? 'https://chipnet.imaginary.cash/tx'
+      : 'https://3xpl.com/bitcoin-cash/transaction';
+
+    if (!activeSigner || !activeProvider || !activeWif || !this.p2pEscrowArtifact) {
+      throw new Error(`Firmante / Contrato P2P no disponible en ${isChipnet ? 'Chipnet' : 'Mainnet'}.`);
+    }
+
+    const cleanSeller = String(sellerAddress || '').split(',')[0].trim();
+    const cleanBuyer = String(buyerAddress || '').split(',')[0].trim();
+    const parsedSeller = parseCashAddress(cleanSeller, isChipnet);
+    const parsedBuyer = parseCashAddress(cleanBuyer, isChipnet);
+    if (!parsedSeller || !parsedBuyer) {
+      throw new Error('Direcciones BCH de comprador o vendedor inválidas para liquidar el Escrow P2P.');
+    }
+
+    const sellerPkh =
+      parsedSeller.bytecode.length === 25 &&
+      parsedSeller.bytecode[0] === 0x76 &&
+      parsedSeller.bytecode[1] === 0xa9 &&
+      parsedSeller.bytecode[2] === 0x14
+        ? parsedSeller.bytecode.slice(3, 23)
+        : ethers.getBytes(ethers.id(cleanSeller)).slice(0, 20);
+
+    const tradeSalt = ethers.getBytes(ethers.id(`P2P:${String(tradeId)}`)).slice(0, 16);
+    const escrowContract = new CashContract(
+      this.p2pEscrowArtifact,
+      [
+        activeSigner.publicKeyCompressed,
+        sellerPkh,
+        parsedBuyer.bytecode,
+        parsedSeller.bytecode,
+        BigInt(expiryTimestamp),
+        tradeSalt
+      ],
+      { provider: activeProvider }
+    );
+
+    return db.withLock(`bch:utxo_spend:${isChipnet ? 'chipnet' : 'mainnet'}`, async () => {
+      const utxos = await this._withTimeout(escrowContract.getUtxos(), 7000, 'P2P Escrow UTXOs');
+      if (!utxos || utxos.length === 0) {
+        throw new Error(`No hay fondos bloqueados en el Escrow P2P (${escrowContract.tokenAddress}) para liquidar.`);
+      }
+
+      const sigTemplate = new SignatureTemplate(activeWif);
+      const targetParsed = action === 'refund' ? parsedSeller : parsedBuyer;
+      let lastTxId = null;
+
+      for (const targetUtxo of utxos) {
+        const signerUtxos = await activeProvider.getUtxos(activeSigner.cashaddr);
+        const feeUtxos = (signerUtxos || []).filter(u => !u.token && BigInt(u.satoshis || 0) >= 2000n);
+        if (feeUtxos.length === 0) {
+          throw new Error(`Watchman ${activeSigner.cashaddr} no tiene suficiente BCH de gas para patrocinar la liquidación P2P.`);
+        }
+
+        const unlocker =
+          action === 'refund'
+            ? escrowContract.unlock.refundToSeller(sigTemplate)
+            : escrowContract.unlock.releaseToBuyer(sigTemplate);
+
+        const txBuilder = new TransactionBuilder({ provider: activeProvider })
+          .addInput(targetUtxo, unlocker)
+          .addInput(feeUtxos[0], sigTemplate.unlockP2PKH());
+
+        if (targetUtxo.token && BigInt(targetUtxo.token.amount || 0) > 0n) {
+          txBuilder.addOutput({
+            to: targetParsed.tokenAddress,
+            amount: BigInt(targetUtxo.satoshis) >= 1000n ? BigInt(targetUtxo.satoshis) : 1000n,
+            token: {
+              category: targetUtxo.token.category,
+              amount: BigInt(targetUtxo.token.amount),
+              ...(targetUtxo.token.nft ? { nft: targetUtxo.token.nft } : {})
+            }
+          });
+        } else {
+          txBuilder.addOutput({
+            to: targetParsed.baseAddress,
+            amount: BigInt(targetUtxo.satoshis)
+          });
+        }
+
+        txBuilder.addBchChangeOutputIfNeeded({
+          to: activeSigner.cashaddr,
+          feeRate: 1.5
+        });
+
+        const txDetails = await txBuilder.send();
+        lastTxId = txDetails.txid;
+        console.log(
+          `[BCH P2P Escrow] ✅ ${action === 'refund' ? 'Refunded to Seller' : 'Released to Buyer'} | Trade ${tradeId} | TXID: ${txDetails.txid}`
+        );
+      }
+
+      return {
+        txHash: lastTxId,
+        explorerUrl: `${explorerTxBase}/${lastTxId}`,
+        escrowAddress: escrowContract.tokenAddress,
+        recipientAddress: targetParsed.tokenAddress
+      };
+    });
   }
 
   getTokenCategory(tokenSymbol = 'PUSD', isChipnet = false) {

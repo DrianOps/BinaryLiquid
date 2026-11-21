@@ -18,6 +18,7 @@ import {
   X,
   Sparkles, 
   ArrowRight, 
+  ArrowUpRight,
   Copy, 
   Check, 
   Edit3,
@@ -49,10 +50,12 @@ const WhitepaperView = lazy(() => import('./components/WhitepaperView'));
 const PerpsView = lazy(() => import('./components/PerpsView'));
 const PortfolioView = lazy(() => import('./components/PortfolioView'));
 const IdentityView = lazy(() => import('./components/IdentityView'));
+const P2PView = lazy(() => import('./components/P2PView'));
 
 // Intelligent Lazy-Preloader map
 const preloadMap: Record<string, () => Promise<any>> = {
   bridge: () => import('./components/BridgeSwap'),
+  p2p: () => import('./components/P2PView'),
   pools: () => import('./components/PoolsView'),
   lend: () => import('./components/LendingView'),
   perps: () => import('./components/PerpsView'),
@@ -150,8 +153,6 @@ import {
   switchEvmNetwork,
   initEip6963Discovery,
   DiscoveredEip6963Wallet,
-  startBchWalletConnectPairing,
-  restoreBchWalletConnectSession,
   disconnectBchWalletConnect,
   connectPaytacaExtension,
   hasPaytacaExtension,
@@ -161,14 +162,25 @@ import {
   signBchMessage,
   hasActiveBchMessageSigningCapability,
   hasActiveEvmSigningCapability,
-  isBchWc2SessionConnected,
-  getBchWc2SessionMethods,
   EnsureAuthSessionOptions
 } from './services/walletConnectService';
+import {
+  connectBlConnectPopup,
+  disconnectBlConnect,
+  restoreBlConnectSession,
+  startBlConnectNostrPairing,
+  type BlConnectSession
+} from './services/blConnectService';
+import {
+  subscribeTonConnect,
+  openTonConnectModal,
+  disconnectTonConnect
+} from './services/tonConnectService';
 
 const translations = {
   en: {
     navSwap: "Bridge Swap",
+    navP2p: "P2P",
     navPerps: "Perps",
     navGateway: "Gateway",
     navPools: "Pools",
@@ -236,6 +248,7 @@ const translations = {
   },
   es: {
     navSwap: "Bridge Swap",
+    navP2p: "P2P",
     navPerps: "Perps",
     navGateway: "Gateway",
     navPools: "Pools",
@@ -328,7 +341,7 @@ const PLATFORM_NETWORKS = {
   }
 };
 
-const VALID_VIEWS = ['bridge', 'perps', 'pools', 'lend', 'portfolio', 'identity', 'docs', 'sdk', 'whitepaper'] as const;
+const VALID_VIEWS = ['bridge', 'p2p', 'perps', 'pools', 'lend', 'portfolio', 'identity', 'docs', 'sdk', 'whitepaper'] as const;
 type MainView = typeof VALID_VIEWS[number] | 'gateway';
 
 const SITE_ORIGIN = 'https://bliquid.xyz';
@@ -352,6 +365,16 @@ const ROUTE_SEO_META: Record<MainView, { en: { title: string; description: strin
     es: {
       title: 'Swap y Puente Cross-Chain | BinaryLiquid (Binary Liquid)',
       description: 'Intercambia liquidez cross-chain entre CashTokens de Bitcoin Cash, redes EVM y Solana en Binary Liquid (BinaryLiquid).'
+    }
+  },
+  p2p: {
+    en: {
+      title: 'Non-Custodial P2P CashScript Escrow | BinaryLiquid (Binary Liquid)',
+      description: 'Buy and sell Bitcoin Cash and CashTokens (PUSD, LIFT) peer-to-peer against fiat using isolated P2SH32 CashScript Escrow covenants and Nostr @usernames.'
+    },
+    es: {
+      title: 'Mercado P2P No-Custodio CashScript | BinaryLiquid (Binary Liquid)',
+      description: 'Compra y vende Bitcoin Cash y CashTokens (PUSD, LIFT) contra moneda fiat con Escrow P2SH32 CashScript e identidad @usuario Nostr.'
     }
   },
   pools: {
@@ -620,8 +643,8 @@ export default function App() {
       document.body.style.backgroundColor = '#080B11';
     } else {
       document.documentElement.classList.remove('dark');
-      document.documentElement.style.backgroundColor = '#FAFAF9';
-      document.body.style.backgroundColor = '#FAFAF9';
+      document.documentElement.style.backgroundColor = '#F2F3F0';
+      document.body.style.backgroundColor = '#F2F3F0';
     }
     if (isFirstThemeMount.current) {
       isFirstThemeMount.current = false;
@@ -677,7 +700,7 @@ export default function App() {
     address: string;
     tokenAddress: string;
     provider: string;
-    source: 'wizard' | 'wc2-bch' | 'extension' | 'manual';
+    source: 'blconnect' | 'wizard' | 'wc2-bch' | 'extension' | 'manual';
     queryAddress?: string;
   } | null>(() => {
     const isTest = platformNetwork === 'testnet';
@@ -703,10 +726,13 @@ export default function App() {
       }
       const inferBchSource = (
         provider?: string,
-        rawSource?: 'wizard' | 'wc2-bch' | 'extension' | 'manual'
-      ): 'wizard' | 'wc2-bch' | 'extension' | 'manual' => {
+        rawSource?: 'blconnect' | 'wizard' | 'wc2-bch' | 'extension' | 'manual'
+      ): 'blconnect' | 'wizard' | 'wc2-bch' | 'extension' | 'manual' => {
         const prov = String(provider || '').toLowerCase();
         if (rawSource === 'manual' || prov.includes('manual')) return 'manual';
+        if (rawSource === 'blconnect' || prov.includes('blconnect') || prov.includes('binaryliquid')) {
+          return 'blconnect';
+        }
         if (prov.includes('cashonize') || prov.includes('zapit') || prov.includes('wc2') || prov.includes('walletconnect')) {
           return 'wc2-bch';
         }
@@ -828,7 +854,7 @@ export default function App() {
   const [tonWallet, setTonWallet] = useState<{
     address: string;
     provider: string;
-    source?: 'extension' | 'manual';
+    source?: 'tonconnect' | 'extension' | 'manual';
   } | null>(() => {
     try {
       const raw = localStorage.getItem('bliq_wallets_v2');
@@ -869,7 +895,12 @@ export default function App() {
   });
 
   const [discoveredEvmWallets, setDiscoveredEvmWallets] = useState<DiscoveredEip6963Wallet[]>([]);
-  const [bchWcPairing, setBchWcPairing] = useState<{ uri: string; qrDataUrl: string } | null>(null);
+  const [blConnectModal, setBlConnectModal] = useState<{
+    uri: string;
+    qrDataUrl: string;
+    cancel: () => void;
+  } | null>(null);
+  const [blConnectPopupBusy, setBlConnectPopupBusy] = useState<boolean>(false);
   const [walletBalances, setWalletBalances] = useState<{
     PUSD: number;
     BCH: number;
@@ -929,7 +960,8 @@ export default function App() {
     return false;
   });
   const [accountModalTab, setAccountModalTab] = useState<'wallets' | 'balances'>('wallets');
-  const [selectedWalletType, setSelectedWalletType] = useState<'paytaca' | 'bch_wc2' | 'walletconnect' | 'injected' | null>(null);
+  const [showManualWalletInput, setShowManualWalletInput] = useState<boolean>(false);
+  const [selectedWalletType, setSelectedWalletType] = useState<'paytaca' | 'walletconnect' | 'injected' | null>(null);
   const [isEditingBch, setIsEditingBch] = useState<boolean>(false);
   const [customBchInput, setCustomBchInput] = useState<string>('');
   const [isEditingTon, setIsEditingTon] = useState<boolean>(false);
@@ -1193,27 +1225,24 @@ export default function App() {
       });
     }
 
-    // 2. Restore BCH WalletConnect V2 (Cashonize / Paytaca WC2) session
-    if (bchWallet?.source !== 'manual') {
-      const shouldForceBchWc2 =
-        bchWallet?.source === 'wc2-bch' ||
-        /cashonize|wc2|walletconnect|zapit/i.test(bchWallet?.provider || '');
-      restoreBchWalletConnectSession(
-        isTest,
-        () => {
-          setBchWallet(prev => (prev?.source === 'wc2-bch' ? null : prev));
-        },
-        { forceCheck: shouldForceBchWc2 }
-      ).then(restoredBch => {
-        if (restoredBch && !restoredBch.networkMismatch) {
-          setBchWallet({
-            address: restoredBch.address,
-            tokenAddress: restoredBch.tokenAddress,
-            provider: restoredBch.walletName,
-            source: 'wc2-bch'
-          });
-        }
+    // 2. Restore BlConnect (Native Hybrid) session cleanly (clear any legacy wc2-bch state)
+    if (bchWallet?.source === 'wc2-bch') {
+      void disconnectBchWalletConnect().catch(() => {});
+      setBchWallet(null);
+    } else if (bchWallet?.source !== 'manual') {
+      const restoredBlc = restoreBlConnectSession(isTest, () => {
+        setBchWallet(prev => (prev?.source === 'blconnect' ? null : prev));
       });
+      if (restoredBlc) {
+        const qAddrs = (restoredBlc.allAddresses || [restoredBlc.cashAddress]).join(',');
+        setBchWallet({
+          address: restoredBlc.cashAddress,
+          tokenAddress: restoredBlc.tokenAddress,
+          provider: `${restoredBlc.walletName} (BlConnect)`,
+          source: 'blconnect',
+          queryAddress: qAddrs
+        });
+      }
     }
 
     // 3. Restore Solana (Phantom vs Solflare) strictly respecting saved wallet source
@@ -1280,6 +1309,32 @@ export default function App() {
       }
     }
   }, []);
+
+  // Subscribe to TON Connect UI 2.0 session & status changes
+  useEffect(() => {
+    const isTest = platformNetwork === 'testnet';
+    return subscribeTonConnect(isTest, (acc) => {
+      if (acc && acc.address) {
+        const tonObj = {
+          address: acc.address,
+          provider: `${acc.provider} (TON Connect)`,
+          source: 'tonconnect' as const
+        };
+        setTonWallet(tonObj);
+        localStorage.setItem('bliq_ton_wallet', JSON.stringify(tonObj));
+        setShowWalletModal(false);
+        refreshWalletBalances(undefined, undefined, undefined, acc.address, undefined);
+      } else {
+        setTonWallet(prev => {
+          if (prev?.source === 'tonconnect') {
+            localStorage.removeItem('bliq_ton_wallet');
+            return null;
+          }
+          return prev;
+        });
+      }
+    });
+  }, [platformNetwork]);
 
   // Subscribe to Phantom / Solflare live accountChanged & disconnect events
   useEffect(() => {
@@ -1388,6 +1443,7 @@ export default function App() {
     const removedBch = bchWallet?.queryAddress || bchWallet?.address;
     try { wc.disconnect(); } catch {}
     try { await disconnectBchWalletConnect(); } catch {}
+    try { await disconnectBlConnect(); } catch {}
     setBchWallet(null);
     setWalletBalances(prev => ({ ...prev, BCH: 0, PUSD: 0 }));
     return removedBch;
@@ -1425,6 +1481,7 @@ export default function App() {
   };
 
   const disconnectTonInternal = () => {
+    void disconnectTonConnect();
     setTonWallet(null);
     setWalletBalances(prev => ({ ...prev, TON: 0, USDT_TON: 0 }));
     if (typeof window !== 'undefined') {
@@ -1621,27 +1678,8 @@ export default function App() {
     const wantEvm = !scopedChains || scopedChains.has('evm');
     const wantSol = !scopedChains || scopedChains.has('solana');
 
-    // Hydrate persisted WalletConnect v2 sessions lazily on demand (e.g. immediately after page reload)
-    let effectiveBchSource = bchWallet?.source;
-    const looksLikeWc2BchProvider = /cashonize|wc2|walletconnect|zapit/i.test(bchWallet?.provider || '');
-    if (wantBch && cleanBch && effectiveBchSource !== 'manual' && !hasActiveBchMessageSigningCapability(effectiveBchSource)) {
-      const restoredBch = await restoreBchWalletConnectSession(
-        platformNetwork === 'testnet',
-        () => {
-          setBchWallet(prev => (prev?.source === 'wc2-bch' ? null : prev));
-        },
-        { forceCheck: effectiveBchSource === 'wc2-bch' || looksLikeWc2BchProvider }
-      ).catch(() => null);
-      if (restoredBch && !restoredBch.networkMismatch) {
-        effectiveBchSource = 'wc2-bch';
-        setBchWallet({
-          address: restoredBch.address,
-          tokenAddress: restoredBch.tokenAddress,
-          provider: restoredBch.walletName,
-          source: 'wc2-bch'
-        });
-      }
-    }
+    // Hydrate persisted EVM WalletConnect v2 session lazily on demand
+    const effectiveBchSource = bchWallet?.source;
     if (wantEvm && cleanEvm && evmWallet?.source === 'wc2-evm' && !hasActiveEvmSigningCapability()) {
       await restoreEvmWalletConnectSession(evmEventCallbacks, { forceCheck: true }).catch(() => null);
     }
@@ -1675,30 +1713,18 @@ export default function App() {
 
       let msg: string;
       if (bchOnly) {
-        const expectsWc2Bch = effectiveBchSource === 'wc2-bch' || looksLikeWc2BchProvider;
-        if (cleanBch && expectsWc2Bch && !isBchWc2SessionConnected()) {
+        if (cleanBch && !canSignBch) {
           msg =
             lang === 'es'
-              ? `La sesión WalletConnect de ${bchWallet?.provider || 'Cashonize'} no está activa o expiró tras recargar. Escanea de nuevo el QR de Cashonize para firmar esta acción BCH/PUSD.`
-              : `Your ${bchWallet?.provider || 'Cashonize'} WalletConnect session is inactive or expired. Please reconnect Cashonize (WC2 QR) to authenticate this BCH/PUSD action.`;
+              ? 'Esta acción requiere firma de mensajes. Conecta BinaryLiquid Wallet para autenticar acciones BCH/PUSD.'
+              : 'This action requires message signing. Connect BinaryLiquid Wallet to authenticate BCH/PUSD actions.';
           setWalletModalTab('bch');
           setShowWalletModal(true);
-        } else if (cleanBch && !canSignBch) {
-          const sessionMethods = expectsWc2Bch ? getBchWc2SessionMethods() : [];
-          const methodsSuffix = sessionMethods.length > 0 ? ` [${sessionMethods.join(', ')}]` : ` [src=${effectiveBchSource || 'none'}]`;
-          msg =
-            lang === 'es'
-              ? `Tu conexión BCH actual (${bchWallet?.provider || effectiveBchSource}${methodsSuffix}) no autorizó firma de mensajes (bch_signMessage). Reconecta Cashonize o usa la extensión de Paytaca para acciones BCH/PUSD.`
-              : `Your current BCH connection (${bchWallet?.provider || effectiveBchSource}${methodsSuffix}) did not authorize message signing (bch_signMessage). Reconnect Cashonize or use the Paytaca extension for BCH/PUSD actions.`;
-          if (expectsWc2Bch) {
-            setWalletModalTab('bch');
-            setShowWalletModal(true);
-          }
         } else {
           msg =
             lang === 'es'
-              ? 'Conecta una billetera BCH con firma de mensajes (Cashonize o extensión Paytaca) para autenticar acciones BCH/PUSD.'
-              : 'Connect a message-signing BCH wallet (Cashonize or Paytaca extension) to authenticate BCH/PUSD actions.';
+              ? 'Conecta BinaryLiquid Wallet para autenticar acciones BCH/PUSD.'
+              : 'Connect BinaryLiquid Wallet to authenticate BCH/PUSD actions.';
         }
       } else if (evmOnly) {
         msg =
@@ -1713,8 +1739,8 @@ export default function App() {
       } else {
         msg =
           lang === 'es'
-            ? 'Conecta MetaMask/WalletConnect, Phantom/Solflare o Cashonize/Paytaca con firma de mensajes para autenticar esta acción.'
-            : 'Connect MetaMask/WalletConnect, Phantom/Solflare, or a message-signing BCH wallet to authenticate this action.';
+            ? 'Conecta BinaryLiquid Wallet, MetaMask/WalletConnect o Phantom/Solflare para autenticar esta acción.'
+            : 'Connect BinaryLiquid Wallet, MetaMask/WalletConnect, or Phantom/Solflare to authenticate this action.';
       }
       showToast(msg, 'error');
       return null;
@@ -1805,6 +1831,7 @@ export default function App() {
     }
     try { await wc.disconnect(); } catch {}
     try { await disconnectBchWalletConnect(); } catch {}
+    try { await disconnectBlConnect(); } catch {}
     bchWalletSourceRef.current = 'manual';
     const primaryBase = base.split(',')[0].trim();
     const primaryToken = token ? token.split(',')[0].trim() : primaryBase;
@@ -1820,49 +1847,25 @@ export default function App() {
     showToast(t.addressUpdated, 'success');
     setIsEditingBch(false);
     setCustomBchInput('');
+    setShowManualWalletInput(false);
+    setShowWalletModal(false);
   };
 
-  const handleConnectTon = async (preferred = 'Tonkeeper') => {
+  const handleConnectTon = async (preferred: 'tonconnect' | 'Tonkeeper' | 'telegram-wallet' = 'tonconnect') => {
     try {
-      const w = window as any;
-      const tonProvider = w?.tonkeeper?.ton || w?.tonkeeper || w?.ton || w?.mytonwallet?.ton;
-      if (tonProvider) {
-        let accounts: any[] = [];
-        if (typeof tonProvider.send === 'function') {
-          accounts = await tonProvider.send('ton_requestAccounts');
-        } else if (typeof tonProvider.request === 'function') {
-          accounts = await tonProvider.request({ method: 'ton_requestAccounts' });
-        }
-        const first = Array.isArray(accounts) ? accounts[0] : null;
-        const addr = typeof first === 'string' ? first.trim() : String(first?.address || first?.account?.address || '').trim();
-        if (addr && isValidTonWalletAddress(addr, platformNetwork === 'testnet')) {
-          const tonObj = { address: addr, provider: preferred, source: 'extension' as const };
-          setTonWallet(tonObj);
-          localStorage.setItem('bliq_ton_wallet', JSON.stringify(tonObj));
-          setShowWalletModal(false);
-          refreshWalletBalances(undefined, undefined, undefined, addr, undefined);
-          showToast(lang === 'es' ? `Conectado con TON: ${formatAddress(addr)}` : `Connected TON: ${formatAddress(addr)}`);
-          return;
-        }
-        if (addr && isValidTonWalletAddress(addr)) {
-          showToast(
-            platformNetwork === 'testnet'
-              ? (lang === 'es' ? 'Tu extensión TON está en Mainnet (EQ/UQ), cambia a Testnet (kQ/0Q) o cambia la red de la app.' : 'Your TON extension is on Mainnet; switch to Testnet (kQ/0Q).')
-              : (lang === 'es' ? 'Tu extensión TON está en Testnet (kQ/0Q), cambia a Mainnet (EQ/UQ).' : 'Your TON extension is on Testnet; switch to Mainnet (EQ/UQ).'),
-            'error'
-          );
-          return;
-        }
-      }
-      setIsEditingTon(true);
-      setCustomTonInput('');
-      setWalletModalTab('ton');
-      setShowWalletModal(true);
-      showToast(lang === 'es' ? 'Ingresa o pega tu dirección TON' : 'Enter or paste your TON address');
+      setShowWalletModal(false);
+      await openTonConnectModal({
+        isDark: darkMode,
+        singleWalletAppName:
+          preferred === 'Tonkeeper'
+            ? 'tonkeeper'
+            : preferred === 'telegram-wallet'
+            ? 'telegram-wallet'
+            : undefined
+      });
     } catch {
-      setIsEditingTon(true);
-      setCustomTonInput('');
       setWalletModalTab('ton');
+      setShowManualWalletInput(true);
       setShowWalletModal(true);
     }
   };
@@ -1888,6 +1891,7 @@ export default function App() {
     refreshWalletBalances(undefined, undefined, undefined, trimmed, undefined);
     setIsEditingTon(false);
     setCustomTonInput('');
+    setShowManualWalletInput(false);
     setShowWalletModal(false);
     showToast(lang === 'es' ? `Dirección TON guardada: ${formatAddress(trimmed)}` : `TON address saved: ${formatAddress(trimmed)}`);
   };
@@ -1963,8 +1967,82 @@ export default function App() {
     return pusd + usdt + usdtBsc + usdtSol + usdtTon + usdc + bch + pol + bnb + sol + ton + ltc;
   }, [walletBalances, oraclePrices]);
 
+  const applyBlConnectSession = async (sess: BlConnectSession) => {
+    try { wc.disconnect(); } catch {}
+    try { await disconnectBchWalletConnect(); } catch {}
+    const queryAddresses =
+      sess.allAddresses && sess.allAddresses.length > 0
+        ? sess.allAddresses.join(',')
+        : sess.cashAddress;
+    const providerLabel = `${sess.walletName || 'BinaryLiquid Wallet'} (BlConnect)`;
+    setBchWallet({
+      address: sess.cashAddress,
+      tokenAddress: sess.tokenAddress || sess.cashAddress,
+      provider: providerLabel,
+      source: 'blconnect',
+      queryAddress: queryAddresses
+    });
+    await registerBackendSession(
+      sess.tokenAddress || sess.cashAddress,
+      queryAddresses,
+      evmWallet?.address || null,
+      providerLabel,
+      solanaWallet?.address || null
+    );
+    refreshWalletBalances(queryAddresses, evmWallet?.address || null);
+    showToast(
+      lang === 'es'
+        ? `⚡ Conectado vía BlConnect (${sess.transport === 'popup' ? 'Instantáneo' : 'Nostr E2EE'}): ${formatAddress(sess.tokenAddress || sess.cashAddress)}`
+        : `⚡ Connected via BlConnect (${sess.transport === 'popup' ? 'Instant' : 'Nostr E2EE'}): ${formatAddress(sess.tokenAddress || sess.cashAddress)}`
+    );
+  };
+
+  const openBlConnectModal = () => {
+    setShowWalletModal(false);
+    const isTest = platformNetwork === 'testnet';
+    const pairing = startBlConnectNostrPairing(isTest, () => {
+      setBchWallet(prev => (prev?.source === 'blconnect' ? null : prev));
+    });
+    setBlConnectModal({
+      uri: pairing.uri,
+      qrDataUrl: pairing.qrDataUrl,
+      cancel: pairing.cancel
+    });
+    void pairing
+      .waitForApproval()
+      .then(async (sess) => {
+        setBlConnectModal(null);
+        await applyBlConnectSession(sess);
+      })
+      .catch((err) => {
+        const msg = err instanceof Error ? err.message : '';
+        if (msg && msg !== 'cancelled') {
+          showToast(msg, 'error');
+        }
+      });
+  };
+
+  const handleBlConnectInstantPopup = async () => {
+    if (blConnectPopupBusy) return;
+    setBlConnectPopupBusy(true);
+    const isTest = platformNetwork === 'testnet';
+    try {
+      const sess = await connectBlConnectPopup(isTest);
+      blConnectModal?.cancel();
+      setBlConnectModal(null);
+      await applyBlConnectSession(sess);
+    } catch (err: any) {
+      const msg = err?.message || '';
+      if (msg && !msg.includes('cerrada') && !msg.includes('rejected') && !msg.includes('cancel')) {
+        showToast(msg, 'error');
+      }
+    } finally {
+      setBlConnectPopupBusy(false);
+    }
+  };
+
   const handleConnectWallet = async (
-    type: 'paytaca' | 'bch_wc2' | 'walletconnect' | 'injected',
+    type: 'paytaca' | 'walletconnect' | 'injected',
     rdns?: string
   ) => {
     if (connectLockRef.current) return;
@@ -1976,10 +2054,11 @@ export default function App() {
     const isTest = platformNetwork === 'testnet';
 
     if (type === 'paytaca') {
-      // Disconnect any active BCH WalletConnect V2 (Cashonize) session before switching to Paytaca
+      // Disconnect any active BlConnect / legacy WC2 session before switching to WizardConnect
+      try { await disconnectBlConnect(); } catch {}
       try { await disconnectBchWalletConnect(); } catch {}
 
-      // 1. Try direct Paytaca Browser Extension if installed, otherwise launch WizardConnect QR
+      // 1. Try direct browser extension if installed, otherwise launch WizardConnect QR
       if (hasPaytacaExtension()) {
         const extRes = await connectPaytacaExtension(isTest);
         if (extRes) {
@@ -2003,44 +2082,6 @@ export default function App() {
         try { await wc.disconnect(); } catch {}
       }
       wc.connect();
-    } else if (type === 'bch_wc2') {
-      // Official Bitcoin Cash WalletConnect V2 (`wc2-bch-bcr` for Cashonize / Paytaca WC2 / Zapit)
-      // Disconnect any active Paytaca WizardConnect session first so it never conflicts or keeps saying Paytaca
-      try { wc.disconnect(); } catch {}
-      try {
-        const pairing = await startBchWalletConnectPairing(isTest, () => {
-          setBchWallet(prev => (prev?.source === 'wc2-bch' ? null : prev));
-        });
-        setBchWcPairing({ uri: pairing.uri, qrDataUrl: pairing.qrDataUrl });
-        const approved = await pairing.waitForApproval();
-        setBchWcPairing(null);
-        try { wc.disconnect(); } catch {}
-        setBchWallet({
-          address: approved.address,
-          tokenAddress: approved.tokenAddress,
-          provider: approved.walletName,
-          source: 'wc2-bch',
-          queryAddress: approved.address
-        });
-        await registerBackendSession(approved.tokenAddress, approved.address, evmWallet?.address || null, approved.walletName, solanaWallet?.address || null);
-        refreshWalletBalances(approved.address, evmWallet?.address || null);
-        showToast(
-          lang === 'es'
-            ? `Conectado con ${approved.walletName}: ${formatAddress(approved.tokenAddress)}`
-            : `Connected with ${approved.walletName}: ${formatAddress(approved.tokenAddress)}`
-        );
-      } catch (err: any) {
-        setBchWcPairing(null);
-        const msg = err?.message || '';
-        if (!msg.includes('rejected') && !msg.includes('cancelled') && !msg.includes('expired')) {
-          showToast(
-            msg || (lang === 'es' ? 'Conexión BCH WalletConnect cancelada' : 'BCH WalletConnect pairing cancelled'),
-            'error'
-          );
-        }
-      } finally {
-        setSelectedWalletType(null);
-      }
     } else if (type === 'walletconnect') {
       // Official WalletConnect V2 EVM (`@walletconnect/ethereum-provider`)
       try {
@@ -2231,7 +2272,7 @@ export default function App() {
             bchQueryAddress={bchWallet?.queryAddress || bchWallet?.address || ''}
             bchWalletName={bchWallet?.provider || ''}
             bchWalletSource={bchWallet?.source}
-            evmAddress={evmWallet?.address || ''}
+            evmAddress={evmWallet?.address || userContext?.evmAddress || ''}
             solanaAddress={solanaWallet?.address || ''}
             solanaSource={solanaWallet?.source}
             tonAddress={tonWallet?.address || ''}
@@ -2287,17 +2328,17 @@ export default function App() {
               type="button"
               onClick={() => setBrandMenuOpen((prev) => !prev)}
               aria-expanded={brandMenuOpen}
-              className="flex items-center gap-2 sm:gap-2.5 cursor-pointer group py-1.5 px-1.5 -ml-1.5 rounded-xl hover:bg-surface-2/70 transition-colors"
+              className="flex items-center gap-2 cursor-pointer group py-1.5 px-2 -ml-2 rounded-xl hover:bg-surface/60 transition-colors"
               title={lang === 'es' ? 'Menú de BinaryLiquid (Whitepaper, SDK & Inicio)' : 'BinaryLiquid Menu (Whitepaper, SDK & Home)'}
             >
               <div className="w-8 h-8 rounded-xl overflow-hidden flex items-center justify-center shadow-xs group-hover:scale-105 transition-transform shrink-0">
                 <img src="/logo.png" alt="BinaryLiquid" className="w-full h-full object-contain" />
               </div>
-              <span className="text-lg sm:text-xl font-bold tracking-tight text-ink flex items-center">
-                Binary<span className="text-primary font-extrabold">Liquid</span>
+              <span className="font-brand italic font-semibold text-[21px] sm:text-[23px] tracking-[-0.02em] leading-none text-ink flex items-center">
+                BinaryLiquid
               </span>
               <ChevronDown
-                className={`w-4 h-4 text-ink-3 group-hover:text-ink transition-transform duration-200 ${
+                className={`w-3.5 h-3.5 text-ink-3 group-hover:text-ink transition-transform duration-200 ${
                   brandMenuOpen ? 'rotate-180 text-ink' : ''
                 }`}
               />
@@ -2374,6 +2415,29 @@ export default function App() {
 
                   <div className="my-1 border-t border-line" />
 
+                  <a
+                    href="https://wallet.bliquid.xyz"
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={() => setBrandMenuOpen(false)}
+                    className="block w-full px-3 py-2 rounded-control text-left transition-colors hover:bg-surface-2/80 text-ink-2 hover:text-ink mb-1"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-semibold text-ink whitespace-nowrap flex items-center gap-1.5">
+                        <Wallet className="w-3.5 h-3.5 text-primary" />
+                        BinaryLiquid Wallet
+                      </span>
+                      <span className="px-1.5 py-0.5 rounded-full bg-primary/10 border border-primary/30 text-primary text-[10px] font-bold whitespace-nowrap shrink-0">
+                        New ↗
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-ink-3 leading-snug mt-0.5 truncate">
+                      {lang === 'es' ? 'wallet.bliquid.xyz · BCH & CashTokens HD' : 'wallet.bliquid.xyz · BCH & CashTokens HD'}
+                    </p>
+                  </a>
+
+                  <div className="my-1 border-t border-line" />
+
                   <div className="px-3 py-1.5 flex items-center justify-between text-[11px] font-medium text-ink-3">
                     <a
                       href="https://bchblaze.cash"
@@ -2407,88 +2471,53 @@ export default function App() {
             </AnimatePresence>
           </div>
           
-          {/* DESKTOP NAVIGATION TABS (Left-aligned next to logo, clean & borderless) */}
-          <div className="hidden md:flex items-center gap-0.5 lg:gap-1 text-xs font-semibold ml-1 sm:ml-2">
-            <button 
-              onMouseEnter={() => preloadView('bridge')}
-              onClick={() => setMainView('bridge')} 
-              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                mainView === 'bridge' 
-                  ? 'bg-surface-2 text-ink font-bold shadow-2xs' 
-                  : 'text-ink-3 hover:text-ink hover:bg-surface-2/60 font-medium'
-              }`}
-            >
-              <span>{t.navSwap}</span>
-            </button>
-
-            <button 
-              onMouseEnter={() => preloadView('perps')}
-              onClick={() => setMainView('perps')} 
-              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                mainView === 'perps' 
-                  ? 'bg-surface-2 text-ink font-bold shadow-2xs' 
-                  : 'text-ink-3 hover:text-ink hover:bg-surface-2/60 font-medium'
-              }`}
-            >
-              <span>{t.navPerps}</span>
-            </button>
-
-            <button 
-              onMouseEnter={() => preloadView('pools')}
-              onClick={() => setMainView('pools')} 
-              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                mainView === 'pools' 
-                  ? 'bg-surface-2 text-ink font-bold shadow-2xs' 
-                  : 'text-ink-3 hover:text-ink hover:bg-surface-2/60 font-medium'
-              }`}
-            >
-              <span>{t.navPools}</span>
-            </button>
-
-            <button 
-              onMouseEnter={() => preloadView('lend')}
-              onClick={() => setMainView('lend')} 
-              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                mainView === 'lend' 
-                  ? 'bg-surface-2 text-ink font-bold shadow-2xs' 
-                  : 'text-ink-3 hover:text-ink hover:bg-surface-2/60 font-medium'
-              }`}
-            >
-              <span>{t.navLend}</span>
-            </button>
-
-            <button 
-              onMouseEnter={() => preloadView('portfolio')}
-              onClick={() => setMainView('portfolio')} 
-              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                mainView === 'portfolio' 
-                  ? 'bg-surface-2 text-ink font-bold shadow-2xs' 
-                  : 'text-ink-3 hover:text-ink hover:bg-surface-2/60 font-medium'
-              }`}
-            >
-              <span>{t.navPortfolio}</span>
-            </button>
+          {/* DESKTOP NAVIGATION TABS (Swiss studio clean floating pills) */}
+          <div className="hidden md:flex items-center gap-0.5 lg:gap-1 text-xs font-medium ml-1 sm:ml-2">
+            {([
+              { id: 'bridge', label: t.navSwap },
+              { id: 'p2p', label: t.navP2p },
+              { id: 'perps', label: t.navPerps },
+              { id: 'pools', label: t.navPools },
+              { id: 'lend', label: t.navLend },
+              { id: 'portfolio', label: t.navPortfolio }
+            ] as const).map((tab) => {
+              const active = mainView === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onMouseEnter={() => preloadView(tab.id)}
+                  onClick={() => setMainView(tab.id)}
+                  className={`px-3.5 py-1.5 rounded-full transition-all cursor-pointer ${
+                    active
+                      ? 'bg-surface text-ink font-semibold shadow-[0_1px_6px_rgba(0,0,0,0.06)]'
+                      : 'text-ink-3 hover:text-ink hover:bg-surface/60 font-medium'
+                  }`}
+                >
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
         
         {/* RIGHT CONTROLS (Responsive) */}
-        <div className="flex items-center gap-2 sm:gap-2.5">
+        <div className="flex items-center gap-2 sm:gap-2">
           {/* UserLink Identity Pill (Placed next to Chipnet button) */}
           <button
             onMouseEnter={() => preloadView('identity')}
             onClick={() => setMainView('identity')}
-            className={`hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all cursor-pointer shadow-2xs ${
+            className={`hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer ${
               mainView === 'identity'
-                ? 'bg-primary/10 border-primary/40 text-primary font-bold'
-                : 'bg-surface hover:bg-surface-2 border-line text-ink-2 hover:text-ink'
+                ? 'bg-surface text-ink font-semibold shadow-[0_1px_6px_rgba(0,0,0,0.06)]'
+                : 'text-ink-2 hover:text-ink hover:bg-surface/70'
             }`}
             title={lang === 'es' ? 'UserLink: Identidad BCH ↔ Nostr' : 'UserLink: BCH ↔ Nostr Identity'}
           >
-            <Fingerprint className="w-3.5 h-3.5 text-primary" />
+            <Fingerprint className="w-3.5 h-3.5 text-ink-2" />
             <span>{t.navIdentity}</span>
           </button>
 
-          {/* Network Switcher Pill (Desktop/Tablet: hidden on mobile to avoid navbar crowding) */}
+          {/* Network Switcher Pill */}
           <button
             onClick={() => {
               const next = platformNetwork === 'mainnet' ? 'testnet' : 'mainnet';
@@ -2499,28 +2528,28 @@ export default function App() {
                   : (lang === 'es' ? 'Red activa: BCH Chipnet (Testnet)' : 'Active network: BCH Chipnet (Testnet)')
               );
             }}
-            className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-medium border border-line bg-surface hover:bg-surface-2 text-ink-2 transition-all cursor-pointer shadow-2xs"
+            className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-medium bg-surface/80 hover:bg-surface text-ink-2 transition-all cursor-pointer shadow-[0_1px_4px_rgba(0,0,0,0.04)]"
             title={lang === 'es' ? 'Click para alternar red (Mainnet / Testnet)' : 'Click to toggle network (Mainnet / Testnet)'}
           >
             <span className={`w-2 h-2 rounded-full ${platformNetwork === 'mainnet' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'}`} />
-            <span className="capitalize font-semibold text-[11px] sm:text-xs">
+            <span className="capitalize font-medium text-[11px] sm:text-xs">
               {platformNetwork === 'mainnet' ? 'Mainnet' : 'Chipnet'}
             </span>
           </button>
 
-          {/* Theme Toggle Button (Desktop/Tablet) */}
+          {/* Theme Toggle Button */}
           <button 
             onClick={() => setDarkMode(!darkMode)} 
-            className="hidden sm:flex w-8 h-8 rounded-full bg-surface hover:bg-surface-2 border border-line text-ink-2 hover:text-ink shadow-2xs transition-all items-center justify-center cursor-pointer"
+            className="hidden sm:flex w-8 h-8 rounded-full hover:bg-surface/80 text-ink-2 hover:text-ink transition-all items-center justify-center cursor-pointer"
             title={darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
           >
-            {darkMode ? <Sun className="w-3.5 h-3.5 text-amber-400" /> : <Moon className="w-3.5 h-3.5 text-ink-3" />}
+            {darkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-ink-2" />}
           </button>
 
-          {/* Language Selector Pill (Desktop/Tablet) */}
+          {/* Language Selector Pill */}
           <button 
             onClick={() => setLang(lang === 'en' ? 'es' : 'en')} 
-            className="hidden sm:flex items-center gap-1 text-ink-2 hover:text-ink font-semibold text-xs bg-surface hover:bg-surface-2 px-2.5 py-1.5 rounded-full border border-line shadow-2xs transition-all cursor-pointer"
+            className="hidden sm:flex items-center gap-1 text-ink-2 hover:text-ink font-medium text-xs hover:bg-surface/80 px-2.5 py-1.5 rounded-full transition-all cursor-pointer"
           >
             <span className="text-xs">{lang === 'en' ? '🇺🇸' : '🇪🇸'}</span>
             <span className="text-[11px]">{lang.toUpperCase()}</span>
@@ -2632,7 +2661,7 @@ export default function App() {
           ) : (
             <button 
               onClick={() => setShowWalletModal(true)} 
-              className="bg-primary hover:bg-primary-hover text-black px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-full font-bold text-xs transition-all shadow-xs cursor-pointer shrink-0"
+              className="bg-ink hover:opacity-90 text-canvas px-4 sm:px-5 py-2 rounded-full font-semibold text-xs transition-all shadow-2xs cursor-pointer shrink-0"
             >
               <span className="hidden sm:inline">{wc.state === 'connecting' ? t.openWallet : t.navWallet}</span>
               <span className="sm:hidden font-semibold">Connect</span>
@@ -2664,132 +2693,206 @@ export default function App() {
               className="fixed inset-0 bg-black/60 backdrop-blur-xs cursor-pointer"
             />
 
-            {/* Drawer Sheet */}
+            {/* Drawer Sheet — Swiss Studio asymmetric left-rounded panel */}
             <motion.div 
               initial={{ x: '100%' }}
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
-              transition={{ type: 'spring', damping: 25, stiffness: 250 }}
-              className="relative z-10 w-72 max-w-[80vw] h-full bg-surface border-l border-line shadow-2xl p-5 flex flex-col justify-between overflow-y-auto"
+              transition={{ type: 'spring', damping: 28, stiffness: 280 }}
+              className="relative z-10 w-[308px] max-w-[86vw] h-full bg-surface rounded-l-[32px] shadow-[0_24px_64px_rgba(0,0,0,0.22)] px-5 py-6 flex flex-col justify-between overflow-y-auto"
             >
-              <div className="space-y-4">
-                {/* Header */}
-                <div className="flex items-center justify-between pb-3 border-b border-line">
-                  <div className="flex items-center gap-2">
-                    <img src="/logo.png" className="w-6 h-6 object-contain" alt="Logo" />
-                    <span className="font-bold text-ink text-sm tracking-tight">Binary<span className="text-primary font-extrabold">Liquid</span></span>
-                  </div>
+              <div className="space-y-5">
+                {/* Editorial Brand Header */}
+                <div className="flex items-center justify-between">
+                  <button
+                    type="button"
+                    onClick={() => { setMainView('gateway'); setMobileMenuOpen(false); }}
+                    className="flex items-center gap-2.5 cursor-pointer"
+                  >
+                    <div className="w-8 h-8 rounded-xl overflow-hidden flex items-center justify-center shrink-0">
+                      <img src="/logo.png" className="w-full h-full object-contain" alt="BinaryLiquid" />
+                    </div>
+                    <span className="font-brand italic font-semibold text-[21px] tracking-[-0.02em] leading-none text-ink">
+                      BinaryLiquid
+                    </span>
+                  </button>
                   <button 
+                    type="button"
                     onClick={() => setMobileMenuOpen(false)} 
-                    className="w-7 h-7 rounded-lg hover:bg-surface-2 text-ink-3 hover:text-ink flex items-center justify-center transition-colors cursor-pointer"
-                    title="Cerrar"
+                    className="w-8 h-8 rounded-full bg-canvas hover:bg-surface-2 text-ink-3 hover:text-ink flex items-center justify-center transition-colors cursor-pointer"
+                    title={lang === 'es' ? 'Cerrar' : 'Close'}
                   >
                     <X className="w-4 h-4" />
                   </button>
                 </div>
 
-                {/* Network Switcher (Clean Segment) */}
-                <div className="space-y-1.5">
-                  <div className="text-[10px] uppercase font-bold tracking-wider text-ink-3 px-1">
-                    {lang === 'es' ? 'Red de la plataforma' : 'Platform Network'}
-                  </div>
-                  <div className="grid grid-cols-2 p-0.5 bg-surface-2 rounded-xl border border-line text-xs">
-                    <button
-                      onClick={() => {
-                        setPlatformNetwork('mainnet');
-                        showToast(lang === 'es' ? 'Red activa: Bitcoin Cash Mainnet (Producción)' : 'Active network: Bitcoin Cash Mainnet (Production)');
-                      }}
-                      className={`py-1.5 rounded-lg font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                        platformNetwork === 'mainnet'
-                          ? 'bg-surface text-ink shadow-xs font-bold'
-                          : 'text-ink-3 hover:text-ink'
-                      }`}
-                    >
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                      <span>Mainnet</span>
-                    </button>
-                    <button
-                      onClick={() => {
-                        setPlatformNetwork('testnet');
-                        showToast(lang === 'es' ? 'Red activa: BCH Chipnet (Testnet)' : 'Active network: BCH Chipnet (Testnet)');
-                      }}
-                      className={`py-1.5 rounded-lg font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                        platformNetwork === 'testnet'
-                          ? 'bg-surface text-amber-500 shadow-xs font-bold'
-                          : 'text-ink-3 hover:text-ink'
-                      }`}
-                    >
-                      <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                      <span>Testnet</span>
-                    </button>
-                  </div>
+                {/* Borderless Network Segmented Pill */}
+                <div className="grid grid-cols-2 p-1 bg-canvas rounded-full text-xs">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPlatformNetwork('mainnet');
+                      showToast(lang === 'es' ? 'Red activa: Bitcoin Cash Mainnet (Producción)' : 'Active network: Bitcoin Cash Mainnet (Production)');
+                    }}
+                    className={`py-2 rounded-full font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                      platformNetwork === 'mainnet'
+                        ? 'bg-ink text-surface shadow-xs'
+                        : 'text-ink-3 hover:text-ink'
+                    }`}
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                    <span>Mainnet</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPlatformNetwork('testnet');
+                      showToast(lang === 'es' ? 'Red activa: BCH Chipnet (Testnet)' : 'Active network: BCH Chipnet (Testnet)');
+                    }}
+                    className={`py-2 rounded-full font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                      platformNetwork === 'testnet'
+                        ? 'bg-ink text-surface shadow-xs'
+                        : 'text-ink-3 hover:text-ink'
+                    }`}
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                    <span>Chipnet</span>
+                  </button>
                 </div>
 
-                {/* Primary Navigation Links (Minimalist single-line rows, NO subtitle clutter) */}
-                <div className="space-y-1 pt-2">
-                  <div className="text-[10px] uppercase font-bold tracking-wider text-ink-3 px-1 mb-1">
-                    {lang === 'es' ? 'Navegación' : 'Navigation'}
-                  </div>
+                {/* Primary Ecosystem Grid (Tactile 2x3 Bento Tiles — Zero AI List Clutter) */}
+                <div className="grid grid-cols-2 gap-2">
                   {[
-                    { id: 'bridge', label: 'Bridge Swap', icon: Zap },
-                    { id: 'perps', label: 'Perps (Futuros)', icon: TrendingUp },
-                    { id: 'pools', label: 'Pools', icon: Droplets },
-                    { id: 'lend', label: 'Lend', icon: Lock },
-                    { id: 'portfolio', label: lang === 'es' ? 'Portafolio' : 'Portfolio', icon: PieChart },
-                    { id: 'identity', label: lang === 'es' ? 'Identidad Soberana' : 'Sovereign Identity', icon: Fingerprint },
-                    { id: 'gateway', label: 'Gateway', icon: Sparkles },
-                    { id: 'whitepaper', label: 'Whitepaper', icon: BookOpen },
-                    { id: 'docs', label: 'Docs', icon: FileText },
-                    { id: 'sdk', label: 'SDK & API', icon: Code2 },
+                    { id: 'bridge', label: 'Bridge Swap', sub: '5 Redes', subEn: '5 Chains', icon: Zap },
+                    { id: 'p2p', label: 'P2P Escrow', sub: 'Fiat ↔ BCH', subEn: 'Fiat ↔ BCH', icon: ShieldCheck },
+                    { id: 'perps', label: 'Perps', sub: 'Hasta 50x', subEn: 'Up to 50x', icon: TrendingUp },
+                    { id: 'pools', label: 'Pools AMM', sub: 'CashTokens', subEn: 'CashTokens', icon: Droplets },
+                    { id: 'lend', label: 'Lend', sub: 'Colateral', subEn: 'Collateral', icon: Lock },
+                    { id: 'portfolio', label: lang === 'es' ? 'Portafolio' : 'Portfolio', sub: 'Multired', subEn: 'Multi-chain', icon: PieChart },
                   ].map(item => {
                     const Icon = item.icon;
                     const active = mainView === item.id;
                     return (
-                      <button 
+                      <button
                         key={item.id}
+                        type="button"
                         onClick={() => { setMainView(item.id as any); setMobileMenuOpen(false); }}
-                        className={`w-full flex items-center justify-between px-3 py-2 rounded-xl font-medium text-xs sm:text-sm transition-all cursor-pointer ${
-                          active 
-                            ? 'bg-primary/10 text-primary font-bold' 
-                            : 'hover:bg-surface-2 text-ink-2 hover:text-ink'
+                        className={`rounded-[20px] p-3 text-left transition-all cursor-pointer flex flex-col justify-between min-h-[76px] ${
+                          active
+                            ? 'bg-ink text-surface shadow-sm'
+                            : 'bg-canvas hover:bg-surface-2 text-ink'
                         }`}
                       >
-                        <div className="flex items-center gap-2.5">
-                          <Icon className={`w-4 h-4 ${active ? 'text-primary' : 'text-ink-3'}`} />
-                          <span>{item.label}</span>
+                        <Icon className={`w-4 h-4 ${active ? 'text-surface' : 'text-ink-2'}`} />
+                        <div className="mt-2.5">
+                          <div className="text-[13px] font-semibold tracking-[-0.01em] leading-tight">
+                            {item.label}
+                          </div>
+                          <div className={`text-[10px] mt-0.5 ${active ? 'text-surface/70' : 'text-ink-3'}`}>
+                            {lang === 'es' ? item.sub : item.subEn}
+                          </div>
                         </div>
-                        {active && <span className="w-1.5 h-1.5 rounded-full bg-primary" />}
                       </button>
                     );
                   })}
                 </div>
+
+                {/* Identity & Wallet Companion Cards */}
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => { setMainView('identity'); setMobileMenuOpen(false); }}
+                    className={`w-full flex items-center justify-between px-3.5 py-3 rounded-[18px] transition-all cursor-pointer ${
+                      mainView === 'identity'
+                        ? 'bg-ink text-surface'
+                        : 'bg-canvas hover:bg-surface-2 text-ink'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <Fingerprint className={`w-4 h-4 shrink-0 ${mainView === 'identity' ? 'text-surface' : 'text-ink-2'}`} />
+                      <div className="text-left min-w-0">
+                        <div className="text-xs font-semibold leading-tight">
+                          {lang === 'es' ? 'Identidad @usuario' : 'Sovereign @username'}
+                        </div>
+                        <div className={`text-[10px] truncate ${mainView === 'identity' ? 'text-surface/70' : 'text-ink-3'}`}>
+                          Nostr · bliquid.xyz/identity
+                        </div>
+                      </div>
+                    </div>
+                    <ChevronRight className={`w-3.5 h-3.5 shrink-0 ${mainView === 'identity' ? 'text-surface/70' : 'text-ink-3'}`} />
+                  </button>
+
+                  <a
+                    href="https://wallet.bliquid.xyz"
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="w-full flex items-center justify-between px-3.5 py-3 rounded-[18px] bg-canvas hover:bg-surface-2 text-ink transition-all"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <Wallet className="w-4 h-4 text-ink-2 shrink-0" />
+                      <div className="text-left min-w-0">
+                        <div className="text-xs font-semibold leading-tight">BinaryLiquid Wallet</div>
+                        <div className="text-[10px] text-ink-3 truncate">wallet.bliquid.xyz · BlConnect</div>
+                      </div>
+                    </div>
+                    <ArrowUpRight className="w-3.5 h-3.5 text-ink-3 shrink-0" />
+                  </a>
+                </div>
+
+                {/* Compact Secondary Protocol Links (4 clean borderless pills) */}
+                <div className="grid grid-cols-2 gap-1.5">
+                  {[
+                    { id: 'gateway', label: 'Gateway' },
+                    { id: 'whitepaper', label: 'Whitepaper' },
+                    { id: 'docs', label: 'Docs' },
+                    { id: 'sdk', label: 'SDK & API' }
+                  ].map(item => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => { setMainView(item.id as any); setMobileMenuOpen(false); }}
+                      className={`px-3 py-2 rounded-xl text-xs font-medium text-center transition-colors cursor-pointer ${
+                        mainView === item.id
+                          ? 'bg-surface-2 text-ink font-semibold'
+                          : 'bg-canvas/60 text-ink-3 hover:text-ink hover:bg-canvas'
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              {/* Bottom Settings & Links */}
-              <div className="pt-4 border-t border-line space-y-3">
-                {/* Theme & Language Quick Toggles */}
+              {/* Clean Utility Dock Footer */}
+              <div className="pt-4 mt-4 space-y-3">
                 <div className="grid grid-cols-2 gap-2">
                   <button 
+                    type="button"
                     onClick={() => setDarkMode(!darkMode)}
-                    className="flex items-center justify-center gap-1.5 py-1.5 px-2.5 rounded-xl border border-line bg-surface hover:bg-surface-2 text-xs font-semibold text-ink-2 transition-all cursor-pointer"
+                    className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-full bg-canvas hover:bg-surface-2 text-xs font-medium text-ink transition-colors cursor-pointer"
                   >
-                    {darkMode ? <Sun className="w-3.5 h-3.5 text-amber-400" /> : <Moon className="w-3.5 h-3.5 text-ink-3" />}
-                    <span>{darkMode ? 'Claro' : 'Oscuro'}</span>
+                    {darkMode ? <Sun className="w-3.5 h-3.5 text-amber-400" /> : <Moon className="w-3.5 h-3.5 text-ink-2" />}
+                    <span>{darkMode ? (lang === 'es' ? 'Claro' : 'Light') : (lang === 'es' ? 'Oscuro' : 'Dark')}</span>
                   </button>
                   <button 
+                    type="button"
                     onClick={() => setLang(lang === 'en' ? 'es' : 'en')}
-                    className="flex items-center justify-center gap-1.5 py-1.5 px-2.5 rounded-xl border border-line bg-surface hover:bg-surface-2 text-xs font-semibold text-ink-2 transition-all cursor-pointer"
+                    className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-full bg-canvas hover:bg-surface-2 text-xs font-medium text-ink transition-colors cursor-pointer"
                   >
-                    <span>{lang === 'en' ? '🇺🇸 EN' : '🇪🇸 ES'}</span>
+                    <Globe className="w-3.5 h-3.5 text-ink-2" />
+                    <span>{lang === 'en' ? 'English' : 'Español'}</span>
                   </button>
                 </div>
 
-                {/* Minimal Footer Links */}
-                <div className="flex items-center justify-between text-[11px] text-ink-3 px-1 pt-1">
-                  <a href="https://bchblaze.cash" target="_blank" rel="noreferrer" className="hover:text-ink transition-colors">BLAZE</a>
-                  <a href="https://paryonusd.com" target="_blank" rel="noreferrer" className="hover:text-ink transition-colors">ParyonUSD</a>
-                  <a href="https://t.me/drianops" target="_blank" rel="noreferrer" className="hover:text-primary transition-colors font-medium">Drian Stack Labs</a>
-                  <a href={PLATFORM_NETWORKS[platformNetwork].explorerBch} target="_blank" rel="noreferrer" className="hover:text-ink transition-colors">Explorer</a>
+                <div className="flex items-center justify-between text-[11px] text-ink-3 px-1">
+                  <a href="https://t.me/drianops" target="_blank" rel="noreferrer" className="hover:text-ink transition-colors">
+                    Drian Stack Labs
+                  </a>
+                  <a href={PLATFORM_NETWORKS[platformNetwork].explorerBch} target="_blank" rel="noreferrer" className="hover:text-ink transition-colors inline-flex items-center gap-1">
+                    <span>Explorer</span>
+                    <ArrowUpRight className="w-3 h-3" />
+                  </a>
                 </div>
               </div>
             </motion.div>
@@ -2799,14 +2902,15 @@ export default function App() {
 
       {/* MOBILE BOTTOM FLOATING DOCK (md:hidden: lightning 1-thumb navigation) */}
       <div className="fixed bottom-3 left-3 right-3 z-40 md:hidden print:hidden pointer-events-none">
-        <div className="pointer-events-auto bg-surface/90 backdrop-blur-md border border-line shadow-lg rounded-2xl px-2 py-1.5 flex items-center justify-around">
+        <div className="pointer-events-auto bg-surface/90 backdrop-blur-md shadow-[0_8px_30px_rgba(0,0,0,0.12)] rounded-full px-2 py-1.5 flex items-center justify-around">
           
           {/* Tab 1: Swap */}
           <button 
+            type="button"
             onClick={() => setMainView('bridge')}
-            className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-all cursor-pointer ${
+            className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-full transition-all cursor-pointer ${
               mainView === 'bridge' 
-                ? 'text-primary font-bold' 
+                ? 'text-ink font-semibold' 
                 : 'text-ink-3 hover:text-ink font-medium'
             }`}
           >
@@ -2814,12 +2918,27 @@ export default function App() {
             <span className="text-[10px]">Swap</span>
           </button>
 
-          {/* Tab 2: Perps */}
+          {/* Tab 2: P2P */}
           <button 
+            type="button"
+            onClick={() => setMainView('p2p')}
+            className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-full transition-all cursor-pointer ${
+              mainView === 'p2p' 
+                ? 'text-ink font-semibold' 
+                : 'text-ink-3 hover:text-ink font-medium'
+            }`}
+          >
+            <ShieldCheck className="w-4 h-4" />
+            <span className="text-[10px]">P2P</span>
+          </button>
+
+          {/* Tab 3: Perps */}
+          <button 
+            type="button"
             onClick={() => setMainView('perps')}
-            className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-all cursor-pointer ${
+            className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-full transition-all cursor-pointer ${
               mainView === 'perps' 
-                ? 'text-primary font-bold' 
+                ? 'text-ink font-semibold' 
                 : 'text-ink-3 hover:text-ink font-medium'
             }`}
           >
@@ -2827,12 +2946,13 @@ export default function App() {
             <span className="text-[10px]">Perps</span>
           </button>
 
-          {/* Tab 3: Pools */}
+          {/* Tab 4: Pools */}
           <button 
+            type="button"
             onClick={() => setMainView('pools')}
-            className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-all cursor-pointer ${
+            className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-full transition-all cursor-pointer ${
               mainView === 'pools' 
-                ? 'text-primary font-bold' 
+                ? 'text-ink font-semibold' 
                 : 'text-ink-3 hover:text-ink font-medium'
             }`}
           >
@@ -2840,25 +2960,13 @@ export default function App() {
             <span className="text-[10px]">Pools</span>
           </button>
 
-          {/* Tab 4: Lend */}
-          <button 
-            onClick={() => setMainView('lend')}
-            className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-all cursor-pointer ${
-              mainView === 'lend' 
-                ? 'text-primary font-bold' 
-                : 'text-ink-3 hover:text-ink font-medium'
-            }`}
-          >
-            <Lock className="w-4 h-4" />
-            <span className="text-[10px]">Lend</span>
-          </button>
-
           {/* Tab 5: Menú (Opens Drawer!) */}
           <button 
+            type="button"
             onClick={() => setMobileMenuOpen(true)}
-            className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-all cursor-pointer ${
+            className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-full transition-all cursor-pointer ${
               mobileMenuOpen 
-                ? 'text-primary font-bold' 
+                ? 'text-ink font-semibold' 
                 : 'text-ink-3 hover:text-ink font-medium'
             }`}
           >
@@ -2869,91 +2977,129 @@ export default function App() {
         </div>
       </div>
 
-      {/* NATIVE WIZARDCONNECT DIALOG (Paytaca Alphanumeric QR) */}
+      {/* NATIVE WIZARDCONNECT DIALOG */}
       {(wc.qrUri || wc.uri) && wc.state === 'connecting' && (
-        <div className="fixed inset-0 bg-black/65 backdrop-blur-md z-[140] flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-[#141924] rounded-3xl p-6 sm:p-7 w-full max-w-sm shadow-2xl relative border border-gray-100 dark:border-gray-800 flex flex-col items-center text-center">
+        <div className="fixed inset-0 bg-black/45 dark:bg-black/70 backdrop-blur-sm z-[140] flex items-center justify-center p-4">
+          <div className="bg-surface rounded-[28px] p-6 w-full max-w-[350px] shadow-[0_24px_60px_-15px_rgba(0,0,0,0.22)] border border-line/60 relative flex flex-col items-center text-center">
             <button
+              type="button"
               onClick={() => { wc.disconnect(); setSelectedWalletType(null); }}
-              className="absolute top-5 right-5 text-gray-400 hover:text-gray-900 dark:hover:text-white bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 px-3 py-1 rounded-full transition-colors font-bold cursor-pointer"
+              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-surface-2 hover:bg-surface-3 text-ink-3 hover:text-ink flex items-center justify-center transition-colors cursor-pointer"
+              title={lang === 'es' ? 'Cerrar' : 'Close'}
             >
-              ✕
+              <X className="w-4 h-4" />
             </button>
 
-            <h2 className="text-xl font-black text-gray-900 dark:text-white mb-1.5 mt-2 flex items-center justify-center gap-2.5">
-              <img src="/wizardconnect-logo.png" className="w-8 h-8 object-contain" alt="Paytaca" />
-              <span>{lang === 'es' ? 'Conectar Paytaca' : 'Connect Paytaca'}</span>
+            <div className="w-11 h-11 rounded-2xl bg-surface-2 flex items-center justify-center mb-3 p-2">
+              <img src="/wizardconnect-logo.png" className="w-7 h-7 object-contain" alt="WizardConnect" />
+            </div>
+
+            <h2 className="text-[18px] font-semibold tracking-[-0.02em] text-ink">
+              WizardConnect
             </h2>
-            <p className="text-xs text-gray-500 dark:text-gray-400 font-medium mb-5">
-              {lang === 'es'
-                ? 'Abre tu billetera Paytaca, toca el ícono de escanear QR y aprueba la sesión WizardConnect (100% No-Custodio).'
-                : 'Open your Paytaca wallet, tap the QR scan icon and approve the WizardConnect session (100% Non-Custodial).'}
+            <p className="text-[13px] text-ink-3 mt-1 mb-5">
+              {lang === 'es' ? 'Escanea el QR para conectar' : 'Scan QR to connect'}
             </p>
 
-            <div className="p-3 bg-white rounded-2xl border border-gray-200 shadow-inner flex items-center justify-center mb-5">
+            <div className="p-3.5 bg-white rounded-[20px] border border-line/70 flex items-center justify-center mb-4">
               {wc.qrUri ? (
-                <AlphanumericQRCode value={wc.qrUri} size={215} foreground="#0E131E" background="#FFFFFF" />
+                <AlphanumericQRCode value={wc.qrUri} size={200} foreground="#0E131E" background="#FFFFFF" />
               ) : null}
             </div>
 
             <button
+              type="button"
               onClick={() => copyToClipboard(wc.uri || '')}
-              className="w-full bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 font-bold text-xs py-3 rounded-xl transition-all cursor-pointer"
+              className="w-full bg-surface-2 hover:bg-surface-3 text-ink font-medium text-[13px] py-3 px-4 rounded-full transition-colors cursor-pointer flex items-center justify-center gap-1.5"
             >
-              {copied
-                ? (lang === 'es' ? '✓ ¡URI WizardConnect copiado!' : '✓ WizardConnect URI copied!')
-                : (lang === 'es' ? 'Copiar URI de Conexión (wiz://...)' : 'Copy Connection URI (wiz://...)')}
+              {copied ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4 text-ink-3" />}
+              <span>
+                {copied
+                  ? (lang === 'es' ? 'Enlace copiado' : 'Link copied')
+                  : (lang === 'es' ? 'Copiar enlace' : 'Copy link')}
+              </span>
             </button>
           </div>
         </div>
       )}
 
-      {/* OFFICIAL BCH WALLETCONNECT V2 DIALOG (`wc2-bch-bcr`: Cashonize / Paytaca WC2) */}
-      {bchWcPairing && (
-        <div className="fixed inset-0 bg-black/65 backdrop-blur-md z-[140] flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-[#141924] rounded-3xl p-6 sm:p-7 w-full max-w-sm shadow-2xl relative border border-gray-100 dark:border-gray-800 flex flex-col items-center text-center">
+      {/* BLCONNECT PROTOCOL V1 MODAL (Instant Popup + Decentralized Nostr E2EE QR) */}
+      {blConnectModal && (
+        <div className="fixed inset-0 bg-black/45 dark:bg-black/70 backdrop-blur-sm z-[145] flex items-center justify-center p-4">
+          <div className="bg-surface rounded-[28px] p-6 w-full max-w-[360px] shadow-[0_24px_60px_-15px_rgba(0,0,0,0.22)] border border-line/60 relative flex flex-col items-center text-center">
             <button
-              onClick={() => { connectLockRef.current = false; setBchWcPairing(null); setSelectedWalletType(null); }}
-              className="absolute top-5 right-5 text-gray-400 hover:text-gray-900 dark:hover:text-white bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 px-3 py-1 rounded-full transition-colors font-bold cursor-pointer"
+              type="button"
+              onClick={() => {
+                blConnectModal.cancel();
+                setBlConnectModal(null);
+              }}
+              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-surface-2 hover:bg-surface-3 text-ink-3 hover:text-ink flex items-center justify-center transition-colors cursor-pointer"
+              title={lang === 'es' ? 'Cerrar' : 'Close'}
             >
-              ✕
+              <X className="w-4 h-4" />
             </button>
 
-            <h2 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white mb-1.5 mt-2">
-              BCH WalletConnect V2
+            <div className="w-11 h-11 rounded-2xl bg-surface-2 flex items-center justify-center mb-3 p-1.5">
+              <img src="/logo.png" className="w-8 h-8 object-contain" alt="BinaryLiquid Wallet" />
+            </div>
+
+            <h2 className="text-[18px] font-semibold tracking-[-0.02em] text-ink">
+              BinaryLiquid Wallet
             </h2>
-            <p className="text-xs text-gray-500 dark:text-gray-400 font-medium mb-4">
+            <p className="text-[13px] text-ink-3 mt-1 mb-5">
               {lang === 'es'
-                ? `Escanea con Cashonize / Paytaca o copia el URI wc:... y pégalo en la pestaña WalletConnect de tu billetera (${platformNetwork === 'testnet' ? 'Chipnet Testnet' : 'BCH Mainnet'}).`
-                : `Scan with Cashonize / Paytaca or copy the wc:... URI and paste it into the WalletConnect tab of your wallet (${platformNetwork === 'testnet' ? 'Chipnet Testnet' : 'BCH Mainnet'}).`}
+                ? 'Conecta aquí o escanea desde tu teléfono'
+                : 'Connect here or scan from your phone'}
             </p>
 
-            {bchWcPairing.qrDataUrl && (
-              <div className="p-3 bg-white rounded-2xl border border-gray-200 shadow-inner flex items-center justify-center mb-4">
-                <img src={bchWcPairing.qrDataUrl} alt="BCH WalletConnect QR" className="w-48 h-48 object-contain" />
+            {/* Primary Instant Same-Browser Popup CTA */}
+            <button
+              type="button"
+              onClick={() => void handleBlConnectInstantPopup()}
+              disabled={blConnectPopupBusy}
+              className="w-full bg-ink text-canvas hover:opacity-90 font-semibold text-[14px] py-3.5 px-4 rounded-full transition-opacity flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
+            >
+              <Zap className="w-4 h-4 text-primary shrink-0" />
+              <span>
+                {blConnectPopupBusy
+                  ? (lang === 'es' ? 'Esperando aprobación...' : 'Waiting for approval...')
+                  : (lang === 'es' ? 'Conectar en navegador' : 'Connect in Browser')}
+              </span>
+            </button>
+
+            <div className="w-full flex items-center gap-3 my-4 text-[11px] font-medium text-ink-3">
+              <span className="flex-1 h-px bg-line/70" />
+              <span>{lang === 'es' ? 'o escanea el QR' : 'or scan QR'}</span>
+              <span className="flex-1 h-px bg-line/70" />
+            </div>
+
+            {blConnectModal.qrDataUrl && (
+              <div className="p-3 bg-white rounded-[20px] border border-line/70 flex items-center justify-center mb-4">
+                <img src={blConnectModal.qrDataUrl} alt="BlConnect QR" className="w-40 h-40 object-contain" />
               </div>
             )}
 
-            <div className="w-full space-y-2">
+            <div className="w-full grid grid-cols-2 gap-2">
               <button
-                onClick={() => copyToClipboard(bchWcPairing.uri)}
-                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs py-3 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                type="button"
+                onClick={() => copyToClipboard(blConnectModal.uri)}
+                className="bg-surface-2 hover:bg-surface-3 text-ink font-medium text-[12px] py-2.5 px-3 rounded-full transition-colors cursor-pointer flex items-center justify-center gap-1.5"
               >
-                {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5 text-ink-3" />}
                 <span>
                   {copied
-                    ? (lang === 'es' ? '¡URI wc: Copiado al Portapapeles!' : 'wc: URI copied to clipboard!')
-                    : (lang === 'es' ? 'Copiar URI WalletConnect (Cashonize / Paytaca)' : 'Copy WalletConnect URI (Cashonize / Paytaca)')}
+                    ? (lang === 'es' ? 'Copiado' : 'Copied')
+                    : (lang === 'es' ? 'Copiar enlace' : 'Copy link')}
                 </span>
               </button>
               <a
-                href="https://cashonize.com"
+                href={`https://wallet.bliquid.xyz/dashboard/dapps?blc=${encodeURIComponent(blConnectModal.uri)}`}
                 target="_blank"
                 rel="noreferrer"
-                className="w-full bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 font-bold text-xs py-2.5 rounded-xl transition-all flex items-center justify-center gap-1.5"
+                className="bg-surface-2 hover:bg-surface-3 text-ink font-medium text-[12px] py-2.5 px-3 rounded-full transition-colors flex items-center justify-center gap-1.5"
               >
-                <span>{lang === 'es' ? 'Abrir Cashonize Web Wallet' : 'Open Cashonize Web Wallet'}</span>
-                <ExternalLink className="w-3.5 h-3.5" />
+                <span>{lang === 'es' ? 'Abrir web' : 'Open web'}</span>
+                <ExternalLink className="w-3.5 h-3.5 text-ink-3" />
               </a>
             </div>
           </div>
@@ -3005,7 +3151,7 @@ export default function App() {
             bchQueryAddress={bchWallet?.queryAddress || bchWallet?.address || ''}
             bchWalletName={bchWallet?.provider || ''}
             bchWalletSource={bchWallet?.source}
-            evmAddress={evmWallet?.address || ''}
+            evmAddress={evmWallet?.address || userContext?.evmAddress || ''}
             solanaAddress={solanaWallet?.address || ''}
             solanaSource={solanaWallet?.source}
             tonAddress={tonWallet?.address || ''}
@@ -3027,6 +3173,28 @@ export default function App() {
         </main>
       )}
 
+      {/* P2P NON-CUSTODIAL CASHSCRIPT ESCROW MARKETPLACE */}
+      {mainView === 'p2p' && (
+        <main className="flex-1 flex flex-col items-center justify-start p-4 sm:p-6 w-full max-w-7xl mx-auto pb-28 md:pb-12">
+          <P2PView
+            backendUrl=""
+            bchAddress={bchWallet?.tokenAddress || bchWallet?.address || ''}
+            bchWalletSource={bchWallet?.source}
+            wizardConnectManager={wc.manager}
+            platformNetwork={platformNetwork}
+            onToggleNetwork={setPlatformNetwork}
+            onRefreshBalances={() => refreshWalletBalances()}
+            onConnectWallet={() => {
+              setWalletModalTab('bch');
+              setShowWalletModal(true);
+            }}
+            onOpenIdentity={() => setMainView('identity')}
+            showToast={showToast}
+            lang={lang}
+          />
+        </main>
+      )}
+
       {/* PERPETUAL FUTURES (PERPS) DEX VIEW */}
       {mainView === 'perps' && (
         <main className="flex-1 flex flex-col items-center justify-start p-3 sm:p-5 w-full max-w-[1360px] mx-auto pb-28 md:pb-12 text-left">
@@ -3035,7 +3203,7 @@ export default function App() {
             userAddress={userContext?.address || ''}
             bchAddress={bchWallet?.tokenAddress || bchWallet?.address || ''}
             bchWalletSource={bchWallet?.source}
-            evmAddress={evmWallet?.address || ''}
+            evmAddress={evmWallet?.address || userContext?.evmAddress || ''}
             walletBalances={walletBalances}
             wizardConnectManager={wc.manager}
             wizardConnectState={wc.state}
@@ -3059,7 +3227,7 @@ export default function App() {
             userAddress={userContext?.address || ''}
             bchAddress={bchWallet?.tokenAddress || bchWallet?.address || ''}
             bchWalletSource={bchWallet?.source}
-            evmAddress={evmWallet?.address || ''}
+            evmAddress={evmWallet?.address || userContext?.evmAddress || ''}
             walletBalances={walletBalances}
             wizardConnectManager={wc.manager}
             wizardConnectState={wc.state}
@@ -3083,7 +3251,7 @@ export default function App() {
             userAddress={userContext?.address || ''}
             bchAddress={bchWallet?.tokenAddress || bchWallet?.address || ''}
             bchWalletSource={bchWallet?.source}
-            evmAddress={evmWallet?.address || ''}
+            evmAddress={evmWallet?.address || userContext?.evmAddress || ''}
             walletBalances={walletBalances}
             wizardConnectManager={wc.manager}
             wizardConnectState={wc.state}
@@ -3107,7 +3275,7 @@ export default function App() {
             backendUrl=""
             userAddress={userContext?.address || ''}
             bchAddress={bchWallet?.queryAddress || bchWallet?.tokenAddress || bchWallet?.address || ''}
-            evmAddress={evmWallet?.address || ''}
+            evmAddress={evmWallet?.address || userContext?.evmAddress || ''}
             solanaAddress={solanaWallet?.address || ''}
             tonAddress={tonWallet?.address || ''}
             ltcAddress={ltcWallet?.address || ''}
@@ -3167,82 +3335,70 @@ export default function App() {
       {/* PROFESSIONAL MULTI-CHAIN ACCOUNT & PORTFOLIO MODAL */}
       <AnimatePresence>
         {showAccountModal && userContext && (
-          <div className="fixed inset-0 bg-black/65 backdrop-blur-md z-[130] flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="fixed inset-0 bg-black/45 dark:bg-black/70 backdrop-blur-sm z-[130] flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
             <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 12 }}
+              initial={{ opacity: 0, scale: 0.96, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 12 }}
-              transition={{ duration: 0.18, ease: 'easeOut' }}
-              className="bg-surface border border-line rounded-card p-5 sm:p-6 w-full max-w-md sm:max-w-lg shadow-soft relative text-left my-auto max-h-[92vh] flex flex-col"
+              exit={{ opacity: 0, scale: 0.96, y: 10 }}
+              transition={{ duration: 0.16, ease: 'easeOut' }}
+              className="bg-surface rounded-[28px] p-5 sm:p-6 w-full max-w-[440px] shadow-[0_24px_60px_-15px_rgba(0,0,0,0.22)] border border-line/60 relative text-left my-auto max-h-[90vh] flex flex-col"
             >
               {/* Close Button */}
               <button 
                 onClick={() => setShowAccountModal(false)}
-                className="absolute top-4 right-4 w-7 h-7 rounded-full bg-surface-2 hover:bg-surface-3 text-ink-3 hover:text-ink flex items-center justify-center transition-colors cursor-pointer"
+                className="absolute top-4 right-4 w-8 h-8 rounded-full bg-surface-2 hover:bg-surface-3 text-ink-3 hover:text-ink flex items-center justify-center transition-colors cursor-pointer"
                 title={lang === 'es' ? 'Cerrar' : 'Close'}
               >
-                <X className="w-3.5 h-3.5" />
+                <X className="w-4 h-4" />
               </button>
 
               {/* Modal Top Header */}
-              <div className="flex items-center gap-3 mb-4 pr-8">
-                <div className="w-10 h-10 rounded-control bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0 shadow-2xs">
-                  <Wallet className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-ink text-base sm:text-lg flex items-center gap-2">
-                    <span>{t.accountTitle}</span>
-                    <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                      Non-Custodial
-                    </span>
-                  </h3>
-                  <span className="text-[11px] text-ink-3 flex items-center gap-1.5 mt-0.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                    <span>{platformNetwork === 'testnet' ? 'Multi-Chain Testnets (Chipnet + Amoy + Devnet)' : 'Multi-Chain Production (Mainnet)'}</span>
-                  </span>
-                </div>
+              <div className="mb-4 pr-8">
+                <h3 className="text-[18px] font-semibold tracking-[-0.02em] text-ink">
+                  {t.accountTitle}
+                </h3>
+                <span className="text-[12px] text-ink-3 flex items-center gap-1.5 mt-0.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                  <span>{platformNetwork === 'testnet' ? 'Chipnet · Testnets' : 'Mainnet'}</span>
+                </span>
               </div>
 
               {/* Portfolio Value Summary Card */}
-              <div className="p-3.5 sm:p-4 rounded-control bg-surface-2 border border-line mb-4 relative overflow-hidden">
+              <div className="p-4 rounded-[20px] bg-surface-2 mb-4 relative overflow-hidden">
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-[11px] font-semibold text-ink-3 uppercase tracking-wider">
+                  <span className="text-[12px] font-medium text-ink-3">
                     {t.portfolioValue}
                   </span>
                   <button
                     onClick={() => refreshWalletBalances()}
                     disabled={balancesLoading}
-                    className="text-[11px] font-semibold text-primary hover:underline flex items-center gap-1 cursor-pointer"
+                    className="text-[12px] font-medium text-ink-2 hover:text-ink flex items-center gap-1 cursor-pointer transition-colors"
                   >
                     <RefreshCw className={`w-3 h-3 ${balancesLoading ? 'animate-spin' : ''}`} />
                     <span>{balancesLoading ? t.refreshing : t.refresh}</span>
                   </button>
                 </div>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-2xl sm:text-3xl font-extrabold text-ink tracking-tight font-mono">
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-2xl sm:text-[28px] font-semibold text-ink tracking-[-0.02em] tabular-nums">
                     ${estimatedPortfolioUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
-                  <span className="text-xs font-bold text-ink-3">USD</span>
+                  <span className="text-[12px] font-medium text-ink-3">USD</span>
                 </div>
-                <p className="text-[10px] text-ink-3 mt-1">
-                  {lang === 'es' ? 'Valor consolidado en tiempo real según cotizaciones del Oracle Pool' : 'Real-time aggregated valuation across all active networks via Oracle Pool'}
-                </p>
               </div>
 
               {/* Segmented Mode Selector: [Wallets (X/5)] | [Balances] */}
-              <div className="grid grid-cols-2 p-1 bg-surface-2 rounded-control border border-line text-xs font-semibold mb-4">
+              <div className="grid grid-cols-2 p-1 bg-surface-2 rounded-full text-[12px] font-medium mb-4 gap-1">
                 <button
                   type="button"
                   onClick={() => setAccountModalTab('wallets')}
-                  className={`py-1.5 px-3 rounded-control transition-all cursor-pointer flex items-center justify-center gap-1.5 text-xs ${
+                  className={`py-1.5 px-3 rounded-full transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
                     accountModalTab === 'wallets'
-                      ? 'bg-surface text-ink shadow-soft font-bold'
+                      ? 'bg-surface text-ink shadow-soft font-semibold'
                       : 'text-ink-3 hover:text-ink'
                   }`}
                 >
-                  <Wallet className="w-3.5 h-3.5" />
                   <span>{t.tabWallets}</span>
-                  <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-surface-3 text-ink-2 font-mono">
+                  <span className="text-[11px] text-ink-3 tabular-nums">
                     {[bchWallet, evmWallet, solanaWallet, tonWallet, ltcWallet].filter(Boolean).length}/5
                   </span>
                 </button>
@@ -3250,13 +3406,12 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setAccountModalTab('balances')}
-                  className={`py-1.5 px-3 rounded-control transition-all cursor-pointer flex items-center justify-center gap-1.5 text-xs ${
+                  className={`py-1.5 px-3 rounded-full transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
                     accountModalTab === 'balances'
-                      ? 'bg-surface text-ink shadow-soft font-bold'
+                      ? 'bg-surface text-ink shadow-soft font-semibold'
                       : 'text-ink-3 hover:text-ink'
                   }`}
                 >
-                  <Coins className="w-3.5 h-3.5" />
                   <span>{t.tabBalances}</span>
                 </button>
               </div>
@@ -3266,7 +3421,7 @@ export default function App() {
                 {accountModalTab === 'wallets' ? (
                   <>
                     {/* 1. BITCOIN CASH */}
-                    <div className="p-3 rounded-control bg-surface-2 border border-line">
+                    <div className="p-3.5 rounded-2xl bg-surface-2">
                       <div className="flex items-center justify-between mb-1.5">
                         <div className="flex items-center gap-1.5">
                           <img src="/BCH.png" className="w-4 h-4 object-contain" alt="BCH" />
@@ -3359,7 +3514,7 @@ export default function App() {
                     </div>
 
                     {/* 2. EVM (POLYGON & BSC) */}
-                    <div className="p-3 rounded-control bg-surface-2 border border-line">
+                    <div className="p-3.5 rounded-2xl bg-surface-2">
                       <div className="flex items-center justify-between mb-1.5">
                         <div className="flex items-center gap-1.5">
                           <img src="/POL.png" className="w-4 h-4 object-contain" alt="POL" />
@@ -3447,7 +3602,7 @@ export default function App() {
                     </div>
 
                     {/* 3. SOLANA (SVM) */}
-                    <div className="p-3 rounded-control bg-surface-2 border border-line">
+                    <div className="p-3.5 rounded-2xl bg-surface-2">
                       <div className="flex items-center justify-between mb-1.5">
                         <div className="flex items-center gap-1.5">
                           <img src="/SOL.png" className="w-4 h-4 object-contain" alt="SOL" />
@@ -3503,7 +3658,7 @@ export default function App() {
                     </div>
 
                     {/* 4. TON BLOCKCHAIN */}
-                    <div className="p-3 rounded-control bg-surface-2 border border-line">
+                    <div className="p-3.5 rounded-2xl bg-surface-2">
                       <div className="flex items-center justify-between mb-1.5">
                         <div className="flex items-center gap-1.5">
                           <img src="/TON.png" className="w-4 h-4 object-contain" alt="TON" />
@@ -3596,7 +3751,7 @@ export default function App() {
                     </div>
 
                     {/* 5. LITECOIN */}
-                    <div className="p-3 rounded-control bg-surface-2 border border-line">
+                    <div className="p-3.5 rounded-2xl bg-surface-2">
                       <div className="flex items-center justify-between mb-1.5">
                         <div className="flex items-center gap-1.5">
                           <img src="/LTC.png" className="w-4 h-4 object-contain" alt="LTC" />
@@ -3698,7 +3853,7 @@ export default function App() {
                       </div>
                       <div className="space-y-1.5">
                         {/* PUSD (BCH CashTokens) */}
-                        <div className="p-2.5 rounded-control bg-surface-2 border border-line flex items-center justify-between">
+                        <div className="px-3 py-2.5 rounded-2xl bg-surface-2 flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <img src="/PUSD.png" className="w-6 h-6 rounded-full object-contain" alt="PUSD" />
                             <div>
@@ -3722,7 +3877,7 @@ export default function App() {
                         </div>
 
                         {/* USDT (Polygon) */}
-                        <div className="p-2.5 rounded-control bg-surface-2 border border-line flex items-center justify-between">
+                        <div className="px-3 py-2.5 rounded-2xl bg-surface-2 flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <img src="/USDT.png" className="w-6 h-6 rounded-full object-contain" alt="USDT Polygon" />
                             <div>
@@ -3746,7 +3901,7 @@ export default function App() {
                         </div>
 
                         {/* USDT (BNB Chain) */}
-                        <div className="p-2.5 rounded-control bg-surface-2 border border-line flex items-center justify-between">
+                        <div className="px-3 py-2.5 rounded-2xl bg-surface-2 flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <img src="/USDT.png" className="w-6 h-6 rounded-full object-contain" alt="USDT BSC" />
                             <div>
@@ -3770,7 +3925,7 @@ export default function App() {
                         </div>
 
                         {/* USDT (Solana) */}
-                        <div className="p-2.5 rounded-control bg-surface-2 border border-line flex items-center justify-between">
+                        <div className="px-3 py-2.5 rounded-2xl bg-surface-2 flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <img src="/USDT.png" className="w-6 h-6 rounded-full object-contain" alt="USDT Solana" />
                             <div>
@@ -3794,7 +3949,7 @@ export default function App() {
                         </div>
 
                         {/* USDT (TON Jetton) */}
-                        <div className="p-2.5 rounded-control bg-surface-2 border border-line flex items-center justify-between">
+                        <div className="px-3 py-2.5 rounded-2xl bg-surface-2 flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <img src="/USDT.png" className="w-6 h-6 rounded-full object-contain" alt="USDT TON" />
                             <div>
@@ -3826,7 +3981,7 @@ export default function App() {
                       </div>
                       <div className="space-y-1.5">
                         {/* BCH */}
-                        <div className="p-2.5 rounded-control bg-surface-2 border border-line flex items-center justify-between">
+                        <div className="px-3 py-2.5 rounded-2xl bg-surface-2 flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <img src="/BCH.png" className="w-6 h-6 rounded-full object-contain" alt="BCH" />
                             <div>
@@ -3847,7 +4002,7 @@ export default function App() {
                         </div>
 
                         {/* POL */}
-                        <div className="p-2.5 rounded-control bg-surface-2 border border-line flex items-center justify-between">
+                        <div className="px-3 py-2.5 rounded-2xl bg-surface-2 flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <img src="/POL.png" className="w-6 h-6 rounded-full object-contain" alt="POL" />
                             <div>
@@ -3866,7 +4021,7 @@ export default function App() {
                         </div>
 
                         {/* BNB */}
-                        <div className="p-2.5 rounded-control bg-surface-2 border border-line flex items-center justify-between">
+                        <div className="px-3 py-2.5 rounded-2xl bg-surface-2 flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <img src="/BNB.png" className="w-6 h-6 rounded-full object-contain" alt="BNB" />
                             <div>
@@ -3885,7 +4040,7 @@ export default function App() {
                         </div>
 
                         {/* SOL */}
-                        <div className="p-2.5 rounded-control bg-surface-2 border border-line flex items-center justify-between">
+                        <div className="px-3 py-2.5 rounded-2xl bg-surface-2 flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <img src="/SOL.png" className="w-6 h-6 rounded-full object-contain" alt="SOL" />
                             <div>
@@ -3904,7 +4059,7 @@ export default function App() {
                         </div>
 
                         {/* TON */}
-                        <div className="p-2.5 rounded-control bg-surface-2 border border-line flex items-center justify-between">
+                        <div className="px-3 py-2.5 rounded-2xl bg-surface-2 flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <img src="/TON.png" className="w-6 h-6 rounded-full object-contain" alt="TON" />
                             <div>
@@ -3923,7 +4078,7 @@ export default function App() {
                         </div>
 
                         {/* LTC */}
-                        <div className="p-2.5 rounded-control bg-surface-2 border border-line flex items-center justify-between">
+                        <div className="px-3 py-2.5 rounded-2xl bg-surface-2 flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <img src="/LTC.png" className="w-6 h-6 rounded-full object-contain" alt="LTC" />
                             <div>
@@ -3947,10 +4102,10 @@ export default function App() {
               </div>
 
               {/* Modal Footer */}
-              <div className="pt-4 mt-3 border-t border-line shrink-0">
+              <div className="pt-3 mt-3 border-t border-line/60 shrink-0">
                 <button 
                   onClick={() => { handleDisconnect(); setShowAccountModal(false); }}
-                  className="w-full py-2.5 rounded-control bg-surface-2 hover:bg-rose-500/10 border border-line hover:border-rose-500/30 text-rose-500 font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                  className="w-full py-2.5 rounded-full bg-surface-2 hover:bg-rose-500/10 text-rose-500 font-semibold text-[13px] transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
                 >
                   <LogOut className="w-3.5 h-3.5" />
                   <span>{t.disconnectAll}</span>
@@ -3964,107 +4119,104 @@ export default function App() {
       {/* MULTI-CHAIN WALLET SELECTOR MODAL (BCH, EVM, SOLANA, TON, LITECOIN) */}
       <AnimatePresence>
         {showWalletModal && (
-          <div className="fixed inset-0 bg-black/65 backdrop-blur-md z-[130] flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="fixed inset-0 bg-black/45 dark:bg-black/70 backdrop-blur-sm z-[130] flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
             <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 12 }}
+              initial={{ opacity: 0, scale: 0.96, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 12 }}
-              transition={{ duration: 0.18, ease: 'easeOut' }}
-              className="bg-surface border border-line rounded-card p-5 sm:p-6 w-full max-w-sm sm:max-w-[430px] shadow-soft relative text-left my-auto"
+              exit={{ opacity: 0, scale: 0.96, y: 10 }}
+              transition={{ duration: 0.16, ease: 'easeOut' }}
+              className="bg-surface rounded-[28px] p-5 sm:p-6 w-full max-w-[390px] sm:max-w-[400px] shadow-[0_24px_60px_-15px_rgba(0,0,0,0.22)] border border-line/60 relative text-left my-auto"
             >
               {/* Close Button */}
               <button
                 type="button"
-                onClick={() => setShowWalletModal(false)}
-                className="absolute top-4 right-4 w-7 h-7 rounded-full bg-surface-2 hover:bg-surface-3 text-ink-3 hover:text-ink flex items-center justify-center transition-colors cursor-pointer"
+                onClick={() => { setShowManualWalletInput(false); setShowWalletModal(false); }}
+                className="absolute top-4 right-4 w-8 h-8 rounded-full bg-surface-2 hover:bg-surface-3 text-ink-3 hover:text-ink flex items-center justify-center transition-colors cursor-pointer"
                 title={lang === 'es' ? 'Cerrar' : 'Close'}
               >
-                <X className="w-3.5 h-3.5" />
+                <X className="w-4 h-4" />
               </button>
 
               {/* Header */}
-              <div className="mb-4 pr-6">
-                <h3 className="text-base sm:text-lg font-bold text-ink">
+              <div className="mb-4 pr-8">
+                <h3 className="text-[18px] font-semibold tracking-[-0.02em] text-ink">
                   {t.modalConnectTitle}
                 </h3>
-                <p className="text-xs text-ink-3 mt-0.5">
-                  {t.modalConnectSubtitle}
-                </p>
               </div>
 
               {/* Segmented Network Switcher: [EVM] | [BCH] | [SOL] | [TON] | [LTC] */}
-              <div className="grid grid-cols-5 p-1 bg-surface-2 rounded-panel border border-line text-xs font-semibold mb-4 gap-1">
+              <div className="grid grid-cols-5 p-1 bg-surface-2 rounded-full text-[11px] font-medium mb-4 gap-1">
                 <button
                   type="button"
-                  onClick={() => setWalletModalTab('evm')}
-                  className={`py-1.5 px-1 rounded-control transition-all cursor-pointer flex flex-col sm:flex-row items-center justify-center gap-1 text-[11px] ${
+                  onClick={() => { setWalletModalTab('evm'); setShowManualWalletInput(false); }}
+                  className={`py-1.5 px-1 rounded-full transition-all cursor-pointer flex items-center justify-center gap-1 ${
                     walletModalTab === 'evm'
-                      ? 'bg-surface text-ink shadow-soft font-bold'
+                      ? 'bg-surface text-ink shadow-soft font-semibold'
                       : 'text-ink-3 hover:text-ink'
                   }`}
                   title="EVM (Polygon & BSC)"
                 >
-                  <img src="/POL.png" className="w-3.5 h-3.5 object-contain" alt="EVM" />
+                  <img src="/POL.png" className="w-3.5 h-3.5 object-contain shrink-0" alt="EVM" />
                   <span className="truncate">EVM</span>
                   {evmWallet && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />}
                 </button>
 
                 <button
                   type="button"
-                  onClick={() => setWalletModalTab('bch')}
-                  className={`py-1.5 px-1 rounded-control transition-all cursor-pointer flex flex-col sm:flex-row items-center justify-center gap-1 text-[11px] ${
+                  onClick={() => { setWalletModalTab('bch'); setShowManualWalletInput(false); }}
+                  className={`py-1.5 px-1 rounded-full transition-all cursor-pointer flex items-center justify-center gap-1 ${
                     walletModalTab === 'bch'
-                      ? 'bg-surface text-ink shadow-soft font-bold'
+                      ? 'bg-surface text-ink shadow-soft font-semibold'
                       : 'text-ink-3 hover:text-ink'
                   }`}
-                  title="Bitcoin Cash & CashTokens"
+                  title="Bitcoin Cash"
                 >
-                  <img src="/BCH.png" className="w-3.5 h-3.5 object-contain" alt="BCH" />
+                  <img src="/BCH.png" className="w-3.5 h-3.5 object-contain shrink-0" alt="BCH" />
                   <span className="truncate">BCH</span>
                   {bchWallet && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />}
                 </button>
 
                 <button
                   type="button"
-                  onClick={() => setWalletModalTab('solana')}
-                  className={`py-1.5 px-1 rounded-control transition-all cursor-pointer flex flex-col sm:flex-row items-center justify-center gap-1 text-[11px] ${
+                  onClick={() => { setWalletModalTab('solana'); setShowManualWalletInput(false); }}
+                  className={`py-1.5 px-1 rounded-full transition-all cursor-pointer flex items-center justify-center gap-1 ${
                     walletModalTab === 'solana'
-                      ? 'bg-surface text-ink shadow-soft font-bold'
+                      ? 'bg-surface text-ink shadow-soft font-semibold'
                       : 'text-ink-3 hover:text-ink'
                   }`}
-                  title="Solana (SVM)"
+                  title="Solana"
                 >
-                  <img src="/SOL.png" className="w-3.5 h-3.5 object-contain" alt="SOL" />
+                  <img src="/SOL.png" className="w-3.5 h-3.5 object-contain shrink-0" alt="SOL" />
                   <span className="truncate">SOL</span>
                   {solanaWallet && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />}
                 </button>
 
                 <button
                   type="button"
-                  onClick={() => setWalletModalTab('ton')}
-                  className={`py-1.5 px-1 rounded-control transition-all cursor-pointer flex flex-col sm:flex-row items-center justify-center gap-1 text-[11px] ${
+                  onClick={() => { setWalletModalTab('ton'); setShowManualWalletInput(false); }}
+                  className={`py-1.5 px-1 rounded-full transition-all cursor-pointer flex items-center justify-center gap-1 ${
                     walletModalTab === 'ton'
-                      ? 'bg-surface text-ink shadow-soft font-bold'
+                      ? 'bg-surface text-ink shadow-soft font-semibold'
                       : 'text-ink-3 hover:text-ink'
                   }`}
-                  title="The Open Network"
+                  title="TON"
                 >
-                  <img src="/TON.png" className="w-3.5 h-3.5 object-contain" alt="TON" />
+                  <img src="/TON.png" className="w-3.5 h-3.5 object-contain shrink-0" alt="TON" />
                   <span className="truncate">TON</span>
                   {tonWallet && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />}
                 </button>
 
                 <button
                   type="button"
-                  onClick={() => setWalletModalTab('ltc')}
-                  className={`py-1.5 px-1 rounded-control transition-all cursor-pointer flex flex-col sm:flex-row items-center justify-center gap-1 text-[11px] ${
+                  onClick={() => { setWalletModalTab('ltc'); setShowManualWalletInput(false); }}
+                  className={`py-1.5 px-1 rounded-full transition-all cursor-pointer flex items-center justify-center gap-1 ${
                     walletModalTab === 'ltc'
-                      ? 'bg-surface text-ink shadow-soft font-bold'
+                      ? 'bg-surface text-ink shadow-soft font-semibold'
                       : 'text-ink-3 hover:text-ink'
                   }`}
-                  title="Litecoin SegWit"
+                  title="Litecoin"
                 >
-                  <img src="/LTC.png" className="w-3.5 h-3.5 object-contain" alt="LTC" />
+                  <img src="/LTC.png" className="w-3.5 h-3.5 object-contain shrink-0" alt="LTC" />
                   <span className="truncate">LTC</span>
                   {ltcWallet && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />}
                 </button>
@@ -4075,33 +4227,31 @@ export default function App() {
                 {/* 1. EVM TAB */}
                 {walletModalTab === 'evm' && (
                   <>
-                    {/* Discovered EIP-6963 Extensions */}
                     {discoveredEvmWallets.length > 0 ? (
                       discoveredEvmWallets.map((w) => (
                         <button
                           key={w.info.rdns}
                           type="button"
                           onClick={() => handleConnectWallet('injected', w.info.rdns)}
-                          className="w-full flex items-center justify-between p-3 rounded-control bg-surface-2 hover:bg-surface-3 border border-line text-ink transition-all group cursor-pointer"
+                          className="w-full flex items-center justify-between px-3.5 py-3 rounded-2xl bg-surface-2 hover:bg-surface-3 text-ink transition-colors group cursor-pointer"
                         >
                           <div className="flex items-center gap-3 min-w-0">
-                            <div className="w-9 h-9 rounded-control bg-surface border border-line flex items-center justify-center shrink-0 p-1.5 shadow-2xs">
+                            <div className="w-9 h-9 rounded-xl bg-surface flex items-center justify-center shrink-0 p-1.5 shadow-2xs">
                               <img src={w.info.icon} className="w-6 h-6 object-contain rounded" alt={w.info.name} />
                             </div>
-                            <div className="text-left min-w-0">
-                              <div className="text-sm font-semibold text-ink flex items-center gap-1.5">
-                                <span>{w.info.name}</span>
-                                {evmWallet?.source === 'injected' &&
-                                  (evmWallet.rdns ? evmWallet.rdns === w.info.rdns : evmWallet.provider === w.info.name) && (
-                                  <span className="text-[10px] text-emerald-500 font-bold">✓</span>
-                                )}
-                              </div>
-                              <span className="text-[11px] text-ink-3">{t.extension}</span>
-                            </div>
+                            <span className="text-[14px] font-semibold text-ink tracking-[-0.01em] truncate flex items-center gap-1.5">
+                              {w.info.name}
+                              {evmWallet?.source === 'injected' &&
+                                (evmWallet.rdns ? evmWallet.rdns === w.info.rdns : evmWallet.provider === w.info.name) && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                              )}
+                            </span>
                           </div>
                           <div className="flex items-center gap-1.5 shrink-0">
-                            <span className="ui-badge ui-badge-success text-[10px]">{t.detected}</span>
-                            <ChevronRight className="w-4 h-4 text-ink-3 group-hover:text-ink transition-transform group-hover:translate-x-0.5" />
+                            <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[11px] font-medium">
+                              {t.detected}
+                            </span>
+                            <ChevronRight className="w-4 h-4 text-ink-3 group-hover:text-ink transition-colors" />
                           </div>
                         </button>
                       ))
@@ -4109,23 +4259,20 @@ export default function App() {
                       <button
                         type="button"
                         onClick={() => handleConnectWallet('injected')}
-                        className="w-full flex items-center justify-between p-3 rounded-control bg-surface-2 hover:bg-surface-3 border border-line text-ink transition-all group cursor-pointer"
+                        className="w-full flex items-center justify-between px-3.5 py-3 rounded-2xl bg-surface-2 hover:bg-surface-3 text-ink transition-colors group cursor-pointer"
                       >
                         <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-9 h-9 rounded-control bg-surface border border-line flex items-center justify-center shrink-0 p-1.5 shadow-2xs">
+                          <div className="w-9 h-9 rounded-xl bg-surface flex items-center justify-center shrink-0 p-1.5 shadow-2xs">
                             <img src="/POL.png" className="w-6 h-6 object-contain" alt="Browser Wallet" />
                           </div>
-                          <div className="text-left min-w-0">
-                            <div className="text-sm font-semibold text-ink flex items-center gap-1.5">
-                              <span>Browser Wallet</span>
-                              {evmWallet?.source === 'injected' && <span className="text-[10px] text-emerald-500 font-bold">✓</span>}
-                            </div>
-                            <span className="text-[11px] text-ink-3">MetaMask, Rabby, Brave</span>
-                          </div>
+                          <span className="text-[14px] font-semibold text-ink tracking-[-0.01em] flex items-center gap-1.5">
+                            Browser Wallet
+                            {evmWallet?.source === 'injected' && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />}
+                          </span>
                         </div>
                         <div className="flex items-center gap-1.5 shrink-0">
-                          <span className="ui-badge text-[10px]">{isMobileBrowser() ? 'Mobile' : t.extension}</span>
-                          <ChevronRight className="w-4 h-4 text-ink-3 group-hover:text-ink transition-transform group-hover:translate-x-0.5" />
+                          <span className="text-[12px] font-medium text-ink-3">MetaMask · Rabby</span>
+                          <ChevronRight className="w-4 h-4 text-ink-3 group-hover:text-ink transition-colors" />
                         </div>
                       </button>
                     )}
@@ -4134,121 +4281,112 @@ export default function App() {
                     <button
                       type="button"
                       onClick={() => handleConnectWallet('walletconnect')}
-                      className="w-full flex items-center justify-between p-3 rounded-control bg-surface-2 hover:bg-surface-3 border border-line text-ink transition-all group cursor-pointer"
+                      className="w-full flex items-center justify-between px-3.5 py-3 rounded-2xl bg-surface-2 hover:bg-surface-3 text-ink transition-colors group cursor-pointer"
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-9 h-9 rounded-control bg-surface border border-line flex items-center justify-center shrink-0 p-1.5 shadow-2xs">
+                        <div className="w-9 h-9 rounded-xl bg-surface flex items-center justify-center shrink-0 p-1.5 shadow-2xs">
                           <img
-                            src="https://raw.githubusercontent.com/WalletConnect/walletconnect-assets/master/Icon/Blue%20(Default)/Icon.svg"
-                            className="w-5 h-5 object-contain"
+                            src="/Walletconnect-logo.png"
+                            className="w-6 h-6 object-contain"
                             alt="WalletConnect"
                           />
                         </div>
-                        <div className="text-left min-w-0">
-                          <div className="text-sm font-semibold text-ink flex items-center gap-1.5">
-                            <span>WalletConnect</span>
-                            {evmWallet?.source === 'wc2-evm' && (
-                              <span className="text-[10px] text-emerald-500 font-bold">✓</span>
-                            )}
-                          </div>
-                          <span className="text-[11px] text-ink-3">Trust, Rainbow, Safe, Móvil QR</span>
-                        </div>
+                        <span className="text-[14px] font-semibold text-ink tracking-[-0.01em] flex items-center gap-1.5">
+                          WalletConnect
+                          {evmWallet?.source === 'wc2-evm' && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />}
+                        </span>
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0">
-                        <span className="ui-badge text-[10px]">{t.mobileQr}</span>
-                        <ChevronRight className="w-4 h-4 text-ink-3 group-hover:text-ink transition-transform group-hover:translate-x-0.5" />
+                        <span className="text-[12px] font-medium text-ink-3">QR</span>
+                        <ChevronRight className="w-4 h-4 text-ink-3 group-hover:text-ink transition-colors" />
                       </div>
                     </button>
-
-                    <div className="p-2.5 rounded-control bg-surface-3/50 border border-line/60 text-[11px] text-ink-3 flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
-                      <span>{lang === 'es' ? 'Soporte nativo para Polygon PoS (137) y BNB Smart Chain (56).' : 'Native support for Polygon PoS (137) and BNB Smart Chain (56).'}</span>
-                    </div>
                   </>
                 )}
 
                 {/* 2. BCH TAB */}
                 {walletModalTab === 'bch' && (
                   <>
-                    {/* Paytaca */}
+                    {/* BinaryLiquid Wallet (BlConnect) */}
+                    <button
+                      type="button"
+                      onClick={openBlConnectModal}
+                      className="w-full flex items-center justify-between px-3.5 py-3 rounded-2xl bg-surface-2 hover:bg-surface-3 border border-primary/25 text-ink transition-colors group cursor-pointer"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-9 h-9 rounded-xl bg-surface flex items-center justify-center shrink-0 p-1 shadow-2xs">
+                          <img src="/logo.png" className="w-7 h-7 object-contain" alt="BinaryLiquid Wallet" />
+                        </div>
+                        <span className="text-[14px] font-semibold text-ink tracking-[-0.01em] flex items-center gap-1.5">
+                          BinaryLiquid Wallet
+                          {bchWallet?.source === 'blconnect' && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[11px] font-medium">
+                          {lang === 'es' ? 'Instantánea' : 'Instant'}
+                        </span>
+                        <ChevronRight className="w-4 h-4 text-ink-3 group-hover:text-ink transition-colors" />
+                      </div>
+                    </button>
+
+                    {/* WizardConnect */}
                     <button
                       type="button"
                       onClick={() => handleConnectWallet('paytaca')}
-                      className="w-full flex items-center justify-between p-3 rounded-control bg-surface-2 hover:bg-surface-3 border border-line text-ink transition-all group cursor-pointer"
+                      className="w-full flex items-center justify-between px-3.5 py-3 rounded-2xl bg-surface-2 hover:bg-surface-3 text-ink transition-colors group cursor-pointer"
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-9 h-9 rounded-control bg-surface border border-line flex items-center justify-center shrink-0 p-1.5 shadow-2xs">
-                          <img src="/wizardconnect-logo.png" className="w-6 h-6 object-contain" alt="Paytaca" />
+                        <div className="w-9 h-9 rounded-xl bg-surface flex items-center justify-center shrink-0 p-1.5 shadow-2xs">
+                          <img src="/wizardconnect-logo.png" className="w-6 h-6 object-contain" alt="WizardConnect" />
                         </div>
-                        <div className="text-left min-w-0">
-                          <div className="text-sm font-semibold text-ink flex items-center gap-1.5">
-                            <span>Paytaca Wallet</span>
-                            {(bchWallet?.source === 'wizard' || bchWallet?.source === 'extension') && (
-                              <span className="text-[10px] text-emerald-500 font-bold">✓</span>
-                            )}
-                          </div>
-                          <span className="text-[11px] text-ink-3">
-                            {hasPaytacaExtension() ? (lang === 'es' ? 'Extensión lista' : 'Extension ready') : 'WizardConnect QR'}
-                          </span>
-                        </div>
+                        <span className="text-[14px] font-semibold text-ink tracking-[-0.01em] flex items-center gap-1.5">
+                          WizardConnect
+                          {(bchWallet?.source === 'wizard' || bchWallet?.source === 'extension') && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                          )}
+                        </span>
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0">
-                        <span className="ui-badge text-[10px]">
-                          {hasPaytacaExtension() ? t.detected : t.mobileQr}
-                        </span>
-                        <ChevronRight className="w-4 h-4 text-ink-3 group-hover:text-ink transition-transform group-hover:translate-x-0.5" />
+                        {hasPaytacaExtension() ? (
+                          <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[11px] font-medium">
+                            {t.detected}
+                          </span>
+                        ) : (
+                          <span className="text-[12px] font-medium text-ink-3">QR</span>
+                        )}
+                        <ChevronRight className="w-4 h-4 text-ink-3 group-hover:text-ink transition-colors" />
                       </div>
                     </button>
 
-                    {/* Cashonize / BCH WC2 */}
+                    {/* Collapsible Manual CashAddress */}
                     <button
                       type="button"
-                      onClick={() => handleConnectWallet('bch_wc2')}
-                      className="w-full flex items-center justify-between p-3 rounded-control bg-surface-2 hover:bg-surface-3 border border-line text-ink transition-all group cursor-pointer"
+                      onClick={() => setShowManualWalletInput((v) => !v)}
+                      className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-ink-3 hover:text-ink hover:bg-surface-2 transition-colors cursor-pointer text-[13px] font-medium"
                     >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-9 h-9 rounded-control bg-surface border border-line flex items-center justify-center shrink-0 p-1.5 shadow-2xs">
-                          <img src="/BCH.png" className="w-6 h-6 object-contain" alt="Cashonize" />
-                        </div>
-                        <div className="text-left min-w-0">
-                          <div className="text-sm font-semibold text-ink flex items-center gap-1.5">
-                            <span>Cashonize / WC2</span>
-                            {bchWallet?.source === 'wc2-bch' && (
-                              <span className="text-[10px] text-emerald-500 font-bold">✓</span>
-                            )}
-                          </div>
-                          <span className="text-[11px] text-ink-3">Cashonize Web, Zapit, WC2</span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <span className="ui-badge text-[10px]">Web / QR</span>
-                        <ChevronRight className="w-4 h-4 text-ink-3 group-hover:text-ink transition-transform group-hover:translate-x-0.5" />
-                      </div>
+                      <span>{lang === 'es' ? 'Pegar dirección BCH' : 'Paste BCH address'}</span>
+                      <ChevronDown className={`w-4 h-4 transition-transform ${showManualWalletInput ? 'rotate-180' : ''}`} />
                     </button>
 
-                    {/* Manual CashAddress */}
-                    <div className="p-3 rounded-control bg-surface-2 border border-line">
-                      <div className="text-xs font-semibold text-ink mb-1 flex items-center justify-between">
-                        <span>{t.manualAddressTitle}</span>
-                        <span className="text-[10px] text-ink-3">bitcoincash:...</span>
-                      </div>
-                      <div className="flex items-center gap-1.5 mt-2">
+                    {showManualWalletInput && (
+                      <div className="p-1.5 pl-3 rounded-2xl bg-surface-2 flex items-center gap-2">
                         <input
                           type="text"
                           value={customBchInput}
                           onChange={(e) => setCustomBchInput(e.target.value)}
-                          placeholder="bchtest:... o bitcoincash:..."
-                          className="flex-1 px-2.5 py-1.5 text-xs font-mono rounded-control bg-surface border border-line text-ink focus:outline-none focus:border-primary"
+                          placeholder={platformNetwork === 'testnet' ? 'bchtest:...' : 'bitcoincash:...'}
+                          className="flex-1 min-w-0 bg-transparent text-[13px] font-mono text-ink placeholder:text-ink-3 focus:outline-none"
                         />
                         <button
                           type="button"
                           onClick={() => handleSaveCustomBch(customBchInput)}
-                          className="px-3 py-1.5 text-xs font-semibold text-white bg-primary hover:bg-primary-hover rounded-control cursor-pointer shrink-0"
+                          className="px-4 py-2 text-[12px] font-semibold bg-ink text-canvas hover:opacity-90 rounded-full cursor-pointer shrink-0 transition-opacity"
                         >
                           {t.saveAddress}
                         </button>
                       </div>
-                    </div>
+                    )}
                   </>
                 )}
 
@@ -4259,33 +4397,26 @@ export default function App() {
                     <button
                       type="button"
                       onClick={() => handleConnectSolana('phantom')}
-                      className="w-full flex items-center justify-between p-3 rounded-control bg-surface-2 hover:bg-surface-3 border border-line text-ink transition-all group cursor-pointer"
+                      className="w-full flex items-center justify-between px-3.5 py-3 rounded-2xl bg-surface-2 hover:bg-surface-3 text-ink transition-colors group cursor-pointer"
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-9 h-9 rounded-control bg-surface border border-line flex items-center justify-center shrink-0 p-1.5 shadow-2xs">
-                          <img src="https://phantom.app/favicon.ico" className="w-6 h-6 object-contain rounded-full" alt="Phantom" />
+                        <div className="w-9 h-9 rounded-xl bg-surface flex items-center justify-center shrink-0 p-1.5 shadow-2xs">
+                          <img src="/phantom.svg" className="w-6 h-6 object-contain rounded-lg" alt="Phantom" />
                         </div>
-                        <div className="text-left min-w-0">
-                          <div className="text-sm font-semibold text-ink flex items-center gap-1.5">
-                            <span>Phantom Wallet</span>
-                            {solanaWallet?.provider === 'Phantom' && (
-                              <span className="text-[10px] text-emerald-500 font-bold">✓</span>
-                            )}
-                          </div>
-                          <span className="text-[11px] text-ink-3">
-                            {typeof window !== 'undefined' && ((window as any)?.phantom?.solana || (window as any)?.solana?.isPhantom)
-                              ? (lang === 'es' ? 'Extensión lista' : 'Extension ready')
-                              : (lang === 'es' ? 'Phantom Browser / App' : 'Phantom Browser / App')}
-                          </span>
-                        </div>
+                        <span className="text-[14px] font-semibold text-ink tracking-[-0.01em] flex items-center gap-1.5">
+                          Phantom
+                          {solanaWallet?.provider === 'Phantom' && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />}
+                        </span>
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0">
-                        <span className="ui-badge ui-badge-success text-[10px]">
-                          {typeof window !== 'undefined' && ((window as any)?.phantom?.solana || (window as any)?.solana?.isPhantom)
-                            ? t.detected
-                            : 'Install / Web'}
-                        </span>
-                        <ChevronRight className="w-4 h-4 text-ink-3 group-hover:text-ink transition-transform group-hover:translate-x-0.5" />
+                        {typeof window !== 'undefined' && ((window as any)?.phantom?.solana || (window as any)?.solana?.isPhantom) ? (
+                          <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[11px] font-medium">
+                            {t.detected}
+                          </span>
+                        ) : (
+                          <span className="text-[12px] font-medium text-ink-3">{t.extension}</span>
+                        )}
+                        <ChevronRight className="w-4 h-4 text-ink-3 group-hover:text-ink transition-colors" />
                       </div>
                     </button>
 
@@ -4293,29 +4424,26 @@ export default function App() {
                     <button
                       type="button"
                       onClick={() => handleConnectSolana('solflare')}
-                      className="w-full flex items-center justify-between p-3 rounded-control bg-surface-2 hover:bg-surface-3 border border-line text-ink transition-all group cursor-pointer"
+                      className="w-full flex items-center justify-between px-3.5 py-3 rounded-2xl bg-surface-2 hover:bg-surface-3 text-ink transition-colors group cursor-pointer"
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-9 h-9 rounded-control bg-surface border border-line flex items-center justify-center shrink-0 p-1.5 shadow-2xs">
-                          <img src="https://solflare.com/favicon.ico" className="w-6 h-6 object-contain rounded-full" alt="Solflare" />
+                        <div className="w-9 h-9 rounded-xl bg-surface flex items-center justify-center shrink-0 p-1.5 shadow-2xs">
+                          <img src="/solflare.svg" className="w-6 h-6 object-contain rounded-lg" alt="Solflare" />
                         </div>
-                        <div className="text-left min-w-0">
-                          <div className="text-sm font-semibold text-ink flex items-center gap-1.5">
-                            <span>Solflare</span>
-                            {solanaWallet?.provider === 'Solflare' && (
-                              <span className="text-[10px] text-emerald-500 font-bold">✓</span>
-                            )}
-                          </div>
-                          <span className="text-[11px] text-ink-3">Solflare Web / Extension</span>
-                        </div>
+                        <span className="text-[14px] font-semibold text-ink tracking-[-0.01em] flex items-center gap-1.5">
+                          Solflare
+                          {solanaWallet?.provider === 'Solflare' && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />}
+                        </span>
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0">
-                        <span className="ui-badge text-[10px]">
-                          {typeof window !== 'undefined' && (window as any)?.solflare
-                            ? t.detected
-                            : 'Install / Web'}
-                        </span>
-                        <ChevronRight className="w-4 h-4 text-ink-3 group-hover:text-ink transition-transform group-hover:translate-x-0.5" />
+                        {typeof window !== 'undefined' && (window as any)?.solflare ? (
+                          <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[11px] font-medium">
+                            {t.detected}
+                          </span>
+                        ) : (
+                          <span className="text-[12px] font-medium text-ink-3">{t.extension}</span>
+                        )}
+                        <ChevronRight className="w-4 h-4 text-ink-3 group-hover:text-ink transition-colors" />
                       </div>
                     </button>
                   </>
@@ -4324,170 +4452,139 @@ export default function App() {
                 {/* 4. TON TAB */}
                 {walletModalTab === 'ton' && (
                   <>
-                    {/* Tonkeeper */}
+                    {/* Official TON Connect UI 2.0 (All Wallets + QR) */}
                     <button
                       type="button"
-                      onClick={() => handleConnectTon('Tonkeeper')}
-                      className="w-full flex items-center justify-between p-3 rounded-control bg-surface-2 hover:bg-surface-3 border border-line text-ink transition-all group cursor-pointer"
+                      onClick={() => handleConnectTon('tonconnect')}
+                      className="w-full flex items-center justify-between px-3.5 py-3 rounded-2xl bg-surface-2 hover:bg-surface-3 border border-sky-500/25 text-ink transition-colors group cursor-pointer"
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-9 h-9 rounded-control bg-surface border border-line flex items-center justify-center shrink-0 p-1.5 shadow-2xs">
-                          <img src="/TON.png" className="w-6 h-6 object-contain" alt="Tonkeeper" />
+                        <div className="w-9 h-9 rounded-xl bg-surface flex items-center justify-center shrink-0 p-1.5 shadow-2xs">
+                          <img src="/TON.png" className="w-6 h-6 object-contain" alt="TON Connect" />
                         </div>
-                        <div className="text-left min-w-0">
-                          <div className="text-sm font-semibold text-ink flex items-center gap-1.5">
-                            <span>Tonkeeper</span>
-                            {tonWallet?.source === 'extension' && (
-                              <span className="text-[10px] text-emerald-500 font-bold">✓</span>
-                            )}
-                          </div>
-                          <span className="text-[11px] text-ink-3">
-                            {typeof window !== 'undefined' && ((window as any)?.tonkeeper || (window as any)?.ton)
-                              ? (lang === 'es' ? 'Extensión lista' : 'Extension ready')
-                              : (lang === 'es' ? 'Conexión Web / Extensión' : 'Web / Extension')}
-                          </span>
-                        </div>
+                        <span className="text-[14px] font-semibold text-ink tracking-[-0.01em] flex items-center gap-1.5">
+                          TON Connect
+                          {tonWallet?.source === 'tonconnect' && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />}
+                        </span>
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0">
-                        <span className="ui-badge text-[10px]">
-                          {typeof window !== 'undefined' && ((window as any)?.tonkeeper || (window as any)?.ton)
-                            ? t.detected
-                            : 'Tonkeeper'}
+                        <span className="px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-600 dark:text-sky-400 text-[11px] font-medium">
+                          QR · App
                         </span>
-                        <ChevronRight className="w-4 h-4 text-ink-3 group-hover:text-ink transition-transform group-hover:translate-x-0.5" />
+                        <ChevronRight className="w-4 h-4 text-ink-3 group-hover:text-ink transition-colors" />
                       </div>
                     </button>
 
-                    {/* Telegram @wallet */}
-                    <a
-                      href="https://t.me/wallet"
-                      target="_blank"
-                      rel="noreferrer"
-                      className="w-full flex items-center justify-between p-3 rounded-control bg-surface-2 hover:bg-surface-3 border border-line text-ink transition-all group cursor-pointer"
+                    {/* Tonkeeper Direct QR / Extension via TON Connect */}
+                    <button
+                      type="button"
+                      onClick={() => handleConnectTon('Tonkeeper')}
+                      className="w-full flex items-center justify-between px-3.5 py-3 rounded-2xl bg-surface-2 hover:bg-surface-3 text-ink transition-colors group cursor-pointer"
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-9 h-9 rounded-control bg-surface border border-line flex items-center justify-center shrink-0 p-1.5 shadow-2xs">
-                          <img src="/TON.png" className="w-6 h-6 object-contain" alt="Telegram Wallet" />
+                        <div className="w-9 h-9 rounded-xl bg-surface flex items-center justify-center shrink-0 p-1.5 shadow-2xs">
+                          <img src="/TON.png" className="w-6 h-6 object-contain" alt="Tonkeeper" />
                         </div>
-                        <div className="text-left min-w-0">
-                          <div className="text-sm font-semibold text-ink flex items-center gap-1.5">
-                            <span>Telegram @wallet</span>
-                          </div>
-                          <span className="text-[11px] text-ink-3">Móvil & Desktop Telegram Bot</span>
-                        </div>
+                        <span className="text-[14px] font-semibold text-ink tracking-[-0.01em] flex items-center gap-1.5">
+                          Tonkeeper
+                          {tonWallet?.provider?.toLowerCase().includes('tonkeeper') && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />}
+                        </span>
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0">
-                        <span className="ui-badge text-[10px]">Telegram</span>
-                        <ExternalLink className="w-4 h-4 text-ink-3 group-hover:text-ink transition-transform group-hover:translate-x-0.5" />
+                        <span className="text-[12px] font-medium text-ink-3">QR</span>
+                        <ChevronRight className="w-4 h-4 text-ink-3 group-hover:text-ink transition-colors" />
                       </div>
-                    </a>
+                    </button>
 
-                    {/* Manual TON Address */}
-                    <div className="p-3 rounded-control bg-surface-2 border border-line">
-                      <div className="text-xs font-semibold text-ink mb-1 flex items-center justify-between">
-                        <span>{lang === 'es' ? 'Dirección TON Manual' : 'Manual TON Address'}</span>
-                        <span className="text-[10px] text-ink-3">{platformNetwork === 'testnet' ? 'kQ... o 0Q...' : 'EQ... o UQ...'}</span>
+                    {/* Telegram @wallet via TON Connect */}
+                    <button
+                      type="button"
+                      onClick={() => handleConnectTon('telegram-wallet')}
+                      className="w-full flex items-center justify-between px-3.5 py-3 rounded-2xl bg-surface-2 hover:bg-surface-3 text-ink transition-colors group cursor-pointer"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-9 h-9 rounded-xl bg-surface flex items-center justify-center shrink-0 p-1.5 shadow-2xs">
+                          <img src="/TON.png" className="w-6 h-6 object-contain" alt="Telegram Wallet" />
+                        </div>
+                        <span className="text-[14px] font-semibold text-ink tracking-[-0.01em]">
+                          Telegram Wallet
+                        </span>
                       </div>
-                      <div className="flex items-center gap-1.5 mt-2">
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span className="text-[12px] font-medium text-ink-3">Telegram</span>
+                        <ChevronRight className="w-4 h-4 text-ink-3 group-hover:text-ink transition-colors" />
+                      </div>
+                    </button>
+
+                    {/* Collapsible Manual TON Address */}
+                    <button
+                      type="button"
+                      onClick={() => setShowManualWalletInput((v) => !v)}
+                      className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-ink-3 hover:text-ink hover:bg-surface-2 transition-colors cursor-pointer text-[13px] font-medium"
+                    >
+                      <span>{lang === 'es' ? 'Pegar dirección TON' : 'Paste TON address'}</span>
+                      <ChevronDown className={`w-4 h-4 transition-transform ${showManualWalletInput ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {showManualWalletInput && (
+                      <div className="p-1.5 pl-3 rounded-2xl bg-surface-2 flex items-center gap-2">
                         <input
                           type="text"
                           value={customTonInput}
                           onChange={(e) => setCustomTonInput(e.target.value)}
-                          placeholder={platformNetwork === 'testnet' ? 'kQ... o 0Q...' : 'EQ... o UQ...'}
-                          className="flex-1 px-2.5 py-1.5 text-xs font-mono rounded-control bg-surface border border-line text-ink focus:outline-none focus:border-primary"
+                          placeholder={platformNetwork === 'testnet' ? 'kQ... / 0Q...' : 'EQ... / UQ...'}
+                          className="flex-1 min-w-0 bg-transparent text-[13px] font-mono text-ink placeholder:text-ink-3 focus:outline-none"
                         />
                         <button
                           type="button"
                           onClick={() => handleSaveCustomTon(customTonInput)}
-                          className="px-3 py-1.5 text-xs font-semibold text-white bg-primary hover:bg-primary-hover rounded-control cursor-pointer shrink-0"
+                          className="px-4 py-2 text-[12px] font-semibold bg-ink text-canvas hover:opacity-90 rounded-full cursor-pointer shrink-0 transition-opacity"
                         >
                           {t.saveAddress}
                         </button>
                       </div>
-                    </div>
+                    )}
                   </>
                 )}
 
                 {/* 5. LTC TAB */}
                 {walletModalTab === 'ltc' && (
-                  <>
-                    {/* Litewallet / Native SegWit info */}
-                    <div className="p-3 rounded-control bg-surface-2 border border-line">
-                      <div className="flex items-center gap-3 mb-2">
-                        <div className="w-9 h-9 rounded-control bg-surface border border-line flex items-center justify-center shrink-0 p-1.5 shadow-2xs">
+                  <div className="space-y-2.5">
+                    <div className="flex items-center justify-between px-3.5 py-3 rounded-2xl bg-surface-2">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-9 h-9 rounded-xl bg-surface flex items-center justify-center shrink-0 p-1.5 shadow-2xs">
                           <img src="/LTC.png" className="w-6 h-6 object-contain" alt="Litewallet" />
                         </div>
-                        <div>
-                          <div className="text-sm font-semibold text-ink">Litewallet & SegWit</div>
-                          <span className="text-[11px] text-ink-3">Dirección nativa bech32 (ltc1...)</span>
-                        </div>
+                        <span className="text-[14px] font-semibold text-ink tracking-[-0.01em]">
+                          Litewallet · SegWit
+                        </span>
                       </div>
-                      <p className="text-[11px] text-ink-3 mb-2">
-                        {lang === 'es' 
-                          ? 'Litecoin opera con depósitos a bóvedas UTXO. Pega tu dirección de recepción de Litewallet o Exodus:'
-                          : 'Litecoin operates via UTXO vaults. Paste your Litewallet or Exodus receiving address:'}
-                      </p>
-                      <div className="flex items-center gap-1.5">
-                        <input
-                          type="text"
-                          value={customLtcInput}
-                          onChange={(e) => setCustomLtcInput(e.target.value)}
-                          placeholder={platformNetwork === 'testnet' ? 'tltc1... o m...' : 'ltc1... o L...'}
-                          className="flex-1 px-2.5 py-1.5 text-xs font-mono rounded-control bg-surface border border-line text-ink focus:outline-none focus:border-primary"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => handleSaveCustomLtc(customLtcInput)}
-                          className="px-3 py-1.5 text-xs font-semibold text-white bg-primary hover:bg-primary-hover rounded-control cursor-pointer shrink-0"
-                        >
-                          {t.saveAddress}
-                        </button>
-                      </div>
+                      <span className="text-[12px] font-mono text-ink-3">ltc1...</span>
                     </div>
-                  </>
+
+                    <div className="p-1.5 pl-3 rounded-2xl bg-surface-2 flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={customLtcInput}
+                        onChange={(e) => setCustomLtcInput(e.target.value)}
+                        placeholder={platformNetwork === 'testnet' ? 'tltc1...' : 'ltc1...'}
+                        className="flex-1 min-w-0 bg-transparent text-[13px] font-mono text-ink placeholder:text-ink-3 focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleSaveCustomLtc(customLtcInput)}
+                        className="px-4 py-2 text-[12px] font-semibold bg-ink text-canvas hover:opacity-90 rounded-full cursor-pointer shrink-0 transition-opacity"
+                      >
+                        {t.saveAddress}
+                      </button>
+                    </div>
+                  </div>
                 )}
               </div>
 
               {/* Minimalist 1-Line Footer */}
-              <div className="pt-3 mt-3 border-t border-line flex items-center justify-between text-[11px] text-ink-3">
-                <span className="truncate">{lang === 'es' ? '100% Sin Custodia' : '100% Non-Custodial'}</span>
-                <div className="flex items-center gap-2 shrink-0">
-                  <a
-                    href="https://paytaca.com"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="hover:text-ink font-semibold text-primary transition-colors"
-                  >
-                    Paytaca
-                  </a>
-                  <span>·</span>
-                  <a
-                    href="https://cashonize.com"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="hover:text-ink font-semibold transition-colors"
-                  >
-                    Cashonize
-                  </a>
-                  <span>·</span>
-                  <a
-                    href="https://phantom.app"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="hover:text-ink font-semibold text-purple-400 transition-colors"
-                  >
-                    Phantom
-                  </a>
-                  <span>·</span>
-                  <a
-                    href="https://tonkeeper.com"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="hover:text-ink font-semibold text-sky-400 transition-colors"
-                  >
-                    Tonkeeper
-                  </a>
-                </div>
+              <div className="pt-3 mt-4 border-t border-line/60 text-center text-[11px] text-ink-3">
+                {lang === 'es' ? 'Sin custodia · Tus llaves permanecen contigo' : 'Non-custodial · Keys stay in your wallet'}
               </div>
             </motion.div>
           </div>

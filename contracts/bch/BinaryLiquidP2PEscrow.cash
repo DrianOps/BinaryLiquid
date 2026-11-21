@@ -1,0 +1,196 @@
+pragma cashscript ^0.14.0;
+
+/**
+ * @title BinaryLiquidP2PEscrow (Non-Custodial CashScript P2SH32 P2P Fiat-to-Crypto Covenant)
+ * @author BinaryLiquid Protocol / DrianOps
+ * @notice Isolated per-trade Bitcoin Cash & CashTokens escrow covenant with:
+ *   1. Strict Destination Lock: Funds can MATHEMATICALLY ONLY exit to `buyerLockingBytecode`
+ *      or `sellerLockingBytecode` — even the Arbiter can NEVER divert a single satoshi or token.
+ *   2. Trustless Seller Direct Release (`sellerDirectRelease`): Seller can release directly on-chain
+ *      using their own BCH key (`hash160(sellerPk) == sellerPkh`) even if the platform/VPS is offline.
+ *   3. 1-Click Arbiter Settlement (`releaseToBuyer` / `refundToSeller`): Smooth fee-sponsored
+ *      settlement after Seller confirmation or dispute resolution, still destination-locked by VM.
+ *   4. Permissionless 24h Timelock Refund (`timeoutRefund`): Anyone can return 100% of unclaimed
+ *      tokens & BCH to `sellerLockingBytecode` after `expiryTimestamp`.
+ *   5. V2 Hardening: Anti multi-input drain (`tx.inputs.length <= 2`, secondary fee input must be
+ *      25-byte P2PKH with `tokenCategory == 0x`), dust floor >= 546, and native BCH conservation.
+ */
+contract BinaryLiquidP2PEscrow(
+    pubkey arbiterPk,
+    bytes20 sellerPkh,
+    bytes buyerLockingBytecode,
+    bytes sellerLockingBytecode,
+    int expiryTimestamp,
+    bytes16 tradeSalt
+) {
+    /**
+     * @notice Releases 100% of escrowed CashTokens / BCH strictly to Buyer via Arbiter settlement
+     * (triggered after Seller cryptographic confirmation or arbitration ruling).
+     */
+    function releaseToBuyer(sig arbiterSig) {
+        require(tradeSalt.length == 16);
+        require(checkSig(arbiterSig, arbiterPk));
+        require(this.activeInputIndex == 0);
+
+        require(tx.inputs.length <= 2);
+        if (tx.inputs.length == 2) {
+            require(tx.inputs[1].lockingBytecode.length == 25);
+            require(tx.inputs[1].tokenCategory == 0x);
+            require(tx.outputs.length <= 2);
+            if (tx.outputs.length == 2) {
+                require(tx.outputs[1].tokenCategory == 0x);
+                require(tx.outputs[1].value <= tx.inputs[1].value);
+            }
+        } else {
+            require(tx.outputs.length == 1);
+        }
+
+        bytes tokenCat = tx.inputs[0].tokenCategory;
+        int tokenAmt = tx.inputs[0].tokenAmount;
+        bytes nftComm = tx.inputs[0].nftCommitment;
+        int inputSats = tx.inputs[0].value;
+
+        require(tx.outputs[0].lockingBytecode == buyerLockingBytecode);
+        require(tx.outputs[0].value >= 546);
+
+        if (tokenCat != 0x) {
+            require(tx.outputs[0].tokenCategory == tokenCat);
+            require(tx.outputs[0].tokenAmount >= tokenAmt);
+            require(tx.outputs[0].nftCommitment == nftComm);
+            if (inputSats >= 2546) {
+                require(tx.outputs[0].value >= inputSats - 2000);
+            }
+        } else {
+            require(tx.outputs[0].tokenCategory == 0x);
+            require(tx.outputs[0].value >= inputSats - 2000);
+        }
+    }
+
+    /**
+     * @notice Trustless Seller Direct Release: Seller releases directly on L1 without needing the Arbiter.
+     */
+    function sellerDirectRelease(sig sellerSig, pubkey sellerPk) {
+        require(tradeSalt.length == 16);
+        require(hash160(sellerPk) == sellerPkh);
+        require(checkSig(sellerSig, sellerPk));
+        require(this.activeInputIndex == 0);
+
+        require(tx.inputs.length <= 2);
+        if (tx.inputs.length == 2) {
+            require(tx.inputs[1].lockingBytecode.length == 25);
+            require(tx.inputs[1].tokenCategory == 0x);
+            require(tx.outputs.length <= 2);
+            if (tx.outputs.length == 2) {
+                require(tx.outputs[1].tokenCategory == 0x);
+                require(tx.outputs[1].value <= tx.inputs[1].value);
+            }
+        } else {
+            require(tx.outputs.length == 1);
+        }
+
+        bytes tokenCat = tx.inputs[0].tokenCategory;
+        int tokenAmt = tx.inputs[0].tokenAmount;
+        bytes nftComm = tx.inputs[0].nftCommitment;
+        int inputSats = tx.inputs[0].value;
+
+        require(tx.outputs[0].lockingBytecode == buyerLockingBytecode);
+        require(tx.outputs[0].value >= 546);
+
+        if (tokenCat != 0x) {
+            require(tx.outputs[0].tokenCategory == tokenCat);
+            require(tx.outputs[0].tokenAmount >= tokenAmt);
+            require(tx.outputs[0].nftCommitment == nftComm);
+            if (inputSats >= 2546) {
+                require(tx.outputs[0].value >= inputSats - 2000);
+            }
+        } else {
+            require(tx.outputs[0].tokenCategory == 0x);
+            require(tx.outputs[0].value >= inputSats - 2000);
+        }
+    }
+
+    /**
+     * @notice Refunds 100% of escrowed CashTokens / BCH strictly back to Seller on cancellation or arbitration.
+     */
+    function refundToSeller(sig arbiterSig) {
+        require(tradeSalt.length == 16);
+        require(checkSig(arbiterSig, arbiterPk));
+        require(this.activeInputIndex == 0);
+
+        require(tx.inputs.length <= 2);
+        if (tx.inputs.length == 2) {
+            require(tx.inputs[1].lockingBytecode.length == 25);
+            require(tx.inputs[1].tokenCategory == 0x);
+            require(tx.outputs.length <= 2);
+            if (tx.outputs.length == 2) {
+                require(tx.outputs[1].tokenCategory == 0x);
+                require(tx.outputs[1].value <= tx.inputs[1].value);
+            }
+        } else {
+            require(tx.outputs.length == 1);
+        }
+
+        bytes tokenCat = tx.inputs[0].tokenCategory;
+        int tokenAmt = tx.inputs[0].tokenAmount;
+        bytes nftComm = tx.inputs[0].nftCommitment;
+        int inputSats = tx.inputs[0].value;
+
+        require(tx.outputs[0].lockingBytecode == sellerLockingBytecode);
+        require(tx.outputs[0].value >= 546);
+
+        if (tokenCat != 0x) {
+            require(tx.outputs[0].tokenCategory == tokenCat);
+            require(tx.outputs[0].tokenAmount >= tokenAmt);
+            require(tx.outputs[0].nftCommitment == nftComm);
+            if (inputSats >= 2546) {
+                require(tx.outputs[0].value >= inputSats - 2000);
+            }
+        } else {
+            require(tx.outputs[0].tokenCategory == 0x);
+            require(tx.outputs[0].value >= inputSats - 2000);
+        }
+    }
+
+    /**
+     * @notice Permissionless 24h Timelock Refund: Anyone can trigger after expiryTimestamp,
+     * returning 100% of escrowed CashTokens & BCH strictly back to `sellerLockingBytecode`.
+     */
+    function timeoutRefund() {
+        require(tradeSalt.length == 16);
+        require(tx.time >= expiryTimestamp);
+        require(this.activeInputIndex == 0);
+
+        require(tx.inputs.length <= 2);
+        if (tx.inputs.length == 2) {
+            require(tx.inputs[1].lockingBytecode.length == 25);
+            require(tx.inputs[1].tokenCategory == 0x);
+            require(tx.outputs.length <= 2);
+            if (tx.outputs.length == 2) {
+                require(tx.outputs[1].tokenCategory == 0x);
+                require(tx.outputs[1].value <= tx.inputs[1].value);
+            }
+        } else {
+            require(tx.outputs.length == 1);
+        }
+
+        bytes tokenCat = tx.inputs[0].tokenCategory;
+        int tokenAmt = tx.inputs[0].tokenAmount;
+        bytes nftComm = tx.inputs[0].nftCommitment;
+        int inputSats = tx.inputs[0].value;
+
+        require(tx.outputs[0].lockingBytecode == sellerLockingBytecode);
+        require(tx.outputs[0].value >= 546);
+
+        if (tokenCat != 0x) {
+            require(tx.outputs[0].tokenCategory == tokenCat);
+            require(tx.outputs[0].tokenAmount >= tokenAmt);
+            require(tx.outputs[0].nftCommitment == nftComm);
+            if (inputSats >= 2546) {
+                require(tx.outputs[0].value >= inputSats - 2000);
+            }
+        } else {
+            require(tx.outputs[0].tokenCategory == 0x);
+            require(tx.outputs[0].value >= inputSats - 2000);
+        }
+    }
+}

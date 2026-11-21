@@ -18,6 +18,7 @@ import { poolService } from './services/poolService.js';
 import { bcmrService, normalizeCategoryId } from './services/bcmrService.js';
 import { lendingService } from './services/lendingService.js';
 import { perpsService } from './services/perpsService.js';
+import { p2pService } from './services/p2pService.js';
 import { watchmanSentinel } from './services/watchmanClient.js';
 import {
   parseCashAddress,
@@ -1735,6 +1736,187 @@ app.post('/api/perps/close', attachOptionalSession, async (req, res) => {
       message: `Posición ${closed.closedPosition.market} liquidada on-chain. Reembolso: ${closed.closedPosition.payoutAmount} ${closed.closedPosition.collateralToken}`,
       ...closed
     });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+// ==============================================================================
+// NON-CUSTODIAL P2P FIAT <-> BCH / CASHTOKENS ESCROW MARKETPLACE
+// Powered by BinaryLiquidP2PEscrow.cash (P2SH32 Covenant + 24h Timelock)
+// ==============================================================================
+app.get('/api/p2p/overview', async (req, res) => {
+  try {
+    const cfCountry =
+      req.headers['cf-ipcountry'] ||
+      req.headers['x-vercel-ip-country'] ||
+      req.headers['x-country-code'] ||
+      '';
+    const data = await p2pService.getOverview({
+      network: req.query.network || 'testnet',
+      fiat: req.query.fiat || 'AUTO',
+      asset: req.query.asset || 'PUSD',
+      side: req.query.side || 'all',
+      userAddress: req.query.userAddress || '',
+      countryCode: String(cfCountry || req.query.country || ''),
+      timeZone: String(req.query.tz || ''),
+      acceptLanguage: String(req.headers['accept-language'] || '')
+    });
+    res.json({ success: true, ...data });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/p2p/offers', async (req, res) => {
+  try {
+    const offer = await p2pService.createOffer(req.body || {});
+    res.json({ success: true, offer });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+app.delete('/api/p2p/offers/:offerId', (req, res) => {
+  try {
+    const result = p2pService.deleteOffer({
+      offerId: req.params.offerId,
+      merchantAddress: req.body?.merchantAddress || req.query.merchantAddress || '',
+      network: req.body?.network || req.query.network || 'testnet'
+    });
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/p2p/trades/create', async (req, res) => {
+  try {
+    const trade = await p2pService.createTrade(req.body || {});
+    res.json({ success: true, trade });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+app.get('/api/p2p/trades/:tradeId', (req, res) => {
+  try {
+    const trade = p2pService.getTrade(req.params.tradeId);
+    res.json({ success: true, trade });
+  } catch (err) {
+    res.status(404).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/p2p/trades/:tradeId/build-fund-tx', async (req, res) => {
+  try {
+    const built = await p2pService.buildFundEscrowTx({
+      tradeId: req.params.tradeId,
+      senderAddress: req.body?.senderAddress || ''
+    });
+    res.json({ success: true, ...built });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/p2p/trades/:tradeId/verify-escrow', async (req, res) => {
+  try {
+    const trade = await p2pService.verifyEscrowDeposit({
+      tradeId: req.params.tradeId,
+      txHash: req.body?.txHash || ''
+    });
+    res.json({ success: true, trade });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/p2p/trades/:tradeId/mark-paid', (req, res) => {
+  try {
+    const trade = p2pService.markFiatPaid({
+      tradeId: req.params.tradeId,
+      actorAddress: req.body?.actorAddress || '',
+      fiatReference: req.body?.fiatReference || ''
+    });
+    res.json({ success: true, trade });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/p2p/trades/:tradeId/messages', (req, res) => {
+  try {
+    const trade = p2pService.addMessage({
+      tradeId: req.params.tradeId,
+      actorAddress: req.body?.actorAddress || '',
+      text: req.body?.text || ''
+    });
+    res.json({ success: true, trade });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/p2p/trades/:tradeId/release', async (req, res) => {
+  try {
+    const trade = await p2pService.releaseTrade({
+      tradeId: req.params.tradeId,
+      actorAddress: req.body?.actorAddress || ''
+    });
+    res.json({ success: true, trade });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/p2p/trades/:tradeId/cancel', async (req, res) => {
+  try {
+    const trade = await p2pService.cancelOrRefundTrade({
+      tradeId: req.params.tradeId,
+      actorAddress: req.body?.actorAddress || ''
+    });
+    res.json({ success: true, trade });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/p2p/trades/:tradeId/dispute', (req, res) => {
+  try {
+    const trade = p2pService.openDispute({
+      tradeId: req.params.tradeId,
+      actorAddress: req.body?.actorAddress || '',
+      reason: req.body?.reason || ''
+    });
+    res.json({ success: true, trade });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/p2p/trades/:tradeId/review', (req, res) => {
+  try {
+    const result = p2pService.submitReview({
+      tradeId: req.params.tradeId,
+      actorAddress: req.body?.actorAddress || '',
+      rating: req.body?.rating,
+      comment: req.body?.comment || '',
+      tags: req.body?.tags || []
+    });
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+app.get('/api/p2p/merchants/:address/reviews', (req, res) => {
+  try {
+    const profile = p2pService.getMerchantReviews({
+      merchantAddress: req.params.address || '',
+      network: req.query?.network || 'testnet'
+    });
+    res.json({ success: true, profile });
   } catch (err) {
     res.status(400).json({ success: false, error: err.message });
   }

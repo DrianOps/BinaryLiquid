@@ -276,12 +276,12 @@ export default function PortfolioView({
         perps: { positions: [], history: [] },
         activity: [],
         chart: {
-          '1h': [{ time: '00:00', value: 0 }, { time: '12:00', value: 0 }],
-          '1d': [{ time: '00:00', value: 0 }, { time: '12:00', value: 0 }],
-          '1w': [{ time: 'Mon', value: 0 }, { time: 'Sun', value: 0 }],
-          '1m': [{ time: 'W1', value: 0 }, { time: 'W4', value: 0 }],
-          '1y': [{ time: 'Jan', value: 0 }, { time: 'Dec', value: 0 }],
-          'all': [{ time: 'Start', value: 0 }, { time: 'Now', value: 0 }]
+          '1h': [{ time: '00m', value: 0 }, { time: '30m', value: 0 }, { time: '60m', value: 0 }],
+          '1d': [{ time: '00:00', value: 0 }, { time: '12:00', value: 0 }, { time: '23:59', value: 0 }],
+          '1w': [{ time: 'Lun', value: 0 }, { time: 'Jue', value: 0 }, { time: 'Dom', value: 0 }],
+          '1m': [{ time: 'Sem 1', value: 0 }, { time: 'Sem 2', value: 0 }, { time: 'Sem 4', value: 0 }],
+          '1y': [{ time: 'Ene', value: 0 }, { time: 'Jun', value: 0 }, { time: 'Dic', value: 0 }],
+          'all': [{ time: 'Inicio', value: 0 }, { time: 'Mitad', value: 0 }, { time: 'Hoy', value: 0 }]
         }
       });
       setLoading(false);
@@ -373,7 +373,7 @@ export default function PortfolioView({
     }
   };
 
-  const renderChainFilterPills = (compact = false) => {
+  const renderChainFilterPills = () => {
     const items: Array<{ id: typeof networkFilter; label: string; icon?: string }> = [
       { id: 'all', label: t.allChains },
       { id: 'bch', label: 'BCH', icon: '/BCH.png' },
@@ -383,15 +383,17 @@ export default function PortfolioView({
       { id: 'ltc', label: 'LTC', icon: '/LTC.png' },
       { id: 'ton', label: 'TON', icon: '/TON.png' }
     ];
-    const pad = compact ? 'px-2.5 py-1' : 'px-3 py-1.5';
     return (
-      <div className="inline-flex items-center p-0.5 rounded-full bg-surface-2 border border-line text-xs font-semibold shrink-0 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+      <div className="flex items-center gap-1 p-1 rounded-control bg-surface-2 overflow-x-auto max-w-full [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
         {items.map((item) => (
           <button
             key={item.id}
+            type="button"
             onClick={() => setNetworkFilter(item.id)}
-            className={`${pad} rounded-full transition-all cursor-pointer font-medium flex items-center gap-1.5 text-xs ${
-              networkFilter === item.id ? 'bg-surface text-ink shadow-2xs font-bold' : 'text-ink-3 hover:text-ink'
+            className={`px-3 py-1.5 rounded-[9px] text-xs font-medium inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-colors cursor-pointer ${
+              networkFilter === item.id
+                ? 'bg-surface text-ink shadow-soft font-semibold'
+                : 'text-ink-2 hover:text-ink'
             }`}
           >
             {item.icon && <img src={item.icon} className="w-3.5 h-3.5 object-contain rounded-full" alt={item.label} />}
@@ -420,22 +422,24 @@ export default function PortfolioView({
     return list;
   }, [portfolio?.chart, timeframe, portfolio?.netWorthUsd]);
 
-  // Generate smooth SVG curve
+  // Generate smooth SVG curve (flattened cleanly along subtle bottom gridline when variance = 0)
   const chartSvgData = useMemo(() => {
-    if (chartPoints.length < 2) return { pathD: '', areaD: '', minVal: 0, maxVal: 0 };
+    if (chartPoints.length < 2) return { pathD: '', areaD: '', minVal: 0, maxVal: 0, isFlat: true };
     const values = chartPoints.map(p => p.value);
     const minVal = Math.min(...values);
     const maxVal = Math.max(...values);
-    const range = maxVal - minVal === 0 ? 1 : maxVal - minVal;
+    const isFlat = maxVal - minVal === 0;
+    const range = isFlat ? 1 : maxVal - minVal;
 
     const width = 600;
-    const height = 180;
-    const paddingY = 20;
+    const height = 160;
+    const paddingY = 18;
 
     const coords = chartPoints.map((p, idx) => {
       const x = (idx / (chartPoints.length - 1)) * width;
-      const normalized = (p.value - minVal) / range;
-      const y = height - paddingY - normalized * (height - paddingY * 2);
+      const y = isFlat
+        ? height - 24
+        : height - paddingY - ((p.value - minVal) / range) * (height - paddingY * 2);
       return { x, y };
     });
 
@@ -454,9 +458,9 @@ export default function PortfolioView({
       pathD += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`;
     }
 
-    const areaD = `${pathD} L ${width} ${height} L 0 ${height} Z`;
+    const areaD = isFlat ? '' : `${pathD} L ${width} ${height} L 0 ${height} Z`;
 
-    return { pathD, areaD, minVal, maxVal };
+    return { pathD, areaD, minVal, maxVal, isFlat };
   }, [chartPoints]);
 
   const currentNetWorth = hoveredPoint ? hoveredPoint.value : (portfolio?.netWorthUsd ?? 0);
@@ -464,200 +468,216 @@ export default function PortfolioView({
   const changePercent = currentNetWorth > 0 ? (changeUsd / currentNetWorth) * 100 : (changeUsd < 0 ? -100 : 0);
   const isPositive = changeUsd >= 0;
 
+  const showMockPrices = isConnected;
+  const displayTokens = useMemo(() => {
+    if (showMockPrices) return filteredTokens;
+    return filteredTokens.map(tk => ({ ...tk, balance: 0, valueUsd: 0 }));
+  }, [filteredTokens, showMockPrices]);
+
   return (
-    <div className="w-full max-w-6xl mx-auto px-3 sm:px-6 py-4 sm:py-6 space-y-6 animate-in fade-in duration-300">
-      
-      {/* 1. TOP HEADER & IDENTITY BAR */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2 border-b border-line">
-        <div className="flex items-center gap-3">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-mono text-sm sm:text-base font-bold text-ink">
-                {primaryDisplayAddress ? (
-                  `${primaryDisplayAddress.slice(0, 10)}...${primaryDisplayAddress.slice(-6)}`
-                ) : (
-                  lang === 'es' ? 'Billetera No Conectada' : 'Wallet Not Connected'
-                )}
-              </span>
-              {primaryDisplayAddress && (
-                <button
-                  onClick={() => handleCopy(primaryDisplayAddress)}
-                  className="p-1 rounded-md text-ink-3 hover:text-ink hover:bg-surface-2 transition-colors cursor-pointer"
-                  title={t.copyAddress}
-                >
-                  {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                </button>
-              )}
-            </div>
-            <div className="flex items-center gap-2 text-xs text-ink-3 mt-0.5">
-              <span className="inline-flex items-center gap-1">
-                <span className={`w-1.5 h-1.5 rounded-full ${platformNetwork === 'mainnet' ? 'bg-emerald-500' : 'bg-amber-400 animate-pulse'}`} />
-                {platformNetwork === 'mainnet' ? 'BCH Mainnet + Polygon + BSC + Solana + LTC + TON' : 'BCH Chipnet + Amoy + BSC + Devnet + LTC + TON'}
-              </span>
-              <span>•</span>
-              <span>{t.liveOnChain}</span>
-            </div>
+    <div className="ui-page pt-2 sm:pt-4 pb-12 animate-in fade-in duration-300">
+      {/* 1. CLEAN PAGE HEADER */}
+      <div className="ui-page-header">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h1 className="ui-title">{t.portfolio}</h1>
+            {primaryDisplayAddress && (
+              <button
+                type="button"
+                onClick={() => handleCopy(primaryDisplayAddress)}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-control bg-surface border border-line font-mono text-xs text-ink-2 hover:text-ink transition-colors cursor-pointer"
+                title={t.copyAddress}
+              >
+                <span className={`w-1.5 h-1.5 rounded-full ${platformNetwork === 'mainnet' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                <span>{`${primaryDisplayAddress.slice(0, 8)}...${primaryDisplayAddress.slice(-6)}`}</span>
+                {copied ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3 text-ink-3" />}
+              </button>
+            )}
           </div>
+          <p className="ui-subtitle">
+            {isConnected
+              ? (lang === 'es'
+                  ? `Consolidado no-custodio · ${platformNetwork === 'mainnet' ? 'Mainnet' : 'Chipnet / Testnet'}`
+                  : `Non-custodial consolidated balances · ${platformNetwork === 'mainnet' ? 'Mainnet' : 'Chipnet / Testnet'}`)
+              : (lang === 'es'
+                  ? 'Balance agregado en BCH, Polygon, BSC, Solana, LTC y TON.'
+                  : 'Consolidated holdings in BCH, Polygon, BSC, Solana, LTC & TON.')}
+          </p>
         </div>
 
-        {/* Right Header Actions */}
-        <div className="flex items-center gap-2 max-w-full overflow-hidden">
-          {/* Network Filter Pill */}
-          {renderChainFilterPills(true)}
+        {/* Right Header Navigation & Single Primary CTA */}
+        <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 shrink-0">
+          <div className="ui-segment overflow-x-auto max-w-full [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {[
+              { id: 'overview', label: t.overview },
+              { id: 'tokens', label: t.tokens },
+              { id: 'pools', label: t.pools },
+              { id: 'defi', label: t.defi },
+              { id: 'activity', label: t.activity }
+            ].map(tab => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`ui-segment-item px-2.5 sm:px-3.5 text-[11px] sm:text-xs whitespace-nowrap shrink-0 ${
+                  activeTab === tab.id ? 'ui-segment-item-active' : ''
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
 
-          {/* Refresh on-chain data button */}
           <button
+            type="button"
             onClick={() => {
               fetchPortfolio(true);
               if (onRefreshBalances) onRefreshBalances();
             }}
             disabled={refreshing}
-            className="p-2 rounded-full border border-line bg-surface hover:bg-surface-2 text-ink-2 hover:text-ink transition-all shadow-2xs cursor-pointer disabled:opacity-50"
+            className="w-9 h-9 rounded-control border border-line bg-surface hover:bg-surface-2 text-ink-2 hover:text-ink flex items-center justify-center transition-colors cursor-pointer shrink-0 disabled:opacity-50"
             title={t.refreshing}
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-primary' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
           </button>
-        </div>
-      </div>
 
-      {/* 2. SUB-NAVIGATION TABS */}
-      <div className="flex items-center gap-1 sm:gap-2 border-b border-line overflow-x-auto pb-1 text-sm font-semibold [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-        {[
-          { id: 'overview', label: t.overview, icon: PieChart },
-          { id: 'tokens', label: t.tokens, icon: Coins },
-          { id: 'pools', label: t.pools, icon: Layers },
-          { id: 'defi', label: t.defi, icon: ShieldCheck },
-          { id: 'activity', label: t.activity, icon: Activity }
-        ].map(tab => {
-          const Icon = tab.icon;
-          const active = activeTab === tab.id;
-          return (
+          {!isConnected && onConnectWallet ? (
             <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
-              className={`inline-flex items-center gap-1.5 px-3 py-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${
-                active
-                  ? 'border-primary text-ink font-bold'
-                  : 'border-transparent text-ink-3 hover:text-ink font-medium'
-              }`}
-            >
-              <Icon className="w-4 h-4" />
-              <span>{tab.label}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* DISCONNECTED CALLOUT (Sleek floating banner instead of blocking the whole UI) */}
-      {!isConnected && (
-        <div className="bg-surface border border-line rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-soft">
-          <div className="flex items-center gap-3 text-left">
-            <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
-              <Wallet className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="font-bold text-sm text-ink">
-                {lang === 'es' ? 'Modo Exploración: Conecta tu Billetera' : 'Preview Mode: Connect Your Wallet'}
-              </div>
-              <p className="text-xs text-ink-3 mt-0.5">
-                {t.connectPrompt}
-              </p>
-            </div>
-          </div>
-          {onConnectWallet && (
-            <button
+              type="button"
               onClick={onConnectWallet}
-              className="ui-btn ui-btn-primary ui-btn-sm font-bold shadow-xs whitespace-nowrap shrink-0"
+              className="ui-btn-primary ui-btn-sm whitespace-nowrap shrink-0"
             >
               <Wallet className="w-3.5 h-3.5" />
               <span>{t.connectBtn}</span>
             </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setReceiveModalOpen(true)}
+              className="ui-btn-primary ui-btn-sm whitespace-nowrap shrink-0"
+            >
+              <ArrowDownLeft className="w-3.5 h-3.5" />
+              <span>{lang === 'es' ? 'Recibir' : 'Receive'}</span>
+            </button>
           )}
+        </div>
+      </div>
+
+      {/* 2. SINGLE UNIFIED CHAIN FILTER BAR (Zero clipping, zero duplication) */}
+      {(activeTab === 'overview' || activeTab === 'tokens') && (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          {renderChainFilterPills()}
+          <div className="text-xs text-ink-3 tabular-nums hidden sm:block">
+            {displayTokens.length} {lang === 'es' ? 'activos mostrados' : 'assets shown'} ·{' '}
+            <span className="font-semibold text-ink">${filteredTokensUsd.toFixed(2)} USD</span>
+          </div>
         </div>
       )}
 
-      {/* TAB CONTENT (Always rendered, populated with real on-chain data when connected!) */}
-      {(
-        <>
-          {/* TAB 1: OVERVIEW (Resumen) */}
-          {activeTab === 'overview' && (
-            <div className="space-y-6">
-              
-              {/* TOP HERO: NET WORTH + INTERACTIVE CHART + QUICK ACTIONS */}
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                
-                {/* Left (8 cols): Total Net Worth & Chart */}
-                <div className="lg:col-span-8 bg-surface border border-line rounded-3xl p-5 sm:p-7 shadow-soft space-y-5">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div>
-                      <div className="text-xs font-semibold text-ink-3">
-                        {t.netWorth}
-                      </div>
-                      <div className="text-3xl sm:text-4xl font-bold text-ink tracking-tight mt-1 tabular-nums">
-                        {currentNetWorth < 0 ? '-' : ''}USD ${Math.abs(currentNetWorth).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </div>
-                      <div className="flex items-center gap-2 mt-1.5 text-xs font-medium">
-                        <span className={`inline-flex items-center gap-0.5 font-bold ${isPositive ? 'text-emerald-500' : 'text-rose-500'}`}>
-                          {isPositive ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
-                          <span>{isPositive ? '+' : '-'}${Math.abs(changeUsd).toFixed(2)} ({changePercent > 0 ? '+' : ''}{changePercent.toFixed(2)}%)</span>
-                        </span>
-                        <span className="text-ink-3">{hoveredPoint ? hoveredPoint.time : t.today}</span>
-                      </div>
+      {/* TAB CONTENT */}
+      <>
+        {/* TAB 1: OVERVIEW (Resumen) */}
+        {activeTab === 'overview' && (
+          <div className="space-y-5">
+            {/* TOP HERO BENTO: NET WORTH + CHART (8 cols) | QUICK ACTIONS + PERFORMANCE (4 cols) */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+              {/* Left (8 cols): Total Net Worth & Chart */}
+              <div className="lg:col-span-8 ui-card p-5 sm:p-6 flex flex-col justify-between space-y-5">
+                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                  <div>
+                    <div className="ui-label">{t.netWorth}</div>
+                    <div className="flex items-baseline gap-2 mt-1">
+                      <span className="text-3xl sm:text-4xl font-semibold text-ink tracking-tight tabular-nums">
+                        {currentNetWorth < 0 ? '-' : ''}$
+                        {Math.abs(currentNetWorth).toLocaleString('en-US', {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2
+                        })}
+                      </span>
+                      <span className="text-xs font-medium text-ink-3">USD</span>
                     </div>
-
-                    {/* Timeframe selector pill */}
-                    <div className="inline-flex items-center p-1 rounded-full bg-surface-2 border border-line text-xs">
-                      {(['1h', '1d', '1w', '1m', '1y', 'all'] as const).map(tf => (
-                        <button
-                          key={tf}
-                          onClick={() => {
-                            setTimeframe(tf);
-                            setHoveredPoint(null);
-                          }}
-                          className={`px-2.5 py-1 rounded-full transition-all cursor-pointer font-semibold ${
-                            timeframe === tf
-                              ? 'bg-surface text-ink shadow-2xs font-bold'
-                              : 'text-ink-3 hover:text-ink'
-                          }`}
-                        >
-                          {tf === '1w' ? (lang === 'es' ? '1sem' : '1w') : tf === 'all' ? (lang === 'es' ? 'Todo' : 'All') : tf}
-                        </button>
-                      ))}
+                    <div className="flex items-center gap-2 mt-1.5 text-xs">
+                      <span
+                        className={`inline-flex items-center gap-1 font-semibold tabular-nums ${
+                          isPositive ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'
+                        }`}
+                      >
+                        {isPositive ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
+                        <span>
+                          {isPositive ? '+' : '-'}${Math.abs(changeUsd).toFixed(2)} ({changePercent > 0 ? '+' : ''}
+                          {changePercent.toFixed(2)}%)
+                        </span>
+                      </span>
+                      <span className="text-ink-3">{hoveredPoint ? hoveredPoint.time : t.today}</span>
                     </div>
                   </div>
 
-                  {/* High-Tech Interactive SVG Chart */}
+                  {/* Timeframe selector */}
+                  <div className="ui-segment self-start">
+                    {(['1h', '1d', '1w', '1m', '1y', 'all'] as const).map(tf => (
+                      <button
+                        key={tf}
+                        type="button"
+                        onClick={() => {
+                          setTimeframe(tf);
+                          setHoveredPoint(null);
+                        }}
+                        className={`ui-segment-item px-2.5 py-1 ${
+                          timeframe === tf ? 'ui-segment-item-active' : ''
+                        }`}
+                      >
+                        {tf === '1w' ? (lang === 'es' ? '1s' : '1w') : tf === 'all' ? (lang === 'es' ? 'Todo' : 'All') : tf}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Clean Institutional SVG Chart with hairline grid */}
+                <div>
                   <div
-                    className="relative w-full h-44 sm:h-48 pt-2 select-none"
+                    className="relative w-full h-40 select-none"
                     onMouseLeave={() => setHoveredPoint(null)}
                   >
-                    <svg viewBox="0 0 600 180" className="w-full h-full overflow-visible">
+                    <svg viewBox="0 0 600 160" className="w-full h-full overflow-visible">
                       <defs>
                         <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#10B981" stopOpacity="0.28" />
+                          <stop offset="0%" stopColor="#10B981" stopOpacity="0.18" />
                           <stop offset="100%" stopColor="#10B981" stopOpacity="0.0" />
                         </linearGradient>
                       </defs>
 
-                      {/* Area fill */}
+                      {/* Subtle horizontal gridlines */}
+                      {[32, 74, 116].map(yLine => (
+                        <line
+                          key={yLine}
+                          x1="0"
+                          y1={yLine}
+                          x2="600"
+                          y2={yLine}
+                          stroke="currentColor"
+                          className="text-line"
+                          strokeDasharray="3 4"
+                          strokeWidth="1"
+                        />
+                      ))}
+
                       {chartSvgData.areaD && (
                         <path d={chartSvgData.areaD} fill="url(#chartGradient)" />
                       )}
 
-                      {/* Smooth Line */}
                       {chartSvgData.pathD && (
                         <path
                           d={chartSvgData.pathD}
                           fill="none"
-                          stroke="#10B981"
-                          strokeWidth="2.5"
+                          stroke={chartSvgData.isFlat ? '#9CA3AF' : '#10B981'}
+                          strokeOpacity={chartSvgData.isFlat ? '0.6' : '1'}
+                          strokeWidth="2"
                           strokeLinecap="round"
                           strokeLinejoin="round"
                         />
                       )}
                     </svg>
 
-                    {/* Interactive overlay points */}
                     <div className="absolute inset-0 flex items-stretch">
                       {chartPoints.map((pt, idx) => (
                         <div
@@ -666,595 +686,549 @@ export default function PortfolioView({
                           onMouseEnter={() => setHoveredPoint(pt)}
                           onTouchStart={() => setHoveredPoint(pt)}
                         >
-                          <div className="hidden group-hover:block absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-px bg-emerald-500/40" />
-                          <div className="hidden group-hover:block absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-white dark:border-gray-900 shadow-sm" />
+                          <div className="hidden group-hover:block absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-px bg-line-strong" />
                         </div>
                       ))}
                     </div>
                   </div>
 
-                  {/* Chart timeline axis labels */}
-                  <div className="flex items-center justify-between text-[11px] font-mono text-ink-3 px-1 pt-1 border-t border-line/60">
+                  {/* Distinct Timeline Axis Labels */}
+                  <div className="flex items-center justify-between text-[11px] font-mono text-ink-3 pt-1.5 border-t border-line tabular-nums">
                     <span>{chartPoints[0]?.time}</span>
                     <span>{chartPoints[Math.floor(chartPoints.length / 2)]?.time}</span>
                     <span>{chartPoints[chartPoints.length - 1]?.time}</span>
                   </div>
                 </div>
 
-                {/* Right (4 cols): Quick Action Cards (Inspired by Reference Image) */}
-                <div className="lg:col-span-4 space-y-4">
-                  <div className="grid grid-cols-2 gap-3">
-                    {/* Action 1: Swap */}
-                    <button
-                      onClick={() => onNavigate && onNavigate('bridge')}
-                      className="p-4 rounded-2xl bg-surface border border-line hover:border-line-strong hover:bg-surface-2 transition-all text-left group shadow-2xs cursor-pointer flex flex-col justify-between h-28"
-                    >
-                      <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center group-hover:scale-105 transition-transform">
-                        <Repeat className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <div className="text-xs font-bold text-ink">{t.swap}</div>
-                        <div className="text-[11px] text-ink-3">3-4s Non-Custodial</div>
-                      </div>
-                    </button>
-
-                    {/* Action 2: Deposit / Receive */}
-                    <button
-                      onClick={() => setReceiveModalOpen(true)}
-                      className="p-4 rounded-2xl bg-surface border border-line hover:border-line-strong hover:bg-surface-2 transition-all text-left group shadow-2xs cursor-pointer flex flex-col justify-between h-28"
-                    >
-                      <div className="w-9 h-9 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center group-hover:scale-105 transition-transform">
-                        <ArrowDownLeft className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <div className="text-xs font-bold text-ink">{t.deposit}</div>
-                        <div className="text-[11px] text-ink-3">BCH / EVM QR</div>
-                      </div>
-                    </button>
-
-                    {/* Action 3: Pools / Earn */}
-                    <button
-                      onClick={() => onNavigate && onNavigate('pools')}
-                      className="p-4 rounded-2xl bg-surface border border-line hover:border-line-strong hover:bg-surface-2 transition-all text-left group shadow-2xs cursor-pointer flex flex-col justify-between h-28"
-                    >
-                      <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center group-hover:scale-105 transition-transform">
-                        <PiggyBank className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <div className="text-xs font-bold text-ink">{t.earn}</div>
-                        <div className="text-[11px] text-ink-3">LP Fee Accrual</div>
-                      </div>
-                    </button>
-
-                    {/* Action 4: Lend */}
-                    <button
-                      onClick={() => onNavigate && onNavigate('lend')}
-                      className="p-4 rounded-2xl bg-surface border border-line hover:border-line-strong hover:bg-surface-2 transition-all text-left group shadow-2xs cursor-pointer flex flex-col justify-between h-28"
-                    >
-                      <div className="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center group-hover:scale-105 transition-transform">
-                        <ShieldCheck className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <div className="text-xs font-bold text-ink">{t.lend}</div>
-                        <div className="text-[11px] text-ink-3">CashScript Vaults</div>
-                      </div>
-                    </button>
-                  </div>
-
-                  {/* Performance Card (Rendimiento) */}
-                  <div className="bg-surface border border-line rounded-2xl p-4 shadow-soft space-y-3">
-                    <div className="flex items-center justify-between text-xs font-bold text-ink">
-                      <span>{t.performance}</span>
-                      <span className="text-[11px] text-ink-3 font-normal">{lang === 'es' ? 'Todo' : 'All time'}</span>
+                {/* Inline Capital Allocation Footer inside Net Worth Card */}
+                <div className="pt-3 border-t border-line grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                  <div>
+                    <div className="ui-label">{lang === 'es' ? 'Billetera spot' : 'Spot wallet'}</div>
+                    <div className="font-semibold text-ink tabular-nums mt-0.5">
+                      ${(portfolio?.breakdown?.walletTokensUsd ?? 0).toFixed(2)}
                     </div>
-
-                    <div className="space-y-2 text-xs">
-                      <div className="flex items-center justify-between">
-                        <span className="text-ink-3">{t.unrealizedReturn}</span>
-                        <span className="font-semibold text-ink tabular-nums">
-                          ${(portfolio?.performance?.unrealizedPnlUsd ?? 0).toFixed(2)}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-ink-3">{t.realizedReturn}</span>
-                        <span className="font-semibold text-ink tabular-nums">
-                          ${(portfolio?.performance?.realizedPnlUsd ?? 0).toFixed(2)}
-                        </span>
-                      </div>
-                      <div className="pt-2 border-t border-line flex items-center justify-between font-bold">
-                        <span className="text-ink">{t.totalReturn}</span>
-                        <span className={`tabular-nums ${isPositive ? 'text-emerald-500' : 'text-rose-500'}`}>
-                          {isPositive ? '+' : ''}${(portfolio?.performance?.totalReturnUsd ?? 0).toFixed(2)}
-                        </span>
-                      </div>
+                  </div>
+                  <div>
+                    <div className="ui-label">{lang === 'es' ? 'Liquidez AMM' : 'AMM pools'}</div>
+                    <div className="font-semibold text-ink tabular-nums mt-0.5">
+                      ${(portfolio?.breakdown?.lpTotalValueUsd ?? 0).toFixed(2)}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="ui-label">{lang === 'es' ? 'Colateral Lend' : 'Lend vaults'}</div>
+                    <div className="font-semibold text-ink tabular-nums mt-0.5">
+                      ${(portfolio?.breakdown?.lendingCollateralUsd ?? 0).toFixed(2)}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="ui-label">{lang === 'es' ? 'Margen Perps' : 'Perps margin'}</div>
+                    <div className="font-semibold text-ink tabular-nums mt-0.5">
+                      ${(portfolio?.breakdown?.perpsMarginLockedUsd ?? 0).toFixed(2)}
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* BOTTOM SECTION: TOKENS TABLE + YIELD EARN CARD */}
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                
-                {/* Left (8 cols): Tokens Table */}
-                <div className="lg:col-span-8 bg-surface border border-line rounded-3xl p-5 sm:p-6 shadow-soft space-y-4">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1 border-b border-line/60">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h4 className="text-base font-bold text-ink">{t.tokens}</h4>
-                        <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-full bg-surface-2 text-ink-3 border border-line">
-                          {filteredTokens.length} {lang === 'es' ? 'activos' : 'assets'}
-                        </span>
-                      </div>
-                      <p className="text-xs text-ink-3 mt-0.5">
-                        {networkFilter === 'all'
-                          ? (lang === 'es' ? 'Saldos consolidados en todas las redes' : 'Consolidated balances across all networks')
-                          : networkFilter === 'bch'
-                          ? (lang === 'es' ? 'Activos en Bitcoin Cash (CashTokens & Nativo)' : 'Bitcoin Cash assets (CashTokens & Native)')
-                          : networkFilter === 'evm'
-                          ? (lang === 'es' ? 'Activos en Polygon (Amoy / PoS)' : 'Polygon assets (Amoy / PoS)')
-                          : networkFilter === 'bsc'
-                          ? (lang === 'es' ? 'Activos en BNB Smart Chain (BEP-20)' : 'BNB Smart Chain assets (BEP-20)')
-                          : networkFilter === 'ltc'
-                          ? (lang === 'es' ? 'Activos en Litecoin (Nativo)' : 'Litecoin assets (Native)')
-                          : networkFilter === 'ton'
-                          ? (lang === 'es' ? 'Activos en TON Network (Jettons & Nativo)' : 'TON Network assets (Jettons & Native)')
-                          : (lang === 'es' ? 'Activos en Solana (Devnet / SVM)' : 'Solana assets (Devnet / SVM)')}
-                      </p>
-                    </div>
+              {/* Right (4 cols): Monochrome Swiss Actions + Performance Summary */}
+              <div className="lg:col-span-4 flex flex-col gap-4">
+                <div className="ui-card p-4 space-y-2.5">
+                  <div className="ui-label">{t.quickActions}</div>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    {[
+                      {
+                        label: t.swap,
+                        sub: lang === 'es' ? 'Cross-chain' : 'Cross-chain',
+                        icon: Repeat,
+                        onClick: () => onNavigate && onNavigate('bridge')
+                      },
+                      {
+                        label: t.deposit,
+                        sub: lang === 'es' ? 'Direcciones QR' : 'QR addresses',
+                        icon: ArrowDownLeft,
+                        onClick: () => setReceiveModalOpen(true)
+                      },
+                      {
+                        label: t.earn,
+                        sub: lang === 'es' ? '0.25% APY LP' : 'LP fee accrual',
+                        icon: PiggyBank,
+                        onClick: () => onNavigate && onNavigate('pools')
+                      },
+                      {
+                        label: t.lend,
+                        sub: 'P2SH32 Vaults',
+                        icon: ShieldCheck,
+                        onClick: () => onNavigate && onNavigate('lend')
+                      }
+                    ].map(act => {
+                      const Icon = act.icon;
+                      return (
+                        <button
+                          key={act.label}
+                          type="button"
+                          onClick={act.onClick}
+                          className="p-3 rounded-panel bg-surface-2 hover:bg-surface-3 border border-line text-left transition-colors cursor-pointer flex flex-col justify-between h-[84px] group"
+                        >
+                          <div className="flex items-center justify-between text-ink-2 group-hover:text-ink">
+                            <Icon className="w-4 h-4" />
+                            <ArrowUpRight className="w-3.5 h-3.5 text-ink-3 group-hover:text-ink transition-colors" />
+                          </div>
+                          <div>
+                            <div className="text-xs font-semibold text-ink truncate">{act.label}</div>
+                            <div className="text-[11px] text-ink-3 truncate">{act.sub}</div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
 
-                    <div className="flex items-center gap-3 max-w-full overflow-hidden">
-                      {/* Segmented Network Switcher */}
-                      {renderChainFilterPills(true)}
-
-                      <div className="text-sm font-bold text-ink font-mono tabular-nums text-right shrink-0 hidden sm:block">
-                        USD ${filteredTokensUsd.toFixed(2)}
-                      </div>
-                    </div>
+                <div className="ui-card p-4 space-y-3 flex-1 flex flex-col justify-between">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-ink">{t.performance}</span>
+                    <span className="text-[11px] text-ink-3">{lang === 'es' ? 'Histórico' : 'All time'}</span>
                   </div>
 
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs">
-                      <thead>
-                        <tr className="text-ink-3 border-b border-line pb-2 font-medium">
-                          <th className="py-2.5 font-medium">{t.token}</th>
-                          <th className="py-2.5 font-medium">{t.price}</th>
-                          <th className="py-2.5 font-medium">{t.balance}</th>
-                          <th className="py-2.5 font-medium text-right">{t.value}</th>
-                          <th className="py-2.5 font-medium text-right">{t.action}</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-line/60">
-                        {filteredTokens.map(tk => {
-                          const meta = getChainUiMeta(tk.chainType);
-                          return (
-                          <tr key={`${tk.chainType}_${tk.symbol}_${tk.name}`} className="hover:bg-surface-2/60 transition-colors">
-                            <td className="py-3 flex items-center gap-2.5">
-                              {/* Token icon with mini-network badge overlay on corner */}
+                  <div className="space-y-2 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="text-ink-3">{t.unrealizedReturn}</span>
+                      <span className="font-medium text-ink tabular-nums">
+                        ${(portfolio?.performance?.unrealizedPnlUsd ?? 0).toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-ink-3">{t.realizedReturn}</span>
+                      <span className="font-medium text-ink tabular-nums">
+                        ${(portfolio?.performance?.realizedPnlUsd ?? 0).toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-ink-3">{t.historicalEarned}</span>
+                      <span className="font-medium text-ink tabular-nums">
+                        ${(portfolio?.performance?.totalYieldEarnedUsd ?? 0).toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="pt-2.5 border-t border-line flex items-center justify-between font-semibold">
+                      <span className="text-ink">{t.totalReturn}</span>
+                      <span
+                        className={`tabular-nums ${
+                          isPositive ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'
+                        }`}
+                      >
+                        {isPositive ? '+' : ''}${(portfolio?.performance?.totalReturnUsd ?? 0).toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* BOTTOM SECTION: TOKENS LEDGER TABLE (8 cols) + YIELD VAULTS (4 cols) */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+              {/* Left (8 cols): Clean Ledger Table */}
+              <div className="lg:col-span-8 ui-card overflow-hidden">
+                <div className="px-5 py-3.5 border-b border-line flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <h4 className="ui-section-title">{t.tokens}</h4>
+                    <span className="ui-badge font-mono tabular-nums">
+                      {displayTokens.length}
+                    </span>
+                  </div>
+                  <div className="text-xs font-semibold text-ink font-mono tabular-nums">
+                    ${filteredTokensUsd.toFixed(2)} USD
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="text-ink-3 border-b border-line bg-surface-2/40 text-[11px] font-medium">
+                        <th className="px-5 py-2.5 font-medium">{t.token}</th>
+                        <th className="px-3 py-2.5 font-medium">{t.price}</th>
+                        <th className="px-3 py-2.5 font-medium">{t.balance}</th>
+                        <th className="px-3 py-2.5 font-medium text-right">{t.value}</th>
+                        <th className="px-5 py-2.5 font-medium text-right">{t.action}</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-line">
+                      {displayTokens.map(tk => {
+                        const meta = getChainUiMeta(tk.chainType);
+                        return (
+                          <tr
+                            key={`${tk.chainType}_${tk.symbol}_${tk.name}`}
+                            className="hover:bg-surface-2/40 transition-colors"
+                          >
+                            <td className="px-5 py-3 flex items-center gap-3">
                               <div className="relative shrink-0">
-                                <img src={tk.icon} alt={tk.symbol} className="w-8 h-8 rounded-full object-contain bg-surface border border-line p-0.5 shadow-2xs" />
+                                <img
+                                  src={tk.icon}
+                                  alt={tk.symbol}
+                                  className="w-8 h-8 rounded-full object-contain bg-surface border border-line p-0.5"
+                                />
                                 <img
                                   src={meta.icon}
                                   alt={tk.chainType}
-                                  className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full object-contain bg-surface border border-line shadow-2xs p-0.2"
+                                  className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full object-contain bg-surface border border-line"
                                   title={tk.chain}
                                 />
                               </div>
-
                               <div className="min-w-0">
                                 <div className="flex items-center gap-1.5">
-                                  <span className="font-bold text-ink">{tk.symbol}</span>
-                                  <span className={`text-[9px] font-semibold px-1.5 py-0.2 rounded-full border ${meta.badgeClass}`}>
-                                    {meta.label}
-                                  </span>
+                                  <span className="font-semibold text-ink">{tk.symbol}</span>
+                                  <span className="text-[11px] text-ink-3">· {meta.label}</span>
                                 </div>
-                                <div className="text-[11px] text-ink-3 truncate">
-                                  {tk.name}
-                                </div>
+                                <div className="text-[11px] text-ink-3 truncate">{tk.name}</div>
                               </div>
                             </td>
-                            <td className="py-3 font-mono text-ink tabular-nums">
+                            <td className="px-3 py-3 font-mono text-ink-2 tabular-nums">
                               ${tk.priceUsd < 1 ? tk.priceUsd.toFixed(3) : tk.priceUsd.toFixed(2)}
                             </td>
-                            <td className="py-3 font-mono text-ink tabular-nums">
+                            <td className="px-3 py-3 font-mono text-ink tabular-nums">
                               {tk.balance.toLocaleString('en-US', { maximumFractionDigits: 6 })}
                             </td>
-                            <td className="py-3 font-mono font-bold text-ink text-right tabular-nums">
+                            <td className="px-3 py-3 font-mono font-semibold text-ink text-right tabular-nums">
                               ${tk.valueUsd.toFixed(2)}
                             </td>
-                            <td className="py-3 text-right">
+                            <td className="px-5 py-3 text-right">
                               <button
+                                type="button"
                                 onClick={() => onNavigate && onNavigate('bridge')}
-                                className="px-2.5 py-1 rounded-lg bg-surface-2 hover:bg-surface-3 text-ink font-semibold text-[11px] transition-colors cursor-pointer"
+                                className="px-2.5 py-1 rounded-lg bg-surface-2 border border-line hover:bg-surface-3 text-ink font-medium text-[11px] transition-colors cursor-pointer"
                               >
                                 Swap
                               </button>
                             </td>
                           </tr>
                         );
-                        })}
-                      </tbody>
-                    </table>
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Right (4 cols): Yield Markets (No AI boilerplate box) */}
+              <div className="lg:col-span-4 ui-card overflow-hidden">
+                <div className="px-5 py-3.5 border-b border-line flex items-center justify-between">
+                  <div>
+                    <h4 className="ui-section-title">{t.earnOpportunities}</h4>
                   </div>
+                  <span className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400 tabular-nums">
+                    +${(portfolio?.performance?.totalYieldEarnedUsd ?? 0).toFixed(2)}
+                  </span>
                 </div>
 
-                {/* Right (4 cols): Earn & Opportunities Card */}
-                <div className="lg:col-span-4 bg-surface border border-line rounded-3xl p-5 sm:p-6 shadow-soft space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="text-base font-bold text-ink">{t.earnOpportunities}</h4>
-                      <p className="text-xs text-ink-3 mt-0.5">
-                        {t.historicalEarned}: <span className="font-bold text-emerald-500">${(portfolio?.performance?.totalYieldEarnedUsd ?? 0).toFixed(2)}</span>
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Yield options list */}
-                  <div className="space-y-3 pt-1">
-                    {[
-                      { token: 'PUSD', name: 'Paryon USD', apy: '5.8%', icon: '/PUSD.png', route: 'lend' },
-                      { token: 'USDT', name: 'Tether USD', apy: '6.2%', icon: '/USDT.png', route: 'lend' },
-                      { token: 'USDC', name: 'USD Coin', apy: '5.5%', icon: '/USDC.png', route: 'lend' }
-                    ].map(opp => (
-                      <div
-                        key={opp.token}
-                        className="p-3 rounded-2xl bg-surface-2 border border-line/60 flex items-center justify-between hover:border-line transition-all"
-                      >
-                        <div className="flex items-center gap-2.5">
-                          <img src={opp.icon} alt={opp.token} className="w-7 h-7 rounded-full object-contain" />
-                          <div>
-                            <div className="font-bold text-xs text-ink">{opp.token}</div>
-                            <div className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold">{opp.apy} {t.apy}</div>
+                <div className="divide-y divide-line">
+                  {[
+                    { token: 'PUSD', name: 'Paryon USD · CashTokens', apy: '5.8%', icon: '/PUSD.png', route: 'lend' },
+                    { token: 'USDT', name: 'Tether USD · Polygon', apy: '6.2%', icon: '/USDT.png', route: 'lend' },
+                    { token: 'USDC', name: 'USD Coin · Polygon', apy: '5.5%', icon: '/USDC.png', route: 'lend' }
+                  ].map(opp => (
+                    <div
+                      key={opp.token}
+                      className="px-5 py-3.5 flex items-center justify-between hover:bg-surface-2/40 transition-colors"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <img src={opp.icon} alt={opp.token} className="w-7 h-7 rounded-full object-contain shrink-0" />
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-semibold text-xs text-ink">{opp.token}</span>
+                            <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold tabular-nums">
+                              {opp.apy} {t.apy}
+                            </span>
                           </div>
+                          <div className="text-[11px] text-ink-3 truncate">{opp.name}</div>
                         </div>
-                        <button
-                          onClick={() => onNavigate && onNavigate(opp.route as any)}
-                          className="inline-flex items-center gap-1 text-xs font-bold text-primary hover:text-primary-hover transition-colors cursor-pointer"
-                        >
-                          <span>{t.obtain}</span>
-                          <ChevronRight className="w-3.5 h-3.5" />
-                        </button>
                       </div>
-                    ))}
-                  </div>
-
-                  {/* Summary Callout */}
-                  <div className="p-3.5 rounded-2xl bg-primary/5 border border-primary/20 text-xs text-ink-2 space-y-1">
-                    <div className="font-bold text-ink flex items-center gap-1.5">
-                      <ShieldCheck className="w-4 h-4 text-primary" />
-                      <span>CashScript & Solidity Covenants</span>
+                      <button
+                        type="button"
+                        onClick={() => onNavigate && onNavigate(opp.route as any)}
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-ink-2 hover:text-ink transition-colors cursor-pointer shrink-0"
+                      >
+                        <span>{t.obtain}</span>
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
                     </div>
-                    <p className="text-[11px] leading-relaxed text-ink-3">
-                      {lang === 'es'
-                        ? 'Tus activos permanecen asegurados bajo contratos no-custodiales con timelocks de 24 horas y pruebas criptográficas ECDSA/Schnorr.'
-                        : 'Your assets stay secured in non-custodial smart contracts backed by 24h timelocks and ECDSA/Schnorr proofs.'}
-                    </p>
-                  </div>
+                  ))}
                 </div>
-
               </div>
-
             </div>
-          )}
+          </div>
+        )}
 
-          {/* TAB 2: TOKENS ONLY */}
-          {activeTab === 'tokens' && (
-            <div className="bg-surface border border-line rounded-3xl p-6 shadow-soft space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-line/60">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-lg font-bold text-ink">{t.tokens}</h3>
-                    <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-full bg-surface-2 text-ink-3 border border-line">
-                      {filteredTokens.length} {lang === 'es' ? 'activos' : 'assets'}
-                    </span>
-                  </div>
-                  <p className="text-xs text-ink-3 mt-0.5">
-                    {networkFilter === 'all'
-                      ? (lang === 'es' ? 'Saldos on-chain consolidados en tus billeteras conectadas' : 'Consolidated on-chain balances across your connected wallets')
-                      : networkFilter === 'bch'
-                      ? (lang === 'es' ? 'Mostrando únicamente activos de Bitcoin Cash (CashTokens & L1)' : 'Showing Bitcoin Cash assets only (CashTokens & L1)')
-                      : networkFilter === 'evm'
-                      ? (lang === 'es' ? 'Mostrando únicamente activos de Polygon (Amoy / PoS)' : 'Showing Polygon assets only (Amoy / PoS)')
-                      : networkFilter === 'bsc'
-                      ? (lang === 'es' ? 'Mostrando únicamente activos de BNB Smart Chain (BEP-20)' : 'Showing BNB Smart Chain assets only (BEP-20)')
-                      : networkFilter === 'ltc'
-                      ? (lang === 'es' ? 'Mostrando únicamente activos de Litecoin (Nativo)' : 'Showing Litecoin assets only (Native)')
-                      : networkFilter === 'ton'
-                      ? (lang === 'es' ? 'Mostrando únicamente activos de TON Network (Jettons & Nativo)' : 'Showing TON Network assets only (Jettons & Native)')
-                      : (lang === 'es' ? 'Mostrando únicamente activos de Solana (Devnet / SVM)' : 'Showing Solana assets only (Devnet / SVM)')}
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-3 max-w-full overflow-hidden">
-                  {/* Dedicated Network Switcher */}
-                  {renderChainFilterPills(false)}
-
-                  <div className="text-lg font-bold text-ink font-mono tabular-nums text-right shrink-0">
-                    USD ${filteredTokensUsd.toFixed(2)}
-                  </div>
-                </div>
+        {/* TAB 2: TOKENS ONLY */}
+        {activeTab === 'tokens' && (
+          <div className="ui-card overflow-hidden">
+            <div className="px-5 py-4 border-b border-line flex items-center justify-between gap-3">
+              <div>
+                <h3 className="ui-section-title">{t.tokens}</h3>
+                <p className="text-xs text-ink-3 mt-0.5">
+                  {networkFilter === 'all'
+                    ? (lang === 'es' ? 'Saldos on-chain consolidados' : 'Consolidated on-chain balances')
+                    : `${displayTokens.length} ${lang === 'es' ? 'activos en red seleccionada' : 'assets on selected network'}`}
+                </p>
               </div>
+              <div className="text-sm font-semibold text-ink font-mono tabular-nums">
+                ${filteredTokensUsd.toFixed(2)} USD
+              </div>
+            </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead>
-                    <tr className="text-ink-3 border-b border-line pb-2 font-medium">
-                      <th className="py-2.5 font-medium">{t.token}</th>
-                      <th className="py-2.5 font-medium">{t.price}</th>
-                      <th className="py-2.5 font-medium">{t.balance}</th>
-                      <th className="py-2.5 font-medium text-right">{t.value}</th>
-                      <th className="py-2.5 font-medium text-right">{t.action}</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-line/60">
-                    {filteredTokens.map(tk => {
-                      const meta = getChainUiMeta(tk.chainType);
-                      return (
-                      <tr key={`${tk.chainType}_${tk.symbol}_${tk.name}`} className="hover:bg-surface-2/60 transition-colors">
-                        <td className="py-3.5 flex items-center gap-3">
-                          {/* Token icon with mini-network badge overlay on corner */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="text-ink-3 border-b border-line bg-surface-2/40 text-[11px] font-medium">
+                    <th className="px-5 py-2.5 font-medium">{t.token}</th>
+                    <th className="px-3 py-2.5 font-medium">{t.price}</th>
+                    <th className="px-3 py-2.5 font-medium">{t.balance}</th>
+                    <th className="px-3 py-2.5 font-medium text-right">{t.value}</th>
+                    <th className="px-5 py-2.5 font-medium text-right">{t.action}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-line">
+                  {displayTokens.map(tk => {
+                    const meta = getChainUiMeta(tk.chainType);
+                    return (
+                      <tr key={`${tk.chainType}_${tk.symbol}_${tk.name}`} className="hover:bg-surface-2/40 transition-colors">
+                        <td className="px-5 py-3.5 flex items-center gap-3">
                           <div className="relative shrink-0">
-                            <img src={tk.icon} alt={tk.symbol} className="w-9 h-9 rounded-full object-contain bg-surface border border-line p-0.5 shadow-2xs" />
+                            <img src={tk.icon} alt={tk.symbol} className="w-8 h-8 rounded-full object-contain bg-surface border border-line p-0.5" />
                             <img
                               src={meta.icon}
                               alt={tk.chainType}
-                              className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full object-contain bg-surface border border-line shadow-2xs p-0.2"
+                              className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full object-contain bg-surface border border-line"
                               title={tk.chain}
                             />
                           </div>
-
                           <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-sm text-ink">{tk.symbol}</span>
-                              <span className={`text-[10px] font-semibold px-2 py-0.2 rounded-full border ${meta.badgeClass}`}>
-                                {meta.label}
-                              </span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-semibold text-sm text-ink">{tk.symbol}</span>
+                              <span className="text-[11px] text-ink-3">· {meta.label}</span>
                             </div>
-                            <div className="text-xs text-ink-3 mt-0.5">
-                              {tk.name} • <span className="font-semibold text-ink-3/90">{tk.chain}</span>
-                            </div>
+                            <div className="text-[11px] text-ink-3 truncate">{tk.name}</div>
                           </div>
                         </td>
-                        <td className="py-3.5 font-mono text-ink text-sm tabular-nums">
+                        <td className="px-3 py-3.5 font-mono text-ink-2 tabular-nums">
                           ${tk.priceUsd < 1 ? tk.priceUsd.toFixed(3) : tk.priceUsd.toFixed(2)}
                         </td>
-                        <td className="py-3.5 font-mono text-ink text-sm tabular-nums">
+                        <td className="px-3 py-3.5 font-mono text-ink tabular-nums">
                           {tk.balance.toLocaleString('en-US', { maximumFractionDigits: 6 })}
                         </td>
-                        <td className="py-3.5 font-mono font-bold text-ink text-sm text-right tabular-nums">
+                        <td className="px-3 py-3.5 font-mono font-semibold text-ink text-right tabular-nums">
                           ${tk.valueUsd.toFixed(2)}
                         </td>
-                        <td className="py-3.5 text-right">
+                        <td className="px-5 py-3.5 text-right">
                           <button
+                            type="button"
                             onClick={() => onNavigate && onNavigate('bridge')}
-                            className="ui-btn ui-btn-primary ui-btn-sm"
+                            className="ui-btn-secondary ui-btn-sm"
                           >
                             Swap
                           </button>
                         </td>
                       </tr>
                     );
-                    })}
-                  </tbody>
-                </table>
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 3: POOLS */}
+        {activeTab === 'pools' && (
+          <div className="ui-card overflow-hidden">
+            <div className="px-5 py-4 border-b border-line flex items-center justify-between">
+              <div>
+                <h3 className="ui-section-title">{t.pools}</h3>
+                <p className="text-xs text-ink-3 mt-0.5">
+                  {lang === 'es' ? 'Posiciones de liquidez (LP) en BinaryLiquid AMM' : 'Liquidity provider (LP) shares in BinaryLiquid AMM'}
+                </p>
+              </div>
+              <div className="text-sm font-semibold text-ink font-mono tabular-nums">
+                ${(portfolio?.breakdown?.lpTotalValueUsd ?? 0).toFixed(2)} USD
               </div>
             </div>
-          )}
 
-          {/* TAB 3: POOLS */}
-          {activeTab === 'pools' && (
-            <div className="bg-surface border border-line rounded-3xl p-6 shadow-soft space-y-4">
-              <div className="flex items-center justify-between">
+            {(!portfolio?.pools || portfolio.pools.length === 0) ? (
+              <div className="text-center py-14 px-6 space-y-3">
+                <div className="text-sm font-semibold text-ink">{t.noPools}</div>
+                <p className="text-xs text-ink-3 max-w-sm mx-auto">
+                  {lang === 'es'
+                    ? 'Aporta liquidez en pares PUSD / USDT o BCH para generar comisiones por cada swap.'
+                    : 'Supply liquidity in PUSD / USDT or BCH pairs to earn cross-chain swap fees.'}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => onNavigate && onNavigate('pools')}
+                  className="ui-btn-secondary ui-btn-sm"
+                >
+                  {t.explorePools}
+                </button>
+              </div>
+            ) : (
+              <div className="divide-y divide-line">
+                {portfolio.pools.map((p: any) => (
+                  <div key={p.id} className="px-5 py-4 flex items-center justify-between hover:bg-surface-2/40 transition-colors">
+                    <div className="flex items-center gap-3">
+                      <div className="flex -space-x-2">
+                        <img src={p.iconA} alt={p.tokenA} className="w-7 h-7 rounded-full border border-surface" />
+                        <img src={p.iconB} alt={p.tokenB} className="w-7 h-7 rounded-full border border-surface" />
+                      </div>
+                      <div>
+                        <div className="font-semibold text-sm text-ink">{p.pair}</div>
+                        <div className="text-xs text-ink-3">{p.poolSharePercent}% {lang === 'es' ? 'del pool' : 'pool share'}</div>
+                      </div>
+                    </div>
+                    <div className="text-right font-mono tabular-nums">
+                      <div className="font-semibold text-sm text-ink">${p.totalValueUsd}</div>
+                      <div className="text-xs text-emerald-600 dark:text-emerald-400">+${p.profitUsd} fees</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 4: DEFI (LEND & PERPS) */}
+        {activeTab === 'defi' && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            {/* Card 1: Lending Covenant Vault */}
+            <div className="ui-card p-5 space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-line">
                 <div>
-                  <h3 className="text-lg font-bold text-ink">{t.pools}</h3>
-                  <p className="text-xs text-ink-3 mt-0.5">
-                    {lang === 'es' ? 'Posiciones de proveedor de liquidez (LP) en BinaryLiquid AMM' : 'Liquidity provider (LP) shares in BinaryLiquid AMM'}
-                  </p>
+                  <h4 className="ui-section-title">{t.lendingVault}</h4>
+                  <p className="text-[11px] text-ink-3">CashScript P2SH32 Covenant</p>
                 </div>
-                <div className="text-lg font-black text-ink font-mono tabular-nums">
-                  USD ${(portfolio?.breakdown?.lpTotalValueUsd ?? 0).toFixed(2)}
+                <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+                  portfolio?.lending?.vault?.healthStatus === 'RISK'
+                    ? 'bg-rose-500/10 text-rose-500'
+                    : portfolio?.lending?.vault?.healthStatus === 'MODERATE'
+                    ? 'bg-amber-500/10 text-amber-500'
+                    : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                }`}>
+                  {portfolio?.lending?.vault?.healthStatus || 'SAFE'}
+                </span>
+              </div>
+
+              <div className="space-y-2.5 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-ink-3">{t.collateralLocked}</span>
+                  <span className="font-semibold text-ink font-mono tabular-nums">
+                    {portfolio?.lending?.vault?.collateralBch || 0} BCH (${portfolio?.lending?.vault?.collateralUsd || 0})
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-ink-3">{t.borrowedDebt}</span>
+                  <span className="font-semibold text-rose-500 font-mono tabular-nums">
+                    ${portfolio?.lending?.vault?.totalDebtUsd || 0}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-ink-3">{t.healthFactor}</span>
+                  <span className="font-semibold text-emerald-600 dark:text-emerald-400 font-mono tabular-nums">
+                    {portfolio?.lending?.vault?.healthFactor || 999.0}
+                  </span>
                 </div>
               </div>
 
-              {(!portfolio?.pools || portfolio.pools.length === 0) ? (
-                <div className="text-center py-12 space-y-3">
-                  <div className="w-12 h-12 rounded-full bg-surface-2 text-ink-3 mx-auto flex items-center justify-center">
-                    <Layers className="w-6 h-6" />
-                  </div>
-                  <div className="text-sm font-semibold text-ink">{t.noPools}</div>
-                  <p className="text-xs text-ink-3 max-w-sm mx-auto">
-                    {lang === 'es' ? 'Aporta liquidez a los pares PUSD / USDT o BCH para devengar 0.25% de comisión por cada swap.' : 'Deposit liquidity in PUSD / USDT or BCH pairs to earn 0.25% fee on every cross-chain swap.'}
-                  </p>
+              <button
+                type="button"
+                onClick={() => onNavigate && onNavigate('lend')}
+                className="w-full ui-btn-secondary ui-btn-sm"
+              >
+                {lang === 'es' ? 'Administrar Bóveda Lend' : 'Manage Lend Vault'}
+              </button>
+            </div>
+
+            {/* Card 2: Active Perps */}
+            <div className="ui-card p-5 space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-line">
+                <div>
+                  <h4 className="ui-section-title">{t.openPositions}</h4>
+                  <p className="text-[11px] text-ink-3">Non-Custodial Perps</p>
+                </div>
+              </div>
+
+              {(!portfolio?.perps?.positions || portfolio.perps.positions.length === 0) ? (
+                <div className="text-center py-8 space-y-2.5">
+                  <p className="text-xs text-ink-3">{t.noPerps}</p>
                   <button
-                    onClick={() => onNavigate && onNavigate('pools')}
-                    className="ui-btn ui-btn-primary ui-btn-sm font-bold mt-2"
+                    type="button"
+                    onClick={() => onNavigate && onNavigate('perps')}
+                    className="ui-btn-secondary ui-btn-sm"
                   >
-                    {t.explorePools}
+                    {t.tradePerps}
                   </button>
                 </div>
               ) : (
-                <div className="space-y-3">
-                  {portfolio.pools.map((p: any) => (
-                    <div key={p.id} className="p-4 rounded-2xl bg-surface-2 border border-line flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="flex -space-x-2">
-                          <img src={p.iconA} alt={p.tokenA} className="w-7 h-7 rounded-full border border-surface" />
-                          <img src={p.iconB} alt={p.tokenB} className="w-7 h-7 rounded-full border border-surface" />
-                        </div>
-                        <div>
-                          <div className="font-bold text-sm text-ink">{p.pair}</div>
-                          <div className="text-xs text-ink-3">{p.poolSharePercent}% {lang === 'es' ? 'del pool' : 'pool share'}</div>
-                        </div>
+                <div className="divide-y divide-line">
+                  {portfolio.perps.positions.map((pos: any) => (
+                    <div key={pos.id} className="py-2.5 text-xs flex items-center justify-between">
+                      <div>
+                        <div className="font-semibold text-ink">{pos.symbol} · {pos.side?.toUpperCase()} ({pos.leverage}x)</div>
+                        <div className="text-[11px] text-ink-3 tabular-nums">Margin: ${pos.marginUsd}</div>
                       </div>
-                      <div className="text-right">
-                        <div className="font-bold text-sm text-ink font-mono tabular-nums">${p.totalValueUsd}</div>
-                        <div className="text-xs text-emerald-500 font-semibold font-mono tabular-nums">+${p.profitUsd} fees</div>
+                      <div className="text-right font-mono font-semibold tabular-nums">
+                        <span className={pos.unrealizedPnlUsd >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'}>
+                          {pos.unrealizedPnlUsd >= 0 ? '+' : ''}${pos.unrealizedPnlUsd}
+                        </span>
                       </div>
                     </div>
                   ))}
                 </div>
               )}
             </div>
-          )}
+          </div>
+        )}
 
-          {/* TAB 4: DEFI (LEND & PERPS) */}
-          {activeTab === 'defi' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              
-              {/* Card 1: Lending Covenant Vault */}
-              <div className="bg-surface border border-line rounded-3xl p-6 shadow-soft space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center">
-                      <ShieldCheck className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-sm text-ink">{t.lendingVault}</h4>
-                      <p className="text-[11px] text-ink-3">CashScript P2SH32 Covenant</p>
-                    </div>
-                  </div>
-                  <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                    portfolio?.lending?.vault?.healthStatus === 'RISK'
-                      ? 'bg-rose-500/10 text-rose-500'
-                      : portfolio?.lending?.vault?.healthStatus === 'MODERATE'
-                      ? 'bg-amber-500/10 text-amber-500'
-                      : 'bg-emerald-500/10 text-emerald-500'
-                  }`}>
-                    {portfolio?.lending?.vault?.healthStatus || 'SAFE'}
-                  </span>
-                </div>
-
-                <div className="space-y-2.5 pt-2 text-xs">
-                  <div className="flex items-center justify-between">
-                    <span className="text-ink-3">{t.collateralLocked}</span>
-                    <span className="font-bold text-ink font-mono tabular-nums">
-                      {portfolio?.lending?.vault?.collateralBch || 0} BCH (${portfolio?.lending?.vault?.collateralUsd || 0})
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-ink-3">{t.borrowedDebt}</span>
-                    <span className="font-bold text-rose-500 font-mono tabular-nums">
-                      ${portfolio?.lending?.vault?.totalDebtUsd || 0}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-ink-3">{t.healthFactor}</span>
-                    <span className="font-bold text-emerald-500 font-mono tabular-nums">
-                      {portfolio?.lending?.vault?.healthFactor || 999.0}
-                    </span>
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => onNavigate && onNavigate('lend')}
-                  className="w-full ui-btn ui-btn-secondary ui-btn-sm font-bold mt-2"
-                >
-                  {lang === 'es' ? 'Administrar Bóveda Lend' : 'Manage Lend Vault'}
-                </button>
-              </div>
-
-              {/* Card 2: Active Perps */}
-              <div className="bg-surface border border-line rounded-3xl p-6 shadow-soft space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
-                      <TrendingUp className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-sm text-ink">{t.openPositions}</h4>
-                      <p className="text-[11px] text-ink-3">Non-Custodial Perps</p>
-                    </div>
-                  </div>
-                </div>
-
-                {(!portfolio?.perps?.positions || portfolio.perps.positions.length === 0) ? (
-                  <div className="text-center py-6 space-y-2">
-                    <p className="text-xs text-ink-3">{t.noPerps}</p>
-                    <button
-                      onClick={() => onNavigate && onNavigate('perps')}
-                      className="ui-btn ui-btn-primary ui-btn-sm font-bold"
-                    >
-                      {t.tradePerps}
-                    </button>
-                  </div>
-                ) : (
-                  <div className="space-y-2.5">
-                    {portfolio.perps.positions.map((pos: any) => (
-                      <div key={pos.id} className="p-3 rounded-xl bg-surface-2 border border-line text-xs flex items-center justify-between">
-                        <div>
-                          <div className="font-bold text-ink">{pos.symbol} • {pos.side?.toUpperCase()} ({pos.leverage}x)</div>
-                          <div className="text-[11px] text-ink-3">Margin: ${pos.marginUsd}</div>
-                        </div>
-                        <div className="text-right font-mono font-bold">
-                          <span className={pos.unrealizedPnlUsd >= 0 ? 'text-emerald-500' : 'text-rose-500'}>
-                            {pos.unrealizedPnlUsd >= 0 ? '+' : ''}${pos.unrealizedPnlUsd}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
+        {/* TAB 5: ACTIVITY */}
+        {activeTab === 'activity' && (
+          <div className="ui-card overflow-hidden">
+            <div className="px-5 py-4 border-b border-line">
+              <h3 className="ui-section-title">{t.activity}</h3>
+              <p className="text-xs text-ink-3 mt-0.5">
+                {lang === 'es' ? 'Historial unificado de transacciones on-chain verificadas' : 'Unified verified on-chain transaction history'}
+              </p>
             </div>
-          )}
 
-          {/* TAB 5: ACTIVITY */}
-          {activeTab === 'activity' && (
-            <div className="bg-surface border border-line rounded-3xl p-6 shadow-soft space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-bold text-ink">{t.activity}</h3>
-                  <p className="text-xs text-ink-3 mt-0.5">
-                    {lang === 'es' ? 'Historial unificado de transacciones on-chain verificadas' : 'Unified verified on-chain transaction history'}
-                  </p>
-                </div>
+            {(!portfolio?.activity || portfolio.activity.length === 0) ? (
+              <div className="text-center py-12 text-ink-3 text-xs">
+                {t.noActivity}
               </div>
-
-              {(!portfolio?.activity || portfolio.activity.length === 0) ? (
-                <div className="text-center py-12 text-ink-3 text-xs">
-                  {t.noActivity}
-                </div>
-              ) : (
-                <div className="divide-y divide-line/60">
-                  {portfolio.activity.map(act => (
-                    <div key={act.id} className="py-3.5 flex items-center justify-between gap-3 text-xs hover:bg-surface-2/40 transition-colors">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
-                          act.type === 'SWAP' ? 'bg-primary/10 text-primary' :
-                          act.type === 'LEND' ? 'bg-amber-500/10 text-amber-500' : 'bg-purple-500/10 text-purple-500'
-                        }`}>
-                          {act.type === 'SWAP' ? <Repeat className="w-4 h-4" /> :
-                           act.type === 'LEND' ? <ShieldCheck className="w-4 h-4" /> : <TrendingUp className="w-4 h-4" />}
-                        </div>
-                        <div>
-                          <div className="font-bold text-ink">{act.title}</div>
-                          <div className="text-[11px] text-ink-3">
-                            {new Date(act.timestamp).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
-                          </div>
-                        </div>
+            ) : (
+              <div className="divide-y divide-line">
+                {portfolio.activity.map(act => (
+                  <div key={act.id} className="px-5 py-3.5 flex items-center justify-between gap-3 text-xs hover:bg-surface-2/40 transition-colors">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-control bg-surface-2 border border-line text-ink-2 flex items-center justify-center shrink-0">
+                        {act.type === 'SWAP' ? <Repeat className="w-4 h-4" /> :
+                         act.type === 'LEND' ? <ShieldCheck className="w-4 h-4" /> : <TrendingUp className="w-4 h-4" />}
                       </div>
-
-                      <div className="flex items-center gap-2">
-                        {act.explorerUrl && (
-                          <a
-                            href={act.explorerUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1 text-[11px] font-semibold text-ink-3 hover:text-ink px-2 py-1 rounded-md bg-surface-2 hover:bg-surface-3 transition-colors"
-                          >
-                            <span>Explorer</span>
-                            <ExternalLink className="w-2.5 h-2.5" />
-                          </a>
-                        )}
+                      <div>
+                        <div className="font-semibold text-ink">{act.title}</div>
+                        <div className="text-[11px] text-ink-3">
+                          {new Date(act.timestamp).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                        </div>
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </>
-      )}
+
+                    {act.explorerUrl && (
+                      <a
+                        href={act.explorerUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 text-[11px] font-medium text-ink-2 hover:text-ink px-2.5 py-1 rounded-md bg-surface-2 border border-line transition-colors"
+                      >
+                        <span>Explorer</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </>
 
       {/* RECEIVE / DEPOSIT MODAL */}
       <AnimatePresence>

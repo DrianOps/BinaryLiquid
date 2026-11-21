@@ -6,15 +6,15 @@
    DESIGN TOKENS (see /frontend/DESIGN.md). RGB triplets for Tailwind alpha.
    ========================================================================== */
 :root {
-  --canvas: 250 250 249;      /* page background */
-  --surface: 255 255 255;     /* cards */
-  --surface-2: 245 245 243;   /* inner panels / inputs */
-  --surface-3: 236 236 232;   /* hover on surface-2 */
-  --line: 232 232 228;        /* hairline borders */
-  --line-strong: 212 212 206; /* focus / emphasized borders */
-  --ink: 17 20 26;            /* primary text */
-  --ink-2: 82 89 102;         /* secondary text */
-  --ink-3: 140 147 160;       /* muted text / labels */
+  --canvas: 242 243 240;      /* #F2F3F0 Swiss warm stone canvas */
+  --surface: 255 255 255;     /* pure white cards */
+  --surface-2: 244 245 242;   /* inner panels / inputs */
+  --surface-3: 234 235 231;   /* hover on surface-2 */
+  --line: 229 230 225;        /* subtle hairline borders */
+  --line-strong: 208 209 203; /* focus / emphasized borders */
+  --ink: 13 13 13;            /* crisp obsidian text */
+  --ink-2: 88 92 100;         /* secondary text */
+  --ink-3: 138 143 152;       /* muted text / labels */
 }
 
 html.dark {
@@ -34,7 +34,7 @@ html.dark {
     overflow-x: hidden;
     max-width: 100vw;
     min-height: 100%;
-    background-color: #FAFAF9;
+    background-color: #F2F3F0;
   }
   
   html.dark {
@@ -47,7 +47,8 @@ html.dark {
     overflow-x: hidden;
     max-width: 100vw;
     min-height: 100vh;
-    @apply bg-[#FAFAF9] text-gray-900 transition-colors duration-200 antialiased font-sans;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    @apply bg-[#F2F3F0] text-gray-900 transition-colors duration-200 antialiased font-sans;
   }
   
   html.dark body {
@@ -131,10 +132,12 @@ html.dark {
   .ui-row { @apply flex items-center justify-between gap-3 py-3 border-b border-line last:border-b-0; }
 }
 
-/* Ambient background (kept very subtle on purpose: minimal design) */
+/* Ambient background (Swiss studio neutral stone + faint architectural finish) */
 .bg-warm-mesh {
-  background-color: #FAFAF9;
-  background-image: radial-gradient(at 50% -10%, rgba(247, 147, 26, 0.05) 0px, transparent 55%);
+  background-color: #F2F3F0;
+  background-image:
+    linear-gradient(125deg, rgba(255, 255, 255, 0.35) 0%, transparent 45%),
+    radial-gradient(at 50% -15%, rgba(255, 255, 255, 0.65) 0px, transparent 60%);
 }
 
 .dark .bg-warm-mesh,

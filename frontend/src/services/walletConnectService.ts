@@ -2,6 +2,14 @@ import { EthereumProvider } from '@walletconnect/ethereum-provider';
 import SignClient from '@walletconnect/sign-client';
 import type { SessionTypes } from '@walletconnect/types';
 import { convertCashAddressNetwork, generateQrDataUrl, pubkeyToCashAddress } from '../utils/bchAddress';
+import {
+  getActiveBlConnectSession,
+  hasActiveBlConnectSession,
+  signBlConnectMessage,
+  signBlConnectTransaction
+} from './blConnectService';
+
+export type BchWalletSource = 'blconnect' | 'wizard' | 'wc2-bch' | 'extension' | 'manual';
 
 export const WALLETCONNECT_PROJECT_ID =
   ((import.meta as any).env?.VITE_WALLETCONNECT_PROJECT_ID as string) ||
@@ -559,11 +567,33 @@ export async function connectInjectedWallet(
     );
   }
 
-  const accounts: string[] = await chosenProvider.request({ method: 'eth_requestAccounts' });
-  if (!accounts || accounts.length === 0) {
+  let accounts: string[] = [];
+  try {
+    const reqAccounts = await chosenProvider.request({ method: 'eth_requestAccounts' });
+    if (Array.isArray(reqAccounts)) {
+      accounts = reqAccounts;
+    }
+  } catch (err) {
+    // Fallback to eth_accounts if already authorized
+    try {
+      const existing = await chosenProvider.request({ method: 'eth_accounts' });
+      if (Array.isArray(existing) && existing.length > 0) {
+        accounts = existing;
+      } else {
+        throw err;
+      }
+    } catch {
+      throw err;
+    }
+  }
+  if ((!accounts || accounts.length === 0) && chosenProvider.selectedAddress) {
+    accounts = [String(chosenProvider.selectedAddress)];
+  }
+  if (!accounts || accounts.length === 0 || !accounts[0]) {
     throw new Error('No seleccionaste ninguna cuenta en tu billetera Web3.');
   }
 
+  const connectedAddress = String(accounts[0]).trim();
   activeInjectedProvider = chosenProvider;
   try {
     if (chosenRdns) {
@@ -574,23 +604,30 @@ export async function connectInjectedWallet(
   } catch {}
   bindEvmProviderEvents(chosenProvider, options?.callbacks);
 
-  let chainIdHex = await chosenProvider.request({ method: 'eth_chainId' });
-  let chainId = parseInt(chainIdHex, 16);
-
-  // Auto-switch to Polygon Amoy (80002) if Testnet is active and user requested autoSwitch
   const desiredChainId = options?.isTestnet !== false ? 80002 : 137;
-  if (options?.autoSwitchNetwork !== false && chainId !== desiredChainId) {
-    try {
-      await switchEvmNetwork(options?.isTestnet !== false, chosenProvider);
-      chainIdHex = await chosenProvider.request({ method: 'eth_chainId' });
-      chainId = parseInt(chainIdHex, 16);
-    } catch (_) {
-      // Non-fatal: user can switch later with 1 click
+  let chainId = desiredChainId;
+  try {
+    const chainIdHex = await Promise.race([
+      chosenProvider.request({ method: 'eth_chainId' }),
+      new Promise<string>(resolve => setTimeout(() => resolve(''), 1500))
+    ]);
+    if (chainIdHex) {
+      const parsedChain = parseInt(String(chainIdHex), 16);
+      if (!Number.isNaN(parsedChain) && parsedChain > 0) {
+        chainId = parsedChain;
+      }
     }
+  } catch {}
+
+  // Trigger network switch non-blockingly so the connected address is set & auto-filled immediately
+  if (options?.autoSwitchNetwork !== false && chainId !== desiredChainId) {
+    void switchEvmNetwork(options?.isTestnet !== false, chosenProvider).catch(() => {
+      // Non-fatal: user can switch later when signing an EVM transaction
+    });
   }
 
   return {
-    address: accounts[0],
+    address: connectedAddress,
     chainId,
     providerName,
     ...(chosenRdns ? { rdns: chosenRdns } : {})
@@ -602,6 +639,9 @@ export async function trySilentReconnectInjectedEvm(
 ): Promise<{ address: string; chainId: number; providerName: string; rdns?: string } | null> {
   if (typeof window === 'undefined') return null;
   initEip6963Discovery();
+  if (discoveredWallets.size === 0) {
+    await new Promise(resolve => setTimeout(resolve, 140));
+  }
   const win = window as any;
 
   let chosenProvider: any = null;
@@ -729,10 +769,18 @@ async function getBchSignClient(onSessionDeleted?: () => void): Promise<Instance
 
   bchSignClientPromise = (async () => {
     try {
-      const client = await SignClient.init({
-        projectId: WALLETCONNECT_PROJECT_ID,
-        metadata: WC_METADATA
-      });
+      const client = await Promise.race([
+        SignClient.init({
+          projectId: WALLETCONNECT_PROJECT_ID,
+          metadata: WC_METADATA
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new Error('WalletConnect Relay timeout (verify Reown Project ID allowed origins).')),
+            10000
+          )
+        )
+      ]);
 
       const handleDeletedOrExpired = (payload: any) => {
         const topic = payload?.topic;
@@ -884,15 +932,23 @@ export async function startBchWalletConnectPairing(
   const primaryChain = isTestnet ? 'bch:bchtest' : 'bch:bitcoincash';
   const secondaryChain = isTestnet ? 'bch:bitcoincash' : 'bch:bchtest';
 
-  const { uri, approval } = await client.connect({
-    optionalNamespaces: {
-      bch: {
-        chains: [primaryChain, secondaryChain],
-        methods: ['bch_getAddresses', 'bch_signTransaction', 'bch_signMessage'],
-        events: ['addressesChanged']
+  const { uri, approval } = await Promise.race([
+    client.connect({
+      optionalNamespaces: {
+        bch: {
+          chains: [primaryChain, secondaryChain],
+          methods: ['bch_getAddresses', 'bch_signTransaction', 'bch_signMessage'],
+          events: ['addressesChanged']
+        }
       }
-    }
-  });
+    }),
+    new Promise<never>((_, reject) =>
+      setTimeout(
+        () => reject(new Error('WalletConnect Relay timeout (verify Reown Project ID allowed origins).')),
+        8000
+      )
+    )
+  ]);
 
   if (!uri) {
     throw new Error('No se pudo generar el URI de emparejamiento WalletConnect V2 para BCH.');
@@ -1035,11 +1091,12 @@ export function getBchWc2SessionMethods(): string[] {
  * Note: WizardConnect (`hdwalletv1`) exposes `signTransaction` only and does not support `signMessage`.
  */
 export function hasActiveBchMessageSigningCapability(
-  preferredSource?: 'wizard' | 'wc2-bch' | 'extension' | 'manual'
+  preferredSource?: BchWalletSource
 ): boolean {
   if (preferredSource === 'manual' || preferredSource === 'wizard') {
     return false;
   }
+  const hasBlcSign = () => hasActiveBlConnectSession();
   const hasWc2Sign = () => {
     const session = resolveHydratedBchSession();
     if (!session) return false;
@@ -1052,24 +1109,34 @@ export function hasActiveBchMessageSigningCapability(
     return Boolean(ext && typeof ext.signMessage === 'function');
   };
 
+  if (preferredSource === 'blconnect') return hasBlcSign();
   if (preferredSource === 'wc2-bch') return hasWc2Sign();
   if (preferredSource === 'extension') return hasExtSign();
-  return hasWc2Sign() || hasExtSign();
+  return hasBlcSign() || hasWc2Sign() || hasExtSign();
 }
 
 /**
  * Requests an authentic Bitcoin Signed Message signature from a connected BCH wallet
- * (`bch_signMessage` via WalletConnect V2 BCH or injected extension).
+ * (`BlConnect`, `wc2-bch-bcr` Cashonize / Paytaca WC2 / Zapit, or injected extension).
  */
 export async function signBchMessage(params: {
   message: string;
   userPrompt?: string;
   isTestnet: boolean;
-  preferredSource?: 'wizard' | 'wc2-bch' | 'extension' | 'manual';
+  preferredSource?: BchWalletSource;
 }): Promise<{ signature: string; walletName: string }> {
   const { message, userPrompt, isTestnet, preferredSource } = params;
   if (preferredSource === 'manual' || preferredSource === 'wizard') {
     throw new Error('La fuente BCH conectada actualmente no soporta firma criptográfica de mensajes.');
+  }
+
+  const canUseBlc = preferredSource === 'blconnect' || (!preferredSource && hasActiveBlConnectSession());
+  if (canUseBlc) {
+    const res = await signBlConnectMessage({ message, userPrompt, isTestnet });
+    if (!res?.signature) {
+      throw new Error('BinaryLiquid Wallet canceló o no devolvió una firma válida.');
+    }
+    return { signature: res.signature.trim(), walletName: res.walletName || 'BinaryLiquid Wallet' };
   }
 
   const session = resolveHydratedBchSession();
@@ -1619,11 +1686,12 @@ export function isWizardManagerConnected(wizardManager?: any): boolean {
 
 export function hasActiveBchSigningCapability(
   wizardManager?: any,
-  preferredSource?: 'wizard' | 'wc2-bch' | 'extension' | 'manual'
+  preferredSource?: BchWalletSource
 ): boolean {
   if (preferredSource === 'manual') {
     return false;
   }
+  const hasBlc = hasActiveBlConnectSession();
   const session = resolveHydratedBchSession();
   const hasWc2 = Boolean(session);
   const hasWizard = isWizardManagerConnected(wizardManager);
@@ -1631,10 +1699,11 @@ export function hasActiveBchSigningCapability(
     typeof window !== 'undefined' &&
     typeof ((window as any).paytaca || (window as any).bitcoinCash)?.signTransaction === 'function';
 
+  if (preferredSource === 'blconnect') return hasBlc;
   if (preferredSource === 'wc2-bch') return hasWc2;
   if (preferredSource === 'wizard') return hasWizard;
   if (preferredSource === 'extension') return hasExt;
-  return hasWc2 || hasWizard || hasExt;
+  return hasBlc || hasWc2 || hasWizard || hasExt;
 }
 
 export async function executeBchSwapDeposit(params: {
@@ -1643,7 +1712,7 @@ export async function executeBchSwapDeposit(params: {
   senderAddress: string;
   isTestnet: boolean;
   wizardManager?: any;
-  preferredSource?: 'wizard' | 'wc2-bch' | 'extension' | 'manual';
+  preferredSource?: BchWalletSource;
   bodyPayload?: Record<string, any>;
   onStatus?: (msg: string) => void;
 }): Promise<{ txHash: string }> {
@@ -1659,12 +1728,14 @@ export async function executeBchSwapDeposit(params: {
   } = params;
 
   if (preferredSource === 'manual') {
-    throw new Error('Las direcciones BCH de solo lectura (manuales) no pueden firmar transacciones. Conecta Cashonize o Paytaca.');
+    throw new Error('Las direcciones BCH de solo lectura (manuales) no pueden firmar transacciones. Conecta BinaryLiquid Wallet, Cashonize o Paytaca.');
   }
 
   // Ensure activeBchSession is hydrated if bchSignClient is active
   resolveHydratedBchSession();
 
+  const blcSession = getActiveBlConnectSession();
+  const hasBlcSession = Boolean(blcSession);
   const hasWc2Session = Boolean(
     bchSignClient && activeBchSession && getBchSessionNamespace(activeBchSession)
   );
@@ -1674,10 +1745,14 @@ export async function executeBchSwapDeposit(params: {
     typeof ((window as any).paytaca || (window as any).bitcoinCash)?.signTransaction === 'function';
 
   // Enforce preferredSource strictly when explicitly connected with one wallet channel
+  const useBlc = preferredSource ? preferredSource === 'blconnect' : hasBlcSession;
   const useExtension = preferredSource ? preferredSource === 'extension' : false;
-  const useWc2 = preferredSource ? preferredSource === 'wc2-bch' : !useExtension && hasWc2Session;
-  const useWizard = preferredSource ? preferredSource === 'wizard' : !useExtension && !useWc2 && hasWizardSession;
+  const useWc2 = preferredSource ? preferredSource === 'wc2-bch' : !useBlc && !useExtension && hasWc2Session;
+  const useWizard = preferredSource ? preferredSource === 'wizard' : !useBlc && !useExtension && !useWc2 && hasWizardSession;
 
+  if (useBlc && !hasBlcSession) {
+    throw new Error('Tu sesión de BinaryLiquid Wallet (BlConnect) se desconectó. Vuelve a conectar tu billetera.');
+  }
   if (useWc2 && !hasWc2Session) {
     throw new Error('Tu sesión de Cashonize / WalletConnect BCH se desconectó. Vuelve a conectar tu billetera.');
   }
@@ -1690,7 +1765,16 @@ export async function executeBchSwapDeposit(params: {
 
   // Determine the exact sender address corresponding to the active signing wallet
   let effectiveSenderAddress = senderAddress;
-  if (useExtension) {
+  if (useBlc && blcSession) {
+    const derivedAddrs = (blcSession.allAddresses || [blcSession.cashAddress])
+      .map((a) => convertCashAddressNetwork(a, isTestnet, false))
+      .filter(Boolean);
+    if (derivedAddrs.length > 0) {
+      effectiveSenderAddress = derivedAddrs.join(',');
+    } else {
+      effectiveSenderAddress = convertCashAddressNetwork(blcSession.tokenAddress || blcSession.cashAddress, isTestnet, true);
+    }
+  } else if (useExtension) {
     effectiveSenderAddress = senderAddress;
   } else if (useWc2 && activeBchSession) {
     const wcExtracted = extractBchAddressFromSession(activeBchSession, isTestnet);
@@ -1921,6 +2005,27 @@ export async function executeBchSwapDeposit(params: {
     return { txHash };
   };
 
+  // Branch 0: BlConnect Native Hybrid Protocol (Instant Popup or Nostr E2EE)
+  const runBlConnectSign = async (): Promise<{ txHash: string }> => {
+    const wcTxPayload = {
+      ...buildData.wcTransaction,
+      broadcast: true
+    };
+    const signResult = await signBlConnectTransaction(wcTxPayload, isTestnet, onStatus);
+    if (signResult?.signedTransaction && signResult.signedTransaction.length > 64) {
+      const broadcastedTxHash = await broadcastRawHexToNetwork(signResult.signedTransaction);
+      return { txHash: broadcastedTxHash || signResult.signedTransactionHash };
+    }
+    if (signResult?.signedTransactionHash) {
+      return { txHash: signResult.signedTransactionHash };
+    }
+    throw new Error('BinaryLiquid Wallet canceló la firma o no devolvió la transacción firmada.');
+  };
+
+  if (useBlc && hasBlcSession) {
+    return await runBlConnectSign();
+  }
+
   if (useExtension) {
     return await runExtensionSign();
   }
@@ -1931,6 +2036,10 @@ export async function executeBchSwapDeposit(params: {
 
   if (useWizard && hasWizardSession) {
     return await runWizardSign();
+  }
+
+  if (!preferredSource && hasBlcSession) {
+    return await runBlConnectSign();
   }
 
   if (!preferredSource && hasWc2Session) {
@@ -1945,7 +2054,7 @@ export async function executeBchSwapDeposit(params: {
     return await runExtensionSign();
   }
 
-  throw new Error('No hay canal de firma activo (conecta Cashonize o Paytaca).');
+  throw new Error('No hay canal de firma activo (conecta BinaryLiquid Wallet, Cashonize o Paytaca).');
 }
 
 // ============================================================================

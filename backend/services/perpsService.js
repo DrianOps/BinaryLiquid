@@ -233,7 +233,7 @@ class PerpsService {
     return db.isTxHashConsumed(txHash);
   }
 
-  async getMarketPrice(baseSymbol) {
+  async getMarketConsensus(baseSymbol, { strict = false } = {}) {
     const sym = String(baseSymbol || 'BCH').toUpperCase();
     const fallbacks = {
       BCH: 275.4,
@@ -244,12 +244,45 @@ class PerpsService {
       USDT: 1.0,
       USDC: 1.0
     };
-    try {
-      const price = await oraclePool.getPriceUsd(sym);
-      return Number(price) > 0 ? Number(price) : (fallbacks[sym] || 1.0);
-    } catch {
-      return fallbacks[sym] || 1.0;
+    if (['PUSD', 'USDT', 'USDC'].includes(sym)) {
+      return { price: 1.0, confPct: 0, spreadPct: 0, sourceCount: 1, sources: ['USD Peg (1:1)'], fresh: true };
     }
+    try {
+      const consensus = await oraclePool.getPriceConsensus(sym, {
+        maxAgeMs: strict ? 1500 : 2500,
+        requireFresh: strict,
+        minSources: strict ? 2 : 1,
+        maxDeviationPct: 1.5,
+        maxStaleMs: 8000
+      });
+      if (consensus && Number(consensus.price) > 0) {
+        return consensus;
+      }
+      if (strict) {
+        throw new Error(`[Oracle Circuit Breaker] Sin consenso fresco válido para ${sym}.`);
+      }
+      return { price: fallbacks[sym] || 1.0, confPct: 0.1, spreadPct: 0, sourceCount: 0, sources: ['Fallback'], fresh: false };
+    } catch (err) {
+      if (strict) {
+        throw err;
+      }
+      return { price: fallbacks[sym] || 1.0, confPct: 0.1, spreadPct: 0, sourceCount: 0, sources: ['Fallback'], fresh: false };
+    }
+  }
+
+  applyConfidenceBand(price, confPct, side, action = 'open') {
+    const safePrice = Number(price);
+    const band = Math.min(0.25, Math.max(0, Number(confPct) || 0)) / 100;
+    if (!Number.isFinite(safePrice) || safePrice <= 0 || band <= 0) return safePrice;
+    const isLong = String(side || 'long').toLowerCase() === 'long';
+    // Worst-case ask on Long Open / Short Close; worst-case bid on Short Open / Long Close (anti-latency-arb guard)
+    const payAsk = (action === 'open' && isLong) || (action === 'close' && !isLong);
+    return payAsk ? safePrice * (1 + band) : safePrice * (1 - band);
+  }
+
+  async getMarketPrice(baseSymbol, { strict = false } = {}) {
+    const consensus = await this.getMarketConsensus(baseSymbol, { strict });
+    return Number(consensus.price);
   }
 
   async getAllMarketPrices() {
@@ -380,6 +413,14 @@ class PerpsService {
         totalOpenInterestUsd: Number((totalLongOiUsd + totalShortOiUsd).toFixed(2)),
         openPositionsCount: activePositions.length,
         totalTradesClosed: db.memoryState.perpHistory.filter(h => (h.network || 'testnet') === net).length
+      },
+      oracleStatus: {
+        mode: 'Parallel Multi-CEX Median + Confidence Band',
+        perpsCacheMs: 1500,
+        minExecutionSources: 2,
+        failClosed: true,
+        activeOracle: oraclePool.activeProvider,
+        consensus: oraclePool.getHealth().consensus
       }
     };
   }
@@ -390,7 +431,6 @@ class PerpsService {
     if (this._triggerPromise) return this._triggerPromise;
 
     this._triggerPromise = (async () => {
-      const prices = pricesOverride || (await this.getAllMarketPrices());
       const snapshot = [...db.memoryState.perpPositions];
       const executed = [];
 
@@ -398,7 +438,9 @@ class PerpsService {
         try {
           const market = PERP_MARKETS[pos.symbol] || PERP_MARKETS.BCHUSDT;
           const baseKey = pos.base || market.base;
-          const markRaw = Number(prices[baseKey] || prices[pos.symbol] || 0);
+          // Require strict fresh multi-exchange consensus before any automatic liquidation or TP/SL execution
+          const consensus = await this.getMarketConsensus(baseKey, { strict: true });
+          const markRaw = Number(consensus?.price || 0);
           if (!Number.isFinite(markRaw) || markRaw <= 0) continue;
 
           const markPrice = Number(markRaw.toFixed(market.tickDecimals));
@@ -568,7 +610,13 @@ class PerpsService {
         provider.getUtxos(vaultTokenAddr).catch(() => []),
         vaultBaseAddr ? provider.getUtxos(vaultBaseAddr).catch(() => []) : Promise.resolve([])
       ]);
-      const allUtxos = [...(utxosToken || []), ...(utxosBase || [])];
+      const seenOutpoints = new Set();
+      const allUtxos = [...(utxosToken || []), ...(utxosBase || [])].filter(u => {
+        const key = `${String(u?.txid || '').toLowerCase()}:${u?.vout ?? ''}`;
+        if (seenOutpoints.has(key)) return false;
+        seenOutpoints.add(key);
+        return true;
+      });
 
       if (!isAutoDetect) {
         const cleanTxId = cleanHash.replace(/^0x/i, '').toLowerCase();
@@ -648,9 +696,13 @@ class PerpsService {
         provider.getUtxos(vaultBaseAddr).catch(() => []),
         vaultTokenAddr ? provider.getUtxos(vaultTokenAddr).catch(() => []) : Promise.resolve([])
       ]);
-      const pureBchUtxos = [...(utxosBase || []), ...(utxosToken || [])].filter(
-        u => !u.token && BigInt(u.satoshis || 0) >= 546n
-      );
+      const seenBchOutpoints = new Set();
+      const pureBchUtxos = [...(utxosBase || []), ...(utxosToken || [])].filter(u => {
+        const key = `${String(u?.txid || '').toLowerCase()}:${u?.vout ?? ''}`;
+        if (seenBchOutpoints.has(key)) return false;
+        seenBchOutpoints.add(key);
+        return !u.token && BigInt(u.satoshis || 0) >= 546n;
+      });
 
       if (!isAutoDetect) {
         const cleanTxId = cleanHash.replace(/^0x/i, '').toLowerCase();
@@ -809,15 +861,17 @@ class PerpsService {
         expectedEvmAddress: addrs.cleanEvm || ''
       });
 
-    // 2. Fetch live Oracle mark price & collateral USD valuation
-    const [markPrice, bchUsdPrice] = await Promise.all([
-      this.getMarketPrice(market.base),
-      colToken === 'BCH' ? this.getMarketPrice('BCH') : Promise.resolve(1.0)
+    // 2. Fetch strict live multi-CEX consensus price & collateral USD valuation (fail-closed, 1.5s max age)
+    const [markConsensus, bchUsdPrice] = await Promise.all([
+      this.getMarketConsensus(market.base, { strict: true }),
+      colToken === 'BCH' ? this.getMarketPrice('BCH', { strict: true }) : Promise.resolve(1.0)
     ]);
+    const markPrice = Number(markConsensus.price);
+    const executionEntryRaw = this.applyConfidenceBand(markPrice, markConsensus.confPct, cleanSide, 'open');
 
     const verifiedMarginAmt = Number(verification.amount);
     const marginUsd = Number((verifiedMarginAmt * (colToken === 'BCH' ? bchUsdPrice : 1.0)).toFixed(4));
-    const entryPrice = Number(markPrice.toFixed(market.tickDecimals));
+    const entryPrice = Number(executionEntryRaw.toFixed(market.tickDecimals));
     if (orderType === 'limit') {
       const lp = Number(limitPrice);
       if (!Number.isFinite(lp) || lp <= 0) {
@@ -1037,13 +1091,17 @@ class PerpsService {
 
       const isPosTestnet = (pos.network || 'testnet') === 'testnet';
       const market = PERP_MARKETS[pos.symbol] || PERP_MARKETS.BCHUSDT;
-      const [exitPriceRaw, bchUsdPrice] = await Promise.all([
+      const [exitConsensus, bchUsdPrice] = await Promise.all([
         Number.isFinite(Number(exitPriceOverride)) && Number(exitPriceOverride) > 0
-          ? Promise.resolve(Number(exitPriceOverride))
-          : this.getMarketPrice(pos.base || market.base),
-        pos.collateralToken === 'BCH' ? this.getMarketPrice('BCH') : Promise.resolve(1.0)
+          ? Promise.resolve({ price: Number(exitPriceOverride), confPct: 0 })
+          : this.getMarketConsensus(pos.base || market.base, { strict: true }),
+        pos.collateralToken === 'BCH' ? this.getMarketPrice('BCH', { strict: true }) : Promise.resolve(1.0)
       ]);
 
+      const exitPriceRaw =
+        Number.isFinite(Number(exitPriceOverride)) && Number(exitPriceOverride) > 0
+          ? Number(exitPriceOverride)
+          : this.applyConfidenceBand(exitConsensus.price, exitConsensus.confPct, pos.side, 'close');
       const exitPrice = Number(exitPriceRaw.toFixed(market.tickDecimals));
       const priceDelta = pos.side === 'long' ? exitPrice - pos.entryPrice : pos.entryPrice - exitPrice;
       const grossPnlUsd = pos.sizeAsset * priceDelta;
@@ -1061,8 +1119,9 @@ class PerpsService {
       const colPriceUsd = colToken === 'BCH' ? bchUsdPrice : 1.0;
       const pnlInCollateral = netPnlUsd / (colPriceUsd > 0 ? colPriceUsd : 1.0);
       const rawPayout = Number(pos.marginAmount || pos.margin || 0) + pnlInCollateral;
-      const decimals = colToken === 'BCH' ? 6 : 4;
-      let payoutAmount = isLiquidated ? 0 : Math.max(0, Number(rawPayout.toFixed(decimals)));
+      const displayDecimals = colToken === 'BCH' ? 6 : 4;
+      const tokenDecimals = colToken === 'BCH' ? 8 : (config.bch.tokens[colToken]?.decimals ?? 6);
+      let payoutAmount = isLiquidated ? 0 : Math.max(0, Number(rawPayout.toFixed(displayDecimals)));
 
       let closeTxHash = null;
       let closeExplorerUrl = null;
@@ -1087,7 +1146,7 @@ class PerpsService {
             ? Number(netBucket?.PUSD || payoutAmount)
             : Number(netBucket?.bch || payoutAmount);
           if (availInVault > 0 && payoutAmount > availInVault * 0.98) {
-            payoutAmount = Number((availInVault * 0.95).toFixed(decimals));
+            payoutAmount = Number((availInVault * 0.95).toFixed(displayDecimals));
           }
 
           const uniqueBchSettleRef = ethers.id(`PERP_CLOSE_BCH:${pos.id}:${targetBch}:${Date.now()}`);
@@ -1109,7 +1168,7 @@ class PerpsService {
             payoutAmount,
             colToken,
             null,
-            decimals,
+            tokenDecimals,
             isPosTestnet
           );
           closeTxHash = releaseRes.txHash;

@@ -15,7 +15,10 @@ import {
   ArrowLeft,
   ArrowRight,
   ClipboardPaste,
-  ArrowLeftRight
+  ArrowLeftRight,
+  RefreshCw,
+  ShieldCheck,
+  Wallet
 } from 'lucide-react';
 import TokenSelectModal, { SUPPORTED_TOKENS, TokenInfo } from './TokenSelectModal';
 import qrcode from 'qrcode-generator';
@@ -39,6 +42,11 @@ import {
   AuthSessionChain,
   EnsureAuthSessionOptions
 } from '../services/walletConnectService';
+import {
+  hasActiveTonConnectSession,
+  sendTonConnectDeposit,
+  openTonConnectModal
+} from '../services/tonConnectService';
 
 interface BridgeSwapProps {
   userContext: any;
@@ -46,7 +54,7 @@ interface BridgeSwapProps {
   bchAddress?: string;
   bchQueryAddress?: string;
   bchWalletName?: string;
-  bchWalletSource?: 'wizard' | 'wc2-bch' | 'extension' | 'manual';
+  bchWalletSource?: 'blconnect' | 'wizard' | 'wc2-bch' | 'extension' | 'manual';
   evmAddress?: string;
   solanaAddress?: string;
   solanaSource?: 'phantom' | 'solflare' | 'injected';
@@ -137,7 +145,15 @@ const UI_TEXT = {
     quoting: 'Cotizando...',
     nonCustodialShort: '100% No custodial',
     minShort: 'Mín.',
-    details: 'Detalles'
+    details: 'Detalles',
+    fromLabel: 'Desde',
+    toLabel: 'Hasta',
+    customAddress: 'Otra dirección',
+    covenantProtected: 'Covenant Protected',
+    covenantSub: 'Enrutado vía CashScript P2SH32',
+    estimatedTime: 'Tiempo estimado',
+    networkFeeLabel: 'Comisión protocolo',
+    bestRoute: 'Ruta directa sin custodia · ~3s'
   },
   en: {
     swap: 'Swap',
@@ -199,7 +215,15 @@ const UI_TEXT = {
     quoting: 'Quoting...',
     nonCustodialShort: '100% Non-custodial',
     minShort: 'Min.',
-    details: 'Details'
+    details: 'Details',
+    fromLabel: 'From',
+    toLabel: 'To',
+    customAddress: 'Custom Address',
+    covenantProtected: 'Covenant Protected',
+    covenantSub: 'Routed via CashScript P2SH32',
+    estimatedTime: 'Estimated time',
+    networkFeeLabel: 'Protocol fee',
+    bestRoute: 'Direct non-custodial route · ~3s'
   }
 };
 
@@ -307,24 +331,31 @@ function TokenPillChip({ token, meta, onClick }: TokenPillChipProps) {
     <button
       type="button"
       onClick={onClick}
-      className="flex items-center gap-2 pl-2 pr-2.5 py-1.5 rounded-full bg-surface-2 hover:bg-surface-3 border border-line hover:border-line-strong shrink-0 transition-colors cursor-pointer"
+      className="flex items-center gap-2.5 pl-2 pr-1 py-1 rounded-2xl hover:bg-surface-2/70 transition-colors shrink-0 cursor-pointer group"
     >
+      <div className="text-right">
+        <div className="flex items-center justify-end gap-1">
+          <ChevronDown className="w-3.5 h-3.5 text-ink-3 group-hover:text-ink transition-colors shrink-0" />
+          <span className="font-semibold text-[16px] leading-tight text-ink">{token.symbol}</span>
+        </div>
+        <div className="text-[11px] leading-tight text-ink-3 mt-0.5 truncate max-w-[96px]">
+          {meta.badge}
+        </div>
+      </div>
       <div className="relative shrink-0">
         <img
           src={token.icon}
           alt={token.symbol}
-          className="w-6 h-6 rounded-full object-contain"
+          className="w-10 h-10 rounded-full object-contain"
         />
         {showChainBadge && (
           <img
             src={meta.chainIcon}
             alt={meta.badge}
-            className="w-3.5 h-3.5 rounded-full object-contain bg-surface-2 ring-2 ring-surface-2 absolute -bottom-0.5 -right-0.5"
+            className="w-4 h-4 rounded-full object-contain bg-surface ring-2 ring-surface absolute -bottom-0.5 -right-0.5"
           />
         )}
       </div>
-      <span className="font-semibold text-sm text-ink">{token.symbol}</span>
-      <ChevronDown className="w-3.5 h-3.5 text-ink-3" />
     </button>
   );
 }
@@ -351,6 +382,7 @@ function resolveTokenFromQuery(paramKey: 'from' | 'to', fallback: TokenInfo): To
 }
 
 export default function BridgeSwap({
+  userContext,
   userAddress,
   bchAddress = '',
   bchQueryAddress = '',
@@ -378,7 +410,7 @@ export default function BridgeSwap({
   const activeBchWalletLabel =
     bchWalletName && !bchWalletName.toLowerCase().includes('manual')
       ? bchWalletName
-      : 'Cashonize / Paytaca';
+      : 'BinaryLiquid / WizardConnect';
 
   // Core Mode & Token Pair (Default: PUSD -> Polygon USDT)
   const [activeTab, setActiveTab] = useState<'swap' | 'limit'>('swap');
@@ -407,6 +439,7 @@ export default function BridgeSwap({
   const [quoteCountdown, setQuoteCountdown] = useState<number>(12);
   const quoteAbortRef = useRef<AbortController | null>(null);
   const [detailsOpen, setDetailsOpen] = useState<boolean>(false);
+  const [customAddressOpen, setCustomAddressOpen] = useState<boolean>(false);
   const [settingsOpen, setSettingsOpen] = useState<boolean>(false);
   const [slippage, setSlippage] = useState<number>(0.5);
   const [customSlippage, setCustomSlippage] = useState<string>('');
@@ -464,9 +497,12 @@ export default function BridgeSwap({
   }, [bchAddress, userAddress, isTestnet]);
 
   const connectedEvm = useMemo(() => {
-    const raw = evmAddress || (userAddress && userAddress.startsWith('0x') ? userAddress : '');
+    const raw =
+      evmAddress ||
+      (userContext?.evmAddress && userContext.evmAddress.startsWith('0x') ? userContext.evmAddress : '') ||
+      (userAddress && userAddress.startsWith('0x') ? userAddress : '');
     return raw ? raw.trim() : '';
-  }, [evmAddress, userAddress]);
+  }, [evmAddress, userContext?.evmAddress, userAddress]);
 
   // Wallet that PAYS (`sellToken`)
   const payingWalletAddress = sellToken.isBch
@@ -536,7 +572,7 @@ export default function BridgeSwap({
     return typeof walletBalances[sym] === 'number' ? (walletBalances[sym] as number) : 0;
   }, [isReceivingWalletConnected, walletBalances, buyToken.symbol, buyToken.isSolana, buyToken.isLtc, buyToken.chain]);
 
-  // Auto-fill recipient ONLY when receiving wallet connects/changes, without overwriting user edits/clears
+  // Auto-fill recipient whenever receiving wallet connects/changes or customAddressOpen is off
   useEffect(() => {
     if (!optionalReceiveWallet) {
       const previousAutoFill = autoFilledTargetRef.current;
@@ -547,16 +583,15 @@ export default function BridgeSwap({
       return;
     }
     if (autoFilledTargetRef.current !== optionalReceiveWallet) {
-      const previousAutoFill = autoFilledTargetRef.current;
-      setRecipientAddress(prev => {
-        if (!prev || prev === previousAutoFill) {
-          return optionalReceiveWallet;
-        }
-        return prev;
-      });
       autoFilledTargetRef.current = optionalReceiveWallet;
+      setRecipientAddress(optionalReceiveWallet);
+      setCustomAddressOpen(false);
+      return;
     }
-  }, [optionalReceiveWallet]);
+    if (!customAddressOpen && recipientAddress !== optionalReceiveWallet) {
+      setRecipientAddress(optionalReceiveWallet);
+    }
+  }, [optionalReceiveWallet, customAddressOpen, recipientAddress]);
 
   // Sync default faucet input with connected BCH wallet if empty
   useEffect(() => {
@@ -590,9 +625,13 @@ export default function BridgeSwap({
     return allowed.includes(a) && allowed.includes(b);
   }, [isTestnet, sellToken, buyToken]);
 
-  // Validate manually entered destination address (`Recibir en`)
+  // Validate destination address (`Recibir en`), auto-falling back to connected receiving wallet when customAddressOpen is off
   const normalizedRecipient = useMemo(() => {
-    const raw = recipientAddress.trim();
+    const raw = (
+      customAddressOpen
+        ? recipientAddress.trim()
+        : recipientAddress.trim() || optionalReceiveWallet || ''
+    ).trim();
     if (!raw) return '';
     if (buyToken.isBch) {
       if (/^0x/i.test(raw)) return '';
@@ -634,7 +673,7 @@ export default function BridgeSwap({
       return '';
     }
     return /^0x[a-fA-F0-9]{40}$/.test(raw) ? raw : '';
-  }, [recipientAddress, buyToken.isBch, buyToken.isSolana, buyToken.isLtc, buyToken.chain, buyToken.symbol, isTestnet]);
+  }, [recipientAddress, customAddressOpen, optionalReceiveWallet, buyToken.isBch, buyToken.isSolana, buyToken.isLtc, buyToken.chain, buyToken.symbol, isTestnet]);
 
   const isRecipientValid = Boolean(normalizedRecipient);
 
@@ -751,14 +790,28 @@ export default function BridgeSwap({
   // ==========================================================================
   // ACTIONS
   // ==========================================================================
+  const getConnectedWalletForToken = useCallback(
+    (tk: TokenInfo): string => {
+      if (tk.isBch) return connectedBch;
+      if (tk.isSolana) return connectedSolana;
+      if (tk.isLtc || tk.symbol.toUpperCase() === 'LTC') return ltcAddress || '';
+      if (tk.chain === 'ton' || tk.symbol.toUpperCase() === 'TON') return tonAddress || '';
+      return connectedEvm;
+    },
+    [connectedBch, connectedSolana, ltcAddress, tonAddress, connectedEvm]
+  );
+
   const handleFlipTokens = () => {
     const prevSell = sellToken;
     const prevBuy = buyToken;
+    const nextReceive = getConnectedWalletForToken(prevSell);
     setSellToken(prevBuy);
     setBuyToken(prevSell);
     setQuote(null);
     setSwapError(null);
-    setRecipientAddress('');
+    setCustomAddressOpen(false);
+    setRecipientAddress(nextReceive || '');
+    autoFilledTargetRef.current = nextReceive || '';
   };
 
   const handleSelectToken = (token: TokenInfo) => {
@@ -781,15 +834,25 @@ export default function BridgeSwap({
       if (isSameTokenAndChain) {
         handleFlipTokens();
       } else {
+        const nextReceive = getConnectedWalletForToken(token);
         setBuyToken(token);
-        const raw = recipientAddress.trim();
-        if (raw) {
-          const isEvm = raw.startsWith('0x');
-          const isBch = raw.startsWith('bchtest:') || raw.startsWith('bitcoincash:');
-          const isSol = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(raw) && !isEvm;
-          if (incomingChain === 'bch' && !isBch) setRecipientAddress('');
-          else if (incomingChain === 'solana' && !isSol) setRecipientAddress('');
-          else if (!['bch', 'solana', 'litecoin', 'ton'].includes(incomingChain) && !isEvm) setRecipientAddress('');
+        if (!customAddressOpen && nextReceive) {
+          setRecipientAddress(nextReceive);
+          autoFilledTargetRef.current = nextReceive;
+        } else {
+          const raw = recipientAddress.trim();
+          if (raw) {
+            const isEvm = raw.startsWith('0x');
+            const isBch = raw.startsWith('bchtest:') || raw.startsWith('bitcoincash:');
+            const isSol = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(raw) && !isEvm;
+            if (incomingChain === 'bch' && !isBch) setRecipientAddress(nextReceive || '');
+            else if (incomingChain === 'solana' && !isSol) setRecipientAddress(nextReceive || '');
+            else if (!['bch', 'solana', 'litecoin', 'ton'].includes(incomingChain) && !isEvm)
+              setRecipientAddress(nextReceive || '');
+          } else if (nextReceive) {
+            setRecipientAddress(nextReceive);
+            autoFilledTargetRef.current = nextReceive;
+          }
         }
       }
     }
@@ -1161,6 +1224,47 @@ export default function BridgeSwap({
         return;
       }
 
+      // 2B-TON. Paying from TON (Native TON or TON Jetton via TON Connect UI 2.0)
+      if (sellToken.isTon || sellToken.chain === 'ton' || sellToken.symbol.toUpperCase() === 'TON') {
+        if (!hasActiveTonConnectSession()) {
+          setCardState('form');
+          setExecuting(false);
+          setSigningStep('');
+          showToast(
+            lang === 'es'
+              ? 'Conecta tu billetera TON con TON Connect para firmar el depósito en 1-Click'
+              : 'Connect your TON wallet via TON Connect for 1-Click signing',
+            'error'
+          );
+          await openTonConnectModal();
+          return;
+        }
+
+        setSigningStep(
+          lang === 'es'
+            ? 'Esperando firma en tu billetera TON (TON Connect)...'
+            : 'Waiting for TON wallet signature (TON Connect)...'
+        );
+        const { boc } = await sendTonConnectDeposit({
+          depositAddress: createdSwap.depositAddress,
+          amountTon: Number(createdSwap.fromAmount)
+        });
+
+        setProcessingStage('settling');
+        setSigningStep(t.settling);
+        const verifyData = await verifySwapWithRetry(createdSwap.id, boc, 4);
+        if (!verifyData?.success) {
+          throw new Error(verifyData?.error || 'Error liquidando swap desde TON');
+        }
+
+        setActiveSwap(verifyData.swap);
+        setCardState('success');
+        setAmount('');
+        onRefreshBalances?.();
+        showToast(t.completed, 'success');
+        return;
+      }
+
       // 2B. Paying EVM Token (`USDT` on Polygon): Direct 1-Click MetaMask / WC2 Deposit + Instant Settlement
       if (!sellToken.isBch) {
         const tokenAddress =
@@ -1200,8 +1304,8 @@ export default function BridgeSwap({
         setSigningStep('');
         showToast(
           lang === 'es'
-            ? 'Sesión de firma expirada: vuelve a conectar Paytaca o Cashonize para firmar en 1-Click'
-            : 'Signing session expired: please reconnect Paytaca or Cashonize for 1-Click signing',
+            ? 'Sesión de firma expirada: vuelve a conectar BinaryLiquid o WizardConnect para firmar en 1-Click'
+            : 'Signing session expired: please reconnect BinaryLiquid or WizardConnect for 1-Click signing',
           'error'
         );
         onConnectWallet();
@@ -1309,8 +1413,8 @@ export default function BridgeSwap({
     if (sellToken.isBch && !hasActiveBchSigningCapability(wizardConnectManager, bchWalletSource)) {
       showToast(
         lang === 'es'
-          ? 'Las órdenes límite BCH requieren una billetera con firma activa (Paytaca, WizardConnect o Cashonize).'
-          : 'BCH limit orders require an active signing wallet (Paytaca, WizardConnect, or Cashonize).',
+          ? 'Las órdenes límite BCH requieren una billetera con firma activa (BinaryLiquid Wallet o WizardConnect).'
+          : 'BCH limit orders require an active signing wallet (BinaryLiquid Wallet or WizardConnect).',
         'error'
       );
       return;
@@ -1556,7 +1660,7 @@ export default function BridgeSwap({
         variant: 'muted' as const
       };
     }
-    if (!recipientAddress.trim()) {
+    if (!normalizedRecipient && !recipientAddress.trim()) {
       return { label: t.enterDestination, disabled: true, variant: 'muted' as const };
     }
     if (!isRecipientValid) {
@@ -1613,217 +1717,222 @@ export default function BridgeSwap({
         </div>
       )}
 
-      {/* MAIN LINE-FREE UNIFIED SWAP CARD */}
-      <div className={`bg-surface rounded-card overflow-hidden transition-all duration-300 ${
-        cardState === 'success'
-          ? 'border border-line-strong shadow-soft'
-          : 'border border-line shadow-soft'
-      }`}>
-        {/* CARD TOP BAR */}
-        {cardState === 'form' && (
-          <div className="flex items-center justify-between px-4 sm:px-5 pt-4 pb-2">
-            {/* Swap | Limit Segmented Control */}
-            <div className="ui-segment">
+      {/* ================================================================ */}
+      {/* VIEW 1: SWISS STUDIO BORDERLESS STACKED SWAP / LIMIT FORM        */}
+      {/* ================================================================ */}
+      {cardState === 'form' && (
+        <div>
+          {/* TOP SUB-BAR: MINIMAL SWAP / LIMIT SEGMENT */}
+          <div className="flex items-center justify-between px-1 pb-3">
+            <div className="inline-flex items-center gap-1">
               <button
                 type="button"
                 onClick={() => setActiveTab('swap')}
-                className={`ui-segment-item ${activeTab === 'swap' ? 'ui-segment-item-active' : ''}`}
+                className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+                  activeTab === 'swap'
+                    ? 'bg-surface text-ink shadow-[0_1px_6px_rgba(0,0,0,0.06)]'
+                    : 'text-ink-3 hover:text-ink'
+                }`}
               >
                 {t.swap}
               </button>
               <button
                 type="button"
                 onClick={() => setActiveTab('limit')}
-                className={`ui-segment-item ${activeTab === 'limit' ? 'ui-segment-item-active' : ''}`}
+                className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+                  activeTab === 'limit'
+                    ? 'bg-surface text-ink shadow-[0_1px_6px_rgba(0,0,0,0.06)]'
+                    : 'text-ink-3 hover:text-ink'
+                }`}
               >
                 {t.limit}
               </button>
             </div>
 
-            {/* Subtle Utility Actions (Faucet + Slippage %) */}
-            <div className="flex items-center gap-1.5">
-              {isTestnet && (
+            <span className="text-[11px] text-ink-3 font-medium">
+              {sellMeta.badge} → {buyMeta.badge}
+            </span>
+          </div>
+
+          {/* COMPACT FAUCET POPOVER */}
+          {faucetOpen && isTestnet && (
+            <div className="mb-2.5 p-4 rounded-[22px] bg-surface shadow-[0_2px_14px_rgba(0,0,0,0.03)] space-y-2.5">
+              <div className="flex items-center justify-between text-[11px] text-ink-2">
+                <span className="font-semibold text-ink flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-500" /> PUSD Chipnet Faucet
+                </span>
                 <button
                   type="button"
-                  onClick={() => {
-                    setFaucetOpen(!faucetOpen);
-                    setSettingsOpen(false);
-                  }}
-                  className={`h-8 px-2.5 rounded-control text-[11px] font-semibold flex items-center gap-1 transition-colors cursor-pointer ${
-                    faucetOpen
-                      ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
-                      : 'bg-surface-2 text-ink-2 hover:text-ink'
-                  }`}
-                  title="Testnet PUSD Faucet"
+                  onClick={() => setFaucetOpen(false)}
+                  className="text-ink-3 hover:text-ink cursor-pointer"
                 >
-                  <Droplets className="w-3.5 h-3.5 text-emerald-500" />
-                  <span>{t.faucet}</span>
+                  <X className="w-3.5 h-3.5" />
                 </button>
-              )}
-
-              <button
-                type="button"
-                onClick={() => {
-                  setSettingsOpen(!settingsOpen);
-                  setFaucetOpen(false);
-                }}
-                className={`h-8 px-2.5 rounded-control flex items-center gap-1 text-[11px] font-medium tabular-nums transition-colors cursor-pointer ${
-                  settingsOpen
-                    ? 'bg-surface-3 text-ink border border-line-strong'
-                    : 'bg-surface-2 text-ink-2 hover:text-ink'
-                }`}
-                title={t.slippage}
-              >
-                <span>{slippage}%</span>
-                <Settings className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* COMPACT FAUCET POPOVER */}
-        {cardState === 'form' && faucetOpen && isTestnet && (
-          <div className="mx-4 sm:mx-5 mt-1 mb-2 p-3 rounded-panel bg-surface-2 space-y-2">
-            <div className="flex items-center justify-between text-[11px] text-ink-2">
-              <span className="font-semibold text-ink flex items-center gap-1">
-                <Sparkles className="w-3 h-3 text-emerald-500" /> PUSD Chipnet Faucet
-              </span>
-              <button
-                type="button"
-                onClick={() => setFaucetOpen(false)}
-                className="text-ink-3 hover:text-ink cursor-pointer"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                value={faucetAddress}
-                onChange={e => setFaucetAddress(e.target.value)}
-                placeholder={t.faucetPlaceholder}
-                className="flex-1 min-w-0 bg-surface border border-line rounded-control px-2.5 py-1.5 text-xs font-mono text-ink outline-none focus:border-emerald-500"
-              />
-              <button
-                type="button"
-                disabled={claimingFaucet}
-                onClick={handleClaimFaucet}
-                className="px-3 py-1.5 rounded-control bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white text-xs font-semibold shrink-0 transition cursor-pointer"
-              >
-                {claimingFaucet ? '...' : t.faucetClaim}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* COMPACT SLIPPAGE POPOVER */}
-        {cardState === 'form' && settingsOpen && (
-          <div className="mx-4 sm:mx-5 mt-1 mb-2 p-3 rounded-panel bg-surface-2 flex items-center justify-between gap-2">
-            <span className="text-xs font-medium text-ink-2">{t.slippage}</span>
-            <div className="flex items-center gap-1">
-              {[0.1, 0.5, 1.0].map(val => (
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={faucetAddress}
+                  onChange={e => setFaucetAddress(e.target.value)}
+                  placeholder={t.faucetPlaceholder}
+                  className="flex-1 min-w-0 bg-canvas rounded-xl px-3 py-2 text-xs font-mono text-ink outline-none"
+                />
                 <button
-                  key={val}
                   type="button"
-                  onClick={() => {
-                    setSlippage(val);
-                    setCustomSlippage('');
-                  }}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
-                    slippage === val && !customSlippage
-                      ? 'bg-ink text-canvas'
-                      : 'bg-surface text-ink-2 border border-line'
-                  }`}
+                  disabled={claimingFaucet}
+                  onClick={handleClaimFaucet}
+                  className="px-3.5 py-2 rounded-full bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white text-xs font-semibold shrink-0 transition cursor-pointer"
                 >
-                  {val}%
+                  {claimingFaucet ? '...' : t.faucetClaim}
                 </button>
-              ))}
-              <input
-                type="number"
-                step="0.1"
-                min="0.05"
-                max="20"
-                placeholder="Custom"
-                value={customSlippage}
-                onChange={e => {
-                  setCustomSlippage(e.target.value);
-                  const n = parseFloat(e.target.value);
-                  if (!isNaN(n) && n > 0 && n <= 20) setSlippage(n);
-                }}
-                className="w-16 px-2 py-1 rounded-lg text-xs text-right bg-surface border border-line text-ink outline-none"
-              />
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* ================================================================ */}
-        {/* VIEW 1: LINE-FREE UNIFIED SWAP / LIMIT FORM                      */}
-        {/* ================================================================ */}
-        {cardState === 'form' && (
-          <div>
-            {/* PAY SECTION (`sellToken`) */}
-            <div className="px-4 sm:px-5 pt-2.5 pb-3">
-              <div className="flex items-center justify-between text-xs text-ink-2 mb-2">
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <span className="font-medium text-ink">{t.pay}</span>
-                  <span className="text-[11px] text-ink-3 truncate">· {sellMeta.networkLabel}</span>
-                </div>
+          {/* COMPACT SLIPPAGE POPOVER */}
+          {settingsOpen && (
+            <div className="mb-2.5 p-4 rounded-[22px] bg-surface shadow-[0_2px_14px_rgba(0,0,0,0.03)] flex items-center justify-between gap-2">
+              <span className="text-xs font-medium text-ink-2">{t.slippage}</span>
+              <div className="flex items-center gap-1">
+                {[0.1, 0.5, 1.0].map(val => (
+                  <button
+                    key={val}
+                    type="button"
+                    onClick={() => {
+                      setSlippage(val);
+                      setCustomSlippage('');
+                    }}
+                    className={`px-2.5 py-1 rounded-full text-xs font-semibold transition cursor-pointer ${
+                      slippage === val && !customSlippage
+                        ? 'bg-ink text-canvas'
+                        : 'bg-canvas text-ink-2 hover:text-ink'
+                    }`}
+                  >
+                    {val}%
+                  </button>
+                ))}
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0.05"
+                  max="20"
+                  placeholder="Custom"
+                  value={customSlippage}
+                  onChange={e => {
+                    setCustomSlippage(e.target.value);
+                    const n = parseFloat(e.target.value);
+                    if (!isNaN(n) && n > 0 && n <= 20) setSlippage(n);
+                  }}
+                  className="w-16 px-2.5 py-1 rounded-full text-xs text-right bg-canvas text-ink outline-none"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* CARD 1: FROM (`sellToken`) — BORDERLESS WHITE PANEL */}
+          <div className="bg-surface rounded-[24px] p-5 shadow-[0_2px_14px_rgba(0,0,0,0.03)]">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <img
+                  src={sellMeta.chainIcon}
+                  alt={sellMeta.badge}
+                  className="w-4 h-4 rounded-full object-contain shrink-0"
+                />
                 {isPayingWalletConnected ? (
-                  <span className="text-[11px] text-ink-2 shrink-0">
-                    {t.balance}:{' '}
-                    <strong className="text-ink font-semibold tabular-nums">
-                      {sellBalance !== null
-                        ? formatCryptoBalance(sellBalance, sellToken.isBch && sellToken.symbol === 'BCH')
-                        : '0.00'}
-                    </strong>
+                  <span className="font-mono text-xs font-medium text-ink truncate" title={payingWalletAddress}>
+                    {formatAddress(payingWalletAddress)}
                   </span>
                 ) : (
                   <button
                     type="button"
                     onClick={onConnectWallet}
-                    className="px-2 py-0.5 rounded-full bg-surface-2 border border-line hover:border-line-strong text-[11px] font-medium text-ink transition-colors cursor-pointer shrink-0"
+                    className="text-xs font-medium text-ink-2 hover:text-ink transition-colors cursor-pointer truncate"
                   >
-                    + {sellToken.isBch ? 'Wallet BCH' : sellToken.isSolana ? 'Wallet Solana' : sellToken.isLtc ? 'Wallet LTC' : sellToken.isTon || sellToken.chain === 'ton' ? 'Wallet TON' : 'Wallet EVM'}
+                    {sellToken.isBch ? 'Connect BCH' : sellToken.isSolana ? 'Connect Solana' : sellToken.isLtc ? 'Connect LTC' : sellToken.isTon || sellToken.chain === 'ton' ? 'Connect TON' : 'Connect EVM'}
                   </button>
                 )}
               </div>
 
-              <div className="flex items-center justify-between gap-3">
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  min="0"
-                  step="any"
-                  value={amount}
-                  onChange={e => setAmount(e.target.value)}
-                  placeholder="0"
-                  className="w-full min-w-0 bg-transparent text-3xl font-semibold tracking-tight text-ink placeholder:text-ink-3/60 outline-none tabular-nums"
-                />
-
-                <TokenPillChip
-                  token={sellToken}
-                  meta={sellMeta}
-                  onClick={() => setTokenModalTarget('sell')}
-                />
+              {/* Minimal Naked Utility Icons (exact Relay/Uniswap style) */}
+              <div className="flex items-center gap-2.5 text-ink-3 shrink-0">
+                {isTestnet && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFaucetOpen(!faucetOpen);
+                      setSettingsOpen(false);
+                    }}
+                    title="Testnet PUSD Faucet"
+                    aria-label="Faucet"
+                    className={`transition-colors cursor-pointer ${
+                      faucetOpen ? 'text-emerald-500' : 'hover:text-ink'
+                    }`}
+                  >
+                    <Droplets className="w-4 h-4" />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => fetchQuote()}
+                  aria-label={lang === 'es' ? 'Actualizar cotización' : 'Refresh quote'}
+                  title={lang === 'es' ? 'Actualizar cotización' : 'Refresh quote'}
+                  className="hover:text-ink transition-colors cursor-pointer"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${loadingQuote ? 'animate-spin text-ink' : ''}`} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSettingsOpen(!settingsOpen);
+                    setFaucetOpen(false);
+                  }}
+                  aria-label={t.slippage}
+                  title={`${t.slippage} (${slippage}%)`}
+                  className={`transition-colors cursor-pointer ${
+                    settingsOpen ? 'text-ink' : 'hover:text-ink'
+                  }`}
+                >
+                  <Settings className="w-4 h-4" />
+                </button>
               </div>
+            </div>
 
-              <div className="flex flex-wrap items-center justify-between gap-2 mt-2.5">
-                <span className="text-[11px] text-ink-3 tabular-nums">
+            <div className="text-[13px] font-medium text-ink-3 mt-3.5">{t.fromLabel}</div>
+
+            <div className="flex items-center justify-between gap-3 mt-1">
+              <input
+                type="number"
+                inputMode="decimal"
+                min="0"
+                step="any"
+                value={amount}
+                onChange={e => setAmount(e.target.value)}
+                placeholder="0"
+                className="w-full min-w-0 bg-transparent text-[34px] leading-none font-medium tracking-tight text-ink placeholder:text-ink-3/50 outline-none tabular-nums"
+              />
+
+              <TokenPillChip
+                token={sellToken}
+                meta={sellMeta}
+                onClick={() => setTokenModalTarget('sell')}
+              />
+            </div>
+
+            <div className="flex items-center justify-between gap-2 mt-3 text-xs text-ink-3">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="tabular-nums">
                   {amount && parseFloat(amount) > 0
                     ? `~$${(parseFloat(amount) * (quote?.priceFromUsd || 1)).toFixed(2)}`
                     : '$0.00'}
                 </span>
-
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1.5 text-[11px]">
                   {quickAmountOptions.map(preset => (
                     <button
                       key={preset.label}
                       type="button"
                       onClick={() => setAmount(preset.value)}
-                      className={`px-2 py-0.5 rounded-full border text-[11px] font-medium transition-colors cursor-pointer tabular-nums ${
-                        amount === preset.value
-                          ? 'bg-surface-3 border-line-strong text-ink'
-                          : 'bg-surface-2 border-line text-ink-2 hover:text-ink hover:border-line-strong'
+                      className={`transition-colors cursor-pointer tabular-nums ${
+                        amount === preset.value ? 'text-ink font-semibold' : 'text-ink-3 hover:text-ink'
                       }`}
                     >
                       {preset.label}
@@ -1831,302 +1940,340 @@ export default function BridgeSwap({
                   ))}
                 </div>
               </div>
-            </div>
-
-            {/* LINE-FREE ROUTE & FLIP CONNECTOR */}
-            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-4 sm:px-5 py-2 text-[11px]">
-              <div className="flex items-center gap-1.5 min-w-0 text-ink-2 font-medium">
-                <img
-                  src={sellMeta.chainIcon}
-                  alt={sellMeta.badge}
-                  className="w-3.5 h-3.5 rounded-full object-contain shrink-0"
-                />
-                <span className="truncate">{sellMeta.badge}</span>
-                <ArrowRight
-                  className={`w-3 h-3 shrink-0 transition-colors ${
-                    loadingQuote ? 'text-primary animate-pulse' : 'text-ink-3'
-                  }`}
-                />
-                <img
-                  src={buyMeta.chainIcon}
-                  alt={buyMeta.badge}
-                  className="w-3.5 h-3.5 rounded-full object-contain shrink-0"
-                />
-                <span className="truncate">{buyMeta.badge}</span>
-              </div>
 
               <button
                 type="button"
-                onClick={handleFlipTokens}
-                aria-label={t.flipPair}
-                className="w-8 h-8 rounded-full bg-surface-2 hover:bg-surface-3 border border-line hover:border-line-strong flex items-center justify-center text-ink-2 hover:text-ink hover:rotate-180 transition-all duration-200 cursor-pointer shrink-0"
+                onClick={() => {
+                  if (isPayingWalletConnected && sellBalance !== null) {
+                    setAmount(String(sellBalance));
+                  } else if (!isPayingWalletConnected) {
+                    onConnectWallet();
+                  }
+                }}
+                className="inline-flex items-center gap-1 text-ink-3 hover:text-ink transition-colors cursor-pointer shrink-0 tabular-nums"
+                title={t.max}
               >
-                <ArrowDownUp className="w-3.5 h-3.5" />
-              </button>
-
-              <div className="flex items-center justify-end gap-1 min-w-0 text-ink-3 tabular-nums">
-                {loadingQuote ? (
-                  <span className="flex items-center gap-1 text-ink-2 font-medium truncate">
-                    <Loader2 className="w-3 h-3 animate-spin shrink-0" />
-                    <span className="truncate">{t.quoting}</span>
-                  </span>
-                ) : !isPairLiquid ? (
-                  <span className="text-rose-500 font-medium truncate">{t.noLiquidity}</span>
-                ) : activeTab === 'limit' ? (
-                  <span className="truncate">{t.limitRouteHint}</span>
-                ) : quote && parseFloat(amount) > 0 ? (
-                  <button
-                    type="button"
-                    onClick={() => fetchQuote()}
-                    title={lang === 'es' ? 'Actualizar cotización del oráculo' : 'Refresh oracle quote'}
-                    className="text-ink-2 hover:text-ink font-medium truncate inline-flex items-center gap-1 cursor-pointer"
-                  >
-                    <span className="truncate">
-                      1 {sellToken.symbol} = {quote.rate} {buyToken.symbol}
-                    </span>
-                    <span className="text-ink-3 text-[10px] shrink-0">· {quoteCountdown}s</span>
-                  </button>
-                ) : (
-                  <span className="truncate">~3s · 0.3%</span>
-                )}
-              </div>
-            </div>
-
-            {/* RECEIVE SECTION (`buyToken`) */}
-            <div className="px-4 sm:px-5 pt-2.5 pb-3">
-              <div className="flex items-center justify-between text-xs text-ink-2 mb-2">
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <span className="font-medium text-ink">{t.receive}</span>
-                  <span className="text-[11px] text-ink-3 truncate">· {buyMeta.networkLabel}</span>
-                </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  {!isPairLiquid ? (
-                    <span className="ui-badge-danger">
-                      {t.noLiquidity}
-                    </span>
-                  ) : isReceivingWalletConnected && buyBalance !== null ? (
-                    <span className="text-[11px] text-ink-2">
-                      {t.balance}:{' '}
-                      <strong className="text-ink font-semibold tabular-nums">
-                        {formatCryptoBalance(buyBalance, (buyToken.isBch && buyToken.symbol === 'BCH') || (buyToken.isSolana && buyToken.symbol === 'SOL'))}
-                      </strong>
-                    </span>
-                  ) : null}
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between gap-3">
-                <div className="w-full min-w-0 text-3xl font-semibold tracking-tight tabular-nums truncate">
-                  {loadingQuote && !receiveDisplay ? (
-                    <span className="inline-block w-24 h-8 rounded-lg bg-surface-2 animate-pulse align-middle" />
-                  ) : receiveDisplay ? (
-                    <span className="text-ink">{receiveDisplay}</span>
-                  ) : (
-                    <span className="text-ink-3/60">0</span>
-                  )}
-                </div>
-
-                <TokenPillChip
-                  token={buyToken}
-                  meta={buyMeta}
-                  onClick={() => setTokenModalTarget('buy')}
-                />
-              </div>
-
-              <div className="flex items-center justify-between mt-2.5 text-[11px] text-ink-3 gap-2">
-                <span className="tabular-nums">
-                  {effectiveQuoteMetrics.netPayoutUsd > 0
-                    ? `~$${effectiveQuoteMetrics.netPayoutUsd.toFixed(2)}`
-                    : receiveDisplay
-                    ? `~$${receiveDisplay}`
+                <Wallet className="w-3.5 h-3.5" />
+                <span>
+                  {isPayingWalletConnected && sellBalance !== null
+                    ? formatCryptoBalance(sellBalance, sellToken.isBch && sellToken.symbol === 'BCH')
                     : '$0.00'}
                 </span>
-                <span className="truncate">
-                  {t.nonCustodialShort}
-                </span>
-              </div>
-            </div>
-
-            {/* TARGET PRICE SECTION (Only in Limit Tab) */}
-            {activeTab === 'limit' && (
-              <div className="px-4 sm:px-5 py-2.5 flex items-center justify-between gap-3">
-                <div className="text-xs text-ink-2">
-                  <div className="font-medium">{t.targetPrice}</div>
-                  <button
-                    type="button"
-                    onClick={() => setTargetRate('1.00')}
-                    className="text-[10px] text-primary font-semibold hover:underline cursor-pointer"
-                  >
-                    {t.market}: 1.00
-                  </button>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <input
-                    type="number"
-                    step="0.001"
-                    min="0.0001"
-                    value={targetRate}
-                    onChange={e => setTargetRate(e.target.value)}
-                    className="w-24 bg-surface-2 border border-line rounded-control px-2.5 py-1.5 text-right text-sm font-semibold text-ink outline-none tabular-nums"
-                  />
-                  <span className="text-xs font-semibold text-ink-3">{buyToken.symbol}</span>
-                </div>
-              </div>
-            )}
-
-            {/* DESTINATION ADDRESS SECTION (`Recibir en`) */}
-            <div className="px-4 sm:px-5 py-3">
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="text-xs font-medium text-ink-2 flex items-center gap-1.5">
-                  <span>
-                    {t.receiveAt} ({buyToken.symbol})
-                  </span>
-                  {recipientAddress.trim() && isRecipientValid && (
-                    <Check className="w-3.5 h-3.5 text-emerald-500" />
-                  )}
-                </label>
-
-                <div className="flex items-center gap-1.5">
-                  {optionalReceiveWallet &&
-                    recipientAddress.trim().toLowerCase() !== optionalReceiveWallet.toLowerCase() && (
-                      <button
-                        type="button"
-                        onClick={() => setRecipientAddress(optionalReceiveWallet)}
-                        className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-surface-2 border border-line text-ink-2 hover:text-ink transition cursor-pointer"
-                      >
-                        {t.myWallet}
-                      </button>
-                    )}
-                  <button
-                    type="button"
-                    onClick={handlePasteRecipient}
-                    className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-surface-2 border border-line text-ink-2 hover:text-ink flex items-center gap-1 transition cursor-pointer"
-                  >
-                    <ClipboardPaste className="w-2.5 h-2.5" />
-                    <span>{t.paste}</span>
-                  </button>
-                </div>
-              </div>
-
-              <input
-                type="text"
-                value={recipientAddress}
-                onChange={e => setRecipientAddress(e.target.value)}
-                placeholder={
-                  buyToken.isBch
-                    ? isTestnet
-                      ? 'bchtest:q... / bchtest:z...'
-                      : 'bitcoincash:q... / bitcoincash:z...'
-                    : buyToken.isSolana || buyToken.symbol === 'SOL'
-                    ? 'Dirección Solana Base58 (Phantom / Solflare)'
-                    : '0x...'
-                }
-                spellCheck={false}
-                className="w-full bg-transparent text-xs font-mono text-ink placeholder:text-ink-3 outline-none"
-              />
-            </div>
-
-            {/* 1-LINE COLLAPSIBLE QUOTE SUMMARY */}
-            {quote && isPairLiquid && parseFloat(amount) > 0 && (
-              <div className="px-4 sm:px-5 py-2 text-xs">
-                <button
-                  type="button"
-                  onClick={() => setDetailsOpen(!detailsOpen)}
-                  className="w-full flex items-center justify-between text-ink-2 cursor-pointer"
-                >
-                  <span className="font-medium text-ink-2 tabular-nums">
-                    {t.minShort} {(effectiveQuoteMetrics.netPayout * (1 - slippage / 100)).toFixed(4)} {buyToken.symbol}
-                  </span>
-                  <span className="flex items-center gap-1.5 text-[11px]">
-                    <span>{t.fee} 0.3%</span>
-                    <span>•</span>
-                    <span>{t.details}</span>
-                    <ChevronDown
-                      className={`w-3.5 h-3.5 transition-transform ${detailsOpen ? 'rotate-180' : ''}`}
-                    />
-                  </span>
-                </button>
-
-                {detailsOpen && (
-                  <div className="pt-2.5 space-y-1.5 text-[11px] text-ink-2">
-                    <div className="flex justify-between">
-                      <span>{t.minReceived} ({slippage}%)</span>
-                      <span className="font-medium text-ink tabular-nums">
-                        {(effectiveQuoteMetrics.netPayout * (1 - slippage / 100)).toFixed(4)} {buyToken.symbol}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>{t.fee} (0.20% LP + 0.10% Protocol)</span>
-                      <span className="font-medium text-ink tabular-nums">
-                        {effectiveQuoteMetrics.feeAmount} {buyToken.symbol}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>{t.contract}</span>
-                      <span className="font-mono text-ink-2">
-                        {sellMeta.contractName}
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {swapError && (
-              <div className="mx-4 sm:mx-5 mt-1 mb-2 rounded-xl border border-red-500/30 bg-red-500/10 px-3.5 py-2.5 text-xs text-red-400 space-y-2">
-                <div className="flex items-start justify-between gap-2">
-                  <span className="leading-relaxed break-words">{swapError.message}</span>
-                  <button
-                    type="button"
-                    onClick={() => setSwapError(null)}
-                    aria-label="Cerrar error"
-                    className="p-0.5 rounded hover:bg-red-500/20 text-red-300 shrink-0 cursor-pointer"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-                {swapError.isRpcError && (
-                  <div className="flex flex-wrap items-center gap-2 pt-0.5">
-                    <button
-                      type="button"
-                      disabled={repairingRpc}
-                      onClick={handleRepairEvmRpc}
-                      className="px-2.5 py-1 rounded-lg bg-red-500/20 hover:bg-red-500/30 border border-red-400/30 text-red-200 font-semibold text-[11px] transition cursor-pointer disabled:opacity-50"
-                    >
-                      {repairingRpc
-                        ? (lang === 'es' ? 'Actualizando MetaMask...' : 'Updating MetaMask...')
-                        : (lang === 'es' ? 'Reparar RPC en MetaMask' : 'Repair MetaMask RPC')}
-                    </button>
-                    <span className="text-[11px] font-mono text-red-300/90 select-all">
-                      {isTestnet
-                        ? 'https://polygon-amoy-bor-rpc.publicnode.com'
-                        : 'https://polygon-bor-rpc.publicnode.com'}
-                    </span>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* PRIMARY CTA BUTTON */}
-            <div className="px-4 sm:px-5 pt-2 pb-4 sm:pb-5">
-              <button
-                type="button"
-                disabled={ctaConfig.disabled}
-                onClick={activeTab === 'swap' ? handleSwap : handleCreateLimitOrder}
-                className={`w-full ui-btn-lg ${
-                  ctaConfig.variant === 'primary'
-                    ? 'ui-btn-primary'
-                    : ctaConfig.variant === 'connect'
-                    ? 'ui-btn-inverse'
-                    : 'ui-btn-disabled'
-                }`}
-              >
-                {executing && <Loader2 className="w-4 h-4 animate-spin" />}
-                <span>{ctaConfig.label}</span>
               </button>
             </div>
           </div>
-        )}
+
+          {/* CARVED CANVAS HALO FLIP CIRCLE */}
+          <div className="relative -my-3 flex items-center justify-center z-10">
+            <button
+              type="button"
+              onClick={handleFlipTokens}
+              aria-label={t.flipPair}
+              className="w-10 h-10 rounded-full bg-surface border-[4px] border-canvas shadow-[0_2px_8px_rgba(0,0,0,0.06)] flex items-center justify-center text-ink-2 hover:text-ink hover:rotate-180 transition-all duration-200 cursor-pointer"
+            >
+              <ArrowDownUp className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* CARD 2: TO (`buyToken`) — BORDERLESS WHITE PANEL */}
+          <div className="bg-surface rounded-[24px] p-5 shadow-[0_2px_14px_rgba(0,0,0,0.03)]">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <img
+                  src={buyMeta.chainIcon}
+                  alt={buyMeta.badge}
+                  className="w-4 h-4 rounded-full object-contain shrink-0"
+                />
+                {normalizedRecipient ? (
+                  <button
+                    type="button"
+                    onClick={() => setCustomAddressOpen(prev => !prev)}
+                    className="inline-flex items-center gap-1.5 min-w-0 cursor-pointer group"
+                    title={normalizedRecipient}
+                  >
+                    <span className="text-xs font-medium text-ink-3 truncate hidden sm:inline">
+                      {buyMeta.networkLabel} ·
+                    </span>
+                    <span className="font-mono text-xs font-semibold text-ink group-hover:text-accent transition-colors truncate">
+                      {formatAddress(normalizedRecipient)}
+                    </span>
+                    <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => onConnectWallet()}
+                    className="inline-flex items-center gap-1.5 text-xs font-medium text-ink-3 hover:text-ink transition-colors cursor-pointer truncate"
+                  >
+                    <span>{buyMeta.networkLabel}</span>
+                    <span className="text-[11px] font-semibold text-accent underline underline-offset-2">
+                      {lang === 'es' ? 'Conectar' : 'Connect'}
+                    </span>
+                  </button>
+                )}
+              </div>
+
+              <button
+                type="button"
+                role="switch"
+                aria-checked={customAddressOpen}
+                onClick={() => {
+                  const next = !customAddressOpen;
+                  setCustomAddressOpen(next);
+                  if (!next && optionalReceiveWallet) {
+                    setRecipientAddress(optionalReceiveWallet);
+                  }
+                }}
+                className="flex items-center gap-2 text-xs font-medium text-ink-2 hover:text-ink transition-colors cursor-pointer shrink-0"
+              >
+                <span>{t.customAddress}</span>
+                <span
+                  className={`inline-flex items-center w-9 h-5 p-0.5 rounded-full transition-colors ${
+                    customAddressOpen ? 'bg-ink' : 'bg-[#D6D7D2] dark:bg-surface-3'
+                  }`}
+                >
+                  <span
+                    className={`w-4 h-4 rounded-full bg-surface shadow-xs transition-transform ${
+                      customAddressOpen ? 'translate-x-4' : 'translate-x-0'
+                    }`}
+                  />
+                </span>
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between text-[13px] font-medium text-ink-3 mt-3.5">
+              <span>{t.toLabel}</span>
+              {!isPairLiquid && <span className="ui-badge-danger">{t.noLiquidity}</span>}
+            </div>
+
+            <div className="flex items-center justify-between gap-3 mt-1">
+              <div className="w-full min-w-0 text-[34px] leading-none font-medium tracking-tight tabular-nums truncate">
+                {loadingQuote && !receiveDisplay ? (
+                  <span className="inline-block w-24 h-8 rounded-lg bg-canvas animate-pulse align-middle" />
+                ) : receiveDisplay ? (
+                  <span className="text-ink">{receiveDisplay}</span>
+                ) : (
+                  <span className="text-ink-3/50">0</span>
+                )}
+              </div>
+
+              <TokenPillChip
+                token={buyToken}
+                meta={buyMeta}
+                onClick={() => setTokenModalTarget('buy')}
+              />
+            </div>
+
+            <div className="flex items-center justify-between gap-2 mt-3 text-xs text-ink-3">
+              <span className="tabular-nums">
+                {effectiveQuoteMetrics.netPayoutUsd > 0
+                  ? `~$${effectiveQuoteMetrics.netPayoutUsd.toFixed(2)}`
+                  : receiveDisplay
+                  ? `~$${receiveDisplay}`
+                  : '$0.00'}
+              </span>
+
+              <div className="inline-flex items-center gap-1 tabular-nums">
+                <Wallet className="w-3.5 h-3.5" />
+                <span>
+                  {isReceivingWalletConnected && buyBalance !== null
+                    ? formatCryptoBalance(buyBalance, (buyToken.isBch && buyToken.symbol === 'BCH') || (buyToken.isSolana && buyToken.symbol === 'SOL'))
+                    : '$0.00'}
+                </span>
+              </div>
+            </div>
+
+            {/* Destination input stays cleanly tucked away until toggled OR when user types amount without connected wallet */}
+            {(customAddressOpen || (!isReceivingWalletConnected && (parseFloat(amount) > 0 || Boolean(recipientAddress)))) && (
+              <div className="mt-3.5 flex items-center gap-1.5 bg-canvas/85 rounded-2xl px-3.5 py-2">
+                <input
+                  type="text"
+                  value={recipientAddress}
+                  onChange={e => setRecipientAddress(e.target.value)}
+                  placeholder={
+                    buyToken.isBch
+                      ? isTestnet
+                        ? 'bchtest:q... / bchtest:z...'
+                        : 'bitcoincash:q... / bitcoincash:z...'
+                      : buyToken.isSolana || buyToken.symbol === 'SOL'
+                      ? (lang === 'es' ? 'Dirección Solana Base58...' : 'Solana Base58 address...')
+                      : '0x...'
+                  }
+                  spellCheck={false}
+                  className="flex-1 min-w-0 bg-transparent text-xs font-mono text-ink placeholder:text-ink-3 outline-none"
+                />
+                {optionalReceiveWallet &&
+                  recipientAddress.trim().toLowerCase() !== optionalReceiveWallet.toLowerCase() && (
+                    <button
+                      type="button"
+                      onClick={() => setRecipientAddress(optionalReceiveWallet)}
+                      className="text-[11px] font-medium px-2 py-1 rounded-full bg-surface text-ink-2 hover:text-ink transition cursor-pointer shrink-0"
+                    >
+                      {t.myWallet}
+                    </button>
+                  )}
+                <button
+                  type="button"
+                  onClick={handlePasteRecipient}
+                  className="text-[11px] font-medium px-2.5 py-1 rounded-full bg-surface text-ink-2 hover:text-ink flex items-center gap-1 transition cursor-pointer shrink-0"
+                  title={t.paste}
+                >
+                  <ClipboardPaste className="w-3 h-3" />
+                  <span>{t.paste}</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* TARGET PRICE CARD (Only in Limit Tab) */}
+          {activeTab === 'limit' && (
+            <div className="mt-2.5 bg-surface rounded-[24px] px-5 py-3.5 shadow-[0_2px_14px_rgba(0,0,0,0.03)] flex items-center justify-between gap-3">
+              <div className="text-xs text-ink-2">
+                <div className="font-medium text-ink">{t.targetPrice}</div>
+                <button
+                  type="button"
+                  onClick={() => setTargetRate('1.00')}
+                  className="text-[11px] text-primary font-medium hover:underline cursor-pointer"
+                >
+                  {t.market}: 1.00
+                </button>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="number"
+                  step="0.001"
+                  min="0.0001"
+                  value={targetRate}
+                  onChange={e => setTargetRate(e.target.value)}
+                  className="w-24 bg-canvas rounded-xl px-2.5 py-1.5 text-right text-sm font-semibold text-ink outline-none tabular-nums"
+                />
+                <span className="text-xs font-semibold text-ink-3">{buyToken.symbol}</span>
+              </div>
+            </div>
+          )}
+
+          {/* CARD 3: COVENANT PROTECTION & COLLAPSIBLE QUOTE PANEL */}
+          <div className="mt-2.5 bg-surface rounded-[24px] p-5 shadow-[0_2px_14px_rgba(0,0,0,0.03)] space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-7 h-7 rounded-lg bg-canvas flex items-center justify-center shrink-0">
+                  <ShieldCheck className="w-4 h-4 text-ink" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold text-ink leading-tight">{t.covenantProtected}</div>
+                  <div className="text-[10px] text-ink-3 leading-tight mt-0.5 truncate">{t.covenantSub}</div>
+                </div>
+              </div>
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-ink-2 shrink-0">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                Atomic
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setDetailsOpen(!detailsOpen)}
+              className="w-full pt-3 border-t border-line/60 flex items-center justify-between gap-2 text-xs cursor-pointer"
+            >
+              <span className="font-semibold text-ink tabular-nums truncate">
+                {loadingQuote
+                  ? t.quoting
+                  : quote && parseFloat(amount) > 0
+                  ? `1 ${sellToken.symbol} = ${quote.rate} ${buyToken.symbol}`
+                  : t.bestRoute}
+              </span>
+              <span className="flex items-center gap-1.5 text-[11px] text-ink-3 shrink-0 tabular-nums">
+                {quote && parseFloat(amount) > 0 && <span>{quoteCountdown}s</span>}
+                <span>0.30%</span>
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${detailsOpen ? 'rotate-180' : ''}`} />
+              </span>
+            </button>
+
+            {detailsOpen && (
+              <div className="pt-1 space-y-2 text-xs">
+                <div className="flex items-center justify-between text-ink-3">
+                  <span>{t.estimatedTime}</span>
+                  <span className="font-medium text-ink tabular-nums">~3s</span>
+                </div>
+                <div className="flex items-center justify-between text-ink-3">
+                  <span>{t.networkFeeLabel}</span>
+                  <span className="font-medium text-ink tabular-nums">
+                    {quote && parseFloat(amount) > 0
+                      ? `${effectiveQuoteMetrics.feeAmount} ${buyToken.symbol} (0.30%)`
+                      : '0.30%'}
+                  </span>
+                </div>
+                {quote && parseFloat(amount) > 0 && (
+                  <div className="flex items-center justify-between text-ink-3">
+                    <span>{t.minReceived} ({slippage}%)</span>
+                    <span className="font-medium text-ink tabular-nums">
+                      {(effectiveQuoteMetrics.netPayout * (1 - slippage / 100)).toFixed(4)} {buyToken.symbol}
+                    </span>
+                  </div>
+                )}
+                <div className="flex items-center justify-between text-ink-3">
+                  <span>{t.contract}</span>
+                  <span className="font-mono text-[11px] text-ink-2">{sellMeta.contractName}</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {swapError && (
+            <div className="mt-2.5 rounded-[20px] bg-red-500/10 px-4 py-3 text-xs text-red-500 dark:text-red-400 space-y-2">
+              <div className="flex items-start justify-between gap-2">
+                <span className="leading-relaxed break-words">{swapError.message}</span>
+                <button
+                  type="button"
+                  onClick={() => setSwapError(null)}
+                  aria-label="Cerrar error"
+                  className="p-0.5 rounded hover:bg-red-500/20 shrink-0 cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              {swapError.isRpcError && (
+                <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                  <button
+                    type="button"
+                    disabled={repairingRpc}
+                    onClick={handleRepairEvmRpc}
+                    className="px-2.5 py-1 rounded-full bg-red-500/20 hover:bg-red-500/30 font-semibold text-[11px] transition cursor-pointer disabled:opacity-50"
+                  >
+                    {repairingRpc
+                      ? (lang === 'es' ? 'Actualizando MetaMask...' : 'Updating MetaMask...')
+                      : (lang === 'es' ? 'Reparar RPC en MetaMask' : 'Repair MetaMask RPC')}
+                  </button>
+                  <span className="text-[11px] font-mono select-all">
+                    {isTestnet
+                      ? 'https://polygon-amoy-bor-rpc.publicnode.com'
+                      : 'https://polygon-bor-rpc.publicnode.com'}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* FULL-WIDTH PILL CTA (JET BLACK OBSIDIAN LIKE REFERENCE) */}
+          <button
+            type="button"
+            disabled={ctaConfig.disabled}
+            onClick={activeTab === 'swap' ? handleSwap : handleCreateLimitOrder}
+            className={`mt-3 w-full h-[54px] rounded-full text-[15px] font-semibold inline-flex items-center justify-center gap-2 transition-all cursor-pointer disabled:cursor-not-allowed ${
+              ctaConfig.variant === 'primary' || ctaConfig.variant === 'connect'
+                ? 'bg-ink text-canvas hover:opacity-90 shadow-[0_4px_16px_rgba(0,0,0,0.08)]'
+                : 'bg-surface-3/80 text-ink-3'
+            }`}
+          >
+            {executing && <Loader2 className="w-4 h-4 animate-spin" />}
+            <span>{ctaConfig.label}</span>
+          </button>
+        </div>
+      )}
+
+      {/* VIEW 2 & VIEW 3: PROCESSING & SUCCESS RECEIPT WRAPPED IN UNIFIED CARD */}
+      {cardState !== 'form' && (
+        <div className="bg-surface rounded-card border border-line shadow-soft overflow-hidden transition-all duration-300">
 
         {/* ================================================================ */}
         {/* VIEW 2: FLUID 1-CLICK PROCESSING & SIGNING LIFECYCLE              */}
@@ -2429,7 +2576,8 @@ export default function BridgeSwap({
             </button>
           </div>
         )}
-      </div>
+        </div>
+      )}
 
       {/* COMPACT OPEN LIMIT ORDERS LIST */}
       {activeTab === 'limit' && limitOrders.length > 0 && (

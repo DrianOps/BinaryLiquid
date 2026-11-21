@@ -50,12 +50,13 @@ This directory contains the core smart contracts powering the **100% Non-Custodi
   - **Mutual Deposit Cancellation & Anti-Replay:** Keeps a registry of `executedPayouts[originTxHash]` and `depositSettled[depositId]` so a settled deposit cannot also be refunded.
   - **Autonomous Refund:** If unfulfilled within 24 hours (`REFUND_TIMELOCK`), the user can call `refund(depositId)` to retrieve 100% of their deposited principal unilaterally.
 
-### 2. [`contracts/bch/BinaryLiquidVaultV2.cash`](./bch/BinaryLiquidVaultV2.cash), [`BinaryLiquidEscrowV2.cash`](./bch/BinaryLiquidEscrowV2.cash) & [`BinaryLiquidCollateralVaultV2.cash`](./bch/BinaryLiquidCollateralVaultV2.cash) (CashScript ^0.14.0)
+### 2. [`contracts/bch/BinaryLiquidVaultV2.cash`](./bch/BinaryLiquidVaultV2.cash), [`BinaryLiquidEscrowV2.cash`](./bch/BinaryLiquidEscrowV2.cash), [`BinaryLiquidP2PEscrow.cash`](./bch/BinaryLiquidP2PEscrow.cash) & [`BinaryLiquidCollateralVaultV2.cash`](./bch/BinaryLiquidCollateralVaultV2.cash) (CashScript ^0.14.0)
 - **Deployment Network:** Bitcoin Cash Mainnet & BCH Chipnet (Testnet4).
 - **Core Guarantees:**
-  - **P2SH-32 UTXO Introspection Covenants:** Uses native BCH CashTokens opcodes (`tx.outputs[0].tokenCategory`, `tx.outputs[0].tokenAmount`, `tx.inputs[this.activeInputIndex].lockingBytecode`) and strict output count validation (`tx.outputs.length`).
+  - **P2SH-32 UTXO Introspection Covenants:** Uses native BCH CashTokens opcodes (`tx.outputs[0].tokenCategory`, `tx.outputs[0].tokenAmount`, `tx.inputs[this.activeInputIndex].lockingBytecode`) and strict input/output count validation.
   - **Covenant State Continuation:** Forces 100% of remaining pool liquidity (both satoshis and CashTokens) back into the exact same Covenant bytecode on every partial release.
-  - **Timelock Recovery:** If unspent after the 24-hour `expiryTimestamp` (`86,400` seconds via `require(tx.time >= expiryTimestamp)`), the depositor can reclaim the UTXO directly back to their wallet.
+  - **Destination-Locked P2P Fiat Escrow (`BinaryLiquidP2PEscrow.cash`):** Per-trade isolated P2SH-32 escrow parameterized by `arbiterPk`, `sellerPkh`, `buyerLockingBytecode`, `sellerLockingBytecode`, `expiryTimestamp`, and `tradeSalt`. Enforces VM-level destination locking so neither the Arbiter nor any server compromise can divert funds away from Buyer or Seller, supports trustless `sellerDirectRelease` directly on L1 without the platform, and guarantees permissionless 24-hour `timeoutRefund`.
+  - **Timelock Recovery:** If unspent after the 24-hour `expiryTimestamp` (`86,400` seconds via `require(tx.time >= expiryTimestamp)`), the depositor/seller can reclaim the UTXO directly back to their wallet.
 
 ### 3. [`contracts/solana/programs/binary_liquid_vault/src/lib.rs`](./solana/programs/binary_liquid_vault/src/lib.rs) (Rust / Anchor ^0.30.1)
 - **Deployment Network:** Solana Mainnet-Beta & Solana Devnet (`BLiqVau1tSo1anaCrossChainBridge111111111111`).
@@ -64,6 +65,12 @@ This directory contains the core smart contracts powering the **100% Non-Custodi
   - **Ed25519 Precompile Introspection:** `release` inspects Solana's native `ed25519_program` via `sysvar::instructions` to verify The Watchman Sentinel's 64-byte signature over the canonical payout digest.
   - **Atomic Anti-Replay PDA:** Initializes `ExecutedPayout` PDA (`seeds = [b"payout", origin_tx_hash.as_ref()]`), preventing any BCH or EVM transaction from being settled twice.
   - **Autonomous 24h Timelock Refund:** `refund` returns 100% of deposited SPL Tokens from the Vault PDA back to the depositor after `86,400` seconds if unsettled.
+
+### 4. [`contracts/ton/BinaryLiquidVault.tact`](./ton/BinaryLiquidVault.tact) (Tact ^1.5.0 — TON TVM)
+- **Deployment Network:** TON Mainnet & Testnet.
+- **Core Guarantees:**
+  - Native Ed25519 signature verification (`checkSignature`) for Watchman attestations.
+  - TEP-74 Jetton wallet routing, on-chain circuit breaker caps, and autonomous timelock refunds.
 
 ---
 

@@ -118,7 +118,7 @@ interface PoolsViewProps {
   backendUrl?: string;
   userAddress: string;
   bchAddress?: string;
-  bchWalletSource?: 'wizard' | 'wc2-bch' | 'extension' | 'manual';
+  bchWalletSource?: 'blconnect' | 'wizard' | 'wc2-bch' | 'extension' | 'manual';
   evmAddress?: string;
   walletBalances?: Record<string, number>;
   wizardConnectManager?: any;

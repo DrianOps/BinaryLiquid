@@ -65,7 +65,7 @@ interface IdentityViewProps {
     tokenAddress?: string;
     publicKey?: string;
     provider?: string;
-    source?: 'wizard' | 'wc2-bch' | 'extension' | 'manual';
+    source?: 'blconnect' | 'wizard' | 'wc2-bch' | 'extension' | 'manual';
   } | null;
   onConnectBch: () => void;
   lang?: 'en' | 'es';
@@ -1039,6 +1039,21 @@ export default function IdentityView({
         indexedCount
       });
       setVerifyInput(nostrKeys.npub);
+      try {
+        localStorage.setItem(
+          'userlink_verified_identity_v1',
+          JSON.stringify({
+            handle: preCheck.handle,
+            nip05: preCheck.nip05,
+            bchAddress: preCheck.bchAddress,
+            connectedBchAddress: bchWallet?.address || preCheck.bchAddress,
+            npub: preCheck.npub,
+            pubkeyHex: preCheck.pubkeyHex,
+            eventId: signedEvent.id,
+            timestamp: preCheck.timestamp
+          })
+        );
+      } catch {}
 
       if (indexedCount > 0) {
         setSigningStage('done');

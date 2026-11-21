@@ -2,11 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { 
   ArrowRight, 
   ArrowDown, 
+  ArrowUpRight,
+  ArrowDownLeft,
+  ArrowLeftRight,
+  MoreVertical,
   ShieldCheck, 
   Zap, 
   Wallet, 
   Check, 
-  CheckCircle2, 
   Loader2,
   X,
   ExternalLink,
@@ -23,10 +26,10 @@ interface LandingPageProps {
 
 const LANDING_TEXTS = {
   en: {
-    badge: 'Live on Testnet · PUSD ⟷ USDT',
+    badge: 'Chipnet & Mainnet · BCH ⟷ EVM · Solana · TON',
     title1: 'Stablecoins between',
-    title2: 'Bitcoin Cash and EVM',
-    subtitle: 'Swap PUSD on Bitcoin Cash for USDT on Polygon, 100% non-custodial.',
+    title2: 'Bitcoin Cash and Web3',
+    subtitle: 'Non-custodial bridge, perps, pools and lending across BCH, Polygon, Solana, BNB and TON.',
     launchBtn: 'Launch app',
     docsBtn: 'Read docs',
     demoBadge: 'Live Non-Custodial Demo',
@@ -64,15 +67,37 @@ const LANDING_TEXTS = {
       {
         icon: Wallet,
         title: 'Your wallets',
-        text: 'Paytaca, Cashonize, MetaMask and WalletConnect.'
+        text: 'BinaryLiquid Wallet, BlConnect, Paytaca, Cashonize and MetaMask.'
       }
-    ]
+    ],
+    walletBanner: {
+      eyebrow: 'wallet.bliquid.xyz',
+      title: 'Non-custodial vault built for Bitcoin Cash.',
+      subtitle:
+        'Hold BCH and CashTokens with encrypted local storage, instant BlConnect pairing, and 1-click bridge settlements.',
+      specs: [
+        { label: 'Architecture', value: 'HD BIP44 or Single Address · AES-GCM' },
+        { label: 'Connection', value: 'BlConnect Instant & Nostr E2EE' },
+        { label: 'Fiat & settlement', value: 'USD, EUR, VES, COP, MXN · P2SH32' }
+      ],
+      openBtn: 'Open Web Wallet',
+      createBtn: 'Create wallet',
+      greeting: 'Hi, Sovereign',
+      vaultReady: 'BCH L1 Vault Ready',
+      portfolioLabel: 'Portfolio',
+      networkBadge: 'Chipnet + Mainnet',
+      txHeading: 'Transactions',
+      faucetSub: 'CashTokens L1 · Confirmed',
+      sendLabel: 'Send @user',
+      sendSub: 'Fee ~250 sats · Schnorr',
+      bridgeSub: 'Polygon & Solana ↔ BCH'
+    }
   },
   es: {
-    badge: 'En vivo en Testnet · PUSD ⟷ USDT',
+    badge: 'Chipnet y Mainnet · BCH ⟷ EVM · Solana · TON',
     title1: 'Stablecoins entre',
-    title2: 'Bitcoin Cash y EVM',
-    subtitle: 'Intercambia PUSD en Bitcoin Cash por USDT en Polygon, 100% sin custodia.',
+    title2: 'Bitcoin Cash y Web3',
+    subtitle: 'Puente sin custodia, perps, pools y lending entre BCH, Polygon, Solana, BNB y TON.',
     launchBtn: 'Abrir aplicación',
     docsBtn: 'Ver documentación',
     demoBadge: 'Demo en Vivo Sin Custodia',
@@ -110,9 +135,31 @@ const LANDING_TEXTS = {
       {
         icon: Wallet,
         title: 'Tus billeteras',
-        text: 'Paytaca, Cashonize, MetaMask y WalletConnect.'
+        text: 'BinaryLiquid Wallet, BlConnect, Paytaca, Cashonize y MetaMask.'
       }
-    ]
+    ],
+    walletBanner: {
+      eyebrow: 'wallet.bliquid.xyz',
+      title: 'Bóveda sin custodia diseñada para Bitcoin Cash.',
+      subtitle:
+        'Gestiona BCH y CashTokens con cifrado local, conexión instantánea vía BlConnect y retiros por el puente en 1 clic.',
+      specs: [
+        { label: 'Arquitectura', value: 'HD BIP44 o Address Única · AES-GCM' },
+        { label: 'Protocolo', value: 'BlConnect Instant y Nostr E2EE' },
+        { label: 'Divisas y red', value: 'USD, EUR, VES, COP, MXN · P2SH32' }
+      ],
+      openBtn: 'Abrir Web Wallet',
+      createBtn: 'Crear bóveda',
+      greeting: 'Hola, Soberano',
+      vaultReady: 'Bóveda BCH L1 Lista',
+      portfolioLabel: 'Portafolio',
+      networkBadge: 'Chipnet + Mainnet',
+      txHeading: 'Transacciones',
+      faucetSub: 'CashTokens L1 · Confirmado',
+      sendLabel: 'Envío @usuario',
+      sendSub: 'Fee ~250 sats · Schnorr',
+      bridgeSub: 'Polygon y Solana ↔ BCH'
+    }
   }
 };
 
@@ -379,6 +426,172 @@ function AnimatedSwapPreview({ onLaunchApp, lang = 'en' }: { onLaunchApp: () => 
   );
 }
 
+const WALLET_FIAT_TOTALS = {
+  USD: { whole: '$4,850', decimals: '.00' },
+  EUR: { whole: '€4,462', decimals: '.00' },
+  VES: { whole: 'Bs. 223,100', decimals: '' }
+} as const;
+
+function WalletVaultPreview({ lang = 'en' }: { lang?: 'en' | 'es' }) {
+  const t = LANDING_TEXTS[lang === 'es' ? 'es' : 'en'].walletBanner;
+  const [fiat, setFiat] = useState<'USD' | 'EUR' | 'VES'>('USD');
+  const amount = WALLET_FIAT_TOTALS[fiat];
+
+  return (
+    <div className="relative mx-auto w-full max-w-[345px] lg:ml-auto lg:mr-0">
+      {/* Phone Outer Bezel */}
+      <div className="relative rounded-[42px] border-[5px] border-[#090D16] bg-[#121624] p-2.5 shadow-[0_32px_90px_-15px_rgba(0,0,0,0.45)] ring-1 ring-white/10">
+        {/* Top Orange Gradient Card inside Phone */}
+        <div
+          className="relative overflow-hidden rounded-[30px] p-5 text-white shadow-inner"
+          style={{
+            background: 'linear-gradient(145deg, #FB923C 0%, #F97316 48%, #9A3412 100%)'
+          }}
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <div className="text-base font-bold leading-tight">{t.greeting}</div>
+              <div className="text-[11px] text-white/80 mt-0.5">{t.vaultReady}</div>
+            </div>
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/25 bg-black/25 backdrop-blur">
+              <img src="/logo.png" alt="BinaryLiquid Wallet" className="h-6 w-6 rounded-full object-contain" />
+            </div>
+          </div>
+
+          <div className="mt-5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-medium text-white/85">
+                {t.portfolioLabel} ({fiat})
+              </span>
+              <div className="inline-flex items-center gap-0.5 rounded-full bg-black/20 p-0.5 border border-white/15">
+                {(['USD', 'EUR', 'VES'] as const).map((code) => (
+                  <button
+                    key={code}
+                    type="button"
+                    onClick={() => setFiat(code)}
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-semibold transition-colors cursor-pointer ${
+                      fiat === code ? 'bg-white text-neutral-900 shadow-xs' : 'text-white/80 hover:text-white'
+                    }`}
+                  >
+                    {code}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+              <span className="text-3xl font-bold tracking-tight tabular-nums leading-none">
+                {amount.whole}
+                {amount.decimals && <span className="text-xl text-white/85">{amount.decimals}</span>}
+              </span>
+              <span className="rounded-full bg-white px-2.5 py-0.5 text-[10px] font-bold text-neutral-900 shadow-sm shrink-0">
+                {t.networkBadge}
+              </span>
+            </div>
+          </div>
+
+          {/* 4 Circular Quick Action Buttons */}
+          <div className="mt-4 grid grid-cols-4 gap-2 text-center">
+            <a
+              href="https://wallet.bliquid.xyz/dashboard/deposit"
+              target="_blank"
+              rel="noreferrer"
+              className="flex h-10 items-center justify-center rounded-full border border-white/25 bg-white/15 text-xs font-semibold text-white backdrop-blur transition hover:bg-white/25"
+            >
+              Add +
+            </a>
+            <a
+              href="https://wallet.bliquid.xyz/dashboard/send"
+              target="_blank"
+              rel="noreferrer"
+              aria-label="Send"
+              className="mx-auto flex h-10 w-10 items-center justify-center rounded-full border border-white/25 bg-white/15 text-white backdrop-blur transition hover:bg-white/25"
+            >
+              <ArrowUpRight className="h-4 w-4" />
+            </a>
+            <a
+              href="https://wallet.bliquid.xyz/dashboard/receive"
+              target="_blank"
+              rel="noreferrer"
+              aria-label="Receive"
+              className="mx-auto flex h-10 w-10 items-center justify-center rounded-full border border-white/25 bg-white/15 text-white backdrop-blur transition hover:bg-white/25"
+            >
+              <ArrowDownLeft className="h-4 w-4" />
+            </a>
+            <a
+              href="https://wallet.bliquid.xyz/dashboard/dapps"
+              target="_blank"
+              rel="noreferrer"
+              aria-label="BlConnect"
+              className="mx-auto flex h-10 w-10 items-center justify-center rounded-full border border-white/25 bg-white/15 text-white backdrop-blur transition hover:bg-white/25"
+            >
+              <Wallet className="h-4 w-4" />
+            </a>
+          </div>
+        </div>
+
+        {/* Floating Tilted Pill Overlapping Left Edge */}
+        <div
+          className="relative z-20 -ml-2 -mt-3 mb-1.5 w-fit max-w-[235px] -rotate-6 rounded-2xl border border-white/30 px-3.5 py-2 text-white shadow-xl backdrop-blur-xl sm:-ml-8"
+          style={{
+            background: 'linear-gradient(90deg, #FB923C 0%, #C2410C 100%)'
+          }}
+        >
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/20">
+              <ArrowLeftRight className="h-4 w-4 text-white" />
+            </div>
+            <div>
+              <div className="text-xs font-bold leading-tight">Watchman Bridge</div>
+              <div className="text-[10px] text-white/90">{t.bridgeSub}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Lower Phone Feed: Recent Transactions */}
+        <div className="px-2.5 pb-2.5 pt-1">
+          <div className="mb-2 flex items-center justify-between text-xs font-semibold text-white/90">
+            <span>{t.txHeading}</span>
+            <MoreVertical className="h-3.5 w-3.5 text-white/50" />
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 p-2.5">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <img
+                  src="/PUSD.png"
+                  alt="PUSD"
+                  className="h-7 w-7 rounded-xl bg-white/90 p-0.5 object-contain shrink-0"
+                />
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold text-white truncate">Faucet / Bridge PUSD</div>
+                  <div className="text-[10px] text-white/55 truncate">{t.faucetSub}</div>
+                </div>
+              </div>
+              <span className="font-mono text-xs font-bold text-emerald-400 shrink-0 tabular-nums">+50.00</span>
+            </div>
+
+            <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 p-2.5">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <img
+                  src="/BCH.png"
+                  alt="BCH"
+                  className="h-7 w-7 rounded-xl bg-white/90 p-0.5 object-contain shrink-0"
+                />
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold text-white truncate">{t.sendLabel}</div>
+                  <div className="text-[10px] text-white/55 truncate">{t.sendSub}</div>
+                </div>
+              </div>
+              <span className="font-mono text-xs font-bold text-white/90 shrink-0 tabular-nums">-0.025 BCH</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function LandingPage({ onLaunchApp, onOpenDocs, onOpenWhitepaper, lang = 'en' }: LandingPageProps) {
   const t = LANDING_TEXTS[lang === 'es' ? 'es' : 'en'];
   const [showPromoModal, setShowPromoModal] = useState<boolean>(false);
@@ -417,20 +630,20 @@ export default function LandingPage({ onLaunchApp, onOpenDocs, onOpenWhitepaper,
   return (
     <div className="w-full flex flex-col flex-1 text-ink pb-28 md:pb-12 overflow-x-hidden">
       {/* HERO */}
-      <section className="px-4 sm:px-6 pt-10 sm:pt-20 pb-10 sm:pb-14 max-w-3xl mx-auto w-full text-center">
-        <span className="ui-badge-warn mb-5">{t.badge}</span>
+      <section className="px-4 sm:px-6 pt-8 sm:pt-12 pb-8 sm:pb-10 max-w-3xl mx-auto w-full text-center">
+        <span className="ui-badge-warn mb-4">{t.badge}</span>
 
-        <h1 className="text-4xl sm:text-6xl font-semibold tracking-tight leading-[1.08] text-ink">
+        <h1 className="text-4xl sm:text-[54px] font-semibold tracking-tight leading-[1.08] text-ink">
           {t.title1}
           <br />
           {t.title2}
         </h1>
 
-        <p className="mt-4 text-base sm:text-lg text-ink-2 max-w-xl mx-auto">
+        <p className="mt-3.5 text-base sm:text-lg text-ink-2 max-w-[560px] mx-auto leading-relaxed">
           {t.subtitle}
         </p>
 
-        <div className="mt-8 flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3">
+        <div className="mt-6 flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3">
           <button 
             type="button" 
             onMouseEnter={() => import('./BridgeSwap')}
@@ -457,7 +670,7 @@ export default function LandingPage({ onLaunchApp, onOpenDocs, onOpenWhitepaper,
       </section>
 
       {/* FEATURES */}
-      <section className="px-4 sm:px-6 py-16 sm:py-20 max-w-5xl mx-auto w-full">
+      <section className="px-4 sm:px-6 pt-16 sm:pt-20 pb-14 sm:pb-16 max-w-5xl mx-auto w-full">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 sm:gap-10">
           {t.features.map(({ icon: Icon, title, text }) => (
             <div key={title}>
@@ -471,35 +684,106 @@ export default function LandingPage({ onLaunchApp, onOpenDocs, onOpenWhitepaper,
         </div>
       </section>
 
+      {/* BINARYLIQUID WALLET SHOWCASE */}
+      <section className="px-4 sm:px-6 pb-16 sm:pb-20 max-w-5xl mx-auto w-full">
+        <div className="ui-divider pt-14 sm:pt-16 grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-center">
+          <div className="lg:col-span-6 space-y-6 text-left">
+            <div className="flex items-center gap-2.5">
+              <img
+                src="/logo.png"
+                alt="BinaryLiquid Wallet"
+                className="w-6 h-6 rounded-full object-contain border border-line bg-surface shrink-0"
+              />
+              <span className="text-sm font-semibold text-ink">BinaryLiquid Wallet</span>
+              <span className="text-ink-3 text-xs">·</span>
+              <span className="text-xs font-mono text-ink-3">{t.walletBanner.eyebrow}</span>
+            </div>
+
+            <div>
+              <h2 className="text-2xl sm:text-[32px] font-semibold tracking-tight leading-[1.15] text-ink">
+                {t.walletBanner.title}
+              </h2>
+              <p className="mt-3 text-sm sm:text-[15px] text-ink-2 leading-relaxed max-w-md">
+                {t.walletBanner.subtitle}
+              </p>
+            </div>
+
+            <div className="divide-y divide-line border-y border-line">
+              {t.walletBanner.specs.map((item) => (
+                <div key={item.label} className="py-3 flex items-center justify-between gap-4 text-xs sm:text-[13px]">
+                  <span className="text-ink-3 font-medium shrink-0">{item.label}</span>
+                  <span className="text-ink font-medium text-right">{item.value}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-1">
+              <a
+                href="https://wallet.bliquid.xyz"
+                target="_blank"
+                rel="noreferrer"
+                className="ui-btn-primary px-5"
+              >
+                <span>{t.walletBanner.openBtn}</span>
+                <ExternalLink className="w-4 h-4" />
+              </a>
+              <a
+                href="https://wallet.bliquid.xyz/register"
+                target="_blank"
+                rel="noreferrer"
+                className="ui-btn-secondary px-5"
+              >
+                <span>{t.walletBanner.createBtn}</span>
+                <ArrowRight className="w-4 h-4" />
+              </a>
+            </div>
+          </div>
+
+          <div className="lg:col-span-6">
+            <WalletVaultPreview lang={lang} />
+          </div>
+        </div>
+      </section>
+
       {/* FOOTER */}
-      <footer className="w-full max-w-5xl mx-auto px-4 sm:px-6 py-8 ui-divider flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-ink-3">
-        <div className="flex items-center gap-2">
-          <span>© 2026 BinaryLiquid</span>
-          <span>•</span>
-          <a href="https://t.me/drianops" target="_blank" rel="noreferrer" className="hover:text-primary transition-colors font-medium text-ink-2">
-            Built by Drian Stack Labs (@drianops)
+      <footer className="w-full max-w-5xl mx-auto px-4 sm:px-6 py-8 ui-divider flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-ink-3">
+        <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+          <span className="whitespace-nowrap">© 2026 BinaryLiquid</span>
+          <span>·</span>
+          <a
+            href="https://t.me/drianops"
+            target="_blank"
+            rel="noreferrer"
+            className="hover:text-ink transition-colors font-medium text-ink-2 whitespace-nowrap"
+          >
+            Drian Stack Labs (@drianops)
           </a>
         </div>
-        <div className="flex flex-wrap items-center gap-5">
+        <div className="flex flex-wrap items-center justify-center sm:justify-end gap-5">
+          <a
+            href="https://wallet.bliquid.xyz"
+            target="_blank"
+            rel="noreferrer"
+            className="text-ink-2 hover:text-ink font-medium transition-colors whitespace-nowrap"
+          >
+            Web Wallet
+          </a>
           {onOpenWhitepaper && (
             <button
               type="button"
               onClick={onOpenWhitepaper}
-              className="hover:text-ink font-semibold text-primary transition-colors cursor-pointer"
+              className="text-ink-2 hover:text-ink font-medium transition-colors cursor-pointer whitespace-nowrap"
             >
               Whitepaper v1.0
             </button>
           )}
-          <a href="https://bchblaze.cash" target="_blank" rel="noreferrer" className="hover:text-ink transition-colors">
-            BCH BLAZE
-          </a>
-          <a href="https://paryonusd.com" target="_blank" rel="noreferrer" className="hover:text-ink transition-colors">
+          <a href="https://paryonusd.com" target="_blank" rel="noreferrer" className="hover:text-ink transition-colors whitespace-nowrap">
             ParyonUSD
           </a>
-          <a href="https://t.me/drianops" target="_blank" rel="noreferrer" className="hover:text-primary transition-colors font-semibold text-primary">
-            Drian Stack Labs (@drianops)
+          <a href="https://bchblaze.cash" target="_blank" rel="noreferrer" className="hover:text-ink transition-colors whitespace-nowrap">
+            BCH BLAZE
           </a>
-          <a href="https://t.me/bchblaze" target="_blank" rel="noreferrer" className="hover:text-ink transition-colors">
+          <a href="https://t.me/bchblaze" target="_blank" rel="noreferrer" className="hover:text-ink transition-colors whitespace-nowrap">
             BCH Blaze TG
           </a>
         </div>

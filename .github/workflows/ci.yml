@@ -22,22 +22,22 @@ jobs:
 
       - name: Verify Zero Secret Leakage in Repository
         run: |
-          if git ls-files | grep -E '(^|/)(\.env|secure_vault|ltc-cold-treasury\.json|ltc-vault\.json|solana-authority\.json|bridge_db\.json)$'; then
+          if git ls-files | grep -E '(^|/)(\.env$|secure_vault|ltc-cold-treasury\.json|ltc-vault\.json|solana-authority\.json|bridge_db\.json|.*\.wif$|.*\.pem$|.*\.key$)'; then
             echo "❌ Forbidden secret or state file tracked in Git!"
             exit 1
           fi
           echo "✅ Zero secret files tracked in Git."
 
-      - name: Install Root & Contract Dependencies
-        run: npm install --no-audit --no-fund
-
-      - name: Compile EVM & CashScript V2 Smart Contracts
-        run: node contracts/compile.js
-
-      - name: Install Backend Dependencies & Run Security Suite
+      - name: Install Backend & Contract Compiler Dependencies
         run: |
           npm --prefix backend install --no-audit --no-fund
-          node backend/test-api.js
+          ln -sfn ../backend/node_modules contracts/node_modules
+
+      - name: Compile EVM & CashScript V2 / P2P Smart Contracts
+        run: node contracts/compile.js
+
+      - name: Run Backend Security & Regression Suite
+        run: node backend/test-api.js
 
       - name: Install Frontend Dependencies & Type-Check + Build
         run: |

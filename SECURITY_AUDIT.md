@@ -13,9 +13,10 @@ Traditional cross-chain bridges fail because they rely on **centralized custodia
 
 **BinaryLiquid Protocol** eliminates custodial bridge risk across its primary virtual machines through a **Non-Custodial Vault & Covenant Architecture**:
 
-1. **Bitcoin Cash L1 (`CashScript ^0.13.0` — P2SH-32 CashTokens Covenants V2):**
+1. **Bitcoin Cash L1 (`CashScript ^0.14.0` — P2SH-32 CashTokens Covenants V2 & P2P Escrow):**
    - [`contracts/bch/BinaryLiquidVaultV2.cash`](./contracts/bch/BinaryLiquidVaultV2.cash)
    - [`contracts/bch/BinaryLiquidEscrowV2.cash`](./contracts/bch/BinaryLiquidEscrowV2.cash)
+   - [`contracts/bch/BinaryLiquidP2PEscrow.cash`](./contracts/bch/BinaryLiquidP2PEscrow.cash)
    - [`contracts/bch/BinaryLiquidCollateralVaultV2.cash`](./contracts/bch/BinaryLiquidCollateralVaultV2.cash)
 2. **Universal EVM (`Solidity ^0.8.20` — Polygon PoS/Amoy, Ethereum, Arbitrum, Base, Optimism, BNB Chain):**
    - [`contracts/evm/BinaryLiquidVaultV2.sol`](./contracts/evm/BinaryLiquidVaultV2.sol)
@@ -74,7 +75,8 @@ If the relayer or Watchman Sentinel goes offline for any reason, user funds are 
 | **ECDSA Signature Malleability (EIP-2 Upper-Half `s`)** | High | `recoverSigner()` enforces `v == 27 \|\| v == 28`, `uint256(s) <= 0x7FFFFFFF...5D576E7357A4501DDFE92F46681B20A0`, and `signer != address(0)`. | **Mitigated (100%)** |
 | **Non-Standard ERC-20 Revert (Mainnet Tether `USDT`)** | High | Low-level `_safeTransfer` and `_safeTransferFrom` wrappers handle both `bool`-returning and `void`-returning ERC-20 tokens. | **Mitigated (100%)** |
 | **Reentrancy via ERC-777 / Hooked Tokens** | High | Strict `nonReentrant` mutex + Checks-Effects-Interactions ordering across `deposit`, `depositToChain`, `release`, and `refund`. | **Mitigated (100%)** |
-| **Permanent Fund Lock on Relayer Outage** | High | Permissionless 24-hour Timelock `refund()` works autonomously without Watchman or admin intervention. | **Mitigated (100%)** |
+| **Permanent Fund Lock on Relayer Outage** | High | Permissionless 24-hour Timelock `refund()` / `timeoutRefund()` works autonomously without Watchman or admin intervention. | **Mitigated (100%)** |
+| **P2P Escrow Arbiter / Platform Diversion** | Critical | `BinaryLiquidP2PEscrow.cash` enforces VM-level destination locks (`buyerLockingBytecode` / `sellerLockingBytecode`), anti-multi-input drain (`tx.inputs.length <= 2`), and trustless `sellerDirectRelease`. | **Mitigated (100%)** |
 
 ---
 

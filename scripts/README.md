@@ -21,7 +21,7 @@ Esta carpeta contiene los scripts de automatización para desplegar, auditar y m
 Desde tu máquina local:
 ```bash
 chmod +x scripts/*.sh
-./scripts/deploy-vps.sh 68.168.218.242 root
+./scripts/deploy-vps.sh YOUR_VPS_IP root
 ```
 
 ### 2. Verificar el estado del protocolo en vivo

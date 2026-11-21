@@ -5,9 +5,14 @@
 
 set -e
 
-VPS_IP="${1:-68.168.218.242}"
+VPS_IP="${1:-${VPS_IP:-}}"
 VPS_USER="${2:-root}"
 DEST_DIR="/var/www/binaryliquid-bridge"
+
+if [ -z "$VPS_IP" ]; then
+  echo "Usage: ./scripts/deploy-vps.sh <VPS_IP> [VPS_USER]"
+  exit 1
+fi
 
 echo "=========================================================="
 echo "🚀 1-Click VPS Deployer for BinaryLiquid Bridge"
