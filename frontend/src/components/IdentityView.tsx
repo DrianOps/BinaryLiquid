@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import {
   ShieldCheck,
   CheckCircle2,
@@ -387,6 +388,43 @@ export default function IdentityView({
   onToggleNetwork
 }: IdentityViewProps) {
   const isEs = lang === 'es';
+
+  // First-visit Paytaca sponsorship modal banner (mirrors LandingPage promo behavior)
+  const PAYTACA_BANNER_STORAGE_KEY = 'bliq_paytaca_identity_banner_dismissed';
+  const [showPaytacaBanner, setShowPaytacaBanner] = useState<boolean>(false);
+
+  useEffect(() => {
+    try {
+      const isDismissed = localStorage.getItem(PAYTACA_BANNER_STORAGE_KEY) === 'true';
+      const forceShow =
+        typeof window !== 'undefined' &&
+        (window.location.search.includes('promo=1') || window.location.search.includes('banner=1'));
+      if (!isDismissed || forceShow) {
+        const timer = setTimeout(() => setShowPaytacaBanner(true), 400);
+        return () => clearTimeout(timer);
+      }
+    } catch {
+      setShowPaytacaBanner(true);
+    }
+  }, []);
+
+  const handleDismissPaytacaBanner = useCallback(() => {
+    setShowPaytacaBanner(false);
+    try {
+      localStorage.setItem(PAYTACA_BANNER_STORAGE_KEY, 'true');
+    } catch {
+      // ignore storage quota/privacy errors
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!showPaytacaBanner) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') handleDismissPaytacaBanner();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [showPaytacaBanner, handleDismissPaytacaBanner]);
 
   // Sync network with platformNetwork
   const [selectedNetwork, setSelectedNetwork] = useState<'mainnet' | 'testnet'>(platformNetwork);
@@ -1301,6 +1339,15 @@ export default function IdentityView({
                   : `${onlineRelayCount}/${USERLINK_RELAYS.length} relays`}
               </span>
             </span>
+            <button
+              type="button"
+              onClick={() => setShowPaytacaBanner(true)}
+              className="ui-badge hover:bg-surface-3 transition-colors cursor-pointer"
+              title={isEs ? 'Patrocinado por Paytaca Wallet' : 'Sponsored by Paytaca Wallet'}
+            >
+              <img src="/paytaca-logo.png" alt="Paytaca" className="w-3.5 h-3.5 object-contain" />
+              <span>{isEs ? 'Patrocinado por Paytaca' : 'Sponsored by Paytaca'}</span>
+            </button>
           </div>
           <p className="ui-subtitle">
             {isEs
@@ -2753,6 +2800,112 @@ export default function IdentityView({
           </div>
         )}
       </AnimatePresence>
+
+      {/* =====================================================================
+          PAYTACA WALLET SPONSORSHIP MODAL (First-visit / on-demand banner)
+          Rendered via portal so backdrop always covers full viewport cleanly.
+          ===================================================================== */}
+      {typeof document !== 'undefined' &&
+        createPortal(
+          <AnimatePresence>
+            {showPaytacaBanner && (
+              <div
+                className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm transition-opacity overflow-y-auto"
+                onClick={handleDismissPaytacaBanner}
+              >
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.92, y: 16 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.92, y: 16 }}
+                  transition={{ type: 'spring', damping: 26, stiffness: 340 }}
+                  onClick={(e) => e.stopPropagation()}
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="paytaca-sponsor-title"
+                  className="relative my-auto w-full max-w-lg bg-surface border border-line rounded-card shadow-2xl overflow-hidden flex flex-col"
+                >
+                  {/* Official Paytaca Promotional Banner Graphic */}
+                  <div className="relative w-full overflow-hidden bg-[#0B1220] border-b border-line">
+                    <img
+                      src="/paytaca-banner.jpg"
+                      alt="Paytaca Wallet - Your money, your control."
+                      className="w-full h-auto aspect-[1200/630] object-cover block select-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleDismissPaytacaBanner}
+                      aria-label={isEs ? 'Cerrar banner de patrocinio' : 'Close sponsor banner'}
+                      className="absolute top-3 right-3 z-20 w-8 h-8 rounded-full bg-black/60 hover:bg-black/85 text-white flex items-center justify-center transition-colors cursor-pointer border border-white/15"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  {/* Clean Editorial Content Body */}
+                  <div className="p-5 sm:p-6 space-y-4 bg-surface">
+                    <div className="space-y-2">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-2 border border-line text-[11px] font-semibold text-ink-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                        <span>
+                          {isEs
+                            ? 'Patrocinador oficial · Paytaca × UserLink'
+                            : 'Official Sponsor · Paytaca × UserLink'}
+                        </span>
+                      </span>
+
+                      <h3
+                        id="paytaca-sponsor-title"
+                        className="text-xl sm:text-2xl font-bold text-ink tracking-tight"
+                      >
+                        {isEs
+                          ? 'Patrocinado por Paytaca Wallet'
+                          : 'Sponsored by Paytaca Wallet'}
+                      </h3>
+
+                      <p className="text-xs sm:text-sm text-ink-2 leading-relaxed">
+                        {isEs
+                          ? 'Paytaca respalda el desarrollo de UserLink en BinaryLiquid para llevar identidades @usuario verificables entre Bitcoin Cash, CashTokens y Nostr con autocustodia total.'
+                          : 'Paytaca backs UserLink on BinaryLiquid to bring verifiable @handle identities across Bitcoin Cash, CashTokens, and Nostr with complete self-custody.'}
+                      </p>
+                    </div>
+
+                    <div className="pt-1 flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                      <button
+                        type="button"
+                        onClick={handleDismissPaytacaBanner}
+                        className="ui-btn-primary ui-btn-lg w-full sm:flex-1 text-sm font-bold flex items-center justify-center gap-2"
+                      >
+                        <span>
+                          {isEs ? 'Continuar a UserLink' : 'Continue to UserLink'}
+                        </span>
+                        <ArrowRight className="w-4 h-4" />
+                      </button>
+
+                      <a
+                        href="https://www.paytaca.com"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={handleDismissPaytacaBanner}
+                        className="ui-btn-secondary ui-btn-lg w-full sm:flex-1 text-xs sm:text-sm font-semibold flex items-center justify-center gap-2"
+                      >
+                        <img
+                          src="/paytaca-logo.png"
+                          alt=""
+                          className="w-4 h-4 object-contain"
+                        />
+                        <span>
+                          {isEs ? 'Explorar Paytaca' : 'Explore Paytaca'}
+                        </span>
+                        <ExternalLink className="w-3.5 h-3.5 text-ink-3" />
+                      </a>
+                    </div>
+                  </div>
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>,
+          document.body
+        )}
     </div>
   );
 }
