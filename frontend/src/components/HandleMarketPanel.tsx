@@ -4,6 +4,7 @@ import {
   Check,
   CheckCircle2,
   Copy,
+  ExternalLink,
   RefreshCw,
   Trash2
 } from 'lucide-react';
@@ -314,54 +315,92 @@ export const HandleMarketPanel: React.FC<HandleMarketPanelProps> = ({
               })}
             </div>
 
-            {/* Clean key-value specification rows for derived Mint Covenant */}
-            <div className="divide-y divide-line text-xs">
-              <div className="py-3 flex flex-wrap items-center justify-between gap-2">
-                <span className="text-ink-3">{isEs ? 'Cotización seleccionada' : 'Selected handle & fee'}</span>
-                <span className="font-mono font-semibold text-ink tabular-nums">
-                  {quoteData.handle} · ${quoteData.tier.usd < 1 ? quoteData.tier.usd.toFixed(2) : quoteData.tier.usd} USD ({quoteData.tier.bch} BCH)
-                </span>
-              </div>
-
-              <div className="py-3 flex flex-wrap items-center justify-between gap-3">
-                <span className="text-ink-3 shrink-0">
-                  {isEs ? 'Covenant P2SH-32 Mint' : 'P2SH-32 Mint Covenant'}
-                </span>
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="font-mono text-ink truncate max-w-[260px] sm:max-w-[460px]">
-                    {quoteData.covenant.covenantTokenAddress}
+            {/* Visual BCMR NFT Preview + Technical Covenant Spec (side-by-side cleanly) */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              <div className="lg:col-span-7 divide-y divide-line text-xs">
+                <div className="py-3 flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-ink-3">{isEs ? 'Cotización seleccionada' : 'Selected handle & fee'}</span>
+                  <span className="font-mono font-semibold text-ink tabular-nums">
+                    {quoteData.handle} · ${quoteData.tier.usd < 1 ? quoteData.tier.usd.toFixed(2) : quoteData.tier.usd} USD ({quoteData.tier.bch} BCH)
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => copyText(quoteData.covenant.covenantTokenAddress, 'mint-addr')}
-                    className="text-ink-3 hover:text-ink cursor-pointer shrink-0"
-                    title="Copy P2SH-32 address"
+                </div>
+
+                <div className="py-3 flex flex-wrap items-center justify-between gap-3">
+                  <span className="text-ink-3 shrink-0">
+                    {isEs ? 'Covenant P2SH-32 Mint' : 'P2SH-32 Mint Covenant'}
+                  </span>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="font-mono text-ink truncate max-w-[220px] sm:max-w-[300px]">
+                      {quoteData.covenant.covenantTokenAddress}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => copyText(quoteData.covenant.covenantTokenAddress, 'mint-addr')}
+                      className="text-ink-3 hover:text-ink cursor-pointer shrink-0"
+                      title="Copy P2SH-32 address"
+                    >
+                      {copiedId === 'mint-addr' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="py-3 flex flex-wrap items-center justify-between gap-3">
+                  <span className="text-ink-3 shrink-0">NFT Commitment (hex)</span>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="font-mono text-ink-2">{quoteData.nftCommitmentHex}</span>
+                    <button
+                      type="button"
+                      onClick={() => copyText(quoteData.nftCommitmentHex, 'mint-comm')}
+                      className="text-ink-3 hover:text-ink cursor-pointer shrink-0"
+                      title="Copy commitment"
+                    >
+                      {copiedId === 'mint-comm' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="py-3 flex flex-wrap items-center justify-between gap-3">
+                  <span className="text-ink-3 shrink-0">Commit-Reveal SHA256d</span>
+                  <span className="font-mono text-ink-2 truncate max-w-[220px] sm:max-w-[300px]">
+                    {quoteData.commitReveal.commitHashHex}
+                  </span>
+                </div>
+
+                <div className="py-3 flex flex-wrap items-center justify-between gap-3">
+                  <span className="text-ink-3 shrink-0">BCMR v2 Metadata JSON</span>
+                  <a
+                    href={`/api/identity/bcmr/${encodeURIComponent(quoteData.cleanHandle)}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 font-mono text-ink-2 hover:text-ink underline underline-offset-4"
                   >
-                    {copiedId === 'mint-addr' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                  </button>
+                    <span>/api/identity/bcmr/{quoteData.cleanHandle}</span>
+                    <ExternalLink className="w-3 h-3 shrink-0" />
+                  </a>
                 </div>
               </div>
 
-              <div className="py-3 flex flex-wrap items-center justify-between gap-3">
-                <span className="text-ink-3 shrink-0">NFT Commitment (hex)</span>
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="font-mono text-ink-2">{quoteData.nftCommitmentHex}</span>
-                  <button
-                    type="button"
-                    onClick={() => copyText(quoteData.nftCommitmentHex, 'mint-comm')}
-                    className="text-ink-3 hover:text-ink cursor-pointer shrink-0"
-                    title="Copy commitment"
-                  >
-                    {copiedId === 'mint-comm' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                  </button>
+              {/* Right: Live CashTokens BCMR Visual NFT Card */}
+              <div className="lg:col-span-5 space-y-2">
+                <div className="rounded-panel overflow-hidden border border-line bg-[#0D1017] shadow-soft">
+                  <img
+                    src={`/api/identity/nft-card/${encodeURIComponent(quoteData.cleanHandle)}.svg`}
+                    alt={`${quoteData.handle} CashTokens BCMR NFT`}
+                    className="w-full h-auto block"
+                  />
                 </div>
-              </div>
-
-              <div className="py-3 flex flex-wrap items-center justify-between gap-3">
-                <span className="text-ink-3 shrink-0">Commit-Reveal SHA256d</span>
-                <span className="font-mono text-ink-2 truncate max-w-[260px] sm:max-w-[460px]">
-                  {quoteData.commitReveal.commitHashHex}
-                </span>
+                <div className="flex items-center justify-between text-[11px] text-ink-3 px-0.5">
+                  <span>{isEs ? 'Vista previa BCMR (@ID)' : 'BCMR (@ID) wallet artwork'}</span>
+                  <a
+                    href={`/api/identity/nft-card/${encodeURIComponent(quoteData.cleanHandle)}.svg`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-mono hover:text-ink inline-flex items-center gap-1"
+                  >
+                    <span>SVG</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
               </div>
             </div>
           </div>

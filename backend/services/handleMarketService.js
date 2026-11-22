@@ -31,6 +31,7 @@ const TIER_USD = {
 function sanitizeHandle(raw) {
   const clean = String(raw || '')
     .trim()
+    .replace(/\.svg$/i, '')
     .replace(/^@+/, '')
     .split('@')[0]
     .toLowerCase()
@@ -39,6 +40,35 @@ function sanitizeHandle(raw) {
     throw new Error('Handle must be 1–32 characters (a-z, 0-9, _, -).');
   }
   return clean;
+}
+
+function resolveHandleInput(rawTarget) {
+  const cleanRaw = String(rawTarget || '').trim().replace(/\.(svg|json)$/i, '');
+  // Decode UL1:<handle> CashTokens NFT commitment hex directly (0x554c313a = "UL1:")
+  if (/^554c313a([0-9a-f]{2}){1,32}$/i.test(cleanRaw)) {
+    const decoded = Buffer.from(cleanRaw.slice(8), 'hex').toString('utf8');
+    if (!/^[a-z0-9_-]{1,32}$/i.test(decoded)) {
+      throw new Error('Invalid UL1 commitment payload characters.');
+    }
+    return decoded.toLowerCase();
+  }
+  return sanitizeHandle(cleanRaw);
+}
+
+function getTierSpec(handleLen) {
+  if (handleLen <= 3) return { key: 'ultraRare', ...TIER_USD.ultraRare };
+  if (handleLen === 4) return { key: 'premium', ...TIER_USD.premium };
+  if (handleLen === 5) return { key: 'short', ...TIER_USD.short };
+  return { key: 'standard', ...TIER_USD.standard };
+}
+
+function escapeXml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 function sha256d(buf) {
@@ -323,5 +353,119 @@ export const handleMarketService = {
     listings.splice(idx, 1);
     db.persist();
     return { removed: true, id };
+  },
+
+  /**
+   * Renders a deterministic, wallet-ready SVG collectible badge for a CashTokens Handle NFT
+   * (`UL1:<handle>`) containing the `@` emblem, handle, commitment hex, and tier.
+   */
+  renderHandleNftCardSvg(rawTarget) {
+    const cleanHandle = resolveHandleInput(rawTarget);
+    const commitmentHex = Buffer.concat([Buffer.from('UL1:', 'utf8'), Buffer.from(cleanHandle, 'utf8')]).toString(
+      'hex'
+    );
+    const tier = getTierSpec(cleanHandle.length);
+    const safeHandle = escapeXml(`@${cleanHandle}`);
+    const tierPrice = tier.usd < 1 ? `$${tier.usd.toFixed(2)}` : `$${tier.usd}`;
+    const safeTier = escapeXml(`${tier.label} · ${tierPrice}`);
+    const fontSize = cleanHandle.length <= 6 ? 60 : cleanHandle.length <= 12 ? 46 : cleanHandle.length <= 20 ? 34 : 26;
+
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 400" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="640" y2="400" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0D1017"/>
+      <stop offset="100%" stop-color="#171C28"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="85%" cy="15%" r="55%">
+      <stop offset="0%" stop-color="#F7931A" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#F7931A" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="640" height="400" rx="28" fill="url(#bg)"/>
+  <rect width="640" height="400" rx="28" fill="url(#glow)"/>
+  <rect x="1.5" y="1.5" width="637" height="397" rx="26.5" stroke="#262C3B" stroke-width="3"/>
+
+  <!-- Top Brand Header -->
+  <circle cx="56" cy="56" r="22" fill="#1C212E" stroke="#2D3446" stroke-width="1.5"/>
+  <text x="56" y="64" text-anchor="middle" fill="#F7931A" font-family="Inter,system-ui,sans-serif" font-size="25" font-weight="700">@</text>
+  <text x="90" y="52" fill="#F3F4F6" font-family="Inter,system-ui,sans-serif" font-size="14" font-weight="600" letter-spacing="0.06em">USERLINK</text>
+  <text x="90" y="70" fill="#8A8F98" font-family="JetBrains Mono,monospace" font-size="11">BITCOIN CASH · CASHTOKENS</text>
+
+  <rect x="444" y="38" width="156" height="32" rx="16" fill="#1C212E" stroke="#2D3446" stroke-width="1.2"/>
+  <text x="522" y="58" text-anchor="middle" fill="#D1D5DB" font-family="JetBrains Mono,monospace" font-size="11" font-weight="600">${safeTier}</text>
+
+  <!-- Center @handle -->
+  <text x="40" y="218" fill="#FFFFFF" font-family="Inter,system-ui,sans-serif" font-size="${fontSize}" font-weight="700" letter-spacing="-0.02em">${safeHandle}</text>
+  <text x="42" y="252" fill="#9CA3AF" font-family="Inter,system-ui,sans-serif" font-size="15">Sovereign BCH ↔ Nostr Identity Handle NFT</text>
+
+  <!-- Bottom Hairline Commitment Footer -->
+  <line x1="40" y1="306" x2="600" y2="306" stroke="#262C3B" stroke-width="1.2"/>
+  <text x="40" y="336" fill="#6B7280" font-family="Inter,system-ui,sans-serif" font-size="11">ON-CHAIN COMMITMENT (UL1)</text>
+  <text x="40" y="358" fill="#E5E7EB" font-family="JetBrains Mono,monospace" font-size="13">${commitmentHex.slice(0, 44)}</text>
+  <text x="600" y="336" text-anchor="end" fill="#6B7280" font-family="Inter,system-ui,sans-serif" font-size="11">METADATA</text>
+  <text x="600" y="358" text-anchor="end" fill="#10B981" font-family="JetBrains Mono,monospace" font-size="13" font-weight="600">BCMR v2</text>
+</svg>`;
+  },
+
+  /**
+   * Generates a valid BCMR v2 (`cashtokens.org/bcmr-v2.schema.json`) identity document
+   * mapping a Handle NFT commitment (`UL1:<handle>`) to its `@` collection icon,
+   * rendered NFT card SVG, and UserLink profile URI.
+   */
+  buildHandleBcmrRegistry({ target, categoryHex = '' }) {
+    const cleanHandle = resolveHandleInput(target);
+    const commitmentHex = Buffer.concat([Buffer.from('UL1:', 'utf8'), Buffer.from(cleanHandle, 'utf8')]).toString(
+      'hex'
+    );
+    const cleanCat = /^[0-9a-f]{64}$/i.test(String(categoryHex || '').trim())
+      ? String(categoryHex).trim().toLowerCase()
+      : '0000000000000000000000000000000000000000000000000000000000000000';
+    const revisionIso = '2026-11-22T00:00:00.000Z';
+
+    return {
+      $schema: 'https://cashtokens.org/bcmr-v2.schema.json',
+      version: { major: 2, minor: 0, patch: 0 },
+      latestRevision: revisionIso,
+      registryIdentity: {
+        name: 'UserLink Sovereign Handles Registry',
+        description: 'Official BCMR v2 Metadata Registry for UserLink @handle CashTokens NFTs',
+        uris: {
+          icon: 'https://bliquid.xyz/userlink-at-icon.svg',
+          web: 'https://bliquid.xyz/identity'
+        }
+      },
+      identities: {
+        [cleanCat]: {
+          [revisionIso]: {
+            name: `@${cleanHandle}`,
+            description: `Immutable UserLink @handle CashToken NFT (@${cleanHandle}) binding Bitcoin Cash and Nostr identities.`,
+            token: {
+              category: cleanCat,
+              symbol: '@ID',
+              decimals: 0,
+              nfts: {
+                description: 'UserLink CashTokens Handle NFTs encoded as UL1:<handle> (prefix 0x554c313a)',
+                parse: {
+                  types: {
+                    [commitmentHex]: {
+                      name: `@${cleanHandle}`,
+                      description: `Sovereign handle @${cleanHandle} verified via BCH Signed Message & Nostr Kind 30078.`,
+                      uris: {
+                        icon: `https://bliquid.xyz/api/identity/nft-card/${encodeURIComponent(cleanHandle)}.svg`,
+                        web: 'https://bliquid.xyz/identity'
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            uris: {
+              icon: 'https://bliquid.xyz/userlink-at-icon.svg',
+              web: 'https://bliquid.xyz/identity'
+            }
+          }
+        }
+      }
+    };
   }
 };

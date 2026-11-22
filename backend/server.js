@@ -764,6 +764,31 @@ app.get('/api/bch/tx/:txid', balanceReadLimiter, async (req, res) => {
 });
 
 // UserLink Handle Anti-Spam Tiered Minting & Non-Custodial P2SH-32 Handle NFT Marketplace
+app.get('/api/identity/nft-card/:target', balanceReadLimiter, (req, res) => {
+  try {
+    const svg = handleMarketService.renderHandleNftCardSvg(req.params.target);
+    res.setHeader('Content-Type', 'image/svg+xml; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=300');
+    res.send(svg);
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+app.get('/api/identity/bcmr/:target', balanceReadLimiter, (req, res) => {
+  try {
+    const bcmrDoc = handleMarketService.buildHandleBcmrRegistry({
+      target: req.params.target,
+      categoryHex: String(req.query.category || '')
+    });
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=300');
+    res.json(bcmrDoc);
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
 app.get('/api/identity/handle-pricing', balanceReadLimiter, async (req, res) => {
   try {
     const handle = String(req.query.handle || 'cash');

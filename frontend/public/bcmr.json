@@ -41,5 +41,20 @@
         }
       }
     }
+  },
+  "extensions": {
+    "userlink": {
+      "protocol": "bch-nostr-userlink-id-v1",
+      "symbol": "@ID",
+      "collectionName": "UserLink Sovereign Handles",
+      "description": "Immutable CashToken NFTs (commitment prefix 0x554c313a 'UL1:' + UTF-8 handle) binding Bitcoin Cash handles with Nostr BIP-340 identities.",
+      "commitmentPrefixHex": "554c313a",
+      "dynamicBcmrTemplate": "https://bliquid.xyz/api/identity/bcmr/{handle}",
+      "dynamicCardTemplate": "https://bliquid.xyz/api/identity/nft-card/{handle}",
+      "uris": {
+        "icon": "https://bliquid.xyz/userlink-at-icon.svg",
+        "web": "https://bliquid.xyz/identity"
+      }
+    }
   }
 }

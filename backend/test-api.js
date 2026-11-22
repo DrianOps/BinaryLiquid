@@ -428,7 +428,17 @@ async function runSecuritySuite() {
   assert.strictEqual(marketListing.nftCommitmentHex, Buffer.from('UL1:cash', 'utf8').toString('hex'));
   assert.strictEqual(marketListing.feeSats, 100000, '2% of 0.05 BCH (5,000,000 sats) must equal 100,000 sats');
   handleMarketService.cancelMarketListing(marketListing.id, sampleSeller);
-  console.log('✅ [13/13] UserLink Handle NFT Anti-Spam Mint & P2SH-32 Atomic Marketplace Covenants verified');
+
+  // Verify dynamic BCMR v2 & SVG Handle NFT artwork generation (including UL1 hex decoding)
+  const svgByHandle = handleMarketService.renderHandleNftCardSvg('bch');
+  const svgByHex = handleMarketService.renderHandleNftCardSvg('554c313a626368');
+  assert.strictEqual(svgByHandle, svgByHex, 'SVG generator must decode UL1 hex commitments equivalently to handle names');
+  assert.ok(svgByHandle.includes('@bch') && svgByHandle.includes('BCMR v2'), 'Rendered SVG must show @handle & BCMR v2');
+  const bcmrDoc = handleMarketService.buildHandleBcmrRegistry({ target: 'bch' });
+  const rev = Object.values(bcmrDoc.identities)[0][bcmrDoc.latestRevision];
+  assert.strictEqual(rev.token.symbol, '@ID');
+  assert.strictEqual(rev.token.nfts.parse.types['554c313a626368'].name, '@bch');
+  console.log('✅ [13/13] UserLink Handle NFT Anti-Spam Mint, BCMR v2 SVG Card & P2SH-32 Marketplace verified');
 
   console.log('\n🎉 ALL_SECURITY_REGRESSION_TESTS_PASSED');
   process.exit(0);
