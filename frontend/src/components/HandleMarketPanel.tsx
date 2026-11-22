@@ -384,7 +384,7 @@ export const HandleMarketPanel: React.FC<HandleMarketPanelProps> = ({
               <div className="lg:col-span-5 space-y-2">
                 <div className="rounded-panel overflow-hidden border border-line bg-[#0D1017] shadow-soft">
                   <img
-                    src={`/api/identity/nft-card/${encodeURIComponent(quoteData.cleanHandle)}.svg`}
+                    src={`/api/identity/nft-card/${encodeURIComponent(quoteData.cleanHandle)}`}
                     alt={`${quoteData.handle} CashTokens BCMR NFT`}
                     className="w-full h-auto block"
                   />
@@ -392,7 +392,7 @@ export const HandleMarketPanel: React.FC<HandleMarketPanelProps> = ({
                 <div className="flex items-center justify-between text-[11px] text-ink-3 px-0.5">
                   <span>{isEs ? 'Vista previa BCMR (@ID)' : 'BCMR (@ID) wallet artwork'}</span>
                   <a
-                    href={`/api/identity/nft-card/${encodeURIComponent(quoteData.cleanHandle)}.svg`}
+                    href={`/api/identity/nft-card/${encodeURIComponent(quoteData.cleanHandle)}`}
                     target="_blank"
                     rel="noreferrer"
                     className="font-mono hover:text-ink inline-flex items-center gap-1"

@@ -451,7 +451,7 @@ export const handleMarketService = {
                       name: `@${cleanHandle}`,
                       description: `Sovereign handle @${cleanHandle} verified via BCH Signed Message & Nostr Kind 30078.`,
                       uris: {
-                        icon: `https://bliquid.xyz/api/identity/nft-card/${encodeURIComponent(cleanHandle)}.svg`,
+                        icon: `https://bliquid.xyz/api/identity/nft-card/${encodeURIComponent(cleanHandle)}`,
                         web: 'https://bliquid.xyz/identity'
                       }
                     }
