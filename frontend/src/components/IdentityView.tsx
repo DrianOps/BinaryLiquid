@@ -24,10 +24,12 @@ import {
   ArrowLeft,
   ArrowRight,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Tag
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
+import { HandleMarketPanel } from './HandleMarketPanel';
 import {
   generateSecretKey,
   getPublicKey,
@@ -84,7 +86,7 @@ interface IdentityViewProps {
   onToggleNetwork?: (net: 'mainnet' | 'testnet') => void;
 }
 
-type MainSection = 'register' | 'profile' | 'inspector';
+type MainSection = 'register' | 'profile' | 'market' | 'inspector';
 type RegisterSubStep = 'search' | 'checkout' | 'resolved';
 type InspectorSubTab = 'verify' | 'auth' | 'spec';
 
@@ -1634,6 +1636,18 @@ export default function IdentityView({
 
           <button
             type="button"
+            onClick={() => setActiveSection('market')}
+            className={`ui-segment-item flex items-center gap-1.5 whitespace-nowrap ${
+              activeSection === 'market' ? 'ui-segment-item-active' : ''
+            }`}
+          >
+            <Tag className="w-3.5 h-3.5 shrink-0" />
+            <span className="sm:hidden">{isEs ? 'Mercado' : 'Market'}</span>
+            <span className="hidden sm:inline">{isEs ? 'Mercado NFT' : 'Handle Market'}</span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => setActiveSection('inspector')}
             className={`ui-segment-item flex items-center gap-1.5 whitespace-nowrap ${
               activeSection === 'inspector' ? 'ui-segment-item-active' : ''
@@ -2624,6 +2638,20 @@ export default function IdentityView({
             />
           </div>
         </div>
+      )}
+
+      {/* =====================================================================
+          SECTION 2B: HANDLE MARKET (CashTokens NFT Minting & P2SH-32 Market)
+          ===================================================================== */}
+      {activeSection === 'market' && (
+        <HandleMarketPanel
+          isEs={isEs}
+          network={selectedNetwork}
+          connectedBchAddress={bchWallet?.address}
+          activeHandle={userHandle}
+          nostrPubkeyHex={nostrKeys?.pk}
+          onConnectBch={onConnectBch}
+        />
       )}
 
       {/* =====================================================================

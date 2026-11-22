@@ -20,6 +20,7 @@ import { bcmrService, normalizeCategoryId } from './services/bcmrService.js';
 import { lendingService } from './services/lendingService.js';
 import { perpsService } from './services/perpsService.js';
 import { p2pService } from './services/p2pService.js';
+import { handleMarketService } from './services/handleMarketService.js';
 import { watchmanSentinel } from './services/watchmanClient.js';
 import {
   parseCashAddress,
@@ -757,6 +758,59 @@ app.get('/api/bch/tx/:txid', balanceReadLimiter, async (req, res) => {
       { ttlMs: 30_000 }
     );
     res.json(payload);
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+// UserLink Handle Anti-Spam Tiered Minting & Non-Custodial P2SH-32 Handle NFT Marketplace
+app.get('/api/identity/handle-pricing', balanceReadLimiter, async (req, res) => {
+  try {
+    const handle = String(req.query.handle || 'cash');
+    const recipientAddress = String(req.query.recipientAddress || '');
+    const network = String(req.query.network || 'testnet').toLowerCase() === 'mainnet' ? 'mainnet' : 'testnet';
+    const quote = await handleMarketService.quoteHandleMint({ handle, recipientAddress, network });
+    res.json({ success: true, quote });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+app.get('/api/identity/market/listings', balanceReadLimiter, (req, res) => {
+  try {
+    const network = String(req.query.network || 'testnet').toLowerCase() === 'mainnet' ? 'mainnet' : 'testnet';
+    const listings = handleMarketService.listMarketListings(network);
+    res.json({ success: true, network, listings });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/identity/market/covenant', async (req, res) => {
+  try {
+    const { handle, sellerAddress, priceBch, priceSats, protocolFeeBps, expiryHours, network, nostrPubkeyHex } =
+      req.body || {};
+    const listing = await handleMarketService.createMarketListing({
+      handle,
+      sellerAddress,
+      priceBch,
+      priceSats,
+      protocolFeeBps,
+      expiryHours,
+      network,
+      nostrPubkeyHex
+    });
+    res.json({ success: true, listing });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+app.delete('/api/identity/market/listings/:id', (req, res) => {
+  try {
+    const sellerAddress = String(req.query.sellerAddress || req.body?.sellerAddress || '');
+    const result = handleMarketService.cancelMarketListing(req.params.id, sellerAddress);
+    res.json({ success: true, ...result });
   } catch (err) {
     res.status(400).json({ success: false, error: err.message });
   }

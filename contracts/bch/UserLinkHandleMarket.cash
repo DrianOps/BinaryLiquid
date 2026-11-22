@@ -1,0 +1,155 @@
+pragma cashscript ^0.14.0;
+
+/**
+ * @title UserLinkHandleMarket (Non-Custodial CashTokens Handle NFT Marketplace Covenant)
+ * @author BinaryLiquid Protocol / DrianOps
+ * @notice Trustless Bitcoin Cash P2SH-32 covenant enabling atomic peer-to-peer buying and selling
+ *         of UserLink @handle CashToken NFTs (commitment `UL1:<handle>`) with zero custody.
+ *
+ * SECURITY INVARIANTS:
+ * 1. Atomic Swap: `buyHandle()` requires exact BCH payment to `sellerLockingBytecode` (and optional
+ *    protocol royalty `protocolFeeBps` <= 10% to `treasuryLockingBytecode`) in the SAME transaction
+ *    that delivers the exact Handle NFT (`tokenCategory` + `nftCommitment`) to the buyer.
+ * 2. Exact Handle Commitment Lock: Rejects any spend unless Input #0 carries `expectedHandleCommitment`.
+ * 3. Anti Multi-Input Drain: Limits `tx.inputs.length <= 3` and requires auxiliary buyer funding
+ *    inputs (#1, #2) to hold `tokenCategory == 0x` so no unrelated CashTokens can be burned.
+ * 4. Seller Sovereignty & Expiry Recovery: Seller can cancel anytime via `cancelListing()` (signed
+ *    by `sellerPkh`), or anyone can return the NFT strictly to `sellerLockingBytecode` after `expiryTimestamp`.
+ */
+contract UserLinkHandleMarket(
+    bytes20 sellerPkh,
+    bytes sellerLockingBytecode,
+    bytes treasuryLockingBytecode,
+    int priceSats,
+    int protocolFeeBps,
+    bytes expectedHandleCommitment,
+    int expiryTimestamp
+) {
+    /**
+     * @notice Permissionless atomic purchase: buyer pays BCH directly to Seller (+ optional royalty)
+     *         and receives the Handle CashToken NFT atomically in a single L1 transaction.
+     */
+    function buyHandle() {
+        require(this.activeInputIndex == 0);
+        require(priceSats >= 1000);
+        require(protocolFeeBps >= 0 && protocolFeeBps <= 1000);
+        require(expectedHandleCommitment.length > 0);
+
+        // Input #0 must hold the listed Handle CashToken NFT
+        bytes inputCat = tx.inputs[0].tokenCategory;
+        bytes inputComm = tx.inputs[0].nftCommitment;
+        int inputTokenAmt = tx.inputs[0].tokenAmount;
+        require(inputCat != 0x);
+        require(inputComm == expectedHandleCommitment);
+
+        // Guard auxiliary buyer BCH inputs so no unrelated CashTokens are accidentally burned
+        require(tx.inputs.length >= 2 && tx.inputs.length <= 3);
+        require(tx.inputs[1].tokenCategory == 0x);
+        if (tx.inputs.length == 3) {
+            require(tx.inputs[2].tokenCategory == 0x);
+        }
+
+        int feeSats = (priceSats * protocolFeeBps) / 10000;
+        if (feeSats < 546) {
+            feeSats = 0;
+        }
+        int sellerNetSats = priceSats - feeSats;
+        require(sellerNetSats >= 546);
+
+        // Output #0: Pure BCH payment strictly to Seller
+        require(tx.outputs[0].lockingBytecode == sellerLockingBytecode);
+        require(tx.outputs[0].tokenCategory == 0x);
+        require(tx.outputs[0].value >= sellerNetSats);
+
+        if (feeSats > 0) {
+            // Output #1: Optional protocol royalty strictly to Treasury
+            require(tx.outputs[1].lockingBytecode == treasuryLockingBytecode);
+            require(tx.outputs[1].tokenCategory == 0x);
+            require(tx.outputs[1].value >= feeSats);
+
+            // Output #2: Exact Handle CashToken NFT delivered to Buyer
+            require(tx.outputs[2].tokenCategory == inputCat);
+            require(tx.outputs[2].nftCommitment == inputComm);
+            require(tx.outputs[2].tokenAmount == inputTokenAmt);
+            require(tx.outputs[2].value >= 800);
+
+            // Optional Output #3: Pure BCH change back to Buyer
+            require(tx.outputs.length >= 3 && tx.outputs.length <= 4);
+            if (tx.outputs.length == 4) {
+                require(tx.outputs[3].tokenCategory == 0x);
+            }
+        } else {
+            // Output #1: Exact Handle CashToken NFT delivered to Buyer (0% fee path)
+            require(tx.outputs[1].tokenCategory == inputCat);
+            require(tx.outputs[1].nftCommitment == inputComm);
+            require(tx.outputs[1].tokenAmount == inputTokenAmt);
+            require(tx.outputs[1].value >= 800);
+
+            // Optional Output #2: Pure BCH change back to Buyer
+            require(tx.outputs.length >= 2 && tx.outputs.length <= 3);
+            if (tx.outputs.length == 3) {
+                require(tx.outputs[2].tokenCategory == 0x);
+            }
+        }
+    }
+
+    /**
+     * @notice Seller cancels listing anytime and retrieves 100% of the Handle NFT back to their address.
+     */
+    function cancelListing(sig sellerSig, pubkey sellerPk) {
+        require(this.activeInputIndex == 0);
+        require(hash160(sellerPk) == sellerPkh);
+        require(checkSig(sellerSig, sellerPk));
+
+        require(tx.inputs.length <= 2);
+        if (tx.inputs.length == 2) {
+            require(tx.inputs[1].tokenCategory == 0x);
+            require(tx.outputs.length <= 2);
+            if (tx.outputs.length == 2) {
+                require(tx.outputs[1].tokenCategory == 0x);
+            }
+        } else {
+            require(tx.outputs.length == 1);
+        }
+
+        bytes inputCat = tx.inputs[0].tokenCategory;
+        bytes inputComm = tx.inputs[0].nftCommitment;
+        int inputTokenAmt = tx.inputs[0].tokenAmount;
+
+        require(tx.outputs[0].lockingBytecode == sellerLockingBytecode);
+        require(tx.outputs[0].tokenCategory == inputCat);
+        require(tx.outputs[0].nftCommitment == inputComm);
+        require(tx.outputs[0].tokenAmount == inputTokenAmt);
+        require(tx.outputs[0].value >= 800);
+    }
+
+    /**
+     * @notice Permissionless expiry recovery: after `expiryTimestamp`, anyone can return the Handle NFT
+     *         strictly back to `sellerLockingBytecode`.
+     */
+    function reclaimExpired() {
+        require(this.activeInputIndex == 0);
+        require(tx.time >= expiryTimestamp);
+
+        require(tx.inputs.length <= 2);
+        if (tx.inputs.length == 2) {
+            require(tx.inputs[1].tokenCategory == 0x);
+            require(tx.outputs.length <= 2);
+            if (tx.outputs.length == 2) {
+                require(tx.outputs[1].tokenCategory == 0x);
+            }
+        } else {
+            require(tx.outputs.length == 1);
+        }
+
+        bytes inputCat = tx.inputs[0].tokenCategory;
+        bytes inputComm = tx.inputs[0].nftCommitment;
+        int inputTokenAmt = tx.inputs[0].tokenAmount;
+
+        require(tx.outputs[0].lockingBytecode == sellerLockingBytecode);
+        require(tx.outputs[0].tokenCategory == inputCat);
+        require(tx.outputs[0].nftCommitment == inputComm);
+        require(tx.outputs[0].tokenAmount == inputTokenAmt);
+        require(tx.outputs[0].value >= 800);
+    }
+}

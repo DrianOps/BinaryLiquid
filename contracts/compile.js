@@ -82,7 +82,9 @@ for (const cashFile of [
   'BinaryLiquidEscrowV2.cash',
   'BinaryLiquidCollateralVault.cash',
   'BinaryLiquidCollateralVaultV2.cash',
-  'BinaryLiquidP2PEscrow.cash'
+  'BinaryLiquidP2PEscrow.cash',
+  'UserLinkHandleMarket.cash',
+  'UserLinkHandleMint.cash'
 ]) {
   const contractName = cashFile.replace('.cash', '');
   const artifact = compileFile(path.join(bchDir, cashFile));

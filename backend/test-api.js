@@ -405,6 +405,29 @@ async function runSecuritySuite() {
   assert.ok(fs.existsSync(path.join(ROOT_DIR, 'docs', 'USERLINK_PROTOCOL.md')), 'USERLINK_PROTOCOL.md specification must exist');
   console.log('✅ [12/12] UserLink Cryptographic Protocol (DIDs, Key Rotation, W3C VC Kind 1985, Selective Disclosure & OP_RETURN Anchor) verified');
 
+  // 13. UserLink Handle NFT Anti-Spam Tiered Minting & P2SH-32 Non-Custodial Marketplace Covenants
+  const { handleMarketService } = await import('./services/handleMarketService.js');
+  const q3 = await handleMarketService.quoteHandleMint({ handle: 'bch', network: 'testnet' });
+  const q6 = await handleMarketService.quoteHandleMint({ handle: 'satoshi_bch', network: 'testnet' });
+  assert.strictEqual(q3.tier.key, 'ultraRare', '3-char handle must map to ultraRare tier');
+  assert.strictEqual(q6.tier.key, 'standard', '6+ char handle must map to standard tier');
+  assert.ok(q3.tier.sats > q6.tier.sats, 'Short handle anti-spam fee must exceed standard handle fee');
+  assert.ok(q3.covenant.covenantTokenAddress.startsWith('bchtest:r'), 'Mint covenant must be P2SH-32 token-aware');
+
+  const sampleSeller = 'bchtest:qpu5kzafwrjh2xkj8xqttld2zadvqkj2jyhu674hjh';
+  const marketListing = await handleMarketService.createMarketListing({
+    handle: 'cash',
+    sellerAddress: sampleSeller,
+    priceBch: 0.05,
+    protocolFeeBps: 200,
+    network: 'testnet'
+  });
+  assert.ok(marketListing.covenant.covenantTokenAddress.startsWith('bchtest:r'), 'Market covenant must be P2SH-32 token-aware');
+  assert.strictEqual(marketListing.nftCommitmentHex, Buffer.from('UL1:cash', 'utf8').toString('hex'));
+  assert.strictEqual(marketListing.feeSats, 100000, '2% of 0.05 BCH (5,000,000 sats) must equal 100,000 sats');
+  handleMarketService.cancelMarketListing(marketListing.id, sampleSeller);
+  console.log('✅ [13/13] UserLink Handle NFT Anti-Spam Mint & P2SH-32 Atomic Marketplace Covenants verified');
+
   console.log('\n🎉 ALL_SECURITY_REGRESSION_TESTS_PASSED');
   process.exit(0);
 }
