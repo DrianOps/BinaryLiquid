@@ -1,15 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Check,
-  Copy,
-  ShieldCheck,
-  Sparkles,
-  Tag,
-  Trash2,
-  Wallet,
   AlertCircle,
+  Check,
+  CheckCircle2,
+  Copy,
   RefreshCw,
-  Lock
+  Trash2
 } from 'lucide-react';
 import { convertCashAddressNetwork, formatAddress } from '../utils/bchAddress';
 
@@ -100,23 +96,20 @@ export const HandleMarketPanel: React.FC<HandleMarketPanelProps> = ({
     ? convertCashAddressNetwork(connectedBchAddress, !isMainnet, false)
     : '';
 
-  // 1. Tiered Minting Quote state
   const [quoteHandle, setQuoteHandle] = useState('bch');
   const [quoteData, setQuoteData] = useState<HandleQuote | null>(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
   const [quoteError, setQuoteError] = useState<string | null>(null);
 
-  // 2. Secondary Market Listing state
   const [sellHandle, setSellHandle] = useState(
     (activeHandle || 'cash').replace(/^@+/, '').split('@')[0] || 'cash'
   );
   const [sellAddress, setSellAddress] = useState(normalizedWalletAddr);
-  const [sellPriceBch, setSellPriceBch] = useState('0.05');
+  const [sellPriceBch, setSellPriceBch] = useState('0.01');
   const [creatingListing, setCreatingListing] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [createdListing, setCreatedListing] = useState<MarketListing | null>(null);
 
-  // 3. Active listings
   const [listings, setListings] = useState<MarketListing[]>([]);
   const [loadingListings, setLoadingListings] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -142,10 +135,7 @@ export const HandleMarketPanel: React.FC<HandleMarketPanelProps> = ({
       setQuoteLoading(true);
       setQuoteError(null);
       try {
-        const params = new URLSearchParams({
-          handle: clean,
-          network
-        });
+        const params = new URLSearchParams({ handle: clean, network });
         if (normalizedWalletAddr) {
           params.set('recipientAddress', normalizedWalletAddr);
         }
@@ -172,9 +162,7 @@ export const HandleMarketPanel: React.FC<HandleMarketPanelProps> = ({
       if (res.ok && data?.success) {
         setListings(Array.isArray(data.listings) ? data.listings : []);
       }
-    } catch {
-      // ignore offline preview
-    } finally {
+    } catch {} finally {
       setLoadingListings(false);
     }
   }, [network]);
@@ -210,7 +198,7 @@ export const HandleMarketPanel: React.FC<HandleMarketPanelProps> = ({
       });
       const data = await res.json();
       if (!res.ok || !data?.success) {
-        throw new Error(data?.error || 'Failed to instantiate P2SH-32 covenant');
+        throw new Error(data?.error || 'Failed to create P2SH-32 covenant');
       }
       setCreatedListing(data.listing);
       void fetchListings();
@@ -237,32 +225,26 @@ export const HandleMarketPanel: React.FC<HandleMarketPanelProps> = ({
   };
 
   return (
-    <div className="space-y-6">
-      {/* CARD 1: ANTI-SPAM TIERED CASHTOKENS NFT MINTING COVENANT */}
-      <div className="ui-card p-5 sm:p-6 space-y-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
+    <div className="max-w-[960px] mx-auto space-y-6">
+      {/* SHEET 1: BCH-NATIVE ON-CHAIN HANDLE PRICING & MINT COVENANT */}
+      <section className="bg-surface border border-line rounded-card shadow-soft p-6 sm:p-8 space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 pb-5 border-b border-line">
           <div>
-            <div className="inline-flex items-center gap-1.5 text-[11px] font-mono text-primary font-semibold uppercase tracking-wide">
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>CashScript P2SH-32 · UserLinkHandleMint.cash</span>
-            </div>
-            <h3 className="ui-section-title mt-1">
+            <h2 className="text-lg sm:text-xl font-semibold tracking-tight text-ink">
+              {isEs ? 'Handles Transferibles como CashToken NFT' : 'On-Chain Handle NFTs & Anti-Spam Pricing'}
+            </h2>
+            <p className="text-sm text-ink-2 mt-1 max-w-2xl">
               {isEs
-                ? 'Registro Anti-Spam de Handles NFT (Commit-Reveal)'
-                : 'Anti-Spam Handle CashTokens NFT Minting (Commit-Reveal)'}
-            </h3>
-            <p className="ui-subtitle">
-              {isEs
-                ? 'La identidad base Nostr (Kind 30078) siempre es gratis. Para nombres globales únicos transferibles como CashToken NFT (UL1:<handle>), el contrato cobra tarifa anti-spam escalonada por longitud.'
-                : 'Base Nostr identities (Kind 30078) remain 100% free. Optional tradeable CashToken NFT handles (UL1:<handle>) enforce length-tiered anti-spam fees directly on BCH L1.'}
+                ? 'La identidad base Nostr (Kind 30078) siempre es $0. Si deseas un handle global único y vendible como NFT en Bitcoin Cash, el covenant cobra una tarifa única accesible pensada para BCH.'
+                : 'Base Nostr handles (Kind 30078) remain free forever. Optional tradeable CashToken NFT handles use Bitcoin Cash micro-pricing with zero annual renewals.'}
             </p>
           </div>
-          <span className="ui-badge font-mono text-[11px]">
-            {isMainnet ? 'Mainnet P2SH-32' : 'Chipnet P2SH-32'}
-          </span>
+          <div className="text-xs font-mono text-ink-3 shrink-0">
+            {isMainnet ? 'Mainnet · P2SH-32' : 'Chipnet · P2SH-32'}
+          </div>
         </div>
 
-        {/* Handle quote form */}
+        {/* Handle lookup & live covenant derivation */}
         <form onSubmit={handleQuoteSubmit} className="flex flex-col sm:flex-row gap-2.5">
           <div className="relative flex-1">
             <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-3 font-mono text-sm">@</span>
@@ -270,324 +252,324 @@ export const HandleMarketPanel: React.FC<HandleMarketPanelProps> = ({
               type="text"
               value={quoteHandle}
               onChange={(e) => setQuoteHandle(e.target.value.replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase())}
-              placeholder="bch, cash, maria, satoshi..."
+              placeholder="bch, cash, maria, tienda..."
               maxLength={32}
-              className="ui-input pl-8 font-mono text-sm"
+              className="ui-input bg-surface-2 pl-8 font-mono text-sm"
             />
           </div>
-          <button type="submit" disabled={quoteLoading} className="ui-btn-primary sm:w-auto">
+          <button type="submit" disabled={quoteLoading} className="ui-btn-primary sm:px-6 shrink-0">
             {quoteLoading
               ? isEs
                 ? 'Calculando...'
-                : 'Quoting...'
+                : 'Deriving...'
               : isEs
-              ? 'Cotizar & Generar Covenant'
-              : 'Quote & Derive Covenant'}
+              ? 'Calcular tarifa'
+              : 'Calculate rate'}
           </button>
         </form>
 
         {quoteError && (
-          <div className="p-3 rounded-control border border-rose-500/30 bg-rose-500/5 text-xs text-rose-500 flex items-center gap-2">
+          <div className="text-xs text-rose-500 flex items-center gap-2">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{quoteError}</span>
           </div>
         )}
 
         {quoteData && (
-          <div className="space-y-4">
-            {/* 4-tier anti-spam pricing strip */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+          <div className="space-y-6">
+            {/* Compact horizontal hairline pricing table (no nested box cards) */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 border-y border-line divide-y sm:divide-y-0 sm:divide-x divide-line">
               {quoteData.allTiers.map((tier) => {
-                const isSelected = tier.key === quoteData.tier.key;
+                const active = tier.key === quoteData.tier.key;
+                const rangeLabel =
+                  tier.minLen === tier.maxLen
+                    ? `${tier.minLen} ${isEs ? 'letras' : 'chars'}`
+                    : tier.maxLen === 3
+                    ? `1–3 ${isEs ? 'letras' : 'chars'}`
+                    : `6+ ${isEs ? 'letras' : 'chars'}`;
                 return (
                   <div
                     key={tier.key}
-                    className={`rounded-panel p-3 border transition-colors ${
-                      isSelected
-                        ? 'bg-primary/5 border-primary/50'
-                        : 'bg-surface-2/60 border-line'
+                    className={`py-3.5 px-3 sm:px-4 transition-colors ${
+                      active ? 'bg-surface-2/80' : ''
                     }`}
                   >
-                    <div className="text-[11px] text-ink-3 font-medium">
-                      {tier.minLen === tier.maxLen
-                        ? `${tier.minLen} ${isEs ? 'letras' : 'chars'}`
-                        : tier.maxLen === 3
-                        ? `1–3 ${isEs ? 'letras' : 'chars'}`
-                        : `6+ ${isEs ? 'letras' : 'chars'}`}
+                    <div className="flex items-center justify-between gap-2 text-xs text-ink-3">
+                      <span>{rangeLabel}</span>
+                      {active && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" title="Selected tier" />
+                      )}
                     </div>
-                    <div className="text-base font-bold text-ink mt-0.5 tabular-nums">
-                      ${tier.usd < 1 ? tier.usd.toFixed(2) : tier.usd} USD
+                    <div className="mt-1 flex items-baseline gap-1.5">
+                      <span className="text-lg font-semibold text-ink tabular-nums">
+                        ${tier.usd < 1 ? tier.usd.toFixed(2) : tier.usd}
+                      </span>
+                      <span className="text-[11px] text-ink-3">{isEs ? 'pago único' : 'one-time'}</span>
                     </div>
-                    <div className="text-[11px] font-mono text-ink-2 tabular-nums">
-                      {tier.bch} BCH ({tier.sats.toLocaleString()} sats)
+                    <div className="text-[11px] font-mono text-ink-2 mt-0.5 tabular-nums">
+                      {tier.bch} BCH
                     </div>
                   </div>
                 );
               })}
             </div>
 
-            {/* Derived P2SH-32 Mint Covenant details */}
-            <div className="ui-panel p-4 space-y-2.5 text-xs">
-              <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-line">
-                <div className="flex items-center gap-2">
-                  <span className="font-mono font-bold text-ink text-sm">{quoteData.handle}</span>
-                  <span className="ui-badge text-[11px]">{quoteData.tier.label}</span>
-                </div>
-                <span className="font-mono text-emerald-600 dark:text-emerald-400 font-semibold tabular-nums">
-                  {quoteData.tier.bch} BCH (~${quoteData.tier.usd} USD) · {quoteData.covenant.opcodes} opcodes
+            {/* Clean key-value specification rows for derived Mint Covenant */}
+            <div className="divide-y divide-line text-xs">
+              <div className="py-3 flex flex-wrap items-center justify-between gap-2">
+                <span className="text-ink-3">{isEs ? 'Cotización seleccionada' : 'Selected handle & fee'}</span>
+                <span className="font-mono font-semibold text-ink tabular-nums">
+                  {quoteData.handle} · ${quoteData.tier.usd < 1 ? quoteData.tier.usd.toFixed(2) : quoteData.tier.usd} USD ({quoteData.tier.bch} BCH)
                 </span>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                <div className="space-y-1">
-                  <div className="text-[11px] text-ink-3">
-                    {isEs ? 'Dirección P2SH-32 Mint Covenant (Token-Aware)' : 'P2SH-32 Mint Covenant Address (Token-Aware)'}
-                  </div>
-                  <div className="flex items-center justify-between gap-2 bg-surface border border-line rounded-control px-2.5 py-1.5 font-mono text-[11px]">
-                    <span className="truncate text-ink">{quoteData.covenant.covenantTokenAddress}</span>
-                    <button
-                      type="button"
-                      onClick={() => copyText(quoteData.covenant.covenantTokenAddress, 'mint-addr')}
-                      className="text-ink-3 hover:text-ink shrink-0 cursor-pointer"
-                    >
-                      {copiedId === 'mint-addr' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <div className="text-[11px] text-ink-3">
-                    {isEs ? 'Compromiso NFT CashToken (UL1:<handle>)' : 'CashToken NFT Commitment (UL1:<handle>)'}
-                  </div>
-                  <div className="flex items-center justify-between gap-2 bg-surface border border-line rounded-control px-2.5 py-1.5 font-mono text-[11px]">
-                    <span className="truncate text-ink">{quoteData.nftCommitmentHex}</span>
-                    <button
-                      type="button"
-                      onClick={() => copyText(quoteData.nftCommitmentHex, 'mint-comm')}
-                      className="text-ink-3 hover:text-ink shrink-0 cursor-pointer"
-                    >
-                      {copiedId === 'mint-comm' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                    </button>
-                  </div>
+              <div className="py-3 flex flex-wrap items-center justify-between gap-3">
+                <span className="text-ink-3 shrink-0">
+                  {isEs ? 'Covenant P2SH-32 Mint' : 'P2SH-32 Mint Covenant'}
+                </span>
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="font-mono text-ink truncate max-w-[260px] sm:max-w-[460px]">
+                    {quoteData.covenant.covenantTokenAddress}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => copyText(quoteData.covenant.covenantTokenAddress, 'mint-addr')}
+                    className="text-ink-3 hover:text-ink cursor-pointer shrink-0"
+                    title="Copy P2SH-32 address"
+                  >
+                    {copiedId === 'mint-addr' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                  </button>
                 </div>
               </div>
 
-              <div className="text-[11px] font-mono text-ink-3 break-all pt-1">
-                Commit-Reveal SHA256d: <span className="text-ink-2">{quoteData.commitReveal.commitHashHex}</span>
+              <div className="py-3 flex flex-wrap items-center justify-between gap-3">
+                <span className="text-ink-3 shrink-0">NFT Commitment (hex)</span>
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="font-mono text-ink-2">{quoteData.nftCommitmentHex}</span>
+                  <button
+                    type="button"
+                    onClick={() => copyText(quoteData.nftCommitmentHex, 'mint-comm')}
+                    className="text-ink-3 hover:text-ink cursor-pointer shrink-0"
+                    title="Copy commitment"
+                  >
+                    {copiedId === 'mint-comm' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="py-3 flex flex-wrap items-center justify-between gap-3">
+                <span className="text-ink-3 shrink-0">Commit-Reveal SHA256d</span>
+                <span className="font-mono text-ink-2 truncate max-w-[260px] sm:max-w-[460px]">
+                  {quoteData.commitReveal.commitHashHex}
+                </span>
               </div>
             </div>
           </div>
         )}
-      </div>
+      </section>
 
-      {/* CARD 2: ATOMIC NON-CUSTODIAL HANDLE NFT MARKETPLACE */}
-      <div className="ui-card p-5 sm:p-6 space-y-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <div className="inline-flex items-center gap-1.5 text-[11px] font-mono text-emerald-600 dark:text-emerald-400 font-semibold uppercase tracking-wide">
-              <Lock className="w-3.5 h-3.5" />
-              <span>CashScript P2SH-32 · UserLinkHandleMarket.cash</span>
+      {/* SHEET 2: P2P NON-CUSTODIAL HANDLE MARKETPLACE (2-COLUMN LEDGER + COMPOSER) */}
+      <section className="bg-surface border border-line rounded-card shadow-soft overflow-hidden">
+        <div className="grid grid-cols-1 lg:grid-cols-12 divide-y lg:divide-y-0 lg:divide-x divide-line">
+          {/* LEFT: Active Orderbook (7 cols) */}
+          <div className="lg:col-span-7 p-6 sm:p-8 flex flex-col justify-between space-y-5">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-base font-semibold text-ink">
+                    {isEs ? 'Órdenes Activas en Mercado P2SH-32' : 'Open P2SH-32 Handle Orderbook'}
+                  </h3>
+                  <p className="text-xs text-ink-2 mt-0.5">
+                    {isEs
+                      ? 'Compra directa on-chain al vendedor en la misma tx del NFT.'
+                      : 'Atomic BCH-for-NFT settlement directly with the listing owner.'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void fetchListings()}
+                  className="ui-btn-ghost ui-btn-sm shrink-0"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${loadingListings ? 'animate-spin' : ''}`} />
+                  <span>{isEs ? 'Actualizar' : 'Refresh'}</span>
+                </button>
+              </div>
+
+              {listings.length === 0 ? (
+                <div className="py-12 border-t border-line text-center space-y-1">
+                  <div className="text-sm font-medium text-ink">
+                    {isEs ? 'Sin handles en venta en esta red' : 'No open listings on this network'}
+                  </div>
+                  <p className="text-xs text-ink-3">
+                    {isEs
+                      ? 'Publica un handle desde el formulario lateral para crear el primer covenant P2SH-32.'
+                      : 'Create a P2SH-32 covenant on the right to list a Handle CashToken NFT.'}
+                  </p>
+                </div>
+              ) : (
+                <div className="divide-y divide-line border-t border-line">
+                  {listings.map((item) => (
+                    <div key={item.id} className="py-3.5 flex items-center justify-between gap-3 text-xs">
+                      <div className="min-w-0 space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-semibold text-ink text-sm">{item.handle}</span>
+                          <span className="text-ink-3 font-mono text-[11px]">
+                            {formatAddress(item.sellerAddress)}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 font-mono text-[11px] text-ink-3">
+                          <span className="truncate max-w-[230px] sm:max-w-[300px]">
+                            {item.covenant.covenantTokenAddress}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => copyText(item.covenant.covenantTokenAddress, item.id)}
+                            className="text-ink-3 hover:text-ink cursor-pointer shrink-0"
+                          >
+                            {copiedId === item.id ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3 shrink-0">
+                        <div className="text-right tabular-nums">
+                          <div className="font-mono font-semibold text-ink">{item.priceBch} BCH</div>
+                          <div className="text-[11px] text-ink-3">~${item.priceUsdEst} USD</div>
+                        </div>
+                        {normalizedWalletAddr &&
+                          item.sellerAddress.toLowerCase() === normalizedWalletAddr.toLowerCase() && (
+                            <button
+                              type="button"
+                              onClick={() => void handleRemoveListing(item)}
+                              className="p-1.5 rounded-control text-ink-3 hover:text-rose-500 cursor-pointer"
+                              title={isEs ? 'Retirar listado' : 'Remove listing'}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-            <h3 className="ui-section-title mt-1">
-              {isEs
-                ? 'Mercado P2P sin Custodia para Comprar / Vender Handles NFT'
-                : 'Non-Custodial P2P Handle NFT Marketplace'}
-            </h3>
-            <p className="ui-subtitle">
-              {isEs
-                ? 'Publica tu CashToken NFT en un covenant atómico P2SH-32: cualquier comprador paga BCH directo a tu dirección (2% royalty on-chain) y recibe el NFT en la misma transacción. Cancela cuando quieras con tu firma BCH.'
-                : 'Lock your Handle CashToken NFT inside an atomic P2SH-32 covenant: buyers pay BCH directly to your address (2% on-chain royalty) and receive the NFT in the same L1 tx. Cancel anytime with your BCH key.'}
-            </p>
+
+            <div className="pt-3 border-t border-line text-[11px] text-ink-3 flex flex-wrap items-center justify-between gap-2">
+              <span>UserLinkHandleMarket.cash · P2SH-32</span>
+              <span>{isEs ? 'Royalty 2% · Timelock 7 días' : '2% protocol fee · 7d reclaim'}</span>
+            </div>
           </div>
-          {!normalizedWalletAddr && (
-            <button type="button" onClick={onConnectBch} className="ui-btn-secondary ui-btn-sm">
-              <Wallet className="w-3.5 h-3.5" />
-              <span>{isEs ? 'Autocompletar con Wallet' : 'Autofill from Wallet'}</span>
-            </button>
-          )}
-        </div>
 
-        <form onSubmit={handleCreateCovenant} className="ui-panel p-4 space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-ink-2">
-                {isEs ? 'Handle NFT a vender' : 'Handle NFT to sell'}
-              </label>
-              <input
-                type="text"
-                value={sellHandle}
-                onChange={(e) => setSellHandle(e.target.value.replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase())}
-                placeholder="cash"
-                required
-                className="ui-input bg-surface border-line font-mono text-xs"
-              />
+          {/* RIGHT: Create Sale Covenant Form (5 cols) */}
+          <div className="lg:col-span-5 p-6 sm:p-8 bg-surface-2/40 space-y-5">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-base font-semibold text-ink">
+                {isEs ? 'Vender un Handle NFT' : 'List Handle NFT'}
+              </h3>
+              {!normalizedWalletAddr && (
+                <button
+                  type="button"
+                  onClick={onConnectBch}
+                  className="text-xs font-medium text-ink-2 hover:text-ink underline cursor-pointer"
+                >
+                  {isEs ? 'Usar mi wallet' : 'Connect wallet'}
+                </button>
+              )}
             </div>
 
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-ink-2">
-                {isEs ? 'Precio de venta (BCH)' : 'Asking Price (BCH)'}
-              </label>
-              <input
-                type="number"
-                step="0.0001"
-                min="0.00001"
-                max="1000"
-                value={sellPriceBch}
-                onChange={(e) => setSellPriceBch(e.target.value)}
-                required
-                className="ui-input bg-surface border-line font-mono text-xs"
-              />
-            </div>
+            <form onSubmit={handleCreateCovenant} className="space-y-3.5">
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-ink-2">
+                  {isEs ? 'Nombre del handle' : 'Handle name'}
+                </label>
+                <input
+                  type="text"
+                  value={sellHandle}
+                  onChange={(e) => setSellHandle(e.target.value.replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase())}
+                  placeholder="cash"
+                  required
+                  className="ui-input bg-surface border-line font-mono text-xs"
+                />
+              </div>
 
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-ink-2">
-                {isEs ? 'Dirección BCH del vendedor (P2PKH)' : 'Seller BCH Address (P2PKH)'}
-              </label>
-              <input
-                type="text"
-                value={sellAddress}
-                onChange={(e) => setSellAddress(e.target.value)}
-                placeholder={isMainnet ? 'bitcoincash:q...' : 'bchtest:q...'}
-                required
-                className="ui-input bg-surface border-line font-mono text-xs"
-              />
-            </div>
-          </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-ink-2">
+                  {isEs ? 'Precio solicitado (BCH)' : 'Price (BCH)'}
+                </label>
+                <input
+                  type="number"
+                  step="0.0001"
+                  min="0.00001"
+                  max="1000"
+                  value={sellPriceBch}
+                  onChange={(e) => setSellPriceBch(e.target.value)}
+                  required
+                  className="ui-input bg-surface border-line font-mono text-xs"
+                />
+              </div>
 
-          {createError && (
-            <div className="p-2.5 rounded-control border border-rose-500/30 bg-rose-500/5 text-xs text-rose-500 flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              <span>{createError}</span>
-            </div>
-          )}
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-ink-2">
+                  {isEs ? 'Tu dirección BCH (P2PKH)' : 'Seller BCH address (P2PKH)'}
+                </label>
+                <input
+                  type="text"
+                  value={sellAddress}
+                  onChange={(e) => setSellAddress(e.target.value)}
+                  placeholder={isMainnet ? 'bitcoincash:q...' : 'bchtest:q...'}
+                  required
+                  className="ui-input bg-surface border-line font-mono text-xs"
+                />
+              </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-            <span className="text-[11px] text-ink-3">
-              {isEs
-                ? 'Royalty on-chain: 2% · Timelock de recuperación: 7 días · 100% sin custodia'
-                : 'On-chain royalty: 2% · Expiry reclaim timelock: 7 days · 100% non-custodial'}
-            </span>
-            <button type="submit" disabled={creatingListing} className="ui-btn-primary ui-btn-sm">
-              <Tag className="w-3.5 h-3.5" />
-              <span>
+              {createError && (
+                <div className="text-xs text-rose-500 flex items-center gap-1.5">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                  <span>{createError}</span>
+                </div>
+              )}
+
+              <button type="submit" disabled={creatingListing} className="ui-btn-primary w-full">
                 {creatingListing
                   ? isEs
-                    ? 'Instanciando Covenant...'
-                    : 'Instantiating Covenant...'
+                    ? 'Generando contrato...'
+                    : 'Generating covenant...'
                   : isEs
-                  ? 'Crear Covenant de Venta P2SH-32'
-                  : 'Create P2SH-32 Sale Covenant'}
-              </span>
-            </button>
-          </div>
-        </form>
-
-        {createdListing && (
-          <div className="p-4 rounded-panel border border-emerald-500/35 bg-emerald-500/5 space-y-2 text-xs">
-            <div className="flex items-center justify-between gap-2 font-semibold text-emerald-700 dark:text-emerald-400">
-              <span className="inline-flex items-center gap-1.5">
-                <ShieldCheck className="w-4 h-4" />
-                {isEs
-                  ? `Covenant P2SH-32 listo para ${createdListing.handle}`
-                  : `P2SH-32 Covenant Ready for ${createdListing.handle}`}
-              </span>
-              <span className="font-mono tabular-nums">
-                {createdListing.priceBch} BCH (~${createdListing.priceUsdEst})
-              </span>
-            </div>
-            <p className="text-ink-2 leading-relaxed">
-              {isEs
-                ? 'Envía tu CashToken NFT (UL1:' + createdListing.cleanHandle + ') a esta dirección P2SH-32 para activar la venta atómica:'
-                : 'Send your CashToken NFT (UL1:' + createdListing.cleanHandle + ') to this P2SH-32 token-aware address to activate atomic settlement:'}
-            </p>
-            <div className="flex items-center justify-between gap-2 bg-surface border border-line rounded-control px-3 py-2 font-mono text-[11px]">
-              <span className="break-all text-ink">{createdListing.covenant.covenantTokenAddress}</span>
-              <button
-                type="button"
-                onClick={() => copyText(createdListing.covenant.covenantTokenAddress, 'new-covenant')}
-                className="text-ink-3 hover:text-ink shrink-0 cursor-pointer"
-              >
-                {copiedId === 'new-covenant' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                  ? 'Crear contrato de venta'
+                  : 'Create Sale Covenant'}
               </button>
-            </div>
-          </div>
-        )}
+            </form>
 
-        {/* Active P2SH-32 Listings */}
-        <div className="space-y-2.5 pt-2">
-          <div className="flex items-center justify-between">
-            <h4 className="text-xs font-semibold text-ink">
-              {isEs ? 'Órdenes P2SH-32 Activas' : 'Active P2SH-32 Covenant Listings'} ({listings.length})
-            </h4>
-            <button
-              type="button"
-              onClick={() => void fetchListings()}
-              className="inline-flex items-center gap-1 text-xs text-ink-3 hover:text-ink cursor-pointer"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${loadingListings ? 'animate-spin' : ''}`} />
-              <span>{isEs ? 'Actualizar' : 'Refresh'}</span>
-            </button>
-          </div>
-
-          {listings.length === 0 ? (
-            <div className="ui-panel p-5 text-center text-xs text-ink-3">
-              {isEs
-                ? 'Aún no hay handles listados en esta red. Crea el primer covenant P2SH-32 arriba (cero anuncios falsos).'
-                : 'No handles listed on this network yet. Instantiate the first P2SH-32 sale covenant above (zero mock listings).'}
-            </div>
-          ) : (
-            <div className="divide-y divide-line border border-line rounded-panel overflow-hidden">
-              {listings.map((item) => (
-                <div
-                  key={item.id}
-                  className="p-3.5 bg-surface flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
-                >
-                  <div className="space-y-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-mono font-bold text-ink text-sm">{item.handle}</span>
-                      <span className="ui-badge text-[10px] font-mono">
-                        UL1:{item.cleanHandle}
-                      </span>
-                      <span className="text-[11px] text-ink-3 font-mono">
-                        {isEs ? 'Vendedor:' : 'Seller:'} {formatAddress(item.sellerAddress)}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1.5 font-mono text-[11px] text-ink-2">
-                      <span className="truncate">P2SH-32: {item.covenant.covenantTokenAddress}</span>
-                      <button
-                        type="button"
-                        onClick={() => copyText(item.covenant.covenantTokenAddress, item.id)}
-                        className="text-ink-3 hover:text-ink shrink-0 cursor-pointer"
-                        title="Copy P2SH-32 covenant address"
-                      >
-                        {copiedId === item.id ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3 shrink-0">
-                    <div className="text-right">
-                      <div className="font-mono font-bold text-ink tabular-nums">{item.priceBch} BCH</div>
-                      <div className="text-[11px] text-ink-3 tabular-nums">~${item.priceUsdEst} USD</div>
-                    </div>
-                    {normalizedWalletAddr &&
-                      item.sellerAddress.toLowerCase() === normalizedWalletAddr.toLowerCase() && (
-                        <button
-                          type="button"
-                          onClick={() => void handleRemoveListing(item)}
-                          className="p-1.5 rounded-control border border-line text-ink-3 hover:text-rose-500 hover:border-rose-500/40 cursor-pointer"
-                          title={isEs ? 'Retirar listado' : 'Remove listing'}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                  </div>
+            {createdListing && (
+              <div className="pt-3 border-t border-line space-y-1.5 text-xs">
+                <div className="flex items-center gap-1.5 font-medium text-emerald-600 dark:text-emerald-400">
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  <span>
+                    {isEs
+                      ? `Contrato listo para ${createdListing.handle}`
+                      : `Covenant ready for ${createdListing.handle}`}
+                  </span>
                 </div>
-              ))}
-            </div>
-          )}
+                <p className="text-[11px] text-ink-3 leading-relaxed">
+                  {isEs
+                    ? 'Envía el NFT a esta dirección P2SH-32 para abrir la compra atómica:'
+                    : 'Deposit the Handle NFT to this P2SH-32 address to activate:'}
+                </p>
+                <div className="flex items-center justify-between gap-2 bg-surface border border-line rounded-control px-2.5 py-2 font-mono text-[11px]">
+                  <span className="truncate text-ink">{createdListing.covenant.covenantTokenAddress}</span>
+                  <button
+                    type="button"
+                    onClick={() => copyText(createdListing.covenant.covenantTokenAddress, 'new-covenant')}
+                    className="text-ink-3 hover:text-ink cursor-pointer shrink-0"
+                  >
+                    {copiedId === 'new-covenant' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      </section>
     </div>
   );
 };

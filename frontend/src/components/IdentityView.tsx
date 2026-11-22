@@ -2339,303 +2339,311 @@ export default function IdentityView({
       )}
 
       {/* =====================================================================
-          SECTION 2: MY IDENTITY PROFILE (Focused & Calm)
+          SECTION 2: MY IDENTITY PROFILE (Swiss 2-Column Sovereign Passport)
           ===================================================================== */}
       {activeSection === 'profile' && (
-        <div className="max-w-[540px] mx-auto pt-2 space-y-4">
-          <div className="ui-card p-5 sm:p-6 space-y-5">
-            {/* Profile Header */}
-            <div className="flex items-center justify-between gap-3 flex-wrap">
-              <div className="flex items-center gap-3 min-w-0">
-                <HandleAvatar handle={cleanHandle} size="lg" />
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-lg font-semibold text-ink truncate">@{cleanHandle}</h2>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setTempHandleInput(cleanHandle);
-                        setIsEditingProfileHandle((v) => !v);
-                      }}
-                      className="text-xs font-medium text-ink-3 hover:text-ink underline cursor-pointer"
-                    >
-                      {isEs ? 'Cambiar' : 'Edit'}
-                    </button>
+        <div className="max-w-[920px] mx-auto pt-2">
+          <div className="bg-surface border border-line rounded-card shadow-soft overflow-hidden">
+            <div className="grid grid-cols-1 md:grid-cols-12 divide-y md:divide-y-0 md:divide-x divide-line">
+              {/* LEFT PANE: Sovereign Pass & Primary Actions (5 cols) */}
+              <div className="md:col-span-5 p-6 sm:p-7 flex flex-col justify-between gap-6">
+                <div className="space-y-5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <HandleAvatar handle={cleanHandle} size="lg" />
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h2 className="text-xl font-semibold tracking-tight text-ink truncate">
+                            @{cleanHandle}
+                          </h2>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setTempHandleInput(cleanHandle);
+                              setIsEditingProfileHandle((v) => !v);
+                            }}
+                            className="text-xs text-ink-3 hover:text-ink underline cursor-pointer"
+                          >
+                            {isEs ? 'Cambiar' : 'Edit'}
+                          </button>
+                        </div>
+                        <div className="text-xs text-ink-3 truncate">{nip05Address}</div>
+                      </div>
+                    </div>
+
+                    <span className={isCurrentHandlePublished ? 'ui-badge-success shrink-0' : 'ui-badge-warn shrink-0'}>
+                      {isCurrentHandlePublished
+                        ? isEs
+                          ? 'Publicado'
+                          : 'Published'
+                        : isEs
+                        ? 'Borrador local'
+                        : 'Local draft'}
+                    </span>
                   </div>
-                  <div className="text-xs text-ink-3 truncate">{nip05Address}</div>
+
+                  {isEditingProfileHandle && (
+                    <div className="flex items-center gap-2 pt-1">
+                      <div className="relative flex-1">
+                        <AtSign className="w-3.5 h-3.5 text-ink-3 absolute left-3 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          value={tempHandleInput}
+                          onChange={(e) => setTempHandleInput(e.target.value)}
+                          placeholder="myuser"
+                          className="ui-input bg-surface-2 h-9 pl-8 text-xs font-mono"
+                          maxLength={20}
+                        />
+                      </div>
+                      <button type="button" onClick={handleSaveProfileHandle} className="ui-btn-secondary ui-btn-sm">
+                        {isEs ? 'Guardar' : 'Save'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsEditingProfileHandle(false)}
+                        className="ui-btn-ghost ui-btn-sm px-2"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
+
+                  {publishError && (
+                    <div className="p-3 rounded-control bg-rose-500/10 border border-rose-500/20 text-rose-500 text-xs flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 shrink-0" />
+                      <span>{publishError}</span>
+                    </div>
+                  )}
                 </div>
-              </div>
 
-              <span className={isCurrentHandlePublished ? 'ui-badge-success' : 'ui-badge-warn'}>
-                {isCurrentHandlePublished
-                  ? isEs
-                    ? 'Publicado'
-                    : 'Published'
-                  : isEs
-                  ? 'Borrador local'
-                  : 'Local draft'}
-              </span>
-            </div>
-
-            {/* Inline Handle Editor */}
-            {isEditingProfileHandle && (
-              <div className="ui-panel p-3 flex items-center gap-2">
-                <div className="relative flex-1">
-                  <AtSign className="w-3.5 h-3.5 text-ink-3 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    value={tempHandleInput}
-                    onChange={(e) => setTempHandleInput(e.target.value)}
-                    placeholder="myuser"
-                    className="ui-input h-9 pl-8 text-xs font-mono"
-                    maxLength={20}
-                  />
-                </div>
-                <button type="button" onClick={handleSaveProfileHandle} className="ui-btn-secondary ui-btn-sm">
-                  {isEs ? 'Guardar' : 'Save'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsEditingProfileHandle(false)}
-                  className="ui-btn-ghost ui-btn-sm px-2"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            )}
-
-            {/* Records Table */}
-            <div className="ui-panel px-4 py-1">
-              <div className="ui-row">
-                <span className="ui-label">
-                  Bitcoin Cash ({isMainnet ? 'Mainnet' : 'Chipnet'})
-                </span>
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <span className="text-xs font-mono text-ink truncate max-w-[190px] sm:max-w-[260px]">
-                    {formatAddress(effectiveBchAddress)}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => copyToClipboard(effectiveBchAddress, 'prof_bch')}
-                    className="p-1 rounded hover:bg-surface-3 text-ink-3 hover:text-ink cursor-pointer"
-                  >
-                    {copiedKey === 'prof_bch' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                  </button>
-                </div>
-              </div>
-
-              <div className="ui-row">
-                <span className="ui-label">Nostr</span>
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <span className="text-xs font-mono text-ink-2 truncate max-w-[190px] sm:max-w-[260px]">
-                    {nostrKeys?.npub || '...'}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => copyToClipboard(nostrKeys?.npub || '', 'prof_npub')}
-                    className="p-1 rounded hover:bg-surface-3 text-ink-3 hover:text-ink cursor-pointer"
-                  >
-                    {copiedKey === 'prof_npub' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                  </button>
-                </div>
-              </div>
-
-              <div className="ui-row">
-                <span className="ui-label">{isEs ? 'Firma activa' : 'Signing mode'}</span>
-                <span className="text-xs font-medium text-ink">
-                  {bchSigningMode === 'wallet'
-                    ? bchWallet?.provider || 'WalletConnect'
-                    : isEs
-                    ? 'Llave soberana local'
-                    : 'Local sovereign key'}
-                </span>
-              </div>
-            </div>
-
-            {publishError && (
-              <div className="p-3 rounded-control bg-rose-500/10 border border-rose-500/20 text-rose-500 text-xs flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                <span>{publishError}</span>
-              </div>
-            )}
-
-            {/* Primary + Secondary Actions (max 1 orange CTA per card) */}
-            {isCurrentHandlePublished ? (
-              <div className="space-y-2.5">
-                <button
-                  type="button"
-                  onClick={() => setQrModalData({ handle: `@${cleanHandle}`, address: effectiveBchAddress })}
-                  className="ui-btn-primary ui-btn-lg w-full"
-                >
-                  <QrCode className="w-4 h-4" />
-                  <span>{isEs ? 'Mostrar QR para recibir BCH' : 'Show QR to receive BCH'}</span>
-                </button>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!publishedEvent) return;
-                      handleOpenResolvedProfile({
-                        handle: publishedEvent.verified.handle,
-                        nip05: publishedEvent.verified.nip05,
-                        bchAddress: publishedEvent.verified.bchAddress,
-                        npub: publishedEvent.verified.npub,
-                        pubkeyHex: publishedEvent.verified.pubkeyHex,
-                        isVerified: true,
-                        sourceLabel: isEs ? 'Identidad publicada' : 'Published Identity'
-                      });
-                    }}
-                    className="ui-btn-secondary ui-btn-sm"
-                  >
-                    <Zap className="w-3.5 h-3.5" />
-                    <span>{isEs ? 'Probar pago' : 'Test payment'}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActiveSection('inspector');
-                      setInspectorTab('verify');
-                      const target = nostrKeys?.npub || `@${cleanHandle}`;
-                      setVerifyInput(target);
-                      handleVerify(target);
-                    }}
-                    className="ui-btn-secondary ui-btn-sm"
-                  >
-                    <ShieldCheck className="w-3.5 h-3.5" />
-                    <span>{isEs ? 'Ver en relays' : 'Inspect on relays'}</span>
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-2.5">
-                <button
-                  type="button"
-                  disabled={isPublishing}
-                  onClick={() => handleCreateBinding(cleanHandle)}
-                  className="ui-btn-primary ui-btn-lg w-full"
-                >
-                  {isPublishing ? (
+                {/* Primary + Secondary Actions (max 1 orange CTA per card) */}
+                <div className="space-y-2.5">
+                  {isCurrentHandlePublished ? (
                     <>
-                      <RefreshCw className="w-4 h-4 animate-spin" />
-                      <span>{isEs ? 'Publicando en relays...' : 'Publishing to relays...'}</span>
+                      <button
+                        type="button"
+                        onClick={() => setQrModalData({ handle: `@${cleanHandle}`, address: effectiveBchAddress })}
+                        className="ui-btn-primary ui-btn-lg w-full"
+                      >
+                        <QrCode className="w-4 h-4" />
+                        <span>{isEs ? 'Mostrar QR para recibir BCH' : 'Show QR to receive BCH'}</span>
+                      </button>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!publishedEvent) return;
+                            handleOpenResolvedProfile({
+                              handle: publishedEvent.verified.handle,
+                              nip05: publishedEvent.verified.nip05,
+                              bchAddress: publishedEvent.verified.bchAddress,
+                              npub: publishedEvent.verified.npub,
+                              pubkeyHex: publishedEvent.verified.pubkeyHex,
+                              isVerified: true,
+                              sourceLabel: isEs ? 'Identidad publicada' : 'Published Identity'
+                            });
+                          }}
+                          className="ui-btn-secondary ui-btn-sm"
+                        >
+                          <Zap className="w-3.5 h-3.5" />
+                          <span>{isEs ? 'Probar pago' : 'Test payment'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveSection('inspector');
+                            setInspectorTab('verify');
+                            const target = nostrKeys?.npub || `@${cleanHandle}`;
+                            setVerifyInput(target);
+                            handleVerify(target);
+                          }}
+                          className="ui-btn-secondary ui-btn-sm"
+                        >
+                          <ShieldCheck className="w-3.5 h-3.5" />
+                          <span>{isEs ? 'Ver en relays' : 'Inspect relays'}</span>
+                        </button>
+                      </div>
                     </>
                   ) : (
-                    <span>{isEs ? `Publicar @${cleanHandle} en relays` : `Publish @${cleanHandle} to relays`}</span>
+                    <>
+                      <button
+                        type="button"
+                        disabled={isPublishing}
+                        onClick={() => handleCreateBinding(cleanHandle)}
+                        className="ui-btn-primary ui-btn-lg w-full"
+                      >
+                        {isPublishing ? (
+                          <>
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                            <span>{isEs ? 'Publicando en relays...' : 'Publishing to relays...'}</span>
+                          </>
+                        ) : (
+                          <span>{isEs ? `Publicar @${cleanHandle} en relays` : `Publish @${cleanHandle} to relays`}</span>
+                        )}
+                      </button>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setQrModalData({ handle: `@${cleanHandle}`, address: effectiveBchAddress })}
+                          className="ui-btn-secondary ui-btn-sm"
+                        >
+                          <QrCode className="w-3.5 h-3.5" />
+                          <span>{isEs ? 'Ver código QR' : 'Show QR code'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveSection('register');
+                            setRegisterStep('search');
+                          }}
+                          className="ui-btn-secondary ui-btn-sm"
+                        >
+                          <Search className="w-3.5 h-3.5" />
+                          <span>{isEs ? 'Buscar nombre' : 'Find handle'}</span>
+                        </button>
+                      </div>
+                    </>
                   )}
-                </button>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setQrModalData({ handle: `@${cleanHandle}`, address: effectiveBchAddress })}
-                    className="ui-btn-secondary ui-btn-sm"
-                  >
-                    <QrCode className="w-3.5 h-3.5" />
-                    <span>{isEs ? 'Ver código QR' : 'Show QR code'}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActiveSection('register');
-                      setRegisterStep('search');
-                    }}
-                    className="ui-btn-secondary ui-btn-sm"
-                  >
-                    <Search className="w-3.5 h-3.5" />
-                    <span>{isEs ? 'Buscar otro nombre' : 'Find another name'}</span>
-                  </button>
                 </div>
               </div>
-            )}
 
-            <RelayPublishStepper
-              isEs={isEs}
-              isPublishing={isPublishing}
-              signingStage={signingStage}
-              isDone={isCurrentHandlePublished}
-              publishLogs={publishLogs}
-              indexedCount={publishedEvent?.indexedCount}
-            />
-
-            {/* Sovereign Key Rotation & Optional BCH OP_RETURN Anchor */}
-            <div className="ui-panel p-3.5 space-y-3 border border-line">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <div>
-                  <div className="text-xs font-semibold text-ink">
-                    {isEs ? 'Rotación soberana y ancla BCH' : 'Key Rotation & On-Chain BCH Anchor'}
+              {/* RIGHT PANE: Cryptographic Ledger, Key Rotation & Anchor (7 cols) */}
+              <div className="md:col-span-7 p-6 sm:p-7 space-y-5">
+                <div className="divide-y divide-line text-xs">
+                  <div className="py-2.5 flex items-center justify-between gap-3">
+                    <span className="text-ink-3">Bitcoin Cash ({isMainnet ? 'Mainnet' : 'Chipnet'})</span>
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="font-mono text-ink truncate max-w-[200px] sm:max-w-[280px]">
+                        {formatAddress(effectiveBchAddress)}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(effectiveBchAddress, 'prof_bch')}
+                        className="p-1 text-ink-3 hover:text-ink cursor-pointer"
+                      >
+                        {copiedKey === 'prof_bch' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
                   </div>
-                  <div className="text-[11px] text-ink-3">
-                    {isEs
-                      ? 'Autoriza una nueva clave Nostr con tu firma BCH o adjunta un txid OP_RETURN.'
-                      : 'Authorize rotating to a fresh Nostr key via BCH signature or attach an OP_RETURN txid.'}
+
+                  <div className="py-2.5 flex items-center justify-between gap-3">
+                    <span className="text-ink-3">Nostr (BIP-340)</span>
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="font-mono text-ink-2 truncate max-w-[200px] sm:max-w-[280px]">
+                        {nostrKeys?.npub || '...'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(nostrKeys?.npub || '', 'prof_npub')}
+                        className="p-1 text-ink-3 hover:text-ink cursor-pointer"
+                      >
+                        {copiedKey === 'prof_npub' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="py-2.5 flex items-center justify-between gap-3">
+                    <span className="text-ink-3">{isEs ? 'Firma activa' : 'Signing mode'}</span>
+                    <span className="font-medium text-ink">
+                      {bchSigningMode === 'wallet'
+                        ? bchWallet?.provider || 'WalletConnect'
+                        : isEs
+                        ? 'Llave soberana local'
+                        : 'Local sovereign key'}
+                    </span>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  disabled={isPublishing || !nostrKeys}
-                  onClick={handleRotateAuthorizedKey}
-                  className="ui-btn-secondary ui-btn-sm shrink-0"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${isPublishing ? 'animate-spin' : ''}`} />
-                  <span>{isEs ? 'Rotar clave Nostr' : 'Rotate Nostr Key'}</span>
-                </button>
-              </div>
 
-              <div className="flex flex-col sm:flex-row gap-2">
-                <input
-                  type="text"
-                  value={anchorTxInput}
-                  onChange={(e) => setAnchorTxInput(e.target.value)}
-                  placeholder={isEs ? 'TxID BCH con OP_RETURN UL1 (opcional, 64 hex)' : 'Optional BCH OP_RETURN UL1 txid (64 hex)'}
-                  className="ui-input bg-surface border-line h-9 flex-1 font-mono text-[11px]"
+                <RelayPublishStepper
+                  isEs={isEs}
+                  isPublishing={isPublishing}
+                  signingStage={signingStage}
+                  isDone={isCurrentHandlePublished}
+                  publishLogs={publishLogs}
+                  indexedCount={publishedEvent?.indexedCount}
                 />
-                {publishedEvent && (
-                  <button
-                    type="button"
-                    onClick={() => copyToClipboard(buildBchOpReturnScriptHex(publishedEvent.event.content), 'op_return_hex')}
-                    className="ui-btn-ghost ui-btn-sm border border-line shrink-0"
-                    title="Copy OP_RETURN hex"
-                  >
-                    {copiedKey === 'op_return_hex' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{isEs ? 'Copiar OP_RETURN' : 'Copy OP_RETURN'}</span>
-                  </button>
-                )}
-              </div>
-              {publishedEvent && (
-                <div className="text-[10px] font-mono text-ink-3 truncate">
-                  UL1 SHA-256: {computeUserLinkCommitmentHash(publishedEvent.event.content)}
-                </div>
-              )}
-            </div>
 
-            <AdvancedSignerDetails
-              isEs={isEs}
-              isOpen={showProfileAdvanced}
-              onToggle={() => setShowProfileAdvanced((v) => !v)}
-              title={isEs ? 'Configuración avanzada y detalles técnicos' : 'Advanced settings & technical details'}
-              walletAddress={bchWallet?.address}
-              walletProvider={bchWallet?.provider}
-              walletCanSignMessage={walletCanSignMessage}
-              bchSigningMode={bchSigningMode}
-              onSelectBchSigningMode={(mode) => {
-                setBchSigningMode(mode);
-                resetActiveProofs();
-              }}
-              effectiveBchAddress={effectiveBchAddress}
-              onRegenerateBch={handleRegenerateBchDemo}
-              nostrNpub={nostrKeys?.npub}
-              nostrIsExtension={nostrKeys?.isExtension}
-              hasNip07Extension={hasNip07Extension}
-              useNip07={useNip07}
-              onConnectNip07={handleConnectNip07}
-              onRegenerateNostr={handleRegenerateNostr}
-              onConnectBch={onConnectBch}
-              publishedEventSummary={
-                publishedEvent
-                  ? { eventId: publishedEvent.event.id, bchPubkey: publishedEvent.verified.bchPubkey }
-                  : null
-              }
-            />
+                {/* Key Rotation & BCH OP_RETURN Anchor (hairline separated, zero inner box) */}
+                <div className="pt-4 border-t border-line space-y-3">
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <div>
+                      <div className="text-xs font-semibold text-ink">
+                        {isEs ? 'Rotación soberana y ancla BCH' : 'Key Rotation & On-Chain BCH Anchor'}
+                      </div>
+                      <div className="text-[11px] text-ink-3">
+                        {isEs
+                          ? 'Autoriza una nueva clave Nostr con tu firma BCH o adjunta un txid OP_RETURN.'
+                          : 'Rotate Nostr key via BCH signature or attach a 64-hex OP_RETURN UL1 txid.'}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={isPublishing || !nostrKeys}
+                      onClick={handleRotateAuthorizedKey}
+                      className="ui-btn-secondary ui-btn-sm shrink-0"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${isPublishing ? 'animate-spin' : ''}`} />
+                      <span>{isEs ? 'Rotar clave Nostr' : 'Rotate Nostr Key'}</span>
+                    </button>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="text"
+                      value={anchorTxInput}
+                      onChange={(e) => setAnchorTxInput(e.target.value)}
+                      placeholder={isEs ? 'TxID BCH con OP_RETURN UL1 (opcional, 64 hex)' : 'Optional BCH OP_RETURN UL1 txid (64 hex)'}
+                      className="ui-input bg-surface-2 border-line h-9 flex-1 font-mono text-[11px]"
+                    />
+                    {publishedEvent && (
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(buildBchOpReturnScriptHex(publishedEvent.event.content), 'op_return_hex')}
+                        className="ui-btn-ghost ui-btn-sm border border-line shrink-0"
+                      >
+                        {copiedKey === 'op_return_hex' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>{isEs ? 'Copiar OP_RETURN' : 'Copy OP_RETURN'}</span>
+                      </button>
+                    )}
+                  </div>
+                  {publishedEvent && (
+                    <div className="text-[10px] font-mono text-ink-3 truncate">
+                      UL1 SHA-256: {computeUserLinkCommitmentHash(publishedEvent.event.content)}
+                    </div>
+                  )}
+                </div>
+
+                <AdvancedSignerDetails
+                  isEs={isEs}
+                  isOpen={showProfileAdvanced}
+                  onToggle={() => setShowProfileAdvanced((v) => !v)}
+                  title={isEs ? 'Configuración avanzada y detalles técnicos' : 'Advanced settings & technical details'}
+                  walletAddress={bchWallet?.address}
+                  walletProvider={bchWallet?.provider}
+                  walletCanSignMessage={walletCanSignMessage}
+                  bchSigningMode={bchSigningMode}
+                  onSelectBchSigningMode={(mode) => {
+                    setBchSigningMode(mode);
+                    resetActiveProofs();
+                  }}
+                  effectiveBchAddress={effectiveBchAddress}
+                  onRegenerateBch={handleRegenerateBchDemo}
+                  nostrNpub={nostrKeys?.npub}
+                  nostrIsExtension={nostrKeys?.isExtension}
+                  hasNip07Extension={hasNip07Extension}
+                  useNip07={useNip07}
+                  onConnectNip07={handleConnectNip07}
+                  onRegenerateNostr={handleRegenerateNostr}
+                  onConnectBch={onConnectBch}
+                  publishedEventSummary={
+                    publishedEvent
+                      ? { eventId: publishedEvent.event.id, bchPubkey: publishedEvent.verified.bchPubkey }
+                      : null
+                  }
+                />
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -2770,9 +2778,9 @@ export default function IdentityView({
                 <motion.div
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="ui-panel p-4 sm:p-5 border border-line space-y-4"
+                  className="pt-5 border-t border-line space-y-6"
                 >
-                  <div className="flex items-center justify-between flex-wrap gap-2 pb-3 border-b border-line">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
                     <div className="flex items-center gap-2">
                       {verificationResult.isOverallValid ? (
                         <CheckCircle2 className="w-4 h-4 text-emerald-500" />
@@ -2812,8 +2820,9 @@ export default function IdentityView({
                     </div>
                   )}
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                    <div className="p-3.5 rounded-panel bg-surface border border-line space-y-1.5">
+                  {/* Cryptographic dual-proof ledger split cleanly by hairlines (zero nested boxes) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 border-y border-line divide-y sm:divide-y-0 sm:divide-x divide-line text-xs">
+                    <div className="py-4 sm:pr-5 space-y-1.5">
                       <div className="ui-label flex items-center gap-1.5">
                         <User className="w-3.5 h-3.5" />
                         <span>{isEs ? 'Identidad Nostr' : 'Nostr Identity'}</span>
@@ -2836,7 +2845,7 @@ export default function IdentityView({
                       </div>
                     </div>
 
-                    <div className="p-3.5 rounded-panel bg-surface border border-line space-y-1.5">
+                    <div className="py-4 sm:pl-5 space-y-1.5">
                       <div className="ui-label flex items-center gap-1.5">
                         <Wallet className="w-3.5 h-3.5" />
                         <span>Bitcoin Cash Address</span>
@@ -2881,34 +2890,49 @@ export default function IdentityView({
                     </div>
                   </div>
 
-                  <div className="p-3.5 rounded-panel bg-surface border border-line text-[11px] font-mono space-y-1 text-ink-3 select-all">
-                    <div className="text-xs font-sans font-medium text-ink pb-0.5 flex items-center justify-between gap-2 flex-wrap">
-                      <span>{isEs ? 'Atestación en relays:' : 'Relay attestation payload:'}</span>
+                  {/* Flat attestation payload key-values */}
+                  <div className="divide-y divide-line text-[11px] font-mono text-ink-3 select-all">
+                    <div className="pb-2 font-sans text-xs font-semibold text-ink flex items-center justify-between gap-2 flex-wrap">
+                      <span>{isEs ? 'Atestación en relays' : 'Relay attestation payload'}</span>
                       {verificationResult.rotationAuthorized && (
                         <span className="ui-badge-success">
                           {isEs ? 'Rotación autorizada por BCH' : 'BCH-Authorized Key Rotation'}
                         </span>
                       )}
                     </div>
-                    <div className="truncate">Event ID: {verificationResult.event.id}</div>
+                    <div className="py-2 flex items-center justify-between gap-3">
+                      <span>Event ID</span>
+                      <span className="truncate text-ink-2 max-w-[260px] sm:max-w-[460px]">{verificationResult.event.id}</span>
+                    </div>
                     {verificationResult.previousNostrPubkey && (
-                      <div className="truncate">Prev Nostr Key: {verificationResult.previousNostrPubkey}</div>
+                      <div className="py-2 flex items-center justify-between gap-3">
+                        <span>Prev Nostr Key</span>
+                        <span className="truncate text-ink-2 max-w-[260px] sm:max-w-[460px]">{verificationResult.previousNostrPubkey}</span>
+                      </div>
                     )}
                     {verificationResult.bchPubkey && (
-                      <div className="truncate">Recovered BCH Pubkey: {verificationResult.bchPubkey}</div>
+                      <div className="py-2 flex items-center justify-between gap-3">
+                        <span>Recovered BCH Pubkey</span>
+                        <span className="truncate text-ink-2 max-w-[260px] sm:max-w-[460px]">{verificationResult.bchPubkey}</span>
+                      </div>
                     )}
                     {verificationResult.commitmentHashHex && (
-                      <div className="truncate">UL1 Commitment SHA-256: {verificationResult.commitmentHashHex}</div>
+                      <div className="py-2 flex items-center justify-between gap-3">
+                        <span>UL1 Commitment SHA-256</span>
+                        <span className="truncate text-ink-2 max-w-[260px] sm:max-w-[460px]">{verificationResult.commitmentHashHex}</span>
+                      </div>
                     )}
-                    <div>Timestamp: {new Date(verificationResult.timestamp * 1000).toUTCString()}</div>
-                    <div>Kind: 30078 (NIP-78 + NIP-39 i-tag + W3C DID)</div>
+                    <div className="py-2 flex items-center justify-between gap-3">
+                      <span>Kind 30078</span>
+                      <span className="text-ink-2">{new Date(verificationResult.timestamp * 1000).toUTCString()}</span>
+                    </div>
                   </div>
 
                   {/* 1. W3C DID Document Resolver */}
-                  <div className="p-3.5 rounded-panel bg-surface border border-line space-y-2">
+                  <div className="pt-4 border-t border-line space-y-2.5">
                     <div className="flex items-center justify-between gap-2 flex-wrap">
                       <div className="text-xs font-semibold text-ink">
-                        W3C DID Document (`did:nostr` ↔ `did:pkh:bch`)
+                        W3C DID Document (did:nostr ↔ did:pkh:bch)
                       </div>
                       <div className="flex items-center gap-2">
                         <button
@@ -2934,14 +2958,14 @@ export default function IdentityView({
                       </div>
                     </div>
                     {showDidDoc && (
-                      <pre className="p-2.5 rounded-control bg-surface-2 border border-line font-mono text-[10px] text-ink-2 overflow-x-auto max-h-56">
+                      <pre className="p-3 rounded-control bg-surface-2 border border-line font-mono text-[10px] text-ink-2 overflow-x-auto max-h-56">
                         {JSON.stringify(buildUserLinkDidDocument(verificationResult), null, 2)}
                       </pre>
                     )}
                   </div>
 
                   {/* 2. On-Chain BCH OP_RETURN Commitment Check */}
-                  <div className="p-3.5 rounded-panel bg-surface border border-line space-y-2.5">
+                  <div className="pt-4 border-t border-line space-y-2.5">
                     <div className="text-xs font-semibold text-ink">
                       {isEs ? 'Anclaje On-Chain Bitcoin Cash (OP_RETURN UL1)' : 'On-Chain Bitcoin Cash Commitment (OP_RETURN UL1)'}
                     </div>
@@ -2973,7 +2997,7 @@ export default function IdentityView({
                   </div>
 
                   {/* 3. Portable W3C Verifiable Credentials (Kind 1985 NIP-32) + Selective Disclosure */}
-                  <div className="p-3.5 rounded-panel bg-surface border border-line space-y-3">
+                  <div className="pt-4 border-t border-line space-y-3">
                     <div className="flex items-center justify-between gap-2 flex-wrap">
                       <div className="text-xs font-semibold text-ink">
                         {isEs ? 'Credenciales Verificables W3C y Reputación (Kind 1985)' : 'Portable W3C Verifiable Credentials & Reputation (Kind 1985)'}
@@ -2982,9 +3006,9 @@ export default function IdentityView({
                     </div>
 
                     {attestations.length > 0 && (
-                      <div className="space-y-2">
+                      <div className="divide-y divide-line border-y border-line">
                         {attestations.slice(0, 4).map((att) => (
-                          <div key={att.eventId} className="p-2.5 rounded-control bg-surface-2 border border-line text-xs space-y-1">
+                          <div key={att.eventId} className="py-2.5 text-xs space-y-1">
                             <div className="flex items-center justify-between gap-2 flex-wrap">
                               <span className="font-semibold text-ink">{att.claimType}</span>
                               <span className="ui-badge-success">Schnorr VC OK</span>
@@ -2992,7 +3016,7 @@ export default function IdentityView({
                             <div className="text-ink-2">{att.claimSummary}</div>
                             <div className="font-mono text-[10px] text-ink-3 truncate">Issuer: {att.issuerNpub}</div>
                             {Object.keys(att.saltedCommitments).length > 0 && (
-                              <div className="pt-1 border-t border-line flex items-center justify-between gap-2 flex-wrap">
+                              <div className="pt-1 flex items-center justify-between gap-2 flex-wrap">
                                 <span className="font-mono text-[10px] text-ink-3 truncate">
                                   Salted Commitment ({Object.keys(att.saltedCommitments)[0]}): {Object.values(att.saltedCommitments)[0].slice(0, 18)}...
                                 </span>
@@ -3017,7 +3041,7 @@ export default function IdentityView({
                           </div>
                         ))}
                         {sdCheckResult !== null && (
-                          <div className={`text-xs font-medium ${sdCheckResult ? 'text-emerald-500' : 'text-rose-500'}`}>
+                          <div className={`py-2 text-xs font-medium ${sdCheckResult ? 'text-emerald-500' : 'text-rose-500'}`}>
                             {sdCheckResult
                               ? isEs
                                 ? `Divulgación selectiva válida: "${attPrivateAttr}=${attPrivateVal}" coincide con el hash privado sin haber expuesto datos en el relay.`
@@ -3032,7 +3056,7 @@ export default function IdentityView({
 
                     {/* Third-party issuer form (uses active session Nostr signer) */}
                     {nostrKeys?.skBytes && (
-                      <div className="pt-2 border-t border-line space-y-2">
+                      <div className="pt-2 space-y-2.5">
                         <div className="text-[11px] font-medium text-ink-2">
                           {isEs ? 'Emitir atestación W3C VC firmada (Kind 1985 + hash privado opcional):' : 'Issue signed W3C VC attestation (Kind 1985 + optional private hash):'}
                         </div>
@@ -3105,7 +3129,7 @@ export default function IdentityView({
 
           {/* 3B: CHALLENGE AUTH */}
           {inspectorTab === 'auth' && (
-            <div className="ui-card p-5 sm:p-6 space-y-5">
+            <div className="ui-card p-6 sm:p-7 space-y-5">
               <div>
                 <h3 className="ui-section-title">
                   {isEs ? 'Autenticación sin contraseñas (Challenge-Response)' : 'Passwordless Challenge-Response Auth'}
@@ -3117,7 +3141,7 @@ export default function IdentityView({
                 </p>
               </div>
 
-              <div className="ui-panel p-4 space-y-3">
+              <div className="pt-4 border-t border-line space-y-3">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-xs font-semibold text-ink">
                     {isEs ? '1. Reto criptográfico (Nonce)' : '1. Cryptographic challenge'}
@@ -3133,7 +3157,7 @@ export default function IdentityView({
                 </div>
 
                 {authChallenge ? (
-                  <div className="p-2.5 rounded-control bg-surface border border-line text-xs font-mono text-ink select-all break-all">
+                  <div className="p-2.5 rounded-control bg-surface-2 border border-line text-xs font-mono text-ink select-all break-all">
                     {authChallenge}
                   </div>
                 ) : (
@@ -3144,7 +3168,7 @@ export default function IdentityView({
               </div>
 
               {authChallenge && (
-                <div className="ui-panel p-4 space-y-3">
+                <div className="pt-4 border-t border-line space-y-3">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-xs font-semibold text-ink">
                       {isEs ? '2. Firmar y verificar vínculo BCH' : '2. Sign & verify BCH link'}
@@ -3173,7 +3197,7 @@ export default function IdentityView({
                   </div>
 
                   {authSignature && (
-                    <div className="p-2.5 rounded-control bg-surface border border-line text-[11px] font-mono text-ink-2 break-all select-all">
+                    <div className="p-2.5 rounded-control bg-surface-2 border border-line text-[11px] font-mono text-ink-2 break-all select-all">
                       {authSignature}
                     </div>
                   )}

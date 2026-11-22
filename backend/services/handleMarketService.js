@@ -22,10 +22,10 @@ const mintArtifact = JSON.parse(fs.readFileSync(MINT_ARTIFACT_PATH, 'utf8'));
 const deterministicProvider = new MockNetworkProvider();
 
 const TIER_USD = {
-  ultraRare: { minLen: 1, maxLen: 3, usd: 150, label: 'Ultra-Rare (1–3 chars)' },
-  premium: { minLen: 4, maxLen: 4, usd: 20, label: 'Premium (4 chars)' },
-  short: { minLen: 5, maxLen: 5, usd: 4, label: 'Short (5 chars)' },
-  standard: { minLen: 6, maxLen: 32, usd: 0.5, label: 'Standard (6+ chars · Free on Nostr)' }
+  ultraRare: { minLen: 1, maxLen: 3, usd: 5, label: '1–3 chars' },
+  premium: { minLen: 4, maxLen: 4, usd: 2, label: '4 chars' },
+  short: { minLen: 5, maxLen: 5, usd: 0.5, label: '5 chars' },
+  standard: { minLen: 6, maxLen: 32, usd: 0.1, label: '6+ chars' }
 };
 
 function sanitizeHandle(raw) {

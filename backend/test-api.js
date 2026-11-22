@@ -410,7 +410,9 @@ async function runSecuritySuite() {
   const q3 = await handleMarketService.quoteHandleMint({ handle: 'bch', network: 'testnet' });
   const q6 = await handleMarketService.quoteHandleMint({ handle: 'satoshi_bch', network: 'testnet' });
   assert.strictEqual(q3.tier.key, 'ultraRare', '3-char handle must map to ultraRare tier');
+  assert.strictEqual(q3.tier.usd, 5, 'BCH 3-char tier must use accessible $5 anti-spam pricing');
   assert.strictEqual(q6.tier.key, 'standard', '6+ char handle must map to standard tier');
+  assert.strictEqual(q6.tier.usd, 0.1, 'BCH 6+ char NFT tier must use $0.10 micro-pricing');
   assert.ok(q3.tier.sats > q6.tier.sats, 'Short handle anti-spam fee must exceed standard handle fee');
   assert.ok(q3.covenant.covenantTokenAddress.startsWith('bchtest:r'), 'Mint covenant must be P2SH-32 token-aware');
 
