@@ -356,54 +356,64 @@ export const handleMarketService = {
   },
 
   /**
-   * Renders a deterministic, wallet-ready SVG collectible badge for a CashTokens Handle NFT
-   * (`UL1:<handle>`) containing the `@` emblem, handle, commitment hex, and tier.
+   * Renders a square 1:1 (512x512) ENS-style CashTokens NFT collectible badge for `UL1:<handle>`
+   * tuned for both wallet list icons (`uris.icon`) and full collectible previews.
    */
   renderHandleNftCardSvg(rawTarget) {
     const cleanHandle = resolveHandleInput(rawTarget);
     const commitmentHex = Buffer.concat([Buffer.from('UL1:', 'utf8'), Buffer.from(cleanHandle, 'utf8')]).toString(
       'hex'
     );
-    const tier = getTierSpec(cleanHandle.length);
     const safeHandle = escapeXml(`@${cleanHandle}`);
-    const tierPrice = tier.usd < 1 ? `$${tier.usd.toFixed(2)}` : `$${tier.usd}`;
-    const safeTier = escapeXml(`${tier.label} · ${tierPrice}`);
-    const fontSize = cleanHandle.length <= 6 ? 60 : cleanHandle.length <= 12 ? 46 : cleanHandle.length <= 20 ? 34 : 26;
+    const fontSize =
+      cleanHandle.length <= 4
+        ? 84
+        : cleanHandle.length <= 7
+        ? 66
+        : cleanHandle.length <= 11
+        ? 50
+        : cleanHandle.length <= 16
+        ? 38
+        : cleanHandle.length <= 22
+        ? 30
+        : 24;
 
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 400" fill="none">
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="640" y2="400" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#0D1017"/>
-      <stop offset="100%" stop-color="#171C28"/>
+    <linearGradient id="cardBg" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0B0E14"/>
+      <stop offset="55%" stop-color="#111622"/>
+      <stop offset="100%" stop-color="#0D1119"/>
     </linearGradient>
-    <radialGradient id="glow" cx="85%" cy="15%" r="55%">
-      <stop offset="0%" stop-color="#F7931A" stop-opacity="0.22"/>
+    <radialGradient id="bchGlow" cx="82%" cy="18%" r="60%">
+      <stop offset="0%" stop-color="#0AC18E" stop-opacity="0.28"/>
+      <stop offset="100%" stop-color="#0AC18E" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="atGlow" cx="18%" cy="84%" r="55%">
+      <stop offset="0%" stop-color="#F7931A" stop-opacity="0.16"/>
       <stop offset="100%" stop-color="#F7931A" stop-opacity="0"/>
     </radialGradient>
   </defs>
-  <rect width="640" height="400" rx="28" fill="url(#bg)"/>
-  <rect width="640" height="400" rx="28" fill="url(#glow)"/>
-  <rect x="1.5" y="1.5" width="637" height="397" rx="26.5" stroke="#262C3B" stroke-width="3"/>
 
-  <!-- Top Brand Header -->
-  <circle cx="56" cy="56" r="22" fill="#1C212E" stroke="#2D3446" stroke-width="1.5"/>
-  <text x="56" y="64" text-anchor="middle" fill="#F7931A" font-family="Inter,system-ui,sans-serif" font-size="25" font-weight="700">@</text>
-  <text x="90" y="52" fill="#F3F4F6" font-family="Inter,system-ui,sans-serif" font-size="14" font-weight="600" letter-spacing="0.06em">USERLINK</text>
-  <text x="90" y="70" fill="#8A8F98" font-family="JetBrains Mono,monospace" font-size="11">BITCOIN CASH · CASHTOKENS</text>
+  <rect width="512" height="512" rx="44" fill="url(#cardBg)"/>
+  <rect width="512" height="512" rx="44" fill="url(#bchGlow)"/>
+  <rect width="512" height="512" rx="44" fill="url(#atGlow)"/>
+  <rect x="2" y="2" width="508" height="508" rx="42" stroke="#252C3D" stroke-width="4"/>
 
-  <rect x="444" y="38" width="156" height="32" rx="16" fill="#1C212E" stroke="#2D3446" stroke-width="1.2"/>
-  <text x="522" y="58" text-anchor="middle" fill="#D1D5DB" font-family="JetBrains Mono,monospace" font-size="11" font-weight="600">${safeTier}</text>
+  <!-- Top Emblem & Chain Status -->
+  <rect x="40" y="40" width="76" height="76" rx="22" fill="#171C28" stroke="#2C3447" stroke-width="2"/>
+  <text x="78" y="94" text-anchor="middle" fill="#F7931A" font-family="Inter,system-ui,sans-serif" font-size="48" font-weight="700">@</text>
 
-  <!-- Center @handle -->
-  <text x="40" y="218" fill="#FFFFFF" font-family="Inter,system-ui,sans-serif" font-size="${fontSize}" font-weight="700" letter-spacing="-0.02em">${safeHandle}</text>
-  <text x="42" y="252" fill="#9CA3AF" font-family="Inter,system-ui,sans-serif" font-size="15">Sovereign BCH ↔ Nostr Identity Handle NFT</text>
+  <circle cx="456" cy="78" r="8" fill="#0AC18E"/>
+  <text x="438" y="83" text-anchor="end" fill="#9CA3AF" font-family="JetBrains Mono,monospace" font-size="16" font-weight="600">BCH</text>
 
-  <!-- Bottom Hairline Commitment Footer -->
-  <line x1="40" y1="306" x2="600" y2="306" stroke="#262C3B" stroke-width="1.2"/>
-  <text x="40" y="336" fill="#6B7280" font-family="Inter,system-ui,sans-serif" font-size="11">ON-CHAIN COMMITMENT (UL1)</text>
-  <text x="40" y="358" fill="#E5E7EB" font-family="JetBrains Mono,monospace" font-size="13">${commitmentHex.slice(0, 44)}</text>
-  <text x="600" y="336" text-anchor="end" fill="#6B7280" font-family="Inter,system-ui,sans-serif" font-size="11">METADATA</text>
-  <text x="600" y="358" text-anchor="end" fill="#10B981" font-family="JetBrains Mono,monospace" font-size="13" font-weight="600">BCMR v2</text>
+  <!-- ENS-Style Monumental Handle Focus -->
+  <text x="40" y="346" fill="#FFFFFF" font-family="Inter,system-ui,sans-serif" font-size="${fontSize}" font-weight="700" letter-spacing="-0.03em">${safeHandle}</text>
+
+  <!-- Minimalist Footer -->
+  <line x1="40" y1="402" x2="472" y2="402" stroke="#232A3A" stroke-width="1.5"/>
+  <text x="40" y="446" fill="#8A8F98" font-family="Inter,system-ui,sans-serif" font-size="16" font-weight="500">UserLink · CashTokens</text>
+  <text x="472" y="446" text-anchor="end" fill="#6B7280" font-family="JetBrains Mono,monospace" font-size="14">${commitmentHex.slice(0, 14)}</text>
 </svg>`;
   },
 

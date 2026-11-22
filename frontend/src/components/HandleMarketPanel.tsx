@@ -315,9 +315,9 @@ export const HandleMarketPanel: React.FC<HandleMarketPanelProps> = ({
               })}
             </div>
 
-            {/* Visual BCMR NFT Preview + Technical Covenant Spec (side-by-side cleanly) */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-              <div className="lg:col-span-7 divide-y divide-line text-xs">
+            {/* Visual BCMR 1:1 NFT Badge + Technical Covenant Spec (side-by-side cleanly) */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+              <div className="lg:col-span-8 divide-y divide-line text-xs">
                 <div className="py-3 flex flex-wrap items-center justify-between gap-2">
                   <span className="text-ink-3">{isEs ? 'Cotización seleccionada' : 'Selected handle & fee'}</span>
                   <span className="font-mono font-semibold text-ink tabular-nums">
@@ -330,7 +330,7 @@ export const HandleMarketPanel: React.FC<HandleMarketPanelProps> = ({
                     {isEs ? 'Covenant P2SH-32 Mint' : 'P2SH-32 Mint Covenant'}
                   </span>
                   <div className="flex items-center gap-2 min-w-0">
-                    <span className="font-mono text-ink truncate max-w-[220px] sm:max-w-[300px]">
+                    <span className="font-mono text-ink truncate max-w-[220px] sm:max-w-[340px]">
                       {quoteData.covenant.covenantTokenAddress}
                     </span>
                     <button
@@ -361,7 +361,7 @@ export const HandleMarketPanel: React.FC<HandleMarketPanelProps> = ({
 
                 <div className="py-3 flex flex-wrap items-center justify-between gap-3">
                   <span className="text-ink-3 shrink-0">Commit-Reveal SHA256d</span>
-                  <span className="font-mono text-ink-2 truncate max-w-[220px] sm:max-w-[300px]">
+                  <span className="font-mono text-ink-2 truncate max-w-[220px] sm:max-w-[340px]">
                     {quoteData.commitReveal.commitHashHex}
                   </span>
                 </div>
@@ -380,17 +380,17 @@ export const HandleMarketPanel: React.FC<HandleMarketPanelProps> = ({
                 </div>
               </div>
 
-              {/* Right: Live CashTokens BCMR Visual NFT Card */}
-              <div className="lg:col-span-5 space-y-2">
-                <div className="rounded-panel overflow-hidden border border-line bg-[#0D1017] shadow-soft">
+              {/* Right: Square 1:1 ENS-style CashTokens NFT Artwork */}
+              <div className="lg:col-span-4 flex flex-col items-center lg:items-end space-y-2">
+                <div className="w-full max-w-[232px] aspect-square rounded-[22px] overflow-hidden shadow-soft">
                   <img
                     src={`/api/identity/nft-card/${encodeURIComponent(quoteData.cleanHandle)}`}
                     alt={`${quoteData.handle} CashTokens BCMR NFT`}
-                    className="w-full h-auto block"
+                    className="w-full h-full object-cover block"
                   />
                 </div>
-                <div className="flex items-center justify-between text-[11px] text-ink-3 px-0.5">
-                  <span>{isEs ? 'Vista previa BCMR (@ID)' : 'BCMR (@ID) wallet artwork'}</span>
+                <div className="w-full max-w-[232px] flex items-center justify-between text-[11px] text-ink-3 px-0.5">
+                  <span>1:1 BCMR NFT</span>
                   <a
                     href={`/api/identity/nft-card/${encodeURIComponent(quoteData.cleanHandle)}`}
                     target="_blank"

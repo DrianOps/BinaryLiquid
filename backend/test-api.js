@@ -429,11 +429,14 @@ async function runSecuritySuite() {
   assert.strictEqual(marketListing.feeSats, 100000, '2% of 0.05 BCH (5,000,000 sats) must equal 100,000 sats');
   handleMarketService.cancelMarketListing(marketListing.id, sampleSeller);
 
-  // Verify dynamic BCMR v2 & SVG Handle NFT artwork generation (including UL1 hex decoding)
+  // Verify dynamic BCMR v2 & 1:1 SVG Handle NFT artwork generation (including UL1 hex decoding)
   const svgByHandle = handleMarketService.renderHandleNftCardSvg('bch');
   const svgByHex = handleMarketService.renderHandleNftCardSvg('554c313a626368');
   assert.strictEqual(svgByHandle, svgByHex, 'SVG generator must decode UL1 hex commitments equivalently to handle names');
-  assert.ok(svgByHandle.includes('@bch') && svgByHandle.includes('BCMR v2'), 'Rendered SVG must show @handle & BCMR v2');
+  assert.ok(
+    svgByHandle.includes('viewBox="0 0 512 512"') && svgByHandle.includes('@bch') && svgByHandle.includes('CashTokens'),
+    'Rendered SVG must be 1:1 square containing @handle & CashTokens badge'
+  );
   const bcmrDoc = handleMarketService.buildHandleBcmrRegistry({ target: 'bch' });
   const rev = Object.values(bcmrDoc.identities)[0][bcmrDoc.latestRevision];
   assert.strictEqual(rev.token.symbol, '@ID');
