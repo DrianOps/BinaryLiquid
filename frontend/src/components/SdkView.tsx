@@ -6,6 +6,7 @@ import {
   Copy,
   ExternalLink
 } from 'lucide-react';
+import { resolveUserLinkFromRelays, USERLINK_RELAYS } from '../utils/userlinkCrypto';
 
 interface SdkViewProps {
   lang?: 'en' | 'es';
@@ -23,6 +24,7 @@ type DocPageId =
   | 'userlink-api'
   | 'userlink-python'
   | 'userlink-nostr'
+  | 'userlink-standards'
   | 'userlink-exchanges'
   | 'swap-widget'
   | 'swap-api'
@@ -64,31 +66,31 @@ const DOC_ITEMS: DocItem[] = [
   {
     id: 'userlink-overview',
     category: { en: 'UserLink Protocol', es: 'Protocolo UserLink' },
-    navLabel: { en: 'NIP-05 Standard', es: 'Estándar NIP-05' },
-    title: { en: 'Protocol Standards & NIP-05', es: 'Estándares UserLink & NIP-05' },
+    navLabel: { en: 'Overview & SDK', es: 'Estándar & SDK' },
+    title: { en: 'UserLink Sovereign Identity SDK', es: 'SDK de Identidad Soberana UserLink' },
     subtitle: {
-      en: 'Human-readable handles (@user@bliquid.xyz) backed by BCH ECDSA + Nostr Schnorr dual cryptographic proofs.',
-      es: 'Nombres legibles (@usuario) respaldados por doble firma criptográfica ECDSA (BCH) y Schnorr (Nostr).'
+      en: 'Standalone @binaryliquid/userlink-sdk linking Bitcoin Cash (secp256k1 BSM) and Nostr (BIP-340 Schnorr) with W3C DID/VC & OP_RETURN UL1.',
+      es: 'Paquete standalone @binaryliquid/userlink-sdk que enlaza Bitcoin Cash (BSM) y Nostr (Schnorr) con W3C DID/VC y OP_RETURN UL1.'
     }
   },
   {
     id: 'userlink-resolver',
     category: { en: 'UserLink Protocol', es: 'Protocolo UserLink' },
     navLabel: { en: 'Live Resolver', es: 'Probador en vivo' },
-    title: { en: 'Live Handle Resolver Playground', es: 'Probador interactivo de resolución' },
+    title: { en: 'Live Cryptographic Handle Resolver', es: 'Probador criptográfico en vivo' },
     subtitle: {
-      en: 'Query the production NIP-05 endpoint directly to inspect BCH address mappings, pubkeys, and relays.',
-      es: 'Consulta en vivo el endpoint NIP-05 para inspeccionar direcciones BCH resueltas, claves públicas y relays.'
+      en: 'Queries public Nostr relays (Kind 30078) + NIP-05 in real time and verifies Schnorr + BCH ECDSA BSM + Hash160 ownership.',
+      es: 'Consulta relays públicos Nostr (Kind 30078) + NIP-05 en vivo y verifica Schnorr + BCH ECDSA BSM + Hash160.'
     }
   },
   {
     id: 'userlink-wallets',
     category: { en: 'UserLink Protocol', es: 'Protocolo UserLink' },
-    navLabel: { en: 'TypeScript / JS', es: 'TypeScript / JS' },
-    title: { en: 'TypeScript & Web3 Wallet Client', es: 'Cliente TypeScript / JS para wallets' },
+    navLabel: { en: 'Paytaca / TS SDK', es: 'Paytaca / TS SDK' },
+    title: { en: 'Wallet Integration (@binaryliquid/userlink-sdk)', es: 'Integración en Wallets (@binaryliquid/userlink-sdk)' },
     subtitle: {
-      en: 'Zero-dependency helper for Paytaca, Cashonize, Zapit, and web dApps to resolve handles into BCH addresses.',
-      es: 'Función ligera sin dependencias para integrar resolución @handle en billeteras web y móviles Bitcoin Cash.'
+      en: 'Drop-in TypeScript SDK for Paytaca, Cashonize, Zapit & dApps: verified pay-by-@handle (BCH/CashTokens) and bch_signMessage binding.',
+      es: 'SDK TypeScript para Paytaca, Cashonize y dApps: pagos verificados por @handle (BCH/CashTokens) y enlace vía bch_signMessage.'
     }
   },
   {
@@ -97,8 +99,8 @@ const DOC_ITEMS: DocItem[] = [
     navLabel: { en: 'REST API & cURL', es: 'API REST & cURL' },
     title: { en: 'REST API & cURL Reference', es: 'Referencia API REST & cURL' },
     subtitle: {
-      en: 'Standard GET /.well-known/nostr.json endpoint with CORS enabled for backends and microservices.',
-      es: 'Endpoint público GET /.well-known/nostr.json con soporte CORS para microservicios y pasarelas.'
+      en: 'NIP-05 acceleration (/.well-known/nostr.json) and read-only BCH OP_RETURN verifier (/api/bch/tx/:txid) with CORS enabled.',
+      es: 'Acelerador NIP-05 (/.well-known/nostr.json) y verificador on-chain BCH OP_RETURN (/api/bch/tx/:txid) con CORS.'
     }
   },
   {
@@ -114,11 +116,21 @@ const DOC_ITEMS: DocItem[] = [
   {
     id: 'userlink-nostr',
     category: { en: 'UserLink Protocol', es: 'Protocolo UserLink' },
-    navLabel: { en: 'Nostr P2P Relays', es: 'Relays Nostr P2P' },
-    title: { en: 'Serverless P2P Nostr Resolution', es: 'Resolución descentralizada en relays Nostr' },
+    navLabel: { en: 'Nostr P2P & BSM', es: 'Nostr P2P & BSM' },
+    title: { en: 'Zero-Trust Nostr P2P + BCH BSM Verification', es: 'Verificación P2P Nostr + BCH BSM sin servidores' },
     subtitle: {
-      en: 'Query parameterized replaceable Kind 30078 events directly from public WebSocket relays without DNS.',
-      es: 'Consulta eventos Kind 30078 directamente desde relays públicos Nostr vía WebSocket sin servidores centrales.'
+      en: 'Query Kind 30078 events across public WebSocket relays and verify both BIP-340 Schnorr and Bitcoin Signed Message Hash160.',
+      es: 'Consulta eventos Kind 30078 en relays públicos y valida criptográficamente Schnorr BIP-340 + firma BCH BSM + Hash160.'
+    }
+  },
+  {
+    id: 'userlink-standards',
+    category: { en: 'UserLink Protocol', es: 'Protocolo UserLink' },
+    navLabel: { en: 'W3C DID, VC & UL1', es: 'W3C DID, VC & UL1' },
+    title: { en: 'W3C DID, Key Rotation, Kind 1985 VC & OP_RETURN', es: 'W3C DID, Rotación, Kind 1985 VC y OP_RETURN' },
+    subtitle: {
+      en: 'Open-standard DID resolution, BCH-authorized key rotation, selective-disclosure attestations, NIP-42 login, and BCH anchoring.',
+      es: 'Resolución W3C DID, rotación de llaves por BCH, atestaciones con divulgación selectiva, login NIP-42 y anclaje en BCH.'
     }
   },
   {
@@ -217,46 +229,73 @@ function CodeBlock({
   );
 }
 
-const TS_WALLET_CODE = `// UserLink Resolution Standard for BCH Wallets
-export async function resolveUserLink(handle: string): Promise<string> {
-  const clean = handle.replace(/^@/, '').trim();
-  const [user, domain = 'bliquid.xyz'] = clean.split('@');
+const TS_WALLET_CODE = `// Install standalone SDK from repo: packages/userlink-sdk (@binaryliquid/userlink-sdk)
+import {
+  resolveUserLinkFromRelays,
+  convertCashAddressNetwork,
+  createUserLinkStatement,
+  buildUserLinkEventTemplate,
+  publishUserLinkToRelay,
+  USERLINK_RELAYS
+} from '@binaryliquid/userlink-sdk';
 
-  // Query NIP-05 endpoint with bch_addresses mapping
-  const res = await fetch(\`https://\${domain}/.well-known/nostr.json?name=\${encodeURIComponent(user)}\`);
-  if (!res.ok) throw new Error(\`Failed to resolve UserLink: HTTP \${res.status}\`);
+// 1. Pay BCH or CashTokens by @handle (Paytaca / Cashonize / dApps)
+export async function resolveVerifiedPayee(handleOrNpub: string, forCashTokens = true) {
+  const { verified } = await resolveUserLinkFromRelays(handleOrNpub);
+  if (!verified || !verified.isOverallValid) {
+    throw new Error('Dual BCH BSM + Nostr Schnorr proof could not be verified');
+  }
 
-  const data = await res.json();
-  const address = data.bch_addresses?.[user];
-  if (!address) throw new Error(\`Handle @\${user} is not linked to any Bitcoin Cash address\`);
-
-  return address; // => bitcoincash:qr5zz6098wax242qrz3k7dctsx2kd3vszvywzsefgn
+  // Convert automatically to token-aware CashAddress (z...) for CashTokens
+  const payAddress = convertCashAddressNetwork(verified.bchAddress, false, forCashTokens);
+  return {
+    handle: verified.handle,
+    npub: verified.npub,
+    payAddress,
+    rotationAuthorized: verified.rotationAuthorized
+  };
 }
 
-// Launch Universal BIP-21 Payment:
-const recipientAddress = await resolveUserLink('@myuser');
-const normalized = recipientAddress.includes(':') ? recipientAddress : \`bitcoincash:\${recipientAddress}\`;
-window.location.href = \`\${normalized}?amount=0.025&label=@myuser\`;`;
+// 2. Create a non-custodial binding with Paytaca WalletConnect v2 (bch_signMessage) + NIP-07
+export async function bindPaytacaIdentity(
+  handle: string,
+  bchAddress: string,
+  signBchMessage: (msg: string) => Promise<string>
+) {
+  const nostrPubkeyHex = await (window as any).nostr.getPublicKey();
+  const statement = createUserLinkStatement({ handle, bchAddress, nostrPubkeyHex, network: 'mainnet' });
+  const bchSigBase64 = await signBchMessage(statement); // WalletConnect bch_signMessage
 
-const CURL_SPEC_CODE = `# 1. Execute NIP-05 lookup:
+  const template = buildUserLinkEventTemplate({
+    handle,
+    bchAddress,
+    nostrPubkeyHex,
+    bchSigBase64,
+    statementContent: statement
+  });
+  const signedEvent = await (window as any).nostr.signEvent(template);
+  await Promise.all(USERLINK_RELAYS.map((r) => publishUserLinkToRelay(r, signedEvent)));
+  return signedEvent;
+}`;
+
+const CURL_SPEC_CODE = `# 1. Optional NIP-05 lookup (DNS accelerator; relays Kind 30078 are canonical):
 curl -s "https://bliquid.xyz/.well-known/nostr.json?name=myuser"
 
-# 2. HTTP 200 OK Response:
+# 2. Verify optional on-chain BCH OP_RETURN UL1 commitment via Electrum API:
+curl -s "https://bliquid.xyz/api/bch/tx/<64_HEX_TXID>?network=mainnet"
+
+# Example OP_RETURN response:
 {
-  "names": {
-    "myuser": "de69276e520917aa8227ba4ab4460edd64b5dc263e6f475b29f33fad3af81990"
-  },
-  "bch_addresses": {
-    "myuser": "bitcoincash:qr5zz6098wax242qrz3k7dctsx2kd3vszvywzsefgn"
-  },
-  "relays": {
-    "de69276e520917aa8227ba4ab4460edd64b5dc263e6f475b29f33fad3af81990": [
-      "wss://relay.primal.net",
-      "wss://relay.snort.social",
-      "wss://nostr.oxtr.dev",
-      "wss://offchain.pub"
-    ]
-  }
+  "success": true,
+  "txid": "<64_HEX_TXID>",
+  "confirmations": 12,
+  "opReturns": [
+    {
+      "vout": 0,
+      "scriptHex": "6a24554c313a68a2b02eaf5b8b1d606c551e1a7250a6df3e6e7eadc21434303d47b1a3363121",
+      "payloadHex": "554c313a68a2b02eaf5b8b1d606c551e1a7250a6df3e6e7eadc21434303d47b1a3363121"
+    }
+  ]
 }`;
 
 const PYTHON_CODE = `import requests
@@ -281,31 +320,78 @@ if __name__ == "__main__":
     print(resolve_userlink("@myuser"))
     # => bitcoincash:qr5zz6098wax242qrz3k7dctsx2kd3vszvywzsefgn`;
 
-const NOSTR_P2P_CODE = `import { SimplePool, verifyEvent } from 'nostr-tools';
+const NOSTR_P2P_CODE = `import { SimplePool } from 'nostr-tools';
+import {
+  USERLINK_RELAYS,
+  USERLINK_D_TAG,
+  verifyUserLinkEvent
+} from '@binaryliquid/userlink-sdk';
 
 const pool = new SimplePool();
-const PUBLIC_RELAYS = [
-  'wss://relay.primal.net',
-  'wss://relay.snort.social',
-  'wss://nostr.oxtr.dev',
-  'wss://offchain.pub'
-];
 
-export async function resolveDecentralized(nostrHexPubkey: string) {
-  const event = await pool.get(PUBLIC_RELAYS, {
+/**
+ * Fully decentralized verification with zero central servers:
+ * 1) Recomputes SHA-256 & validates BIP-340 Schnorr signature
+ * 2) Recovers compressed BCH pubkey from Bitcoin Signed Message (bch_sig)
+ * 3) Asserts HASH160(recoveredPubkey) === CashAddress payload
+ * 4) Asserts bidirectional JSON statement match & checks BCH-authorized rotation
+ */
+export async function resolveAndVerifyP2P(nostrHexPubkey: string) {
+  const event = await pool.get(USERLINK_RELAYS, {
     kinds: [30078],
-    '#d': ['bch-identity-binding'],
+    '#d': [USERLINK_D_TAG],
     authors: [nostrHexPubkey]
   });
 
-  if (!event || !verifyEvent(event)) {
-    throw new Error('Valid UserLink record not found on Nostr relays');
+  if (!event) throw new Error('No Kind 30078 UserLink event found on relays');
+
+  const verified = verifyUserLinkEvent(event);
+  if (!verified.isOverallValid) {
+    throw new Error(\`Cryptographic proof rejected: \${verified.verificationNote}\`);
   }
 
-  const passport = JSON.parse(event.content);
-  const bchSig = event.tags.find((t) => t[0] === 'bch_sig')?.[1] || '';
-  const sigScheme = event.tags.find((t) => t[0] === 'sig_scheme')?.[1] || 'bitcoin-signed-message';
-  return { passport, bchSig, sigScheme };
+  return verified; // { handle, bchAddress, npub, isNostrSigValid, isBchSigValid, isAddressOwned, rotationAuthorized }
+}`;
+
+const STANDARDS_SDK_CODE = `import {
+  resolveUserLinkFromRelays,
+  buildUserLinkDidDocument,
+  createAuthChallenge,
+  verifyAuthChallengeEvent,
+  fetchAttestationsFromRelays,
+  verifySelectiveDisclosure,
+  buildBchOpReturnScriptHex,
+  verifyBchOnChainAnchor
+} from '@binaryliquid/userlink-sdk';
+
+// 1. W3C DID Core resolution (did:nostr <-> did:pkh:bch)
+const { verified } = await resolveUserLinkFromRelays('@myuser');
+const didDoc = buildUserLinkDidDocument(verified!);
+
+// 2. Passwordless NIP-42 Challenge-Response Auth (kind 22242)
+const challenge = createAuthChallenge('paytaca.com');
+// ... client signs kind:22242 event with tag ['challenge', challenge.nonce] ...
+// const auth = verifyAuthChallengeEvent(signedAuthEvent, challenge);
+
+// 3. Portable W3C Verifiable Credentials (Kind 1985) + Selective Disclosure
+const credentials = await fetchAttestationsFromRelays(verified!.pubkeyHex);
+const tierProven = verifySelectiveDisclosure({
+  salt: 'ul_salt_2026',
+  attribute: 'tier',
+  value: 'verified_gold',
+  commitmentHex: credentials[0]?.saltedCommitments?.tier || ''
+});
+
+// 4. Optional On-Chain BCH OP_RETURN UL1 Commitment
+const opReturnHex = buildBchOpReturnScriptHex(verified!.event.content); // 6a24554c313a<sha256>
+if (verified!.anchorTxId) {
+  const anchor = await verifyBchOnChainAnchor({
+    txid: verified!.anchorTxId,
+    statementContent: verified!.event.content,
+    network: 'mainnet',
+    apiBase: 'https://bliquid.xyz'
+  });
+  console.log('On-chain UL1 confirmations:', anchor.verifiedOnChain, anchor.confirmations);
 }`;
 
 const SWAP_API_CODE = `// 1. Fetch real-time oracle quote (includes 0.30% flat protocol fee)
@@ -351,7 +437,7 @@ export const SdkView: React.FC<SdkViewProps> = ({
   const [embedTheme, setEmbedTheme] = useState<'dark' | 'light'>('dark');
 
   // UserLink Playground States
-  const [testHandle, setTestHandle] = useState('myuser');
+  const [testHandle, setTestHandle] = useState('@myuser');
   const [isResolving, setIsResolving] = useState(false);
   const [resolveError, setResolveError] = useState<string | null>(null);
   const [resolveResult, setResolveResult] = useState<{
@@ -360,12 +446,16 @@ export const SdkView: React.FC<SdkViewProps> = ({
     pubkey: string;
     relays: string[];
     latencyMs: number;
+    source: 'nostr-verified' | 'nip05-fallback';
+    sigSummary: string;
   } | null>({
     handle: 'myuser@bliquid.xyz',
-    bchAddress: 'bitcoincash:qr5zz6098wax242qrz3k7dctsx2kd3vszvywzsefgn',
+    bchAddress: 'bitcoincash:qpg97awuj2g6q5w0sr59x7enrv24nfd9ny7ujzg3mq',
     pubkey: 'de69276e520917aa8227ba4ab4460edd64b5dc263e6f475b29f33fad3af81990',
-    relays: ['wss://relay.primal.net', 'wss://relay.snort.social', 'wss://nostr.oxtr.dev', 'wss://offchain.pub'],
-    latencyMs: 38
+    relays: USERLINK_RELAYS,
+    latencyMs: 38,
+    source: 'nostr-verified',
+    sigSummary: 'BIP-340 Schnorr + BCH BSM + Hash160 Verified'
   });
 
   const origin = typeof window !== 'undefined' ? window.location.origin : 'https://bliquid.xyz';
@@ -409,59 +499,63 @@ export const SdkView: React.FC<SdkViewProps> = ({
     setIsResolving(true);
     setResolveError(null);
     const start = performance.now();
-    const clean = testHandle.replace(/^@/, '').trim().toLowerCase();
-    const [user, domain = 'bliquid.xyz'] = clean.split('@');
-    const targetUser = (user || '').replace(/[^a-z0-9_-]/g, '');
-    const targetDomain = (domain || 'bliquid.xyz').trim();
+    const rawQuery = testHandle.trim();
 
-    if (!targetUser || !targetDomain.includes('.')) {
+    if (!rawQuery) {
       setResolveResult(null);
-      setResolveError(isEs ? 'Handle o dominio NIP-05 inválido.' : 'Invalid NIP-05 handle or domain.');
+      setResolveError(
+        isEs
+          ? 'Ingresa un @handle, npub1..., o dirección CashAddress.'
+          : 'Enter a @handle, npub1..., or Bitcoin Cash address.'
+      );
       setIsResolving(false);
       return;
     }
 
     try {
-      const url = `https://${targetDomain}/.well-known/nostr.json?name=${encodeURIComponent(targetUser)}`;
-      const res = await fetch(url);
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
-      }
-      const data = await res.json();
+      const { verified, nip05Fallback } = await resolveUserLinkFromRelays(rawQuery, USERLINK_RELAYS, 5500);
       const elapsed = Math.round(performance.now() - start);
 
-      const resolvedPk = data?.names?.[targetUser] || '';
-      const resolvedAddr = data?.bch_addresses?.[targetUser] || '';
-      if (!resolvedPk || !resolvedAddr) {
-        setResolveResult(null);
-        setResolveError(
-          isEs
-            ? `El identificador "${targetUser}@${targetDomain}" no fue encontrado en nostr.json.`
-            : `Handle "${targetUser}@${targetDomain}" not found in nostr.json.`
-        );
+      if (verified && verified.isOverallValid) {
+        setResolveResult({
+          handle: verified.nip05 || verified.handle.replace(/^@/, ''),
+          bchAddress: verified.bchAddress,
+          pubkey: verified.pubkeyHex,
+          relays: USERLINK_RELAYS,
+          latencyMs: elapsed,
+          source: 'nostr-verified',
+          sigSummary: verified.rotationAuthorized
+            ? 'BIP-340 Schnorr + BCH BSM + Key Rotation Verified'
+            : 'BIP-340 Schnorr + BCH BSM + Hash160 Verified'
+        });
         return;
       }
 
-      const resolvedRelays = (resolvedPk && data?.relays?.[resolvedPk]) || [
-        'wss://relay.primal.net',
-        'wss://relay.snort.social',
-        'wss://nostr.oxtr.dev',
-        'wss://offchain.pub'
-      ];
+      if (nip05Fallback) {
+        setResolveResult({
+          handle: nip05Fallback.nip05,
+          bchAddress: nip05Fallback.bchAddress,
+          pubkey: nip05Fallback.pubkeyHex,
+          relays: USERLINK_RELAYS,
+          latencyMs: elapsed,
+          source: 'nip05-fallback',
+          sigSummary: 'NIP-05 HTTP Fallback (Kind 30078 relay event not yet found)'
+        });
+        return;
+      }
 
-      setResolveResult({
-        handle: `${targetUser}@${targetDomain}`,
-        bchAddress: resolvedAddr,
-        pubkey: resolvedPk,
-        relays: resolvedRelays,
-        latencyMs: elapsed
-      });
+      setResolveResult(null);
+      setResolveError(
+        isEs
+          ? `No se encontró un vínculo verificado para "${rawQuery}" en relays Nostr ni NIP-05.`
+          : `No cryptographically verified UserLink record found for "${rawQuery}" on Nostr relays or NIP-05.`
+      );
     } catch (err: any) {
       setResolveResult(null);
       setResolveError(
         isEs
-          ? `No se pudo consultar ${targetDomain}/.well-known/nostr.json (${err?.message || 'Error de red o CORS'}).`
-          : `Failed querying ${targetDomain}/.well-known/nostr.json (${err?.message || 'Network or CORS error'}).`
+          ? `Error consultando relays Nostr (${err?.message || 'Error de red'}).`
+          : `Failed querying Nostr relays (${err?.message || 'Network error'}).`
       );
     } finally {
       setIsResolving(false);
@@ -726,25 +820,38 @@ window.location.href = "bitcoincash:qr5zz6098wax242qrz3k7dctsx2kd3vszvywzsefgn?a
 
               <div className="py-4 border-y border-line grid grid-cols-1 sm:grid-cols-2 gap-6 text-xs">
                 <div className="space-y-1">
-                  <div className="font-semibold text-ink">NIP-05 HTTP Lookup</div>
+                  <div className="font-semibold text-ink">Nostr Kind 30078 + Kind 1985 (Primary P2P)</div>
                   <p className="text-ink-2 leading-relaxed">
                     {isEs
-                      ? 'Endpoint JSON estándar en /.well-known/nostr.json con soporte CORS universal para wallets y exchanges.'
-                      : 'Standard HTTPS JSON mapping at /.well-known/nostr.json with universal CORS headers.'}
+                      ? 'Eventos reemplazables Kind 30078 (bch-identity-binding) y credenciales W3C VC Kind 1985 en relays públicos globales sin base de datos propia.'
+                      : 'Parameterized replaceable Kind 30078 bindings and Kind 1985 W3C Verifiable Credentials on public WebSocket relays with zero proprietary database.'}
                   </p>
                 </div>
 
                 <div className="space-y-1">
-                  <div className="font-semibold text-ink">Nostr Kind 30078 (d-tag: bch-identity-binding)</div>
+                  <div className="font-semibold text-ink">@binaryliquid/userlink-sdk (ESM / CJS / TS)</div>
                   <p className="text-ink-2 leading-relaxed">
                     {isEs
-                      ? 'Evento reemplazable parametrizado en relays públicos globales (Primal, Snort, Oxtr, Offchain) para resolución P2P sin DNS.'
-                      : 'Parameterized replaceable event stored across public WebSocket relays (Primal, Snort, Oxtr, Offchain) for serverless lookup.'}
+                      ? 'Paquete standalone en packages/userlink-sdk con verificación Schnorr + BSM Hash160, W3C DID, rotación BCH, divulgación selectiva y OP_RETURN UL1.'
+                      : 'Standalone packages/userlink-sdk library exposing Schnorr + BSM Hash160 verification, W3C DID, BCH key rotation, selective disclosure & OP_RETURN UL1.'}
                   </p>
                 </div>
               </div>
 
-              <div>
+              <CodeBlock
+                title="Install & Import (@binaryliquid/userlink-sdk)"
+                code={`# Clone or install directly from DrianOps/BinaryLiquid (packages/userlink-sdk)
+cd packages/userlink-sdk && npm install && npm run build && npm test
+
+# Exports both ESM (dist/index.mjs), CJS (dist/index.cjs), and TypeScript types (dist/index.d.ts)`}
+                copyId="overview-install"
+                copiedSection={copiedSection}
+                onCopy={copyToClipboard}
+                copyLabel={copyLabel}
+                copiedLabel={copiedLabel}
+              />
+
+              <div className="flex flex-wrap items-center gap-2.5">
                 <button
                   type="button"
                   onClick={() => selectDoc('userlink-resolver')}
@@ -752,6 +859,13 @@ window.location.href = "bitcoincash:qr5zz6098wax242qrz3k7dctsx2kd3vszvywzsefgn?a
                 >
                   <span>{isEs ? 'Probar en el Playground' : 'Open Live Playground'}</span>
                   <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => selectDoc('userlink-wallets')}
+                  className="ui-btn-secondary ui-btn-sm inline-flex items-center gap-1.5"
+                >
+                  <span>{isEs ? 'Ver integración Paytaca SDK' : 'View Paytaca SDK Guide'}</span>
                 </button>
               </div>
             </div>
@@ -767,7 +881,7 @@ window.location.href = "bitcoincash:qr5zz6098wax242qrz3k7dctsx2kd3vszvywzsefgn?a
                   type="text"
                   value={testHandle}
                   onChange={(e) => setTestHandle(e.target.value)}
-                  placeholder="myuser o myuser@bliquid.xyz"
+                  placeholder="@myuser, npub1..., o bitcoincash:q..."
                   className="ui-input flex-1 font-mono text-xs"
                 />
                 <button
@@ -792,8 +906,12 @@ window.location.href = "bitcoincash:qr5zz6098wax242qrz3k7dctsx2kd3vszvywzsefgn?a
                       <span className="text-ink-3">{isEs ? 'Identificador' : 'Handle'}:</span>
                       <span className="font-mono font-semibold text-ink">@{resolveResult.handle}</span>
                     </div>
-                    <span className="font-mono text-[11px] text-emerald-500 tabular-nums">
-                      NIP-05 · {resolveResult.latencyMs}ms
+                    <span
+                      className={`font-mono text-[11px] tabular-nums ${
+                        resolveResult.source === 'nostr-verified' ? 'text-emerald-500' : 'text-amber-500'
+                      }`}
+                    >
+                      {resolveResult.sigSummary} · {resolveResult.latencyMs}ms
                     </span>
                   </div>
 
@@ -856,7 +974,7 @@ window.location.href = "bitcoincash:qr5zz6098wax242qrz3k7dctsx2kd3vszvywzsefgn?a
           {/* =============================================================== */}
           {activeDocId === 'userlink-wallets' && (
             <CodeBlock
-              title="resolveUserLink.ts"
+              title="paytacaUserLinkIntegration.ts"
               code={TS_WALLET_CODE}
               copyId="ts-code"
               copiedSection={copiedSection}
@@ -871,12 +989,21 @@ window.location.href = "bitcoincash:qr5zz6098wax242qrz3k7dctsx2kd3vszvywzsefgn?a
           {/* =============================================================== */}
           {activeDocId === 'userlink-api' && (
             <div className="space-y-4">
-              <div className="py-3 border-y border-line flex flex-wrap items-center justify-between gap-2 text-xs">
-                <div className="font-mono">
-                  <span className="text-emerald-500 font-semibold mr-2">GET</span>
-                  <span className="text-ink font-medium">/.well-known/nostr.json?name=&#123;username&#125;</span>
+              <div className="divide-y divide-line border-y border-line text-xs">
+                <div className="py-3 flex flex-wrap items-center justify-between gap-2">
+                  <div className="font-mono">
+                    <span className="text-emerald-500 font-semibold mr-2">GET</span>
+                    <span className="text-ink font-medium">/.well-known/nostr.json?name=&#123;username&#125;</span>
+                  </div>
+                  <span className="text-ink-3 text-[11px]">NIP-05 Accelerator · CORS: *</span>
                 </div>
-                <span className="text-ink-3 text-[11px]">CORS: *</span>
+                <div className="py-3 flex flex-wrap items-center justify-between gap-2">
+                  <div className="font-mono">
+                    <span className="text-emerald-500 font-semibold mr-2">GET</span>
+                    <span className="text-ink font-medium">/api/bch/tx/:txid?network=mainnet|testnet</span>
+                  </div>
+                  <span className="text-ink-3 text-[11px]">OP_RETURN UL1 Verifier · Electrum</span>
+                </div>
               </div>
 
               <CodeBlock
@@ -911,7 +1038,7 @@ window.location.href = "bitcoincash:qr5zz6098wax242qrz3k7dctsx2kd3vszvywzsefgn?a
           {/* =============================================================== */}
           {activeDocId === 'userlink-nostr' && (
             <CodeBlock
-              title="resolveDecentralized.ts"
+              title="resolveAndVerifyP2P.ts"
               code={NOSTR_P2P_CODE}
               copyId="nostr-code"
               copiedSection={copiedSection}
@@ -919,6 +1046,42 @@ window.location.href = "bitcoincash:qr5zz6098wax242qrz3k7dctsx2kd3vszvywzsefgn?a
               copyLabel={copyLabel}
               copiedLabel={copiedLabel}
             />
+          )}
+
+          {/* =============================================================== */}
+          {/* DOC 8B: W3C DID, KEY ROTATION, KIND 1985 VC & OP_RETURN UL1    */}
+          {/* =============================================================== */}
+          {activeDocId === 'userlink-standards' && (
+            <div className="space-y-4">
+              <div className="py-3 border-y border-line grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div>
+                  <div className="font-semibold text-ink">W3C DID Core &amp; Key Rotation</div>
+                  <p className="text-ink-2 mt-0.5 leading-relaxed">
+                    {isEs
+                      ? 'Resuelve did:nostr ↔ did:pkh:bch y autoriza rotación de llave Nostr con firma BCH (prev_nostr).'
+                      : 'Resolves did:nostr ↔ did:pkh:bch documents and verifies BCH-authorized Nostr key rotation (prev_nostr).'}
+                  </p>
+                </div>
+                <div>
+                  <div className="font-semibold text-ink">Kind 1985 VC, Selective Disclosure &amp; UL1</div>
+                  <p className="text-ink-2 mt-0.5 leading-relaxed">
+                    {isEs
+                      ? 'Atestaciones portables NIP-32, compromisos salados sin PII y verificación BCH OP_RETURN UL1.'
+                      : 'Portable NIP-32 W3C attestations, privacy-preserving salted commitments, and Electrum OP_RETURN UL1 checks.'}
+                  </p>
+                </div>
+              </div>
+
+              <CodeBlock
+                title="didVcAndAnchors.ts"
+                code={STANDARDS_SDK_CODE}
+                copyId="standards-sdk-code"
+                copiedSection={copiedSection}
+                onCopy={copyToClipboard}
+                copyLabel={copyLabel}
+                copiedLabel={copiedLabel}
+              />
+            </div>
           )}
 
           {/* =============================================================== */}

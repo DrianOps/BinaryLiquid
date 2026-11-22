@@ -48,11 +48,16 @@ Altering any byte of the JSON statement causes key recovery to produce a mismatc
 
 ---
 
-## 5. Setup & Verification
+## 5. Standalone SDK, Setup & Verification
+
+A framework-agnostic TypeScript/JavaScript library (**`@binaryliquid/userlink-sdk`**) is packaged in [`packages/userlink-sdk/`](../packages/userlink-sdk/README.md) with ESM (`dist/index.mjs`), CommonJS (`dist/index.cjs`), and TypeScript declaration (`dist/index.d.ts`) outputs ready for adoption by Paytaca, Cashonize, Zapit, Nostr clients, and dApps.
 
 ```bash
-# Run automated cryptographic, key-rotation, W3C VC & security test suite
-cd backend && npm install && node test-api.js
+# Build & test the standalone @binaryliquid/userlink-sdk (ESM + CJS cryptographic tests)
+cd packages/userlink-sdk && npm install && npm run build && npm test
+
+# Run automated backend cryptographic, key-rotation, W3C VC & security test suite
+cd ../../backend && npm install && node test-api.js
 
 # Build & run interactive UserLink Identity & Inspector UI
 cd ../frontend && npm install && npm run build
@@ -60,5 +65,5 @@ cd ../frontend && npm install && npm run build
 
 Live endpoints:
 - **UserLink UI & Inspector:** `https://bliquid.xyz/identity`
-- **Protocol SDK Snippets:** `https://bliquid.xyz/sdk`
+- **Interactive SDK & Live Verifier:** `https://bliquid.xyz/sdk`
 - **Send BCH/CashTokens by `@handle`:** `https://wallet.bliquid.xyz/dashboard/send`

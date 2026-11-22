@@ -61,6 +61,7 @@ Instead of pooling deposits inside mutable admin wallets, BinaryLiquid locks fun
 - Maps human-readable handles (`@handle@bliquid.xyz`) directly to a Bitcoin Cash CashAddress and Nostr `npub`.
 - **Dual Cryptographic Binding:** Signed by both the Bitcoin Cash key (Bitcoin Signed Message ECDSA) and the Nostr key (Schnorr) and published as replaceable Nostr **Kind `30078`** (`#d: bch-identity-binding`), with W3C DID resolution (`did:nostr` ↔ `did:pkh:bch`), BCH-authorized key rotation, NIP-32 (`Kind 1985`) W3C Verifiable Credentials with salted selective disclosure, and optional BCH `OP_RETURN` anchoring. See [docs/USERLINK_PROTOCOL.md](./docs/USERLINK_PROTOCOL.md).
 - **Decentralized Relay & DNS Resolution:** Published and resolved across `wss://relay.primal.net`, `wss://relay.snort.social`, `wss://nostr.oxtr.dev`, and `wss://offchain.pub`, alongside static NIP-05 DNS resolution at `/.well-known/nostr.json`.
+- **Reusable Standalone SDK (`packages/userlink-sdk`):** Framework-agnostic `@binaryliquid/userlink-sdk` library (ESM/CJS/TypeScript types) implementing dual Schnorr + BCH BSM `hash160` verification, Paytaca `bch_signMessage` helpers, W3C DID Core resolution, NIP-42 challenge auth, `Kind 1985` W3C VC + selective disclosure, and `OP_RETURN UL1` anchoring.
 - **Zero-Gas, Wallet-Ready Payments:** Supports BIP-21 deep-linking and direct resolution inside Paytaca, Cashonize, and BinaryLiquid Wallet.
 
 ### 4. Multi-Chain Wallet Connectivity & Portfolio Terminal (`/portfolio`, `wallet.bliquid.xyz`)

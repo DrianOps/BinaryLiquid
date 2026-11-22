@@ -1,0 +1,56 @@
+{
+  "name": "@binaryliquid/userlink-sdk",
+  "version": "1.0.0",
+  "description": "Self-sovereign Bitcoin Cash <-> Nostr cryptographic identity SDK (NIP-78 Kind 30078, Bitcoin Signed Message ECDSA, W3C DID, BCH-authorized Key Rotation, Kind 1985 W3C VC, Selective Disclosure & BCH OP_RETURN UL1).",
+  "license": "MIT",
+  "author": "Drian Stack Labs <@drianops>",
+  "homepage": "https://bliquid.xyz/sdk",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/DrianOps/BinaryLiquid.git",
+    "directory": "packages/userlink-sdk"
+  },
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "keywords": [
+    "bitcoin-cash",
+    "bch",
+    "nostr",
+    "cashtokens",
+    "paytaca",
+    "did",
+    "verifiable-credentials",
+    "nip-78",
+    "nip-32",
+    "nip-05",
+    "self-sovereign-identity",
+    "userlink"
+  ],
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "node test/sdk.test.mjs && node test/sdk-cjs.test.cjs"
+  },
+  "dependencies": {
+    "@noble/curves": "^2.0.1",
+    "@noble/hashes": "^2.0.1",
+    "nostr-tools": "^2.25.2"
+  },
+  "devDependencies": {
+    "esbuild": "^0.19.12",
+    "typescript": "^5.3.3"
+  }
+}
