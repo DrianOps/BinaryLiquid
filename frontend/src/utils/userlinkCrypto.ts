@@ -1,4 +1,4 @@
-import { SimplePool, verifyEvent, nip19, type Event as NostrEvent } from 'nostr-tools';
+import { SimplePool, finalizeEvent, verifyEvent, nip19, type Event as NostrEvent } from 'nostr-tools';
 import { secp256k1 } from '@noble/curves/secp256k1.js';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
@@ -13,6 +13,7 @@ export const USERLINK_RELAYS = [
 ];
 
 export const USERLINK_D_TAG = 'bch-identity-binding';
+export const USERLINK_ATTESTATION_LABEL = 'userlink.vc.v1';
 
 export interface VerifiedUserLinkResult {
   npub: string;
@@ -29,7 +30,26 @@ export interface VerifiedUserLinkResult {
   isAddressOwned: boolean;
   isMutualBindingValid: boolean;
   isOverallValid: boolean;
+  previousNostrPubkey?: string;
+  rotationAuthorized?: boolean;
+  anchorTxId?: string;
+  commitmentHashHex?: string;
   verificationNote?: string;
+}
+
+export interface UserLinkAttestationResult {
+  eventId: string;
+  issuerPubkeyHex: string;
+  issuerNpub: string;
+  subjectPubkeyHex: string;
+  claimType: string;
+  claimSummary: string;
+  rating?: number;
+  saltedCommitments: Record<string, string>;
+  issuedAt: number;
+  isSigValid: boolean;
+  isOverallValid: boolean;
+  rawCredential: Record<string, unknown>;
 }
 
 function encodeVarInt(n: number): Uint8Array {
@@ -258,6 +278,8 @@ export function verifyUserLinkEvent(foundEvent: NostrEvent): VerifiedUserLinkRes
   const bchSigTag = foundEvent.tags.find((t: string[]) => t[0] === 'bch_sig')?.[1] || '';
   const handleTag = foundEvent.tags.find((t: string[]) => t[0] === 'handle')?.[1] || '';
   const nip05Tag = foundEvent.tags.find((t: string[]) => t[0] === 'nip05')?.[1] || '';
+  const prevNostrTag = foundEvent.tags.find((t: string[]) => t[0] === 'prev_nostr')?.[1] || '';
+  const anchorTxTag = foundEvent.tags.find((t: string[]) => t[0] === 'anchor_tx')?.[1] || '';
   const sigSchemeTag =
     foundEvent.tags.find((t: string[]) => t[0] === 'sig_scheme')?.[1] ||
     (/^[0-9a-fA-F]{128,144}$/.test(bchSigTag) ? 'ecdsa-secp256k1-sha256' : 'bitcoin-signed-message');
@@ -267,11 +289,19 @@ export function verifyUserLinkEvent(foundEvent: NostrEvent): VerifiedUserLinkRes
     parsedStatement = JSON.parse(foundEvent.content);
   } catch {}
 
+  const previousNostrPubkey = (
+    prevNostrTag ||
+    (typeof parsedStatement?.previousNostrPubkey === 'string' ? parsedStatement.previousNostrPubkey : '')
+  )
+    .trim()
+    .toLowerCase();
+
   const isMutualBindingValid = Boolean(
     parsedStatement &&
       typeof parsedStatement === 'object' &&
       parsedStatement.nostrPubkey === foundEvent.pubkey &&
-      (!bchAddressTag || parsedStatement.bchAddress === bchAddressTag)
+      (!bchAddressTag || parsedStatement.bchAddress === bchAddressTag) &&
+      (!prevNostrTag || parsedStatement.previousNostrPubkey === prevNostrTag)
   );
 
   const bchCheck = verifyBitcoinMessageAndAddress({
@@ -296,6 +326,12 @@ export function verifyUserLinkEvent(foundEvent: NostrEvent): VerifiedUserLinkRes
   const isOverallValid =
     isNostrSigValid && bchCheck.isBchSigValid && bchCheck.isAddressOwned && isMutualBindingValid;
 
+  const rotationAuthorized = Boolean(
+    isOverallValid && /^[0-9a-f]{64}$/.test(previousNostrPubkey) && previousNostrPubkey !== foundEvent.pubkey
+  );
+
+  const commitmentHashHex = computeUserLinkCommitmentHash(foundEvent.content);
+
   let verificationNote = bchCheck.reason;
   if (!isNostrSigValid) verificationNote = 'Invalid Nostr BIP-340 Schnorr signature';
   else if (!isMutualBindingValid) verificationNote = 'Signed statement does not bind event pubkey and BCH address';
@@ -315,6 +351,10 @@ export function verifyUserLinkEvent(foundEvent: NostrEvent): VerifiedUserLinkRes
     isAddressOwned: bchCheck.isAddressOwned,
     isMutualBindingValid,
     isOverallValid,
+    ...(previousNostrPubkey ? { previousNostrPubkey } : {}),
+    rotationAuthorized,
+    ...(anchorTxTag ? { anchorTxId: anchorTxTag.trim().toLowerCase() } : {}),
+    commitmentHashHex,
     verificationNote
   };
 }
@@ -524,4 +564,311 @@ export async function publishUserLinkToRelay(
       pool.close([relayUrl]);
     } catch {}
   }
+}
+
+/**
+ * Computes the deterministic SHA-256 commitment hash prefixed with `UL1:`
+ * used for optional Bitcoin Cash `OP_RETURN` on-chain anchoring.
+ */
+export function computeUserLinkCommitmentHash(statementContent: string): string {
+  const prefixed = new TextEncoder().encode(`UL1:${statementContent}`);
+  return bytesToHex(sha256(prefixed));
+}
+
+/**
+ * Builds the raw Bitcoin Cash script hex (`OP_RETURN <"UL1:" + 32-byte sha256>`)
+ * for anchoring a UserLink cryptographic binding directly on Bitcoin Cash.
+ */
+export function buildBchOpReturnScriptHex(statementContent: string): string {
+  const hashHex = computeUserLinkCommitmentHash(statementContent);
+  // 0x6a = OP_RETURN, 0x24 = push 36 bytes ("UL1:" 4 bytes + sha256 32 bytes)
+  return `6a24554c313a${hashHex}`;
+}
+
+/**
+ * Generates a standard W3C DID Core Document (`did:nostr` + `did:pkh:bch`)
+ * directly from a verified UserLink Kind 30078 proof without central servers.
+ */
+export function buildUserLinkDidDocument(verified: VerifiedUserLinkResult): Record<string, unknown> {
+  const didId = `did:nostr:${verified.pubkeyHex}`;
+  const isChipnet = verified.bchAddress.startsWith('bchtest:');
+  const bchRaw = verified.bchAddress.includes(':')
+    ? verified.bchAddress.split(':')[1]
+    : verified.bchAddress;
+  const didBch = `did:pkh:bch:${isChipnet ? 'chipnet' : 'mainnet'}:${bchRaw}`;
+
+  return {
+    '@context': [
+      'https://www.w3.org/ns/did/v1',
+      'https://w3id.org/security/suites/secp256k1-2019/v1'
+    ],
+    id: didId,
+    alsoKnownAs: [
+      didBch,
+      `acct:${verified.nip05}`,
+      verified.npub,
+      ...(verified.previousNostrPubkey ? [`did:nostr:${verified.previousNostrPubkey}`] : [])
+    ],
+    verificationMethod: [
+      {
+        id: `${didId}#nostr-key`,
+        type: 'SchnorrSecp256k1VerificationKey2019',
+        controller: didId,
+        publicKeyHex: verified.pubkeyHex
+      },
+      {
+        id: `${didId}#bch-key`,
+        type: 'EcdsaSecp256k1RecoveryMethod2020',
+        controller: didId,
+        ...(verified.bchPubkey ? { publicKeyHex: verified.bchPubkey } : {}),
+        blockchainAccountId: `bch:${isChipnet ? 'chipnet' : 'mainnet'}:${verified.bchAddress}`
+      }
+    ],
+    authentication: [`${didId}#nostr-key`, `${didId}#bch-key`],
+    assertionMethod: [`${didId}#nostr-key`],
+    service: [
+      {
+        id: `${didId}#nostr-relays`,
+        type: 'NostrRelayRegistry',
+        serviceEndpoint: USERLINK_RELAYS
+      },
+      {
+        id: `${didId}#nip05`,
+        type: 'LinkedDomains',
+        serviceEndpoint: `https://bliquid.xyz/.well-known/nostr.json?name=${encodeURIComponent(
+          verified.handle.replace(/^@/, '')
+        )}`
+      }
+    ]
+  };
+}
+
+/**
+ * Privacy-preserving salted commitment helper for Selective Disclosure.
+ */
+export function createSaltedDisclosureCommitment(
+  salt: string,
+  attribute: string,
+  value: string
+): string {
+  const payload = `ul_sd_v1:${salt}:${attribute.trim().toLowerCase()}:${value.trim()}`;
+  return bytesToHex(sha256(new TextEncoder().encode(payload)));
+}
+
+export function verifySelectiveDisclosure(params: {
+  salt: string;
+  attribute: string;
+  value: string;
+  commitmentHex: string;
+}): boolean {
+  if (!params.salt || !params.attribute || !params.commitmentHex) return false;
+  const computed = createSaltedDisclosureCommitment(params.salt, params.attribute, params.value);
+  return computed === params.commitmentHex.trim().toLowerCase();
+}
+
+/**
+ * Builds & signs a Nostr Kind 1985 (NIP-32) Verifiable Credential / Portable Reputation attestation.
+ */
+export function createSignedAttestationEvent(params: {
+  subjectPubkeyHex: string;
+  subjectBchAddress: string;
+  subjectHandle?: string;
+  claimType: string;
+  claimSummary: string;
+  rating?: number;
+  saltedCommitments?: Record<string, string>;
+  issuerSkBytes: Uint8Array;
+}): NostrEvent {
+  const now = Math.floor(Date.now() / 1000);
+  const credential = {
+    '@context': ['https://www.w3.org/ns/credentials/v2'],
+    type: ['VerifiableCredential', 'UserLinkAttestation'],
+    issuer: '', // populated after pubkey derivation below
+    validFrom: new Date(now * 1000).toISOString(),
+    credentialSubject: {
+      id: `did:nostr:${params.subjectPubkeyHex.toLowerCase()}`,
+      bchAddress: params.subjectBchAddress,
+      ...(params.subjectHandle ? { handle: params.subjectHandle } : {}),
+      claimType: params.claimType,
+      summary: params.claimSummary,
+      ...(params.rating !== undefined ? { rating: params.rating } : {}),
+      ...(params.saltedCommitments && Object.keys(params.saltedCommitments).length > 0
+        ? { saltedCommitments: params.saltedCommitments }
+        : {})
+    }
+  };
+
+  // Sign provisional to get issuer pubkey deterministically via finalizeEvent
+  const tempSigned = finalizeEvent(
+    {
+      kind: 1985,
+      created_at: now,
+      tags: [
+        ['L', USERLINK_ATTESTATION_LABEL],
+        ['l', params.claimType, USERLINK_ATTESTATION_LABEL],
+        ['p', params.subjectPubkeyHex.toLowerCase()],
+        ['i', `bch:${params.subjectBchAddress}`]
+      ],
+      content: ''
+    },
+    params.issuerSkBytes
+  );
+
+  credential.issuer = `did:nostr:${tempSigned.pubkey}`;
+  return finalizeEvent(
+    {
+      kind: 1985,
+      created_at: now,
+      tags: tempSigned.tags,
+      content: JSON.stringify(credential)
+    },
+    params.issuerSkBytes
+  );
+}
+
+/**
+ * Cryptographically validates a Kind 1985 (NIP-32) W3C Verifiable Credential attestation event.
+ */
+export function verifyAttestationEvent(event: NostrEvent): UserLinkAttestationResult {
+  const clean: NostrEvent = {
+    id: event.id,
+    pubkey: event.pubkey,
+    created_at: event.created_at,
+    kind: event.kind,
+    tags: Array.isArray(event.tags) ? event.tags.map((t) => [...t]) : [],
+    content: event.content,
+    sig: event.sig
+  };
+  const isSigValid = Boolean(verifyEvent(clean));
+
+  let parsed: any = {};
+  try {
+    parsed = JSON.parse(event.content);
+  } catch {}
+
+  const pTag = clean.tags.find((t) => t[0] === 'p')?.[1]?.toLowerCase() || '';
+  const lTag = clean.tags.find((t) => t[0] === 'l')?.[1] || '';
+  const subj = parsed?.credentialSubject || {};
+  const matchesSubject = Boolean(pTag && subj.id === `did:nostr:${pTag}`);
+  const matchesIssuer = !parsed?.issuer || parsed.issuer === `did:nostr:${event.pubkey}`;
+
+  let issuerNpub = event.pubkey;
+  try {
+    issuerNpub = nip19.npubEncode(event.pubkey);
+  } catch {}
+
+  const isOverallValid =
+    isSigValid &&
+    clean.kind === 1985 &&
+    matchesSubject &&
+    matchesIssuer &&
+    Boolean(subj.claimType || lTag);
+
+  return {
+    eventId: event.id,
+    issuerPubkeyHex: event.pubkey,
+    issuerNpub,
+    subjectPubkeyHex: pTag,
+    claimType: String(subj.claimType || lTag || 'Attestation'),
+    claimSummary: String(subj.summary || ''),
+    ...(typeof subj.rating === 'number' ? { rating: subj.rating } : {}),
+    saltedCommitments:
+      subj.saltedCommitments && typeof subj.saltedCommitments === 'object'
+        ? subj.saltedCommitments
+        : {},
+    issuedAt: event.created_at,
+    isSigValid,
+    isOverallValid,
+    rawCredential: parsed
+  };
+}
+
+/**
+ * Fetches and verifies Kind 1985 portable W3C attestations from Nostr relays for a subject pubkey.
+ */
+export async function fetchAttestationsFromRelays(
+  subjectPubkeyHex: string,
+  relays: string[] = USERLINK_RELAYS,
+  timeoutMs = 4500
+): Promise<UserLinkAttestationResult[]> {
+  const cleanPk = (subjectPubkeyHex || '').trim().toLowerCase();
+  if (!/^[0-9a-f]{64}$/.test(cleanPk)) return [];
+
+  const pool = new SimplePool();
+  try {
+    const events = await Promise.race([
+      pool.querySync(relays, {
+        kinds: [1985],
+        '#p': [cleanPk],
+        '#L': [USERLINK_ATTESTATION_LABEL]
+      }).catch(() => [] as NostrEvent[]),
+      new Promise<NostrEvent[]>(resolve => setTimeout(() => resolve([]), timeoutMs))
+    ]);
+
+    const seen = new Set<string>();
+    const results: UserLinkAttestationResult[] = [];
+    for (const ev of events.sort((a, b) => b.created_at - a.created_at)) {
+      if (seen.has(ev.id)) continue;
+      seen.add(ev.id);
+      const checked = verifyAttestationEvent(ev);
+      if (checked.isOverallValid) results.push(checked);
+    }
+    return results;
+  } finally {
+    try {
+      pool.close(relays);
+    } catch {}
+  }
+}
+
+/**
+ * Verifies an optional on-chain Bitcoin Cash OP_RETURN commitment (`UL1:<sha256>`)
+ * against the Electrum transaction inspection API.
+ */
+export async function verifyBchOnChainAnchor(params: {
+  txid: string;
+  statementContent: string;
+  network: 'mainnet' | 'testnet';
+  apiBase?: string;
+}): Promise<{
+  verifiedOnChain: boolean;
+  confirmations: number;
+  commitmentHex: string;
+  matchedScriptHex?: string;
+  reason?: string;
+}> {
+  const expectedHex = computeUserLinkCommitmentHash(params.statementContent);
+  const cleanTxid = (params.txid || '').trim().toLowerCase();
+  if (!/^[0-9a-f]{64}$/.test(cleanTxid)) {
+    return { verifiedOnChain: false, confirmations: 0, commitmentHex: expectedHex, reason: 'Invalid txid format' };
+  }
+
+  const base = (params.apiBase || '').replace(/\/+$/, '');
+  const res = await fetch(
+    `${base}/api/bch/tx/${encodeURIComponent(cleanTxid)}?network=${params.network}`
+  );
+  const data = await res.json();
+  if (!res.ok || !data?.success) {
+    return {
+      verifiedOnChain: false,
+      confirmations: 0,
+      commitmentHex: expectedHex,
+      reason: data?.error || 'Transaction not found on BCH Electrum'
+    };
+  }
+
+  const opReturns: Array<{ scriptHex: string; payloadHex: string }> = data.opReturns || [];
+  const matched = opReturns.find(
+    (o) =>
+      String(o.payloadHex || '').toLowerCase().includes(expectedHex) ||
+      String(o.scriptHex || '').toLowerCase().includes(expectedHex)
+  );
+
+  return {
+    verifiedOnChain: Boolean(matched),
+    confirmations: Number(data.confirmations || 0),
+    commitmentHex: expectedHex,
+    ...(matched ? { matchedScriptHex: matched.scriptHex } : {}),
+    ...(matched ? {} : { reason: 'No matching UL1 SHA-256 OP_RETURN commitment found in transaction outputs' })
+  };
 }

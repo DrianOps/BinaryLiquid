@@ -740,6 +740,28 @@ app.get('/api/bch/history/:address', balanceReadLimiter, async (req, res) => {
   }
 });
 
+// Read-only BCH Transaction OP_RETURN Commitment Inspection (UserLink on-chain anchor verifier)
+app.get('/api/bch/tx/:txid', balanceReadLimiter, async (req, res) => {
+  try {
+    const rawTxid = String(req.params.txid || '').trim().toLowerCase();
+    const netParam = String(req.query.network || '').toLowerCase();
+    const forceTestnet = netParam === 'mainnet' ? false : true;
+    const cacheKey = `bch:tx:v1:${forceTestnet ? 'testnet' : 'mainnet'}:${rawTxid}`;
+
+    const payload = await balanceCache.getOrCompute(
+      cacheKey,
+      async () => {
+        const txData = await bchService.getTransactionCommitment(rawTxid, forceTestnet);
+        return { success: true, ...txData };
+      },
+      { ttlMs: 30_000 }
+    );
+    res.json(payload);
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
 app.post('/api/swap/:id/verify-tx', async (req, res) => {
   try {
     const { txHash } = req.body;

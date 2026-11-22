@@ -57,7 +57,17 @@ import {
   verifyUserLinkEvent,
   resolveUserLinkFromRelays,
   publishUserLinkToRelay,
-  type VerifiedUserLinkResult
+  buildUserLinkDidDocument,
+  buildBchOpReturnScriptHex,
+  computeUserLinkCommitmentHash,
+  createSaltedDisclosureCommitment,
+  verifySelectiveDisclosure,
+  createSignedAttestationEvent,
+  verifyAttestationEvent,
+  fetchAttestationsFromRelays,
+  verifyBchOnChainAnchor,
+  type VerifiedUserLinkResult,
+  type UserLinkAttestationResult
 } from '../utils/userlinkCrypto';
 
 interface IdentityViewProps {
@@ -720,6 +730,28 @@ export default function IdentityView({
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [isTamperedPreview, setIsTamperedPreview] = useState<boolean>(false);
 
+  // Stretch-goal states: DID Doc, Portable W3C Attestations (Kind 1985), Key Rotation, OP_RETURN Anchor, Selective Disclosure
+  const [showDidDoc, setShowDidDoc] = useState<boolean>(false);
+  const [anchorTxInput, setAnchorTxInput] = useState<string>('');
+  const [anchorAuditInput, setAnchorAuditInput] = useState<string>('');
+  const [anchorAuditResult, setAnchorAuditResult] = useState<{
+    checking: boolean;
+    verifiedOnChain?: boolean;
+    confirmations?: number;
+    commitmentHex?: string;
+    reason?: string;
+  } | null>(null);
+  const [resolvedAttestations, setResolvedAttestations] = useState<UserLinkAttestationResult[]>([]);
+  const [attestations, setAttestations] = useState<UserLinkAttestationResult[]>([]);
+  const [attClaimType, setAttClaimType] = useState<string>('MerchantVerified');
+  const [attSummary, setAttSummary] = useState<string>('Verified peer settlement & CashTokens support');
+  const [attPrivateAttr, setAttPrivateAttr] = useState<string>('tier');
+  const [attPrivateVal, setAttPrivateVal] = useState<string>('verified_gold');
+  const [attPrivateSalt, setAttPrivateSalt] = useState<string>('ul_salt_2026');
+  const [attPublishing, setAttPublishing] = useState<boolean>(false);
+  const [sdCheckResult, setSdCheckResult] = useState<boolean | null>(null);
+  const [payAsset, setPayAsset] = useState<'BCH' | 'PUSD' | 'MUSD' | 'LIFT'>('PUSD');
+
   // Inspector: Challenge Auth state
   const [authChallenge, setAuthChallenge] = useState<string>('');
   const [authSignature, setAuthSignature] = useState<string>('');
@@ -951,15 +983,26 @@ export default function IdentityView({
 
   const handleOpenResolvedProfile = (record: ResolvedIdentityRecord) => {
     setResolvedRecord(record);
+    setResolvedAttestations([]);
     setPaySuccessData(null);
     setActiveSection('register');
     setRegisterStep('resolved');
+    if (record.pubkeyHex) {
+      fetchAttestationsFromRelays(record.pubkeyHex)
+        .then((list) => setResolvedAttestations(list))
+        .catch(() => {});
+    }
   };
 
-  // PUBLISH REAL CRYPTOGRAPHIC BINDING TO NOSTR RELAYS
-  const handleCreateBinding = async (targetHandleOverride?: string) => {
+  // PUBLISH REAL CRYPTOGRAPHIC BINDING (OR BCH-AUTHORIZED KEY ROTATION) TO NOSTR RELAYS
+  const handleCreateBinding = async (
+    targetHandleOverride?: string,
+    rotationOpts?: { previousNostrPubkey?: string; anchorTxId?: string }
+  ) => {
     const activeHandle = persistHandle(targetHandleOverride || cleanHandle);
     const activeNip05 = `${activeHandle}@bliquid.xyz`;
+    const prevPubkey = (rotationOpts?.previousNostrPubkey || '').trim().toLowerCase();
+    const cleanAnchorTx = (rotationOpts?.anchorTxId ?? anchorTxInput).trim().toLowerCase();
 
     if (!nostrKeys || !effectiveBchAddress) return;
     setIsPublishing(true);
@@ -969,9 +1012,10 @@ export default function IdentityView({
 
     try {
       const now = Math.floor(Date.now() / 1000);
+      const isRotation = /^[0-9a-f]{64}$/.test(prevPubkey) && prevPubkey !== nostrKeys.pk;
 
-      // 1. Canonical Bidirectional Identity Statement
-      const statementObject = {
+      // 1. Canonical Bidirectional Identity Statement (supports BCH-Authorized Key Rotation)
+      const statementObject: Record<string, unknown> = {
         protocol: 'bch-nostr-userlink-id-v1',
         issuer: 'Drian Stack Labs UserLink',
         username: `@${activeHandle}`,
@@ -979,8 +1023,10 @@ export default function IdentityView({
         bchAddress: effectiveBchAddress,
         bchSignerMode: bchSigningMode,
         nostrPubkey: nostrKeys.pk,
-        statement:
-          'I cryptographically attest that I control both this Bitcoin Cash address and this Nostr identity without reliance on custodial intermediaries.',
+        ...(isRotation ? { action: 'bch-authorized-key-rotation', previousNostrPubkey: prevPubkey } : {}),
+        statement: isRotation
+          ? 'My Bitcoin Cash key authorizes rotating this identity from previousNostrPubkey to nostrPubkey without central intermediaries.'
+          : 'I cryptographically attest that I control both this Bitcoin Cash address and this Nostr identity without reliance on custodial intermediaries.',
         issuedAt: now,
         network: selectedNetwork
       };
@@ -1024,7 +1070,9 @@ export default function IdentityView({
           ['c', 'userlink-bch-id'],
           ['client', 'UserLink by Drian Stack Labs'],
           ['network', selectedNetwork],
-          ['claim', 'bch-schnorr-bsm-binding']
+          ['claim', isRotation ? 'bch-authorized-key-rotation' : 'bch-schnorr-bsm-binding'],
+          ...(isRotation ? [['prev_nostr', prevPubkey]] : []),
+          ...(/^[0-9a-f]{64}$/.test(cleanAnchorTx) ? [['anchor_tx', cleanAnchorTx]] : [])
         ],
         content: statementJson
       };
@@ -1154,11 +1202,18 @@ export default function IdentityView({
     setAuthenticEventBackup(null);
     setVerifyError(null);
     setIsTamperedPreview(false);
+    setAttestations([]);
+    setAnchorAuditResult(null);
+    setSdCheckResult(null);
 
     try {
       const { verified } = await resolveUserLinkFromRelays(rawTarget);
       if (verified) {
         setVerificationResult(verified);
+        setAnchorAuditInput(verified.anchorTxId || '');
+        fetchAttestationsFromRelays(verified.pubkeyHex)
+          .then((list) => setAttestations(list))
+          .catch(() => {});
         return;
       }
 
@@ -1170,7 +1225,12 @@ export default function IdentityView({
           publishedEvent.verified.pubkeyHex.toLowerCase() === rawTarget.toLowerCase() ||
           publishedEvent.verified.bchAddress === rawTarget)
       ) {
-        setVerificationResult(verifyUserLinkEvent(publishedEvent.event));
+        const localChecked = verifyUserLinkEvent(publishedEvent.event);
+        setVerificationResult(localChecked);
+        setAnchorAuditInput(localChecked.anchorTxId || '');
+        fetchAttestationsFromRelays(localChecked.pubkeyHex)
+          .then((list) => setAttestations(list))
+          .catch(() => {});
         return;
       }
 
@@ -1187,6 +1247,158 @@ export default function IdentityView({
       }
     } finally {
       setIsVerifying(false);
+    }
+  };
+
+  // BCH-authorized Nostr key rotation (signs transition from previousNostrPubkey -> new key with BCH wallet)
+  const handleRotateAuthorizedKey = async () => {
+    const prevPk = nostrKeys?.pk || '';
+    if (!prevPk) return;
+    const nextSk = generateSecretKey();
+    const nextHex = bytesToHex(nextSk);
+    const nextPk = getPublicKey(nextSk);
+    const nextNpub = nip19.npubEncode(nextPk);
+
+    setUseNip07(false);
+    setNip07PubkeyHex('');
+    setNostrSkHex(nextHex);
+    try {
+      localStorage.removeItem('userlink_use_nip07');
+      localStorage.removeItem('userlink_nip07_pubkey');
+      sessionStorage.setItem('sovereign_nostr_sk', nextHex);
+    } catch {}
+
+    // Sign rotation directly with the new key while passing prev_nostr authorization to BCH signer
+    setIsPublishing(true);
+    setSigningStage('bch');
+    setPublishError(null);
+    setPublishLogs(USERLINK_RELAYS.map((r) => ({ relay: r, status: 'pending', latency: 0 })));
+    try {
+      const now = Math.floor(Date.now() / 1000);
+      const statementObject = {
+        protocol: 'bch-nostr-userlink-id-v1',
+        issuer: 'Drian Stack Labs UserLink',
+        action: 'bch-authorized-key-rotation',
+        username: `@${cleanHandle}`,
+        nip05: `${cleanHandle}@bliquid.xyz`,
+        bchAddress: effectiveBchAddress,
+        bchSignerMode: bchSigningMode,
+        previousNostrPubkey: prevPk,
+        nostrPubkey: nextPk,
+        statement:
+          'My Bitcoin Cash key authorizes rotating this identity from previousNostrPubkey to nostrPubkey without central intermediaries.',
+        issuedAt: now,
+        network: selectedNetwork
+      };
+      const statementJson = JSON.stringify(statementObject);
+      let bchSignature = '';
+      if (bchSigningMode === 'wallet' && walletCanSignMessage) {
+        const res = await signBchMessage({
+          message: statementJson,
+          userPrompt: isEs ? `Autorizar rotación @${cleanHandle}` : `Authorize key rotation @${cleanHandle}`,
+          isTestnet: !isMainnet,
+          preferredSource: bchWallet?.source
+        });
+        bchSignature = res.signature;
+      } else if (demoBchData) {
+        bchSignature = signBitcoinMessage(statementJson, demoBchData.skBytes);
+      }
+
+      setSigningStage('nostr');
+      const signedEvent = finalizeEvent(
+        {
+          kind: 30078,
+          created_at: now,
+          tags: [
+            ['d', USERLINK_D_TAG],
+            ['t', cleanHandle],
+            ['t', effectiveBchAddress],
+            ['i', `bch:${effectiveBchAddress}`, bchSignature],
+            ['bch', effectiveBchAddress],
+            ['bch_sig', bchSignature],
+            ['sig_scheme', 'bitcoin-signed-message'],
+            ['handle', cleanHandle],
+            ['nip05', `${cleanHandle}@bliquid.xyz`],
+            ['prev_nostr', prevPk],
+            ['claim', 'bch-authorized-key-rotation'],
+            ['network', selectedNetwork],
+            ...(/^[0-9a-f]{64}$/i.test(anchorTxInput.trim()) ? [['anchor_tx', anchorTxInput.trim().toLowerCase()]] : [])
+          ],
+          content: statementJson
+        },
+        nextSk
+      );
+
+      setSigningStage('relays');
+      const logs: Array<{ relay: string; status: 'pending' | 'ok' | 'error'; latency?: number; error?: string }> =
+        USERLINK_RELAYS.map((r) => ({ relay: r, status: 'pending', latency: 0 }));
+      await Promise.all(
+        USERLINK_RELAYS.map(async (relayUrl, idx) => {
+          const r = await publishUserLinkToRelay(relayUrl, signedEvent, 5500);
+          logs[idx] = { relay: relayUrl, status: r.ok ? 'ok' : 'error', latency: r.latency, error: r.error };
+          setPublishLogs([...logs]);
+        })
+      );
+      const checked = verifyUserLinkEvent(signedEvent);
+      setPublishedEvent({ event: signedEvent, verified: checked, indexedCount: logs.filter((l) => l.status === 'ok').length });
+      setVerifyInput(nextNpub);
+      setSigningStage('done');
+    } catch (err: any) {
+      setSigningStage('idle');
+      setPublishError(err?.message || 'Rotation failed');
+    } finally {
+      setIsPublishing(false);
+    }
+  };
+
+  // Publish third-party / peer W3C Verifiable Credential (Kind 1985 NIP-32 + Salted Selective Disclosure)
+  const handlePublishAttestation = async () => {
+    if (!verificationResult || !nostrKeys?.skBytes) return;
+    setAttPublishing(true);
+    try {
+      const saltedCommitments: Record<string, string> = {};
+      if (attPrivateAttr.trim() && attPrivateVal.trim() && attPrivateSalt.trim()) {
+        saltedCommitments[attPrivateAttr.trim().toLowerCase()] = createSaltedDisclosureCommitment(
+          attPrivateSalt.trim(),
+          attPrivateAttr.trim(),
+          attPrivateVal.trim()
+        );
+      }
+      const signedVc = createSignedAttestationEvent({
+        subjectPubkeyHex: verificationResult.pubkeyHex,
+        subjectBchAddress: verificationResult.bchAddress,
+        subjectHandle: verificationResult.handle,
+        claimType: attClaimType,
+        claimSummary: attSummary.trim() || attClaimType,
+        rating: attClaimType === 'TradeReputation' ? 5 : undefined,
+        saltedCommitments,
+        issuerSkBytes: nostrKeys.skBytes
+      });
+      await Promise.all(USERLINK_RELAYS.map((r) => publishUserLinkToRelay(r, signedVc, 4500)));
+      const checked = verifyAttestationEvent(signedVc);
+      if (checked.isOverallValid) {
+        setAttestations((prev) => [checked, ...prev]);
+      }
+    } finally {
+      setAttPublishing(false);
+    }
+  };
+
+  const handleCheckOnChainAnchor = async () => {
+    if (!verificationResult || !anchorAuditInput.trim()) return;
+    setAnchorAuditResult({ checking: true });
+    try {
+      const checkNet: 'mainnet' | 'testnet' = verificationResult.bchAddress.startsWith('bchtest:')
+        ? 'testnet'
+        : 'mainnet';
+      const res = await verifyBchOnChainAnchor({
+        txid: anchorAuditInput.trim(),
+        statementContent: verificationResult.event.content,
+        network: checkNet
+      });
+      setAnchorAuditResult({ checking: false, ...res });
+    } catch (err: any) {
+      setAnchorAuditResult({ checking: false, verifiedOnChain: false, reason: err?.message || 'Error' });
     }
   };
 
@@ -1952,17 +2164,71 @@ export default function IdentityView({
                   </div>
                 </div>
 
-                {/* Send BCH Payment Panel */}
+                {/* Portable W3C Verifiable Credentials / Reputation (Kind 1985) */}
+                {resolvedAttestations.length > 0 && (
+                  <div className="ui-panel p-3.5 space-y-2 border border-line">
+                    <div className="flex items-center justify-between text-xs font-semibold text-ink">
+                      <span>{isEs ? 'Credenciales y Reputación (Kind 1985)' : 'Portable Attestations (Kind 1985)'}</span>
+                      <span className="ui-badge-success">{resolvedAttestations.length} W3C VC</span>
+                    </div>
+                    <div className="space-y-1.5">
+                      {resolvedAttestations.slice(0, 3).map((att) => (
+                        <div key={att.eventId} className="text-xs flex items-center justify-between gap-2 bg-surface px-2.5 py-1.5 rounded-control border border-line">
+                          <span className="font-medium text-ink truncate">
+                            {att.claimType}: {att.claimSummary}
+                          </span>
+                          <span className="font-mono text-[10px] text-ink-3 shrink-0">
+                            {att.issuerNpub.slice(0, 10)}...
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Send BCH & CashTokens Payment Panel */}
                 <div className="border-t border-line pt-4 space-y-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="ui-section-title">{isEs ? 'Enviar Bitcoin Cash' : 'Send Bitcoin Cash'}</span>
-                    <div className="flex items-center gap-1.5">
-                      {['0.005', '0.01', '0.05'].map((amt) => (
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <span className="ui-section-title">{isEs ? 'Enviar por identidad' : 'Pay by Identity'}</span>
+                    <div className="flex items-center gap-1">
+                      {(['PUSD', 'BCH', 'MUSD', 'LIFT'] as const).map((sym) => (
+                        <button
+                          key={sym}
+                          type="button"
+                          onClick={() => setPayAsset(sym)}
+                          className={`px-2 py-1 rounded-lg text-[11px] font-semibold border cursor-pointer transition-colors ${
+                            payAsset === sym
+                              ? 'bg-surface-3 border-line-strong text-ink'
+                              : 'bg-surface border-line text-ink-2 hover:text-ink'
+                          }`}
+                        >
+                          {sym}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <div className="relative flex-1">
+                      <input
+                        type="number"
+                        step="0.001"
+                        min="0"
+                        value={payAmount}
+                        onChange={(e) => setPayAmount(e.target.value)}
+                        className="ui-input pr-16 font-mono tabular-nums"
+                      />
+                      <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-ink-3">
+                        {payAsset}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {['0.01', '1', '5'].map((amt) => (
                         <button
                           key={amt}
                           type="button"
                           onClick={() => setPayAmount(amt)}
-                          className={`px-2.5 py-1 rounded-lg text-xs font-medium border cursor-pointer transition-colors ${
+                          className={`px-2 py-1.5 rounded-lg text-xs font-medium border cursor-pointer transition-colors ${
                             payAmount === amt
                               ? 'bg-surface-3 border-line-strong text-ink'
                               : 'bg-surface border-line text-ink-2 hover:text-ink'
@@ -1974,30 +2240,31 @@ export default function IdentityView({
                     </div>
                   </div>
 
-                  <div className="relative">
-                    <input
-                      type="number"
-                      step="0.001"
-                      min="0"
-                      value={payAmount}
-                      onChange={(e) => setPayAmount(e.target.value)}
-                      className="ui-input pr-14 font-mono tabular-nums"
-                    />
-                    <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-ink-3">
-                      BCH
-                    </span>
-                  </div>
-
-                  {/* Single Primary CTA per card */}
+                  {/* Direct real on-chain BCH & CashTokens send via UserLink */}
                   <a
-                    href={buildBip21Uri(resolvedRecord.bchAddress, payAmount, resolvedRecord.handle)}
+                    href={`https://wallet.bliquid.xyz/dashboard/send?to=${encodeURIComponent(resolvedRecord.handle)}&asset=${payAsset}&amount=${encodeURIComponent(payAmount)}`}
+                    target="_blank"
+                    rel="noreferrer"
                     className="ui-btn-primary ui-btn-lg w-full"
                   >
-                    <Wallet className="w-4 h-4" />
+                    <Send className="w-4 h-4" />
                     <span>
                       {isEs
-                        ? `Abrir pago en billetera (${payAmount} BCH)`
-                        : `Open payment in wallet (${payAmount} BCH)`}
+                        ? `Enviar ${payAmount} ${payAsset} a ${resolvedRecord.handle}`
+                        : `Send ${payAmount} ${payAsset} to ${resolvedRecord.handle}`}
+                    </span>
+                    <ExternalLink className="w-3.5 h-3.5 opacity-80" />
+                  </a>
+
+                  <a
+                    href={buildBip21Uri(resolvedRecord.bchAddress, payAmount, resolvedRecord.handle)}
+                    className="ui-btn-secondary ui-btn-sm w-full"
+                  >
+                    <Wallet className="w-3.5 h-3.5" />
+                    <span>
+                      {isEs
+                        ? `Abrir BIP-21 en billetera externa (${payAmount} BCH)`
+                        : `Open external wallet BIP-21 (${payAmount} BCH)`}
                     </span>
                   </a>
 
@@ -2276,6 +2543,57 @@ export default function IdentityView({
               indexedCount={publishedEvent?.indexedCount}
             />
 
+            {/* Sovereign Key Rotation & Optional BCH OP_RETURN Anchor */}
+            <div className="ui-panel p-3.5 space-y-3 border border-line">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div>
+                  <div className="text-xs font-semibold text-ink">
+                    {isEs ? 'Rotación soberana y ancla BCH' : 'Key Rotation & On-Chain BCH Anchor'}
+                  </div>
+                  <div className="text-[11px] text-ink-3">
+                    {isEs
+                      ? 'Autoriza una nueva clave Nostr con tu firma BCH o adjunta un txid OP_RETURN.'
+                      : 'Authorize rotating to a fresh Nostr key via BCH signature or attach an OP_RETURN txid.'}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  disabled={isPublishing || !nostrKeys}
+                  onClick={handleRotateAuthorizedKey}
+                  className="ui-btn-secondary ui-btn-sm shrink-0"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isPublishing ? 'animate-spin' : ''}`} />
+                  <span>{isEs ? 'Rotar clave Nostr' : 'Rotate Nostr Key'}</span>
+                </button>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input
+                  type="text"
+                  value={anchorTxInput}
+                  onChange={(e) => setAnchorTxInput(e.target.value)}
+                  placeholder={isEs ? 'TxID BCH con OP_RETURN UL1 (opcional, 64 hex)' : 'Optional BCH OP_RETURN UL1 txid (64 hex)'}
+                  className="ui-input h-9 flex-1 font-mono text-[11px]"
+                />
+                {publishedEvent && (
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(buildBchOpReturnScriptHex(publishedEvent.event.content), 'op_return_hex')}
+                    className="ui-btn-ghost ui-btn-sm border border-line shrink-0"
+                    title="Copy OP_RETURN hex"
+                  >
+                    {copiedKey === 'op_return_hex' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{isEs ? 'Copiar OP_RETURN' : 'Copy OP_RETURN'}</span>
+                  </button>
+                )}
+              </div>
+              {publishedEvent && (
+                <div className="text-[10px] font-mono text-ink-3 truncate">
+                  UL1 SHA-256: {computeUserLinkCommitmentHash(publishedEvent.event.content)}
+                </div>
+              )}
+            </div>
+
             <AdvancedSignerDetails
               isEs={isEs}
               isOpen={showProfileAdvanced}
@@ -2536,15 +2854,221 @@ export default function IdentityView({
                   </div>
 
                   <div className="p-3.5 rounded-panel bg-surface border border-line text-[11px] font-mono space-y-1 text-ink-3 select-all">
-                    <div className="text-xs font-sans font-medium text-ink pb-0.5">
-                      {isEs ? 'Atestación en relays:' : 'Relay attestation payload:'}
+                    <div className="text-xs font-sans font-medium text-ink pb-0.5 flex items-center justify-between gap-2 flex-wrap">
+                      <span>{isEs ? 'Atestación en relays:' : 'Relay attestation payload:'}</span>
+                      {verificationResult.rotationAuthorized && (
+                        <span className="ui-badge-success">
+                          {isEs ? 'Rotación autorizada por BCH' : 'BCH-Authorized Key Rotation'}
+                        </span>
+                      )}
                     </div>
                     <div className="truncate">Event ID: {verificationResult.event.id}</div>
+                    {verificationResult.previousNostrPubkey && (
+                      <div className="truncate">Prev Nostr Key: {verificationResult.previousNostrPubkey}</div>
+                    )}
                     {verificationResult.bchPubkey && (
                       <div className="truncate">Recovered BCH Pubkey: {verificationResult.bchPubkey}</div>
                     )}
+                    {verificationResult.commitmentHashHex && (
+                      <div className="truncate">UL1 Commitment SHA-256: {verificationResult.commitmentHashHex}</div>
+                    )}
                     <div>Timestamp: {new Date(verificationResult.timestamp * 1000).toUTCString()}</div>
-                    <div>Kind: 30078 (NIP-78 + NIP-39 i-tag)</div>
+                    <div>Kind: 30078 (NIP-78 + NIP-39 i-tag + W3C DID)</div>
+                  </div>
+
+                  {/* 1. W3C DID Document Resolver */}
+                  <div className="p-3.5 rounded-panel bg-surface border border-line space-y-2">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="text-xs font-semibold text-ink">
+                        W3C DID Document (`did:nostr` ↔ `did:pkh:bch`)
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            copyToClipboard(
+                              JSON.stringify(buildUserLinkDidDocument(verificationResult), null, 2),
+                              'did_doc'
+                            )
+                          }
+                          className="ui-btn-ghost ui-btn-sm border border-line"
+                        >
+                          {copiedKey === 'did_doc' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                          <span>{isEs ? 'Copiar DID' : 'Copy DID'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowDidDoc((v) => !v)}
+                          className="ui-btn-secondary ui-btn-sm"
+                        >
+                          <span>{showDidDoc ? (isEs ? 'Ocultar' : 'Hide') : (isEs ? 'Ver DID JSON' : 'Inspect DID JSON')}</span>
+                        </button>
+                      </div>
+                    </div>
+                    {showDidDoc && (
+                      <pre className="p-2.5 rounded-control bg-surface-2 border border-line font-mono text-[10px] text-ink-2 overflow-x-auto max-h-56">
+                        {JSON.stringify(buildUserLinkDidDocument(verificationResult), null, 2)}
+                      </pre>
+                    )}
+                  </div>
+
+                  {/* 2. On-Chain BCH OP_RETURN Commitment Check */}
+                  <div className="p-3.5 rounded-panel bg-surface border border-line space-y-2.5">
+                    <div className="text-xs font-semibold text-ink">
+                      {isEs ? 'Anclaje On-Chain Bitcoin Cash (OP_RETURN UL1)' : 'On-Chain Bitcoin Cash Commitment (OP_RETURN UL1)'}
+                    </div>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <input
+                        type="text"
+                        value={anchorAuditInput}
+                        onChange={(e) => setAnchorAuditInput(e.target.value)}
+                        placeholder={isEs ? 'TxID de transacción BCH con OP_RETURN UL1...' : 'BCH txid containing OP_RETURN UL1 commitment...'}
+                        className="ui-input h-9 flex-1 font-mono text-[11px]"
+                      />
+                      <button
+                        type="button"
+                        disabled={anchorAuditResult?.checking || !anchorAuditInput.trim()}
+                        onClick={handleCheckOnChainAnchor}
+                        className="ui-btn-secondary ui-btn-sm shrink-0"
+                      >
+                        <ShieldCheck className="w-3.5 h-3.5" />
+                        <span>{anchorAuditResult?.checking ? (isEs ? 'Auditando...' : 'Checking...') : (isEs ? 'Verificar en BCH' : 'Verify on BCH')}</span>
+                      </button>
+                    </div>
+                    {anchorAuditResult && !anchorAuditResult.checking && (
+                      <div className={`text-xs font-medium ${anchorAuditResult.verifiedOnChain ? 'text-emerald-500' : 'text-amber-500'}`}>
+                        {anchorAuditResult.verifiedOnChain
+                          ? `${isEs ? 'Compromiso OP_RETURN confirmado en BCH' : 'BCH OP_RETURN commitment verified'} (${anchorAuditResult.confirmations || 0} conf.)`
+                          : anchorAuditResult.reason}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 3. Portable W3C Verifiable Credentials (Kind 1985 NIP-32) + Selective Disclosure */}
+                  <div className="p-3.5 rounded-panel bg-surface border border-line space-y-3">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="text-xs font-semibold text-ink">
+                        {isEs ? 'Credenciales Verificables W3C y Reputación (Kind 1985)' : 'Portable W3C Verifiable Credentials & Reputation (Kind 1985)'}
+                      </div>
+                      <span className="ui-badge">{attestations.length} {isEs ? 'atestaciones' : 'attestations'}</span>
+                    </div>
+
+                    {attestations.length > 0 && (
+                      <div className="space-y-2">
+                        {attestations.slice(0, 4).map((att) => (
+                          <div key={att.eventId} className="p-2.5 rounded-control bg-surface-2 border border-line text-xs space-y-1">
+                            <div className="flex items-center justify-between gap-2 flex-wrap">
+                              <span className="font-semibold text-ink">{att.claimType}</span>
+                              <span className="ui-badge-success">Schnorr VC OK</span>
+                            </div>
+                            <div className="text-ink-2">{att.claimSummary}</div>
+                            <div className="font-mono text-[10px] text-ink-3 truncate">Issuer: {att.issuerNpub}</div>
+                            {Object.keys(att.saltedCommitments).length > 0 && (
+                              <div className="pt-1 border-t border-line flex items-center justify-between gap-2 flex-wrap">
+                                <span className="font-mono text-[10px] text-ink-3 truncate">
+                                  Salted Commitment ({Object.keys(att.saltedCommitments)[0]}): {Object.values(att.saltedCommitments)[0].slice(0, 18)}...
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const firstAttr = Object.keys(att.saltedCommitments)[0];
+                                    const ok = verifySelectiveDisclosure({
+                                      salt: attPrivateSalt,
+                                      attribute: firstAttr,
+                                      value: attPrivateVal,
+                                      commitmentHex: att.saltedCommitments[firstAttr]
+                                    });
+                                    setSdCheckResult(ok);
+                                  }}
+                                  className="text-[11px] font-semibold text-ink hover:underline cursor-pointer"
+                                >
+                                  {isEs ? 'Probar Selective Disclosure' : 'Verify Selective Disclosure'}
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                        {sdCheckResult !== null && (
+                          <div className={`text-xs font-medium ${sdCheckResult ? 'text-emerald-500' : 'text-rose-500'}`}>
+                            {sdCheckResult
+                              ? isEs
+                                ? `Divulgación selectiva válida: "${attPrivateAttr}=${attPrivateVal}" coincide con el hash privado sin haber expuesto datos en el relay.`
+                                : `Selective Disclosure valid: "${attPrivateAttr}=${attPrivateVal}" matches private salted commitment without leaking PII on relays.`
+                              : isEs
+                              ? 'Salt o valor privado incorrecto para este compromiso.'
+                              : 'Salt or private attribute does not match committed hash.'}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Third-party issuer form (uses active session Nostr signer) */}
+                    {nostrKeys?.skBytes && (
+                      <div className="pt-2 border-t border-line space-y-2">
+                        <div className="text-[11px] font-medium text-ink-2">
+                          {isEs ? 'Emitir atestación W3C VC firmada (Kind 1985 + hash privado opcional):' : 'Issue signed W3C VC attestation (Kind 1985 + optional private hash):'}
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <select
+                            value={attClaimType}
+                            onChange={(e) => setAttClaimType(e.target.value)}
+                            className="ui-input h-9 text-xs"
+                          >
+                            <option value="MerchantVerified">MerchantVerified</option>
+                            <option value="TradeReputation">TradeReputation (5★)</option>
+                            <option value="HumanVerified">HumanVerified</option>
+                            <option value="DeveloperBadge">DeveloperBadge</option>
+                          </select>
+                          <input
+                            type="text"
+                            value={attSummary}
+                            onChange={(e) => setAttSummary(e.target.value)}
+                            placeholder="Credential summary"
+                            className="ui-input h-9 text-xs"
+                          />
+                        </div>
+                        <div className="grid grid-cols-3 gap-2">
+                          <input
+                            type="text"
+                            value={attPrivateAttr}
+                            onChange={(e) => setAttPrivateAttr(e.target.value)}
+                            placeholder="Private attr (e.g. tier)"
+                            className="ui-input h-8 text-[11px] font-mono"
+                          />
+                          <input
+                            type="text"
+                            value={attPrivateVal}
+                            onChange={(e) => setAttPrivateVal(e.target.value)}
+                            placeholder="Secret value"
+                            className="ui-input h-8 text-[11px] font-mono"
+                          />
+                          <input
+                            type="text"
+                            value={attPrivateSalt}
+                            onChange={(e) => setAttPrivateSalt(e.target.value)}
+                            placeholder="Salt"
+                            className="ui-input h-8 text-[11px] font-mono"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          disabled={attPublishing}
+                          onClick={handlePublishAttestation}
+                          className="ui-btn-secondary ui-btn-sm w-full"
+                        >
+                          <ShieldCheck className="w-3.5 h-3.5" />
+                          <span>
+                            {attPublishing
+                              ? isEs
+                                ? 'Publicando W3C VC en relays...'
+                                : 'Publishing W3C VC to relays...'
+                              : isEs
+                              ? 'Firmar y emitir credencial Kind 1985'
+                              : 'Sign & Issue Kind 1985 Credential'}
+                          </span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </motion.div>
               )}

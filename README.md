@@ -59,7 +59,7 @@ Instead of pooling deposits inside mutable admin wallets, BinaryLiquid locks fun
 
 ### 3. UserLink Sovereign Identity Protocol (`/identity`)
 - Maps human-readable handles (`@handle@bliquid.xyz`) directly to a Bitcoin Cash CashAddress and Nostr `npub`.
-- **Dual Cryptographic Binding:** Signed by both the Bitcoin Cash key (Bitcoin Signed Message ECDSA) and the Nostr key (Schnorr) and published as replaceable Nostr **Kind `30078`** (`#d: bch-identity-binding`).
+- **Dual Cryptographic Binding:** Signed by both the Bitcoin Cash key (Bitcoin Signed Message ECDSA) and the Nostr key (Schnorr) and published as replaceable Nostr **Kind `30078`** (`#d: bch-identity-binding`), with W3C DID resolution (`did:nostr` ↔ `did:pkh:bch`), BCH-authorized key rotation, NIP-32 (`Kind 1985`) W3C Verifiable Credentials with salted selective disclosure, and optional BCH `OP_RETURN` anchoring. See [docs/USERLINK_PROTOCOL.md](./docs/USERLINK_PROTOCOL.md).
 - **Decentralized Relay & DNS Resolution:** Published and resolved across `wss://relay.primal.net`, `wss://relay.snort.social`, `wss://nostr.oxtr.dev`, and `wss://offchain.pub`, alongside static NIP-05 DNS resolution at `/.well-known/nostr.json`.
 - **Zero-Gas, Wallet-Ready Payments:** Supports BIP-21 deep-linking and direct resolution inside Paytaca, Cashonize, and BinaryLiquid Wallet.
 

@@ -1996,6 +1996,87 @@ class BchService {
       items: items.filter(Boolean)
     };
   }
+
+  /**
+   * Extracts public OP_RETURN commitments and confirmation metadata for a BCH transaction ID.
+   * Used by UserLink Inspector to independently verify optional on-chain identity anchors.
+   */
+  async getTransactionCommitment(txid, forceTestnet = null) {
+    const cleanTxid = String(txid || '').trim().toLowerCase();
+    if (!/^[0-9a-f]{64}$/.test(cleanTxid)) {
+      throw new Error('Transaction ID inválido (debe tener 64 caracteres hexadecimales).');
+    }
+
+    await this.readyPromise;
+    const isChipnet = forceTestnet !== null ? Boolean(forceTestnet) : true;
+    const activeProvider = isChipnet ? this.chipnetProvider : this.mainnetProvider;
+    if (!activeProvider) {
+      throw new Error(`Electrum provider no disponible para ${isChipnet ? 'chipnet' : 'mainnet'}`);
+    }
+
+    const tx = await this._withTimeout(
+      activeProvider.performRequest('blockchain.transaction.get', cleanTxid, true),
+      5500,
+      `Electrum tx.get(${cleanTxid})`
+    );
+    if (!tx) {
+      throw new Error('Transacción no encontrada en la red Bitcoin Cash.');
+    }
+
+    const opReturns = [];
+    for (const vout of tx.vout || []) {
+      const hex = String(vout?.scriptPubKey?.hex || '').toLowerCase();
+      if (!hex.startsWith('6a')) continue;
+
+      // Extract pushdata chunks following OP_RETURN (0x6a)
+      const pushes = [];
+      let pos = 2;
+      while (pos + 2 <= hex.length) {
+        const opcode = parseInt(hex.slice(pos, pos + 2), 16);
+        pos += 2;
+        let len = 0;
+        if (opcode >= 1 && opcode <= 75) {
+          len = opcode;
+        } else if (opcode === 0x4c && pos + 2 <= hex.length) {
+          len = parseInt(hex.slice(pos, pos + 2), 16);
+          pos += 2;
+        } else if (opcode === 0x4d && pos + 4 <= hex.length) {
+          const lo = parseInt(hex.slice(pos, pos + 2), 16);
+          const hi = parseInt(hex.slice(pos + 2, pos + 4), 16);
+          len = lo | (hi << 8);
+          pos += 4;
+        } else {
+          break;
+        }
+        const sliceHex = hex.slice(pos, pos + len * 2);
+        pos += len * 2;
+        if (sliceHex) pushes.push(sliceHex);
+      }
+
+      const combinedHex = pushes.join('');
+      let utf8 = '';
+      try {
+        utf8 = Buffer.from(combinedHex, 'hex').toString('utf8');
+      } catch {}
+
+      opReturns.push({
+        vout: Number(vout.n ?? 0),
+        scriptHex: hex,
+        pushesHex: pushes,
+        payloadHex: combinedHex,
+        utf8Preview: utf8
+      });
+    }
+
+    return {
+      network: isChipnet ? 'testnet' : 'mainnet',
+      txid: cleanTxid,
+      confirmations: Number(tx.confirmations || 0),
+      blockhash: tx.blockhash || null,
+      timestamp: tx.time ? Number(tx.time) * 1000 : null,
+      opReturns
+    };
+  }
 }
 
 export const bchService = new BchService();
