@@ -2573,7 +2573,7 @@ export default function IdentityView({
                   value={anchorTxInput}
                   onChange={(e) => setAnchorTxInput(e.target.value)}
                   placeholder={isEs ? 'TxID BCH con OP_RETURN UL1 (opcional, 64 hex)' : 'Optional BCH OP_RETURN UL1 txid (64 hex)'}
-                  className="ui-input h-9 flex-1 font-mono text-[11px]"
+                  className="ui-input bg-surface border-line h-9 flex-1 font-mono text-[11px]"
                 />
                 {publishedEvent && (
                   <button
