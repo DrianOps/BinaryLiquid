@@ -258,7 +258,7 @@ function AnimatedSwapPreview({ onLaunchApp, lang = 'en' }: { onLaunchApp: () => 
       onClick={onLaunchApp}
       className={`bg-surface rounded-card p-4 space-y-2 relative group cursor-pointer transition-all duration-300 min-h-[380px] flex flex-col justify-between overflow-hidden ${
         stage === 'success'
-          ? 'border-2 border-primary shadow-xl shadow-primary/20'
+          ? 'border border-emerald-500/40 shadow-soft'
           : 'border border-line hover:border-line-strong shadow-soft'
       }`}
       title="Click to launch Bridge Swap"
@@ -368,55 +368,64 @@ function AnimatedSwapPreview({ onLaunchApp, lang = 'en' }: { onLaunchApp: () => 
       <AnimatePresence>
         {stage === 'success' && (
           <motion.div
-            initial={{ opacity: 0, scale: 0.96 }}
+            initial={{ opacity: 0, scale: 0.98 }}
             animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.96 }}
-            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+            exit={{ opacity: 0, scale: 0.98 }}
+            transition={{ duration: 0.2 }}
             className="absolute inset-0 z-20 bg-surface rounded-[22px] p-6 flex flex-col items-center justify-between text-center"
           >
-            {/* Top Status Pill in Bitcoin Orange */}
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 border border-primary/30 text-primary text-[11px] font-bold uppercase tracking-wider">
-              <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-              <span>{t.confirmed}</span>
-            </div>
+            {/* Center: Overlapping Token Pair + Solid Emerald Check */}
+            <div className="space-y-2 my-auto w-full">
+              <div className="relative flex items-center justify-center mb-3">
+                <img
+                  src={currentPair.sellIcon}
+                  alt={currentPair.sellToken}
+                  className="w-11 h-11 rounded-full object-contain bg-surface-2 border border-line opacity-80 -mr-3"
+                />
+                <div className="relative">
+                  <img
+                    src={currentPair.buyIcon}
+                    alt={currentPair.buyToken}
+                    className="w-12 h-12 rounded-full object-contain bg-surface border border-line ring-4 ring-surface"
+                  />
+                  <motion.span
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ type: 'spring', stiffness: 450, damping: 22, delay: 0.08 }}
+                    className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center ring-[2.5px] ring-surface"
+                  >
+                    <Check className="w-3 h-3 stroke-[3]" />
+                  </motion.span>
+                </div>
+              </div>
 
-            {/* Center: Big Animated Check & Amounts in Bitcoin Orange */}
-            <div className="space-y-3 my-auto">
-              <motion.div
-                initial={{ scale: 0, rotate: -20 }}
-                animate={{ scale: 1, rotate: 0 }}
-                transition={{ type: 'spring', stiffness: 400, damping: 18, delay: 0.1 }}
-                className="w-16 h-16 rounded-full bg-primary/10 text-primary flex items-center justify-center mx-auto border-2 border-primary/40 shadow-lg shadow-primary/25"
-              >
-                <Check className="w-8 h-8 text-primary stroke-[3]" />
-              </motion.div>
+              <div className="text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                {lang === 'es' ? 'Swap confirmado' : 'Swap confirmed'}
+              </div>
 
               <div>
-                <div className="text-2xl sm:text-3xl font-extrabold text-ink tabular-nums tracking-tight">
+                <div className="text-2xl sm:text-3xl font-semibold text-ink tabular-nums tracking-tight">
                   +{currentPair.buyAmount} {currentPair.buyToken}
                 </div>
                 <div className="text-xs text-ink-3 mt-1">
                   {t.receivedFrom(currentPair.sellAmount, currentPair.sellToken)}
                 </div>
               </div>
-
-              {/* Fake TXID pill */}
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-2 border border-line text-xs font-mono text-ink-2 select-all">
-                <span className="text-[10px] uppercase font-bold text-ink-3 font-sans">TxID:</span>
-                <span className="text-ink font-semibold">{currentPair.fakeTxId}</span>
-                <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-              </div>
             </div>
 
             {/* Bottom info & specs */}
-            <div className="w-full space-y-1.5 pt-3 border-t border-line text-[11px]">
-              <div className="flex items-center justify-between text-ink-3">
-                <span>{t.settlementTimeLabel}</span>
-                <span className="font-bold text-primary font-mono">{t.settlementTimeVal}</span>
+            <div className="w-full rounded-panel bg-surface-2 border border-line divide-y divide-line/60 text-[11px] text-left">
+              <div className="flex items-center justify-between px-3 py-2 text-ink-3">
+                <span>TxID</span>
+                <span className="font-mono text-ink font-medium">{currentPair.fakeTxId}</span>
               </div>
-              <div className="flex items-center justify-between text-ink-3">
+              <div className="flex items-center justify-between px-3 py-2 text-ink-3">
+                <span>{t.settlementTimeLabel}</span>
+                <span className="font-medium text-emerald-600 dark:text-emerald-400 font-mono">{t.settlementTimeVal}</span>
+              </div>
+              <div className="flex items-center justify-between px-3 py-2 text-ink-3">
                 <span>{t.securityLabel}</span>
-                <span className="font-semibold text-ink-2">{t.securityVal}</span>
+                <span className="font-medium text-ink-2">{t.securityVal}</span>
               </div>
             </div>
           </motion.div>
