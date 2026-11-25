@@ -227,6 +227,79 @@ const UI_TEXT = {
   }
 };
 
+interface RecentPublicSwap {
+  id: string;
+  status: string;
+  fromToken: string;
+  toToken: string;
+  fromChain?: string;
+  toChain?: string;
+  fromAmount: number | string;
+  toAmount: number | string;
+  payoutTxHash?: string | null;
+  depositTxHash?: string | null;
+  payoutExplorerUrl?: string | null;
+  completedAt?: string;
+}
+
+function formatRecentChainLabel(chainId?: string): string {
+  const c = (chainId || '').toLowerCase();
+  if (c.includes('bch')) return 'BCH';
+  if (c.includes('polygon')) return 'Polygon';
+  if (c.includes('solana')) return 'Solana';
+  if (c.includes('bsc') || c.includes('bnb')) return 'BNB';
+  if (c.includes('ton')) return 'TON';
+  if (c.includes('ltc') || c.includes('litecoin')) return 'LTC';
+  if (c.includes('eth')) return 'Ethereum';
+  return c ? c.slice(0, 8) : '';
+}
+
+function formatCompactSwapAmount(value: number | string): string {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return String(value ?? '0');
+  if (n >= 1000) return n.toLocaleString('en-US', { maximumFractionDigits: 2 });
+  if (n >= 1) return Number(n.toFixed(2)).toString();
+  return Number(n.toFixed(4)).toString();
+}
+
+function formatRelativeAge(iso: string | undefined, nowMs: number, lang: 'es' | 'en'): string {
+  if (!iso) return '';
+  const ts = new Date(iso).getTime();
+  if (!Number.isFinite(ts)) return '';
+  const diffSec = Math.max(0, Math.floor((nowMs - ts) / 1000));
+  if (diffSec < 45) return lang === 'es' ? 'ahora' : 'just now';
+  const mins = Math.floor(diffSec / 60);
+  if (mins < 60) return lang === 'es' ? `${mins}m` : `${mins}m`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return lang === 'es' ? `${hrs}h` : `${hrs}h`;
+  const days = Math.floor(hrs / 24);
+  return lang === 'es' ? `${days}d` : `${days}d`;
+}
+
+function getTokenIconBySymbol(symbol: string): string {
+  const sym = (symbol || '').toUpperCase();
+  const known = new Set(['PUSD', 'USDT', 'USDC', 'BCH', 'MUSD', 'LIFT', 'SOL', 'POL', 'BNB', 'ETH', 'TON', 'LTC', 'BTC']);
+  return known.has(sym) ? `/${sym}.png` : '/logo.png';
+}
+
+function resolveRecentSwapExplorerUrl(swap: RecentPublicSwap): string | null {
+  if (swap.payoutExplorerUrl && /^https?:\/\//i.test(swap.payoutExplorerUrl)) {
+    return swap.payoutExplorerUrl;
+  }
+  const hash = swap.payoutTxHash || swap.depositTxHash;
+  if (!hash) return null;
+  const toC = (swap.toChain || '').toLowerCase();
+  if (toC.includes('bch_chipnet')) return `https://chipnet.imaginary.cash/tx/${hash}`;
+  if (toC.includes('bch')) return `https://blockchair.com/bitcoin-cash/transaction/${hash}`;
+  if (toC.includes('polygon_amoy')) return `https://amoy.polygonscan.com/tx/${hash}`;
+  if (toC.includes('polygon')) return `https://polygonscan.com/tx/${hash}`;
+  if (toC.includes('solana_devnet')) return `https://solscan.io/tx/${hash}?cluster=devnet`;
+  if (toC.includes('solana')) return `https://solscan.io/tx/${hash}`;
+  if (toC.includes('bsc_testnet')) return `https://testnet.bscscan.com/tx/${hash}`;
+  if (toC.includes('bsc')) return `https://bscscan.com/tx/${hash}`;
+  return null;
+}
+
 type TokenChainKey = 'ton' | 'bnb' | 'bch' | 'solana' | 'litecoin' | 'ethereum' | 'polygon';
 
 function resolveTokenChainKey(
@@ -461,6 +534,42 @@ export default function BridgeSwap({
 
   // Limit Orders
   const [limitOrders, setLimitOrders] = useState<any[]>([]);
+
+  // Recent Settled Swaps (compact 5-row sliding queue)
+  const [recentSwaps, setRecentSwaps] = useState<RecentPublicSwap[]>([]);
+  const [recentClockMs, setRecentClockMs] = useState<number>(() => Date.now());
+
+  const fetchRecentSwaps = useCallback(async () => {
+    try {
+      const res = await fetch(
+        `${backendUrl}/api/swaps/recent?limit=5&network=${platformNetwork}&status=COMPLETED&public=1`
+      );
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data?.success && Array.isArray(data.swaps)) {
+        setRecentSwaps(data.swaps.slice(0, 5));
+        setRecentClockMs(Date.now());
+      }
+    } catch {
+      // Quiet background refresh
+    }
+  }, [backendUrl, platformNetwork]);
+
+  useEffect(() => {
+    void fetchRecentSwaps();
+    const id = setInterval(() => {
+      if (typeof document === 'undefined' || !document.hidden) {
+        void fetchRecentSwaps();
+      }
+    }, 15000);
+    return () => clearInterval(id);
+  }, [fetchRecentSwaps]);
+
+  useEffect(() => {
+    if (cardState === 'success') {
+      void fetchRecentSwaps();
+    }
+  }, [cardState, fetchRecentSwaps]);
 
   // ==========================================================================
   // STRICT PAY-WALLET vs RECEIVE-ADDRESS SEPARATION
@@ -2612,6 +2721,90 @@ export default function BridgeSwap({
             </div>
           );
         })()}
+        </div>
+      )}
+
+      {/* RECENT SETTLED SWAPS (Quiet 5-row sliding queue, zero empty box) */}
+      {activeTab === 'swap' && cardState === 'form' && recentSwaps.length > 0 && (
+        <div className="mt-5">
+          <div className="flex items-center justify-between px-1.5 mb-2 text-[11px] text-ink-3">
+            <span className="font-medium">
+              {lang === 'es' ? 'Actividad reciente' : 'Recent activity'}
+            </span>
+            <span className="text-ink-3/75">
+              {isTestnet ? 'Chipnet' : 'Mainnet'}
+            </span>
+          </div>
+
+          <div className="bg-surface/75 border border-line/80 rounded-panel divide-y divide-line/60 overflow-hidden">
+            {recentSwaps.slice(0, 5).map((item) => {
+              const fromChainLabel = formatRecentChainLabel(item.fromChain);
+              const toChainLabel = formatRecentChainLabel(item.toChain);
+              const explorerUrl = resolveRecentSwapExplorerUrl(item);
+              const age = formatRelativeAge(item.completedAt, recentClockMs, lang);
+              const rowClass =
+                'flex items-center justify-between gap-3 px-3.5 py-2.5 text-xs transition-colors animate-in fade-in slide-in-from-top-1 duration-300' +
+                (explorerUrl ? ' hover:bg-surface-2/80 cursor-pointer group' : '');
+
+              const inner = (
+                <>
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="flex items-center shrink-0">
+                      <img
+                        src={getTokenIconBySymbol(item.fromToken)}
+                        alt={item.fromToken}
+                        className="w-5 h-5 rounded-full object-contain bg-surface-2 border border-line"
+                      />
+                      <img
+                        src={getTokenIconBySymbol(item.toToken)}
+                        alt={item.toToken}
+                        className="w-5 h-5 rounded-full object-contain bg-surface border border-line -ml-1.5 ring-2 ring-surface"
+                      />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="font-medium text-ink tabular-nums truncate">
+                        <span>
+                          {formatCompactSwapAmount(item.fromAmount)} {item.fromToken}
+                        </span>
+                        <span className="text-ink-3 mx-1.5">→</span>
+                        <span>
+                          {formatCompactSwapAmount(item.toAmount)} {item.toToken}
+                        </span>
+                      </div>
+                      {(fromChainLabel || toChainLabel) && (
+                        <div className="text-[11px] text-ink-3 truncate">
+                          {fromChainLabel} → {toChainLabel}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 shrink-0 text-[11px] text-ink-3 tabular-nums">
+                    {age && <span>{age}</span>}
+                    {explorerUrl && (
+                      <ExternalLink className="w-3 h-3 text-ink-3/50 group-hover:text-ink transition-colors" />
+                    )}
+                  </div>
+                </>
+              );
+
+              return explorerUrl ? (
+                <a
+                  key={item.id}
+                  href={explorerUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className={rowClass}
+                >
+                  {inner}
+                </a>
+              ) : (
+                <div key={item.id} className={rowClass}>
+                  {inner}
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 

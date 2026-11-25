@@ -934,9 +934,48 @@ app.post('/api/swap/:id/verify-tx', async (req, res) => {
 
 // Recent Public Swaps (Live ticker/Activity)
 app.get('/api/swaps/recent', (req, res) => {
-  const limit = parseInt(req.query.limit || '10', 10);
-  const recent = db.listSwaps(limit);
-  res.json({ success: true, count: recent.length, swaps: recent });
+  const limit = Math.min(Math.max(parseInt(req.query.limit || '10', 10) || 10, 1), 50);
+  const statusFilter = req.query.status ? String(req.query.status).toUpperCase() : null;
+  const networkFilter = req.query.network ? String(req.query.network).toLowerCase() : null;
+  const isPublicSummary = req.query.public === '1' || req.query.public === 'true';
+
+  let list = db.listSwaps(200, statusFilter);
+  if (networkFilter === 'testnet' || networkFilter === 'mainnet') {
+    list = list.filter((s) => {
+      const fromTest = relayerEngine.isTestnetChainId(s.fromChain || '');
+      const toTest = relayerEngine.isTestnetChainId(s.toChain || '');
+      return networkFilter === 'testnet' ? (fromTest || toTest) : (!fromTest && !toTest);
+    });
+  }
+  if (isPublicSummary) {
+    list = list.filter((s) => Boolean(s.payoutTxHash || s.depositTxHash));
+  }
+
+  list.sort((a, b) => {
+    const ta = new Date(a.completedAt || a.updatedAt || a.createdAt || 0).getTime();
+    const tb = new Date(b.completedAt || b.updatedAt || b.createdAt || 0).getTime();
+    return tb - ta;
+  });
+
+  const sliced = list.slice(0, limit);
+  const swaps = isPublicSummary
+    ? sliced.map((s) => ({
+        id: s.id,
+        status: s.status,
+        fromToken: s.fromToken,
+        toToken: s.toToken,
+        fromChain: s.fromChain,
+        toChain: s.toChain,
+        fromAmount: s.fromAmount,
+        toAmount: s.toAmount,
+        payoutTxHash: s.payoutTxHash || null,
+        depositTxHash: s.depositTxHash || null,
+        payoutExplorerUrl: s.payoutExplorerUrl || null,
+        completedAt: s.completedAt || s.updatedAt || s.createdAt
+      }))
+    : sliced;
+
+  res.json({ success: true, count: swaps.length, swaps });
 });
 
 // Treasury Statistics & Protocol Fee Accounting
