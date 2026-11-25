@@ -14,6 +14,14 @@
 
 ---
 
+## Live Cross-Chain Swap Demo
+
+Real end-to-end non-custodial swap (**`10 PUSD` on BCH → `9.97 USDT` on Polygon**) signed with **BinaryLiquid Wallet (`BlConnect`)** and settled on-chain in ~4 seconds via `BinaryLiquidEscrowV2.cash` (P2SH-32), updating both wallet balances live (`994.93 → 984.93 PUSD` and `9.87 → 19.84 USDT`):
+
+![BinaryLiquid Live Cross-Chain Swap Demo — 10 PUSD to 9.97 USDT](./docs/swap_demo.gif)
+
+---
+
 ## Quick Links
 
 | Resource | Live URL |
