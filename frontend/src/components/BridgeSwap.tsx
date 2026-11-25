@@ -2435,8 +2435,8 @@ export default function BridgeSwap({
                   {processingStage === 'authorizing'
                     ? sellMeta.chainKey === 'bch'
                       ? lang === 'es'
-                        ? `Revisa tu billetera BCH (${activeBchWalletLabel}) para autorizar el intercambio.`
-                        : `Check your BCH wallet (${activeBchWalletLabel}) to authorize the swap.`
+                        ? `Confirma el intercambio en ${activeBchWalletLabel}.`
+                        : `Approve the swap in ${activeBchWalletLabel}.`
                       : sellMeta.chainKey === 'solana'
                       ? lang === 'es'
                         ? `Revisa tu billetera Solana (Phantom / Solflare) para autorizar el depósito en ${sellMeta.networkLabel}.`

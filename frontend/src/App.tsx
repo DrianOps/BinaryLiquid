@@ -900,6 +900,7 @@ export default function App() {
     qrDataUrl: string;
     cancel: () => void;
   } | null>(null);
+  const [blConnectTab, setBlConnectTab] = useState<'browser' | 'qr'>('browser');
   const [blConnectPopupBusy, setBlConnectPopupBusy] = useState<boolean>(false);
   const [walletBalances, setWalletBalances] = useState<{
     PUSD: number;
@@ -1238,7 +1239,7 @@ export default function App() {
         setBchWallet({
           address: restoredBlc.cashAddress,
           tokenAddress: restoredBlc.tokenAddress,
-          provider: `${restoredBlc.walletName} (BlConnect)`,
+          provider: 'BinaryLiquid Wallet',
           source: 'blconnect',
           queryAddress: qAddrs
         });
@@ -1974,7 +1975,7 @@ export default function App() {
       sess.allAddresses && sess.allAddresses.length > 0
         ? sess.allAddresses.join(',')
         : sess.cashAddress;
-    const providerLabel = `${sess.walletName || 'BinaryLiquid Wallet'} (BlConnect)`;
+    const providerLabel = 'BinaryLiquid Wallet';
     setBchWallet({
       address: sess.cashAddress,
       tokenAddress: sess.tokenAddress || sess.cashAddress,
@@ -1992,13 +1993,14 @@ export default function App() {
     refreshWalletBalances(queryAddresses, evmWallet?.address || null);
     showToast(
       lang === 'es'
-        ? `⚡ Conectado vía BlConnect (${sess.transport === 'popup' ? 'Instantáneo' : 'Nostr E2EE'}): ${formatAddress(sess.tokenAddress || sess.cashAddress)}`
-        : `⚡ Connected via BlConnect (${sess.transport === 'popup' ? 'Instant' : 'Nostr E2EE'}): ${formatAddress(sess.tokenAddress || sess.cashAddress)}`
+        ? `BinaryLiquid Wallet conectada · ${formatAddress(sess.tokenAddress || sess.cashAddress)}`
+        : `BinaryLiquid Wallet connected · ${formatAddress(sess.tokenAddress || sess.cashAddress)}`
     );
   };
 
   const openBlConnectModal = () => {
     setShowWalletModal(false);
+    setBlConnectTab('browser');
     const isTest = platformNetwork === 'testnet';
     const pairing = startBlConnectNostrPairing(isTest, () => {
       setBchWallet(prev => (prev?.source === 'blconnect' ? null : prev));
@@ -3023,10 +3025,10 @@ export default function App() {
         </div>
       )}
 
-      {/* BLCONNECT PROTOCOL V1 MODAL (Instant Popup + Decentralized Nostr E2EE QR) */}
+      {/* BINARYLIQUID WALLET CONNECTION MODAL */}
       {blConnectModal && (
-        <div className="fixed inset-0 bg-black/45 dark:bg-black/70 backdrop-blur-sm z-[145] flex items-center justify-center p-4">
-          <div className="bg-surface rounded-[28px] p-6 w-full max-w-[360px] shadow-[0_24px_60px_-15px_rgba(0,0,0,0.22)] border border-line/60 relative flex flex-col items-center text-center">
+        <div className="fixed inset-0 bg-black/50 dark:bg-black/75 backdrop-blur-sm z-[145] flex items-center justify-center p-4">
+          <div className="bg-surface rounded-[24px] p-6 w-full max-w-[360px] shadow-[0_24px_60px_-15px_rgba(0,0,0,0.35)] border border-line relative flex flex-col items-center text-center">
             <button
               type="button"
               onClick={() => {
@@ -3039,69 +3041,85 @@ export default function App() {
               <X className="w-4 h-4" />
             </button>
 
-            <div className="w-11 h-11 rounded-2xl bg-surface-2 flex items-center justify-center mb-3 p-1.5">
-              <img src="/logo.png" className="w-8 h-8 object-contain" alt="BinaryLiquid Wallet" />
+            <div className="w-11 h-11 rounded-2xl bg-surface-2 border border-line flex items-center justify-center mb-3 p-1.5">
+              <img src="/logo.png" className="w-7 h-7 object-contain" alt="BinaryLiquid Wallet" />
             </div>
 
-            <h2 className="text-[18px] font-semibold tracking-[-0.02em] text-ink">
+            <h2 className="text-[17px] font-semibold tracking-[-0.02em] text-ink">
               BinaryLiquid Wallet
             </h2>
-            <p className="text-[13px] text-ink-3 mt-1 mb-5">
-              {lang === 'es'
-                ? 'Conecta aquí o escanea desde tu teléfono'
-                : 'Connect here or scan from your phone'}
+            <p className="text-xs text-ink-3 mt-1 mb-4">
+              {blConnectTab === 'browser'
+                ? (lang === 'es' ? 'Abre la ventana segura para aprobar' : 'Open the secure window to approve')
+                : (lang === 'es' ? 'Escanea desde tu teléfono con la wallet' : 'Scan from your phone wallet')}
             </p>
 
-            {/* Primary Instant Same-Browser Popup CTA */}
-            <button
-              type="button"
-              onClick={() => void handleBlConnectInstantPopup()}
-              disabled={blConnectPopupBusy}
-              className="w-full bg-ink text-canvas hover:opacity-90 font-semibold text-[14px] py-3.5 px-4 rounded-full transition-opacity flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
-            >
-              <Zap className="w-4 h-4 text-primary shrink-0" />
-              <span>
-                {blConnectPopupBusy
-                  ? (lang === 'es' ? 'Esperando aprobación...' : 'Waiting for approval...')
-                  : (lang === 'es' ? 'Conectar en navegador' : 'Connect in Browser')}
-              </span>
-            </button>
-
-            <div className="w-full flex items-center gap-3 my-4 text-[11px] font-medium text-ink-3">
-              <span className="flex-1 h-px bg-line/70" />
-              <span>{lang === 'es' ? 'o escanea el QR' : 'or scan QR'}</span>
-              <span className="flex-1 h-px bg-line/70" />
-            </div>
-
-            {blConnectModal.qrDataUrl && (
-              <div className="p-3 bg-white rounded-[20px] border border-line/70 flex items-center justify-center mb-4">
-                <img src={blConnectModal.qrDataUrl} alt="BlConnect QR" className="w-40 h-40 object-contain" />
-              </div>
-            )}
-
-            <div className="w-full grid grid-cols-2 gap-2">
+            {/* Clean Segmented Mode Switcher */}
+            <div className="ui-segment w-full grid grid-cols-2 mb-5">
               <button
                 type="button"
-                onClick={() => copyToClipboard(blConnectModal.uri)}
-                className="bg-surface-2 hover:bg-surface-3 text-ink font-medium text-[12px] py-2.5 px-3 rounded-full transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                onClick={() => setBlConnectTab('browser')}
+                className={`ui-segment-item ${blConnectTab === 'browser' ? 'ui-segment-item-active' : ''}`}
               >
-                {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5 text-ink-3" />}
-                <span>
-                  {copied
-                    ? (lang === 'es' ? 'Copiado' : 'Copied')
-                    : (lang === 'es' ? 'Copiar enlace' : 'Copy link')}
-                </span>
+                {lang === 'es' ? 'Este navegador' : 'This browser'}
               </button>
-              <a
-                href={`https://wallet.bliquid.xyz/dashboard/dapps?blc=${encodeURIComponent(blConnectModal.uri)}`}
-                target="_blank"
-                rel="noreferrer"
-                className="bg-surface-2 hover:bg-surface-3 text-ink font-medium text-[12px] py-2.5 px-3 rounded-full transition-colors flex items-center justify-center gap-1.5"
+              <button
+                type="button"
+                onClick={() => setBlConnectTab('qr')}
+                className={`ui-segment-item ${blConnectTab === 'qr' ? 'ui-segment-item-active' : ''}`}
               >
-                <span>{lang === 'es' ? 'Abrir web' : 'Open web'}</span>
-                <ExternalLink className="w-3.5 h-3.5 text-ink-3" />
-              </a>
+                {lang === 'es' ? 'Teléfono (QR)' : 'Phone (QR)'}
+              </button>
             </div>
+
+            {blConnectTab === 'browser' ? (
+              <div className="w-full space-y-3">
+                <button
+                  type="button"
+                  onClick={() => void handleBlConnectInstantPopup()}
+                  disabled={blConnectPopupBusy}
+                  className="w-full ui-btn-inverse ui-btn-lg text-[13px] font-semibold flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
+                >
+                  {blConnectPopupBusy ? (
+                    <span className="w-3.5 h-3.5 rounded-full border-2 border-current border-t-transparent animate-spin" />
+                  ) : null}
+                  <span>
+                    {blConnectPopupBusy
+                      ? (lang === 'es' ? 'Esperando confirmación...' : 'Waiting for confirmation...')
+                      : (lang === 'es' ? 'Continuar en BinaryLiquid Wallet' : 'Continue to BinaryLiquid Wallet')}
+                  </span>
+                </button>
+                <a
+                  href={`https://wallet.bliquid.xyz/dashboard/dapps?blc=${encodeURIComponent(blConnectModal.uri)}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center justify-center gap-1.5 text-xs font-medium text-ink-3 hover:text-ink transition-colors"
+                >
+                  <span>{lang === 'es' ? 'Abrir en pestaña nueva' : 'Open in new tab'}</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
+            ) : (
+              <div className="w-full flex flex-col items-center space-y-3.5">
+                {blConnectModal.qrDataUrl && (
+                  <div className="p-3 bg-white rounded-[18px] border border-line/70 flex items-center justify-center">
+                    <img src={blConnectModal.qrDataUrl} alt="BinaryLiquid Wallet QR" className="w-44 h-44 object-contain" />
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => copyToClipboard(blConnectModal.uri)}
+                  className="w-full ui-btn-secondary h-10 text-xs font-medium flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5 text-ink-3" />}
+                  <span>
+                    {copied
+                      ? (lang === 'es' ? 'Enlace copiado' : 'Link copied')
+                      : (lang === 'es' ? 'Copiar enlace de conexión' : 'Copy pairing link')}
+                  </span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
