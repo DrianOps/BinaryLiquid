@@ -535,19 +535,20 @@ export default function BridgeSwap({
   // Limit Orders
   const [limitOrders, setLimitOrders] = useState<any[]>([]);
 
-  // Recent Settled Swaps (compact 5-row sliding queue)
+  // Recent Settled Swaps (collapsible sliding queue, hidden scrollbar)
   const [recentSwaps, setRecentSwaps] = useState<RecentPublicSwap[]>([]);
+  const [recentActivityOpen, setRecentActivityOpen] = useState<boolean>(false);
   const [recentClockMs, setRecentClockMs] = useState<number>(() => Date.now());
 
   const fetchRecentSwaps = useCallback(async () => {
     try {
       const res = await fetch(
-        `${backendUrl}/api/swaps/recent?limit=5&network=${platformNetwork}&status=COMPLETED&public=1`
+        `${backendUrl}/api/swaps/recent?limit=8&network=${platformNetwork}&status=COMPLETED&public=1`
       );
       if (!res.ok) return;
       const data = await res.json();
       if (data?.success && Array.isArray(data.swaps)) {
-        setRecentSwaps(data.swaps.slice(0, 5));
+        setRecentSwaps(data.swaps.slice(0, 8));
         setRecentClockMs(Date.now());
       }
     } catch {
@@ -2724,89 +2725,127 @@ export default function BridgeSwap({
         </div>
       )}
 
-      {/* RECENT SETTLED SWAPS (Quiet 5-row sliding queue, zero empty box) */}
-      {activeTab === 'swap' && cardState === 'form' && recentSwaps.length > 0 && (
-        <div className="mt-5">
-          <div className="flex items-center justify-between px-1.5 mb-2 text-[11px] text-ink-3">
-            <span className="font-medium">
-              {lang === 'es' ? 'Actividad reciente' : 'Recent activity'}
-            </span>
-            <span className="text-ink-3/75">
-              {isTestnet ? 'Chipnet' : 'Mainnet'}
-            </span>
-          </div>
+      {/* RECENT SETTLED SWAPS (Collapsible drawer, ~3 rows visible, hidden scrollbar) */}
+      {activeTab === 'swap' && cardState === 'form' && recentSwaps.length > 0 && (() => {
+        const latest = recentSwaps[0];
+        const latestAge = formatRelativeAge(latest?.completedAt, recentClockMs, lang);
+        return (
+          <div className="mt-3.5 bg-surface/75 border border-line/80 rounded-panel overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setRecentActivityOpen((prev) => !prev)}
+              className="w-full flex items-center justify-between gap-3 px-3.5 py-2.5 text-xs hover:bg-surface-2/60 transition-colors cursor-pointer"
+              aria-expanded={recentActivityOpen}
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                {!recentActivityOpen && latest ? (
+                  <div className="flex items-center shrink-0">
+                    <img
+                      src={getTokenIconBySymbol(latest.fromToken)}
+                      alt={latest.fromToken}
+                      className="w-4 h-4 rounded-full object-contain bg-surface-2 border border-line"
+                    />
+                    <img
+                      src={getTokenIconBySymbol(latest.toToken)}
+                      alt={latest.toToken}
+                      className="w-4 h-4 rounded-full object-contain bg-surface border border-line -ml-1 ring-1 ring-surface"
+                    />
+                  </div>
+                ) : null}
+                <span className="font-medium text-ink-2 shrink-0">
+                  {lang === 'es' ? 'Actividad reciente' : 'Recent activity'}
+                </span>
+                {!recentActivityOpen && latest ? (
+                  <span className="text-[11px] text-ink-3 tabular-nums truncate">
+                    · {formatCompactSwapAmount(latest.fromAmount)} {latest.fromToken} → {formatCompactSwapAmount(latest.toAmount)} {latest.toToken}
+                  </span>
+                ) : null}
+              </div>
 
-          <div className="bg-surface/75 border border-line/80 rounded-panel divide-y divide-line/60 overflow-hidden">
-            {recentSwaps.slice(0, 5).map((item) => {
-              const fromChainLabel = formatRecentChainLabel(item.fromChain);
-              const toChainLabel = formatRecentChainLabel(item.toChain);
-              const explorerUrl = resolveRecentSwapExplorerUrl(item);
-              const age = formatRelativeAge(item.completedAt, recentClockMs, lang);
-              const rowClass =
-                'flex items-center justify-between gap-3 px-3.5 py-2.5 text-xs transition-colors animate-in fade-in slide-in-from-top-1 duration-300' +
-                (explorerUrl ? ' hover:bg-surface-2/80 cursor-pointer group' : '');
+              <div className="flex items-center gap-2 shrink-0 text-[11px] text-ink-3 tabular-nums">
+                <span>{recentActivityOpen ? (isTestnet ? 'Chipnet' : 'Mainnet') : latestAge}</span>
+                <ChevronDown
+                  className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                    recentActivityOpen ? 'rotate-180' : ''
+                  }`}
+                />
+              </div>
+            </button>
 
-              const inner = (
-                <>
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="flex items-center shrink-0">
-                      <img
-                        src={getTokenIconBySymbol(item.fromToken)}
-                        alt={item.fromToken}
-                        className="w-5 h-5 rounded-full object-contain bg-surface-2 border border-line"
-                      />
-                      <img
-                        src={getTokenIconBySymbol(item.toToken)}
-                        alt={item.toToken}
-                        className="w-5 h-5 rounded-full object-contain bg-surface border border-line -ml-1.5 ring-2 ring-surface"
-                      />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="font-medium text-ink tabular-nums truncate">
-                        <span>
-                          {formatCompactSwapAmount(item.fromAmount)} {item.fromToken}
-                        </span>
-                        <span className="text-ink-3 mx-1.5">→</span>
-                        <span>
-                          {formatCompactSwapAmount(item.toAmount)} {item.toToken}
-                        </span>
-                      </div>
-                      {(fromChainLabel || toChainLabel) && (
-                        <div className="text-[11px] text-ink-3 truncate">
-                          {fromChainLabel} → {toChainLabel}
+            {recentActivityOpen && (
+              <div className="border-t border-line/60 max-h-[162px] overflow-y-auto no-scrollbar divide-y divide-line/60">
+                {recentSwaps.map((item) => {
+                  const fromChainLabel = formatRecentChainLabel(item.fromChain);
+                  const toChainLabel = formatRecentChainLabel(item.toChain);
+                  const explorerUrl = resolveRecentSwapExplorerUrl(item);
+                  const age = formatRelativeAge(item.completedAt, recentClockMs, lang);
+                  const rowClass =
+                    'flex items-center justify-between gap-3 px-3.5 py-2.5 text-xs transition-colors' +
+                    (explorerUrl ? ' hover:bg-surface-2/80 cursor-pointer group' : '');
+
+                  const inner = (
+                    <>
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="flex items-center shrink-0">
+                          <img
+                            src={getTokenIconBySymbol(item.fromToken)}
+                            alt={item.fromToken}
+                            className="w-5 h-5 rounded-full object-contain bg-surface-2 border border-line"
+                          />
+                          <img
+                            src={getTokenIconBySymbol(item.toToken)}
+                            alt={item.toToken}
+                            className="w-5 h-5 rounded-full object-contain bg-surface border border-line -ml-1.5 ring-2 ring-surface"
+                          />
                         </div>
-                      )}
+                        <div className="min-w-0">
+                          <div className="font-medium text-ink tabular-nums truncate">
+                            <span>
+                              {formatCompactSwapAmount(item.fromAmount)} {item.fromToken}
+                            </span>
+                            <span className="text-ink-3 mx-1.5">→</span>
+                            <span>
+                              {formatCompactSwapAmount(item.toAmount)} {item.toToken}
+                            </span>
+                          </div>
+                          {(fromChainLabel || toChainLabel) && (
+                            <div className="text-[11px] text-ink-3 truncate">
+                              {fromChainLabel} → {toChainLabel}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 shrink-0 text-[11px] text-ink-3 tabular-nums">
+                        {age && <span>{age}</span>}
+                        {explorerUrl && (
+                          <ExternalLink className="w-3 h-3 text-ink-3/50 group-hover:text-ink transition-colors" />
+                        )}
+                      </div>
+                    </>
+                  );
+
+                  return explorerUrl ? (
+                    <a
+                      key={item.id}
+                      href={explorerUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className={rowClass}
+                    >
+                      {inner}
+                    </a>
+                  ) : (
+                    <div key={item.id} className={rowClass}>
+                      {inner}
                     </div>
-                  </div>
-
-                  <div className="flex items-center gap-1.5 shrink-0 text-[11px] text-ink-3 tabular-nums">
-                    {age && <span>{age}</span>}
-                    {explorerUrl && (
-                      <ExternalLink className="w-3 h-3 text-ink-3/50 group-hover:text-ink transition-colors" />
-                    )}
-                  </div>
-                </>
-              );
-
-              return explorerUrl ? (
-                <a
-                  key={item.id}
-                  href={explorerUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className={rowClass}
-                >
-                  {inner}
-                </a>
-              ) : (
-                <div key={item.id} className={rowClass}>
-                  {inner}
-                </div>
-              );
-            })}
+                  );
+                })}
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* COMPACT OPEN LIMIT ORDERS LIST */}
       {activeTab === 'limit' && limitOrders.length > 0 && (
