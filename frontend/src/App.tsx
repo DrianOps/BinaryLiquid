@@ -902,6 +902,7 @@ export default function App() {
   } | null>(null);
   const [blConnectTab, setBlConnectTab] = useState<'browser' | 'qr'>('browser');
   const [blConnectPopupBusy, setBlConnectPopupBusy] = useState<boolean>(false);
+  const [pendingSwapPair, setPendingSwapPair] = useState<{ fromId: string; toId: string } | null>(null);
   const [walletBalances, setWalletBalances] = useState<{
     PUSD: number;
     BCH: number;
@@ -3153,6 +3154,10 @@ export default function App() {
       {mainView === 'gateway' && (
         <LandingPage 
           onLaunchApp={() => setMainView('bridge')}
+          onLaunchPair={(fromId, toId) => {
+            setPendingSwapPair({ fromId, toId });
+            setMainView('bridge');
+          }}
           onOpenDocs={() => setMainView('docs')}
           onOpenWhitepaper={() => setMainView('whitepaper')}
           onNavigateView={(view) => setMainView(view)}
@@ -3164,6 +3169,8 @@ export default function App() {
       {mainView === 'bridge' && (
         <main className="flex-1 flex flex-col items-center justify-start md:justify-center p-4 sm:p-6 w-full max-w-7xl mx-auto pb-28 md:pb-12">
           <BridgeSwap
+            initialPair={pendingSwapPair}
+            onConsumeInitialPair={() => setPendingSwapPair(null)}
             userContext={userContext}
             userAddress={userContext?.address || ''}
             bchAddress={bchWallet?.tokenAddress || bchWallet?.address || ''}

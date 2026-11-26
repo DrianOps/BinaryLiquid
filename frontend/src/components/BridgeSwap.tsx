@@ -82,6 +82,8 @@ interface BridgeSwapProps {
   wizardConnectState?: string;
   authToken?: string | null;
   onEnsureAuthSession?: (options?: EnsureAuthSessionOptions) => Promise<string | null>;
+  initialPair?: { fromId: string; toId: string } | null;
+  onConsumeInitialPair?: () => void;
 }
 
 const UI_TEXT = {
@@ -476,7 +478,9 @@ export default function BridgeSwap({
   onToggleNetwork,
   wizardConnectManager,
   authToken,
-  onEnsureAuthSession
+  onEnsureAuthSession,
+  initialPair,
+  onConsumeInitialPair
 }: BridgeSwapProps) {
   const t = UI_TEXT[lang] || UI_TEXT.es;
   const isTestnet = platformNetwork === 'testnet';
@@ -487,10 +491,33 @@ export default function BridgeSwap({
 
   // Core Mode & Token Pair (Default: PUSD -> Polygon USDT)
   const [activeTab, setActiveTab] = useState<'swap' | 'limit'>('swap');
-  const [sellToken, setSellToken] = useState<TokenInfo>(() => resolveTokenFromQuery('from', SUPPORTED_TOKENS[0])); // PUSD
-  const [buyToken, setBuyToken] = useState<TokenInfo>(() =>
-    resolveTokenFromQuery('to', SUPPORTED_TOKENS.find(tk => tk.id === 'usdt_polygon') || SUPPORTED_TOKENS[4])
-  ); // USDT (Polygon)
+  const [sellToken, setSellToken] = useState<TokenInfo>(() => {
+    if (initialPair?.fromId) {
+      const match = SUPPORTED_TOKENS.find(tk => tk.id === initialPair.fromId);
+      if (match) return match;
+    }
+    return resolveTokenFromQuery('from', SUPPORTED_TOKENS[0]);
+  });
+  const [buyToken, setBuyToken] = useState<TokenInfo>(() => {
+    if (initialPair?.toId) {
+      const match = SUPPORTED_TOKENS.find(tk => tk.id === initialPair.toId);
+      if (match) return match;
+    }
+    return resolveTokenFromQuery('to', SUPPORTED_TOKENS.find(tk => tk.id === 'usdt_polygon') || SUPPORTED_TOKENS[4]);
+  });
+
+  useEffect(() => {
+    if (!initialPair) return;
+    const fromTok = SUPPORTED_TOKENS.find(tk => tk.id === initialPair.fromId);
+    const toTok = SUPPORTED_TOKENS.find(tk => tk.id === initialPair.toId);
+    if (fromTok && toTok && fromTok.id !== toTok.id) {
+      setSellToken(fromTok);
+      setBuyToken(toTok);
+      setActiveTab('swap');
+      setCardState('form');
+    }
+    onConsumeInitialPair?.();
+  }, [initialPair, onConsumeInitialPair]);
   const sellMeta = useMemo(() => getTokenChainMeta(sellToken, isTestnet), [sellToken, isTestnet]);
   const buyMeta = useMemo(() => getTokenChainMeta(buyToken, isTestnet), [buyToken, isTestnet]);
   const [tokenModalTarget, setTokenModalTarget] = useState<'sell' | 'buy' | null>(null);

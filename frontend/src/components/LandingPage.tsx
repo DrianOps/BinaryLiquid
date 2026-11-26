@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { 
   ArrowRight, 
   ArrowDown, 
@@ -12,7 +12,8 @@ import {
   Shield,
   Check, 
   Loader2,
-  ExternalLink
+  ExternalLink,
+  X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -20,10 +21,373 @@ type LandingNavView = 'bridge' | 'p2p' | 'pools' | 'identity' | 'sdk' | 'docs' |
 
 interface LandingPageProps {
   onLaunchApp: () => void;
+  onLaunchPair?: (fromId: string, toId: string) => void;
   onOpenDocs: () => void;
   onOpenWhitepaper?: () => void;
   onNavigateView?: (view: LandingNavView) => void;
   lang?: 'en' | 'es';
+}
+
+interface FloatingCoinConfig {
+  tokenId: string;
+  symbol: string;
+  network: string;
+  icon: string;
+  side: 'left' | 'right';
+  size: number;
+  xPct: number;
+  yPct: number;
+  vx: number;
+  vy: number;
+}
+
+const FLOATING_COINS: FloatingCoinConfig[] = [
+  // Open left corridor (x: 3%..21%)
+  { tokenId: 'pusd_bch', symbol: 'PUSD', network: 'BCH', icon: '/PUSD.png', side: 'left', size: 54, xPct: 9, yPct: 16, vx: 13, vy: 9 },
+  { tokenId: 'bch_l1', symbol: 'BCH', network: 'Bitcoin Cash', icon: '/BCH.png', side: 'left', size: 52, xPct: 18, yPct: 44, vx: -11, vy: 12 },
+  { tokenId: 'musd_bch', symbol: 'MUSD', network: 'BCH', icon: '/MUSD.png', side: 'left', size: 46, xPct: 7, yPct: 68, vx: 12, vy: -10 },
+  { tokenId: 'ltc_l1', symbol: 'LTC', network: 'Litecoin', icon: '/LTC.png', side: 'left', size: 44, xPct: 17, yPct: 84, vx: -10, vy: -9 },
+  // Open right corridor (x: 79%..95%)
+  { tokenId: 'usdt_polygon', symbol: 'USDT', network: 'Polygon', icon: '/USDT.png', side: 'right', size: 54, xPct: 87, yPct: 18, vx: -13, vy: 10 },
+  { tokenId: 'sol_spl', symbol: 'SOL', network: 'Solana', icon: '/SOL.png', side: 'right', size: 50, xPct: 79, yPct: 45, vx: 11, vy: -12 },
+  { tokenId: 'bnb_bsc', symbol: 'BNB', network: 'BNB Chain', icon: '/BNB.png', side: 'right', size: 46, xPct: 90, yPct: 68, vx: -11, vy: -9 },
+  { tokenId: 'ton_l1', symbol: 'TON', network: 'TON', icon: '/TON.png', side: 'right', size: 44, xPct: 80, yPct: 84, vx: 10, vy: 11 }
+];
+
+function FloatingCoinField({
+  lang,
+  onSelectPair
+}: {
+  lang: 'en' | 'es';
+  onSelectPair: (fromId: string, toId: string) => void;
+}) {
+  const isEs = lang === 'es';
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const nodeRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const hoveredIdxRef = useRef<number | null>(null);
+  const selectedIdxRef = useRef<number | null>(null);
+
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
+  const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
+  const [launchingPair, setLaunchingPair] = useState<{ from: FloatingCoinConfig; to: FloatingCoinConfig } | null>(null);
+
+  useEffect(() => {
+    hoveredIdxRef.current = hoveredIdx;
+  }, [hoveredIdx]);
+
+  useEffect(() => {
+    selectedIdxRef.current = selectedIdx;
+  }, [selectedIdx]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const prefersReduced =
+      typeof window !== 'undefined' &&
+      window.matchMedia &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    let rect = container.getBoundingClientRect();
+    const bodies = FLOATING_COINS.map((c) => ({
+      x: (c.xPct / 100) * Math.max(rect.width, 1024),
+      y: (c.yPct / 100) * Math.max(rect.height, 640),
+      vx: c.vx,
+      vy: c.vy,
+      baseVx: c.vx,
+      baseVy: c.vy,
+      r: c.size / 2,
+      side: c.side
+    }));
+
+    const applyTransforms = () => {
+      for (let i = 0; i < bodies.length; i++) {
+        const el = nodeRefs.current[i];
+        if (!el) continue;
+        const b = bodies[i];
+        el.style.transform = `translate3d(${(b.x - b.r).toFixed(1)}px, ${(b.y - b.r).toFixed(1)}px, 0)`;
+      }
+    };
+
+    const handleResize = () => {
+      if (!containerRef.current) return;
+      const next = containerRef.current.getBoundingClientRect();
+      if (next.width > 0 && rect.width > 0) {
+        const sx = next.width / rect.width;
+        const sy = next.height / Math.max(rect.height, 1);
+        for (const b of bodies) {
+          b.x *= sx;
+          b.y *= sy;
+        }
+      }
+      rect = next;
+      applyTransforms();
+    };
+
+    applyTransforms();
+    window.addEventListener('resize', handleResize);
+
+    if (prefersReduced) {
+      return () => window.removeEventListener('resize', handleResize);
+    }
+
+    let rafId = 0;
+    let lastTs = performance.now();
+
+    const step = (now: number) => {
+      const dt = Math.min((now - lastTs) / 1000, 0.05);
+      lastTs = now;
+
+      const w = rect.width;
+      const h = rect.height;
+
+      if (w >= 960 && h > 200) {
+        for (let i = 0; i < bodies.length; i++) {
+          const b = bodies[i];
+          const isPaused = hoveredIdxRef.current === i || selectedIdxRef.current === i;
+
+          if (isPaused) {
+            // Smooth instant braking on hover or selection
+            b.vx *= Math.pow(0.001, dt);
+            b.vy *= Math.pow(0.001, dt);
+            if (Math.abs(b.vx) < 0.2) b.vx = 0;
+            if (Math.abs(b.vy) < 0.2) b.vy = 0;
+          } else {
+            // Gently recover ambient drift speed when released
+            const curSpeed = Math.hypot(b.vx, b.vy);
+            const targetSpeed = Math.hypot(b.baseVx, b.baseVy);
+            if (curSpeed < 1.5) {
+              b.vx += (b.baseVx - b.vx) * Math.min(1, dt * 2.2);
+              b.vy += (b.baseVy - b.vy) * Math.min(1, dt * 2.2);
+            } else if (curSpeed < targetSpeed * 0.85) {
+              const boost = 1 + dt * 1.4;
+              b.vx *= boost;
+              b.vy *= boost;
+            }
+          }
+
+          b.x += b.vx * dt;
+          b.y += b.vy * dt;
+
+          // Keep strictly inside open left/right hero margins so text & card stay 100% clear across 1024px–1920px+
+          const centerHalfClear = b.y < 340 ? 330 : 250;
+          const minX =
+            b.side === 'left'
+              ? Math.max(b.r + 14, w * 0.025)
+              : Math.max(w * 0.77 + b.r, w / 2 + centerHalfClear + b.r + 12);
+          const maxX =
+            b.side === 'left'
+              ? Math.max(
+                  Math.max(b.r + 14, w * 0.025) + 12,
+                  Math.min(w * 0.23 - b.r, w / 2 - centerHalfClear - b.r - 12)
+                )
+              : Math.min(w - b.r - 14, w * 0.975);
+          const minY = b.r + 24;
+          const maxY = h - b.r - 28;
+
+          if (b.x < minX) {
+            b.x = minX;
+            b.vx = Math.abs(b.vx);
+            b.baseVx = Math.abs(b.baseVx);
+          } else if (b.x > maxX) {
+            b.x = maxX;
+            b.vx = -Math.abs(b.vx);
+            b.baseVx = -Math.abs(b.baseVx);
+          }
+
+          if (b.y < minY) {
+            b.y = minY;
+            b.vy = Math.abs(b.vy);
+            b.baseVy = Math.abs(b.baseVy);
+          } else if (b.y > maxY) {
+            b.y = maxY;
+            b.vy = -Math.abs(b.vy);
+            b.baseVy = -Math.abs(b.baseVy);
+          }
+        }
+
+        // Gentle elastic separation between neighboring coins on same side
+        for (let i = 0; i < bodies.length; i++) {
+          for (let j = i + 1; j < bodies.length; j++) {
+            const a = bodies[i];
+            const b = bodies[j];
+            if (a.side !== b.side) continue;
+            const dx = b.x - a.x;
+            const dy = b.y - a.y;
+            const dist = Math.hypot(dx, dy) || 0.001;
+            const minDist = a.r + b.r + 26;
+            if (dist < minDist) {
+              const nx = dx / dist;
+              const ny = dy / dist;
+              const overlap = (minDist - dist) * 0.5;
+              const aPaused = hoveredIdxRef.current === i || selectedIdxRef.current === i;
+              const bPaused = hoveredIdxRef.current === j || selectedIdxRef.current === j;
+              if (!aPaused) {
+                a.x -= nx * overlap;
+                a.y -= ny * overlap;
+                a.vx -= nx * 6;
+                a.vy -= ny * 6;
+              }
+              if (!bPaused) {
+                b.x += nx * overlap;
+                b.y += ny * overlap;
+                b.vx += nx * 6;
+                b.vy += ny * 6;
+              }
+            }
+          }
+        }
+
+        applyTransforms();
+      }
+
+      rafId = requestAnimationFrame(step);
+    };
+
+    rafId = requestAnimationFrame(step);
+    return () => {
+      cancelAnimationFrame(rafId);
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []);
+
+  const handleCoinClick = (idx: number) => {
+    if (launchingPair) return;
+    if (selectedIdx === null) {
+      setSelectedIdx(idx);
+      return;
+    }
+    if (selectedIdx === idx) {
+      setSelectedIdx(null);
+      return;
+    }
+    const first = FLOATING_COINS[selectedIdx];
+    const second = FLOATING_COINS[idx];
+    setLaunchingPair({ from: first, to: second });
+    setTimeout(() => {
+      onSelectPair(first.tokenId, second.tokenId);
+    }, 220);
+  };
+
+  const firstCoin = selectedIdx !== null ? FLOATING_COINS[selectedIdx] : null;
+  const hoveredCoin = hoveredIdx !== null ? FLOATING_COINS[hoveredIdx] : null;
+
+  return (
+    <>
+      {/* Ambient Interactive Floating Coins (Desktop lg+ margins only) */}
+      <div
+        ref={containerRef}
+        aria-label={isEs ? 'Monedas interactivas para armar par de swap' : 'Interactive floating coins to build a swap pair'}
+        className="hidden lg:block absolute inset-0 overflow-visible pointer-events-none z-10"
+      >
+        {FLOATING_COINS.map((coin, idx) => {
+          const isHovered = hoveredIdx === idx;
+          const isSelected = selectedIdx === idx;
+          const isTargetPreview = firstCoin !== null && isHovered && !isSelected;
+
+          return (
+            <button
+              key={coin.tokenId}
+              data-floating-coin={coin.tokenId}
+              ref={(el) => {
+                nodeRefs.current[idx] = el;
+              }}
+              type="button"
+              onMouseEnter={() => setHoveredIdx(idx)}
+              onMouseLeave={() => setHoveredIdx((prev) => (prev === idx ? null : prev))}
+              onFocus={() => setHoveredIdx(idx)}
+              onBlur={() => setHoveredIdx((prev) => (prev === idx ? null : prev))}
+              onClick={() => handleCoinClick(idx)}
+              style={{ width: coin.size, height: coin.size }}
+              className={`pointer-events-auto absolute top-0 left-0 rounded-full flex items-center justify-center cursor-pointer transition-[opacity,box-shadow,border-color,background-color] duration-200 will-change-transform group ${
+                isSelected
+                  ? 'opacity-100 bg-surface border-2 border-primary shadow-lg shadow-primary/20 z-30'
+                  : isHovered
+                    ? 'opacity-100 bg-surface border border-line-strong shadow-md z-30'
+                    : firstCoin
+                      ? 'opacity-90 bg-surface/90 border border-line hover:border-primary/60 shadow-soft z-20'
+                      : 'opacity-70 bg-surface/80 border border-line/80 shadow-soft z-10'
+              }`}
+              title={
+                firstCoin && !isSelected
+                  ? `${firstCoin.symbol} → ${coin.symbol}`
+                  : `${coin.symbol} (${coin.network})`
+              }
+            >
+              <img
+                src={coin.icon}
+                alt=""
+                draggable={false}
+                className={`w-[64%] h-[64%] rounded-full object-contain transition-transform duration-200 ${
+                  isHovered || isSelected ? 'scale-110' : 'scale-100'
+                }`}
+              />
+
+              {/* Crisp Hover / Selected Floating Label */}
+              {(isHovered || isSelected) && (
+                <span className="pointer-events-none absolute top-full mt-2 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-ink text-canvas px-2.5 py-0.5 text-[10.5px] font-semibold shadow-sm tracking-tight">
+                  {isTargetPreview && firstCoin
+                    ? `${firstCoin.symbol} → ${coin.symbol}`
+                    : isSelected
+                      ? `${coin.symbol} · ${isEs ? 'origen' : 'from'}`
+                      : `${coin.symbol} · ${coin.network}`}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Whisper-Clean Floating Pair Builder Pill (appears only when a coin is picked) */}
+      <AnimatePresence>
+        {(firstCoin || launchingPair) && (
+          <motion.div
+            initial={{ opacity: 0, y: 12, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 10, scale: 0.96 }}
+            transition={{ duration: 0.18 }}
+            className="hidden lg:flex fixed bottom-6 left-1/2 -translate-x-1/2 z-50 items-center gap-3 rounded-full border border-line-strong bg-surface/95 backdrop-blur-md pl-3 pr-2 py-2 shadow-xl text-xs"
+          >
+            {launchingPair ? (
+              <div className="flex items-center gap-2 px-2 font-semibold text-ink">
+                <img src={launchingPair.from.icon} alt="" className="w-4 h-4 rounded-full object-contain" />
+                <span>{launchingPair.from.symbol}</span>
+                <ArrowRight className="w-3.5 h-3.5 text-primary" />
+                <img src={launchingPair.to.icon} alt="" className="w-4 h-4 rounded-full object-contain" />
+                <span>{launchingPair.to.symbol}</span>
+              </div>
+            ) : firstCoin ? (
+              <>
+                <div className="flex items-center gap-1.5 font-semibold text-ink">
+                  <img src={firstCoin.icon} alt="" className="w-4 h-4 rounded-full object-contain" />
+                  <span>{firstCoin.symbol}</span>
+                </div>
+                <ArrowRight className="w-3.5 h-3.5 text-ink-3" />
+                {hoveredCoin && hoveredCoin.tokenId !== firstCoin.tokenId ? (
+                  <div className="flex items-center gap-1.5 font-semibold text-primary">
+                    <img src={hoveredCoin.icon} alt="" className="w-4 h-4 rounded-full object-contain" />
+                    <span>{hoveredCoin.symbol}</span>
+                  </div>
+                ) : (
+                  <span className="text-ink-2">
+                    {isEs ? 'Elige otra moneda flotante para hacer swap' : 'Click another floating coin to swap'}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setSelectedIdx(null)}
+                  aria-label={isEs ? 'Cancelar selección' : 'Cancel selection'}
+                  className="ml-1 w-6 h-6 rounded-full bg-surface-2 hover:bg-surface-3 text-ink-3 hover:text-ink flex items-center justify-center transition-colors cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </>
+            ) : null}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
+  );
 }
 
 const SUPPORTED_RAIL_ITEMS = [
@@ -713,6 +1077,7 @@ function WalletVaultPreview({
 
 export default function LandingPage({
   onLaunchApp,
+  onLaunchPair,
   onOpenDocs,
   onOpenWhitepaper,
   onNavigateView,
@@ -734,47 +1099,58 @@ export default function LandingPage({
 
   return (
     <div className="w-full flex flex-col flex-1 text-ink pb-28 md:pb-12 overflow-x-hidden">
-      {/* HERO */}
-      <section className="px-4 sm:px-6 pt-10 sm:pt-14 pb-8 sm:pb-10 max-w-3xl mx-auto w-full text-center">
-        <div className="text-[11px] font-mono tracking-wide text-ink-3 mb-4">
-          {t.badge}
-        </div>
+      {/* HERO + INTERACTIVE FLOATING COINS STAGE */}
+      <div className="relative w-full max-w-[1380px] mx-auto">
+        <FloatingCoinField
+          lang={lang}
+          onSelectPair={(fromId, toId) => {
+            if (onLaunchPair) onLaunchPair(fromId, toId);
+            else onLaunchApp();
+          }}
+        />
 
-        <h1 className="text-4xl sm:text-[54px] font-semibold tracking-tight leading-[1.06] text-ink">
-          {t.title1}
-          <br />
-          {t.title2}
-        </h1>
+        {/* HERO */}
+        <section className="relative z-20 px-4 sm:px-6 pt-10 sm:pt-14 pb-8 sm:pb-10 max-w-3xl mx-auto w-full text-center">
+          <div className="text-[11px] font-mono tracking-wide text-ink-3 mb-4">
+            {t.badge}
+          </div>
 
-        <p className="mt-4 text-base sm:text-lg text-ink-2 max-w-[540px] mx-auto leading-relaxed">
-          {t.subtitle}
-        </p>
+          <h1 className="text-4xl sm:text-[54px] font-semibold tracking-tight leading-[1.06] text-ink">
+            {t.title1}
+            <br />
+            {t.title2}
+          </h1>
 
-        <div className="mt-7 flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3">
-          <button 
-            type="button" 
-            onMouseEnter={() => import('./BridgeSwap')}
-            onClick={onLaunchApp} 
-            className="ui-btn-primary ui-btn-lg px-6 cursor-pointer"
-          >
-            <span>{t.launchBtn}</span>
-            <ArrowRight className="w-4 h-4" />
-          </button>
-          <button 
-            type="button" 
-            onMouseEnter={() => import('./DocsView')}
-            onClick={onOpenDocs} 
-            className="ui-btn-secondary ui-btn-lg px-6 cursor-pointer"
-          >
-            {t.docsBtn}
-          </button>
-        </div>
-      </section>
+          <p className="mt-4 text-base sm:text-lg text-ink-2 max-w-[540px] mx-auto leading-relaxed">
+            {t.subtitle}
+          </p>
 
-      {/* ANIMATED PREVIEW CARD */}
-      <section className="px-4 sm:px-6 max-w-md mx-auto w-full">
-        <AnimatedSwapPreview onLaunchApp={onLaunchApp} lang={lang} />
-      </section>
+          <div className="mt-7 flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3">
+            <button 
+              type="button" 
+              onMouseEnter={() => import('./BridgeSwap')}
+              onClick={onLaunchApp} 
+              className="ui-btn-primary ui-btn-lg px-6 cursor-pointer"
+            >
+              <span>{t.launchBtn}</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+            <button 
+              type="button" 
+              onMouseEnter={() => import('./DocsView')}
+              onClick={onOpenDocs} 
+              className="ui-btn-secondary ui-btn-lg px-6 cursor-pointer"
+            >
+              {t.docsBtn}
+            </button>
+          </div>
+        </section>
+
+        {/* ANIMATED PREVIEW CARD */}
+        <section className="relative z-20 px-4 sm:px-6 max-w-md mx-auto w-full">
+          <AnimatedSwapPreview onLaunchApp={onLaunchApp} lang={lang} />
+        </section>
+      </div>
 
       {/* QUIET SUPPORTED NETWORKS STRIP */}
       <section className="px-4 sm:px-6 pt-12 pb-6 max-w-5xl mx-auto w-full">
@@ -783,13 +1159,19 @@ export default function LandingPage({
             <div key={item.label} className="inline-flex items-center gap-2 text-xs font-medium text-ink-2">
               <img
                 src={item.icon}
-                alt={item.label}
+                alt=""
+                aria-hidden="true"
                 className="w-4 h-4 rounded-full object-contain"
               />
               <span>{item.label}</span>
             </div>
           ))}
         </div>
+        <p className="hidden lg:block text-center text-[11px] font-mono text-ink-3/75 mt-2.5">
+          {lang === 'es'
+            ? 'Tip: pasa el cursor por cualquier moneda flotante para frenarla — haz clic en dos para abrir ese par.'
+            : 'Tip: hover any floating coin to pause it — click two to open that swap pair.'}
+        </p>
       </section>
 
       {/* EDITORIAL PROTOCOL INDEX (Asymmetric Swiss specification list, zero generic cards) */}
