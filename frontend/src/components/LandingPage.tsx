@@ -339,15 +339,16 @@ function FloatingCoinField({
       </div>
 
       {/* Whisper-Clean Floating Pair Builder Pill (appears only when a coin is picked) */}
-      <AnimatePresence>
-        {(firstCoin || launchingPair) && (
-          <motion.div
-            initial={{ opacity: 0, y: 12, scale: 0.96 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 10, scale: 0.96 }}
-            transition={{ duration: 0.18 }}
-            className="hidden lg:flex fixed bottom-6 left-1/2 -translate-x-1/2 z-50 items-center gap-3 rounded-full border border-line-strong bg-surface/95 backdrop-blur-md pl-3 pr-2 py-2 shadow-xl text-xs"
-          >
+      <div className="hidden lg:flex fixed bottom-6 inset-x-0 z-50 justify-center pointer-events-none px-4">
+        <AnimatePresence>
+          {(firstCoin || launchingPair) && (
+            <motion.div
+              initial={{ opacity: 0, y: 12, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: 0.96 }}
+              transition={{ duration: 0.18 }}
+              className="pointer-events-auto flex items-center gap-3 rounded-full border border-line-strong bg-surface/95 backdrop-blur-md pl-3 pr-2 py-2 shadow-xl text-xs"
+            >
             {launchingPair ? (
               <div className="flex items-center gap-2 px-2 font-semibold text-ink">
                 <img src={launchingPair.from.icon} alt="" className="w-4 h-4 rounded-full object-contain" />
@@ -386,6 +387,7 @@ function FloatingCoinField({
           </motion.div>
         )}
       </AnimatePresence>
+      </div>
     </>
   );
 }
