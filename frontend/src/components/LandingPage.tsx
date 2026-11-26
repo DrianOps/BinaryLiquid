@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   ArrowRight, 
   ArrowDown, 
@@ -10,30 +10,39 @@ import {
   Home,
   BarChart2,
   Shield,
-  ShieldCheck, 
-  Zap, 
-  Wallet, 
   Check, 
   Loader2,
-  X,
-  ExternalLink,
-  Sparkles
+  ExternalLink
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+
+type LandingNavView = 'bridge' | 'p2p' | 'pools' | 'identity' | 'sdk' | 'docs' | 'whitepaper';
 
 interface LandingPageProps {
   onLaunchApp: () => void;
   onOpenDocs: () => void;
   onOpenWhitepaper?: () => void;
+  onNavigateView?: (view: LandingNavView) => void;
   lang?: 'en' | 'es';
 }
 
+const SUPPORTED_RAIL_ITEMS = [
+  { label: 'Bitcoin Cash', icon: '/BCH.png' },
+  { label: 'ParyonUSD', icon: '/PUSD.png' },
+  { label: 'Moria USD', icon: '/MUSD.png' },
+  { label: 'Polygon', icon: '/POL.png' },
+  { label: 'Solana', icon: '/SOL.png' },
+  { label: 'BNB Chain', icon: '/BNB.png' },
+  { label: 'TON', icon: '/TON.png' },
+  { label: 'Litecoin', icon: '/LTC.png' }
+] as const;
+
 const LANDING_TEXTS = {
   en: {
-    badge: 'Chipnet & Mainnet · BCH ⟷ EVM · Solana · TON',
+    badge: 'Mainnet & Chipnet · BCH · EVM · Solana · TON',
     title1: 'Stablecoins between',
     title2: 'Bitcoin Cash and Web3',
-    subtitle: 'Non-custodial bridge, perps, pools and lending across BCH, Polygon, Solana, BNB and TON.',
+    subtitle: 'Non-custodial bridge, P2P fiat escrow, sovereign identity and web wallet built natively for Bitcoin Cash.',
     launchBtn: 'Launch app',
     docsBtn: 'Read docs',
     demoBadge: 'Live Non-Custodial Demo',
@@ -43,37 +52,53 @@ const LANDING_TEXTS = {
     swapFor: (sell: string, buy: string) => `Swap ${sell} for ${buy}`,
     signing: 'Signing Transaction...',
     locking: 'Locking in CashScript Covenant (P2SH32)...',
-    assurance: '100% Non-custodial · Settled via smart contracts & CashScript covenants',
-    confirmed: 'Swap Confirmed On-Chain',
+    assurance: 'Non-custodial · Settled via CashScript covenants & multi-VM vaults',
+    confirmed: 'Swap confirmed',
     receivedFrom: (amt: string, sym: string) => `Received from ${amt} ${sym}`,
-    settlementTimeLabel: 'Settlement time:',
+    settlementTimeLabel: 'Settlement time',
     settlementTimeVal: '~2.8 seconds',
-    securityLabel: 'Security:',
-    securityVal: 'Covenant CashScript P2SH32',
-    promoModal: {
-      badge: 'Official Hackathon Selection',
-      title: 'BinaryLiquid @ BCH BLAZE 2026',
-      desc: 'BinaryLiquid has been entered into the global Bitcoin Cash hackathon on DoraHacks. Explore our non-custodial bridge and vote for innovation on BCH!',
-      acceptBtn: 'Accept & Visit Hackathon',
-      dismissBtn: 'Continue to dApp',
-    },
-    features: [
-      {
-        icon: ShieldCheck,
-        title: 'Non-custodial',
-        text: 'Funds settle through smart contracts and CashScript covenants.'
-      },
-      {
-        icon: Zap,
-        title: 'Fast settlement',
-        text: 'Deposits are detected on-chain and paid out in ~3 seconds.'
-      },
-      {
-        icon: Wallet,
-        title: 'Your wallets',
-        text: 'BinaryLiquid Wallet, BlConnect, Paytaca, Cashonize and MetaMask.'
+    securityLabel: 'Settlement',
+    securityVal: 'CashScript P2SH32',
+    protocolSection: {
+      eyebrow: 'Architecture',
+      title: 'Native contracts, end to end.',
+      desc: 'Every module runs on our own non-custodial CashScript covenants, multi-VM vaults and open standards — auditable on GitHub.',
+      githubCta: 'Inspect source on GitHub',
+      rows: [
+        {
+          num: '01',
+          name: 'Cross-Chain Bridge & AMM Pools',
+          meta: 'CashScript P2SH-32 · EVM · Solana Anchor · TON',
+          desc: 'Bidirectional stablecoin settlement (PUSD, MUSD, USDT, USDC) with 24-hour autonomous refund timelocks and 0.30% LP fee split.',
+          action: 'Open Bridge',
+          view: 'bridge' as LandingNavView
+        },
+        {
+          num: '02',
+          name: 'P2P Fiat-to-Crypto Escrow',
+          meta: 'Per-trade P2SH-32 · 0% protocol fee',
+          desc: 'Destination-locked CashScript escrows for local fiat rails with identity-gated trade rooms and verifiable on-chain release.',
+          action: 'Open P2P Desk',
+          view: 'p2p' as LandingNavView
+        },
+        {
+          num: '03',
+          name: 'UserLink Sovereign Identity',
+          meta: 'Nostr Kind 30078 · NIP-05 · Standalone SDK',
+          desc: 'Human-readable @handle@bliquid.xyz payment handles with dual BCH/Schnorr signatures, W3C DID resolution and zero L1 gas.',
+          action: 'Open Identity',
+          view: 'identity' as LandingNavView
+        }
+      ],
+      explainerRow: {
+        num: '04',
+        name: 'Interactive Explainer Studios',
+        meta: 'English & Spanish · Browser-native walkthroughs',
+        desc: 'Two narrated technical guides walking through CashScript P2SH-32 cross-chain liquidity and UserLink sovereign identity.',
+        link1: 'Bridge & Covenants',
+        link2: 'UserLink Identity'
       }
-    ],
+    },
     walletBanner: {
       eyebrow: 'wallet.bliquid.xyz',
       title: 'Non-custodial vault built for Bitcoin Cash.',
@@ -85,23 +110,14 @@ const LANDING_TEXTS = {
         { label: 'Fiat & settlement', value: 'USD, EUR, VES, COP, MXN · P2SH32' }
       ],
       openBtn: 'Open Web Wallet',
-      createBtn: 'Create wallet',
-      greeting: 'Hi, Sovereign',
-      vaultReady: 'BCH L1 Vault Ready',
-      portfolioLabel: 'Portfolio',
-      networkBadge: 'Chipnet + Mainnet',
-      txHeading: 'Transactions',
-      faucetSub: 'CashTokens L1 · Confirmed',
-      sendLabel: 'Send @user',
-      sendSub: 'Fee ~250 sats · Schnorr',
-      bridgeSub: 'Polygon & Solana ↔ BCH'
+      createBtn: 'Create wallet'
     }
   },
   es: {
-    badge: 'Chipnet y Mainnet · BCH ⟷ EVM · Solana · TON',
+    badge: 'Mainnet y Chipnet · BCH · EVM · Solana · TON',
     title1: 'Stablecoins entre',
     title2: 'Bitcoin Cash y Web3',
-    subtitle: 'Puente sin custodia, perps, pools y lending entre BCH, Polygon, Solana, BNB y TON.',
+    subtitle: 'Puente sin custodia, mesa P2P fiat, identidad soberana y web wallet construidos de forma nativa para Bitcoin Cash.',
     launchBtn: 'Abrir aplicación',
     docsBtn: 'Ver documentación',
     demoBadge: 'Demo en Vivo Sin Custodia',
@@ -111,37 +127,53 @@ const LANDING_TEXTS = {
     swapFor: (sell: string, buy: string) => `Intercambiar ${sell} por ${buy}`,
     signing: 'Firmando Transacción...',
     locking: 'Bloqueando en Covenant CashScript (P2SH32)...',
-    assurance: '100% Sin custodia · Liquidado vía smart contracts y covenants CashScript',
-    confirmed: 'Swap Confirmado On-Chain',
+    assurance: 'Sin custodia · Liquidado vía covenants CashScript y bóvedas multi-VM',
+    confirmed: 'Swap confirmado',
     receivedFrom: (amt: string, sym: string) => `Recibido desde ${amt} ${sym}`,
-    settlementTimeLabel: 'Tiempo de liquidación:',
+    settlementTimeLabel: 'Tiempo de liquidación',
     settlementTimeVal: '~2.8 segundos',
-    securityLabel: 'Seguridad:',
-    securityVal: 'Covenant CashScript P2SH32',
-    promoModal: {
-      badge: 'Selección Oficial Hackathon',
-      title: 'BinaryLiquid @ BCH BLAZE 2026',
-      desc: 'BinaryLiquid participa en el hackathon global de Bitcoin Cash en DoraHacks. ¡Descubre nuestro puente sin custodia y apoya la innovación en BCH!',
-      acceptBtn: 'Aceptar y Visitar Hackathon',
-      dismissBtn: 'Continuar a la app',
-    },
-    features: [
-      {
-        icon: ShieldCheck,
-        title: 'Sin custodia',
-        text: 'Los fondos se liquidan a través de smart contracts y covenants de CashScript.'
-      },
-      {
-        icon: Zap,
-        title: 'Liquidación rápida',
-        text: 'Los depósitos se detectan en cadena y se pagan en ~3 segundos.'
-      },
-      {
-        icon: Wallet,
-        title: 'Tus billeteras',
-        text: 'BinaryLiquid Wallet, BlConnect, Paytaca, Cashonize y MetaMask.'
+    securityLabel: 'Liquidación',
+    securityVal: 'CashScript P2SH32',
+    protocolSection: {
+      eyebrow: 'Arquitectura',
+      title: 'Contratos propios, de punta a punta.',
+      desc: 'Cada módulo corre sobre nuestros propios covenants CashScript, bóvedas multi-VM y estándares abiertos — todo auditable en GitHub.',
+      githubCta: 'Revisar código en GitHub',
+      rows: [
+        {
+          num: '01',
+          name: 'Puente Cross-Chain y Pools AMM',
+          meta: 'CashScript P2SH-32 · EVM · Solana Anchor · TON',
+          desc: 'Liquidación bidireccional de stablecoins (PUSD, MUSD, USDT, USDC) con timelocks autónomos de 24 h y reparto de fees 0.30%.',
+          action: 'Abrir Bridge',
+          view: 'bridge' as LandingNavView
+        },
+        {
+          num: '02',
+          name: 'Escrow P2P Fiat-a-Cripto',
+          meta: 'P2SH-32 por operación · 0% comisión',
+          desc: 'Covenants CashScript con destino bloqueado para pagos bancarios locales, identidad verificada y liberación directa on-chain.',
+          action: 'Abrir Mesa P2P',
+          view: 'p2p' as LandingNavView
+        },
+        {
+          num: '03',
+          name: 'Identidad Soberana UserLink',
+          meta: 'Nostr Kind 30078 · NIP-05 · SDK propio',
+          desc: 'Nombres legibles @usuario@bliquid.xyz con doble firma BCH/Schnorr, resolución W3C DID y cero gas en capa 1.',
+          action: 'Abrir Identidad',
+          view: 'identity' as LandingNavView
+        }
+      ],
+      explainerRow: {
+        num: '04',
+        name: 'Estudios Educativos Interactivos',
+        meta: 'Español e Inglés · Recorridos guiados en navegador',
+        desc: 'Dos guías técnicas narradas paso a paso sobre liquidez cross-chain con CashScript P2SH-32 e identidad soberana UserLink.',
+        link1: 'Bridge y Covenants',
+        link2: 'Identidad UserLink'
       }
-    ],
+    },
     walletBanner: {
       eyebrow: 'wallet.bliquid.xyz',
       title: 'Bóveda sin custodia diseñada para Bitcoin Cash.',
@@ -153,16 +185,7 @@ const LANDING_TEXTS = {
         { label: 'Divisas y red', value: 'USD, EUR, VES, COP, MXN · P2SH32' }
       ],
       openBtn: 'Abrir Web Wallet',
-      createBtn: 'Crear bóveda',
-      greeting: 'Hola, Soberano',
-      vaultReady: 'Bóveda BCH L1 Lista',
-      portfolioLabel: 'Portafolio',
-      networkBadge: 'Chipnet + Mainnet',
-      txHeading: 'Transacciones',
-      faucetSub: 'CashTokens L1 · Confirmado',
-      sendLabel: 'Envío @usuario',
-      sendSub: 'Fee ~250 sats · Schnorr',
-      bridgeSub: 'Polygon y Solana ↔ BCH'
+      createBtn: 'Crear bóveda'
     }
   }
 };
@@ -688,58 +711,46 @@ function WalletVaultPreview({
   );
 }
 
-export default function LandingPage({ onLaunchApp, onOpenDocs, onOpenWhitepaper, lang = 'en' }: LandingPageProps) {
+export default function LandingPage({
+  onLaunchApp,
+  onOpenDocs,
+  onOpenWhitepaper,
+  onNavigateView,
+  lang = 'en'
+}: LandingPageProps) {
   const t = LANDING_TEXTS[lang === 'es' ? 'es' : 'en'];
-  const [showPromoModal, setShowPromoModal] = useState<boolean>(false);
 
-  useEffect(() => {
-    try {
-      const isDismissed = localStorage.getItem('bliq_blaze_banner_dismissed') === 'true';
-      const forceShow = typeof window !== 'undefined' && (
-        window.location.search.includes('promo=1') ||
-        window.location.search.includes('banner=1')
-      );
-      if (!isDismissed || forceShow) {
-        const timer = setTimeout(() => setShowPromoModal(true), 400);
-        return () => clearTimeout(timer);
-      }
-    } catch {
-      setShowPromoModal(true);
+  const goView = (view: LandingNavView) => {
+    if (onNavigateView) {
+      onNavigateView(view);
+    } else if (view === 'bridge') {
+      onLaunchApp();
+    } else if (view === 'docs') {
+      onOpenDocs();
+    } else if (view === 'whitepaper' && onOpenWhitepaper) {
+      onOpenWhitepaper();
     }
-  }, []);
-
-  const handleAcceptPromo = () => {
-    try {
-      localStorage.setItem('bliq_blaze_banner_dismissed', 'true');
-    } catch {}
-    setShowPromoModal(false);
-    window.open('https://dorahacks.io/hackathon/bchblaze2026/detail', '_blank', 'noopener,noreferrer');
-  };
-
-  const handleDismissPromo = () => {
-    try {
-      localStorage.setItem('bliq_blaze_banner_dismissed', 'true');
-    } catch {}
-    setShowPromoModal(false);
   };
 
   return (
     <div className="w-full flex flex-col flex-1 text-ink pb-28 md:pb-12 overflow-x-hidden">
       {/* HERO */}
-      <section className="px-4 sm:px-6 pt-8 sm:pt-12 pb-8 sm:pb-10 max-w-3xl mx-auto w-full text-center">
-        <span className="ui-badge-warn mb-4">{t.badge}</span>
+      <section className="px-4 sm:px-6 pt-10 sm:pt-14 pb-8 sm:pb-10 max-w-3xl mx-auto w-full text-center">
+        <div className="text-[11px] font-mono tracking-wide text-ink-3 mb-4">
+          {t.badge}
+        </div>
 
-        <h1 className="text-4xl sm:text-[54px] font-semibold tracking-tight leading-[1.08] text-ink">
+        <h1 className="text-4xl sm:text-[54px] font-semibold tracking-tight leading-[1.06] text-ink">
           {t.title1}
           <br />
           {t.title2}
         </h1>
 
-        <p className="mt-3.5 text-base sm:text-lg text-ink-2 max-w-[560px] mx-auto leading-relaxed">
+        <p className="mt-4 text-base sm:text-lg text-ink-2 max-w-[540px] mx-auto leading-relaxed">
           {t.subtitle}
         </p>
 
-        <div className="mt-6 flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3">
+        <div className="mt-7 flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3">
           <button 
             type="button" 
             onMouseEnter={() => import('./BridgeSwap')}
@@ -765,18 +776,121 @@ export default function LandingPage({ onLaunchApp, onOpenDocs, onOpenWhitepaper,
         <AnimatedSwapPreview onLaunchApp={onLaunchApp} lang={lang} />
       </section>
 
-      {/* FEATURES */}
-      <section className="px-4 sm:px-6 pt-16 sm:pt-20 pb-14 sm:pb-16 max-w-5xl mx-auto w-full">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 sm:gap-10">
-          {t.features.map(({ icon: Icon, title, text }) => (
-            <div key={title}>
-              <div className="w-9 h-9 rounded-control bg-surface-2 text-ink flex items-center justify-center mb-4">
-                <Icon className="w-4 h-4" />
-              </div>
-              <h3 className="text-sm font-semibold text-ink">{title}</h3>
-              <p className="text-sm text-ink-2 mt-1">{text}</p>
+      {/* QUIET SUPPORTED NETWORKS STRIP */}
+      <section className="px-4 sm:px-6 pt-12 pb-6 max-w-5xl mx-auto w-full">
+        <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3 py-4 border-y border-line/70">
+          {SUPPORTED_RAIL_ITEMS.map((item) => (
+            <div key={item.label} className="inline-flex items-center gap-2 text-xs font-medium text-ink-2">
+              <img
+                src={item.icon}
+                alt={item.label}
+                className="w-4 h-4 rounded-full object-contain"
+              />
+              <span>{item.label}</span>
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* EDITORIAL PROTOCOL INDEX (Asymmetric Swiss specification list, zero generic cards) */}
+      <section className="px-4 sm:px-6 pt-12 sm:pt-16 pb-14 sm:pb-16 max-w-5xl mx-auto w-full">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-start">
+          <div className="lg:col-span-4 space-y-4 text-left lg:sticky lg:top-24">
+            <div className="text-xs font-mono text-ink-3">
+              {t.protocolSection.eyebrow}
+            </div>
+            <h2 className="text-2xl sm:text-[30px] font-semibold tracking-tight leading-[1.14] text-ink">
+              {t.protocolSection.title}
+            </h2>
+            <p className="text-sm text-ink-2 leading-relaxed">
+              {t.protocolSection.desc}
+            </p>
+            <div className="pt-1">
+              <a
+                href="https://github.com/DrianOps/BinaryLiquid"
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-ink hover:text-primary transition-colors"
+              >
+                <span>{t.protocolSection.githubCta}</span>
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            </div>
+          </div>
+
+          <div className="lg:col-span-8 border-t border-line divide-y divide-line">
+            {t.protocolSection.rows.map((row) => (
+              <button
+                key={row.num}
+                type="button"
+                onClick={() => goView(row.view)}
+                className="w-full py-5 sm:py-6 flex items-start justify-between gap-4 text-left group cursor-pointer transition-colors hover:bg-surface-2/40 -mx-3 px-3 rounded-xl"
+              >
+                <div className="flex items-start gap-4 sm:gap-5 min-w-0">
+                  <span className="font-mono text-xs text-ink-3 pt-1 shrink-0">
+                    {row.num}
+                  </span>
+                  <div className="min-w-0 space-y-1">
+                    <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
+                      <h3 className="text-[15px] sm:text-base font-semibold text-ink group-hover:text-primary transition-colors">
+                        {row.name}
+                      </h3>
+                      <span className="text-[11px] font-mono text-ink-3">
+                        {row.meta}
+                      </span>
+                    </div>
+                    <p className="text-xs sm:text-[13px] text-ink-2 leading-relaxed max-w-xl">
+                      {row.desc}
+                    </p>
+                  </div>
+                </div>
+                <span className="inline-flex items-center gap-1 text-xs font-medium text-ink-3 group-hover:text-ink transition-colors shrink-0 pt-1">
+                  <span className="hidden sm:inline">{row.action}</span>
+                  <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+                </span>
+              </button>
+            ))}
+
+            {/* 04: Interactive Explainer Studios */}
+            <div className="py-5 sm:py-6 flex items-start gap-4 sm:gap-5 text-left -mx-3 px-3">
+              <span className="font-mono text-xs text-ink-3 pt-1 shrink-0">
+                {t.protocolSection.explainerRow.num}
+              </span>
+              <div className="min-w-0 flex-1 space-y-1.5">
+                <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
+                  <h3 className="text-[15px] sm:text-base font-semibold text-ink">
+                    {t.protocolSection.explainerRow.name}
+                  </h3>
+                  <span className="text-[11px] font-mono text-ink-3">
+                    {t.protocolSection.explainerRow.meta}
+                  </span>
+                </div>
+                <p className="text-xs sm:text-[13px] text-ink-2 leading-relaxed max-w-xl">
+                  {t.protocolSection.explainerRow.desc}
+                </p>
+                <div className="pt-1.5 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs font-semibold">
+                  <a
+                    href="/explainer/"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-ink hover:text-primary transition-colors"
+                  >
+                    <span>{t.protocolSection.explainerRow.link1}</span>
+                    <ExternalLink className="w-3 h-3 text-ink-3" />
+                  </a>
+                  <a
+                    href="/explainer-id/"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-ink hover:text-primary transition-colors"
+                  >
+                    <span>{t.protocolSection.explainerRow.link2}</span>
+                    <ExternalLink className="w-3 h-3 text-ink-3" />
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -857,6 +971,14 @@ export default function LandingPage({ onLaunchApp, onOpenDocs, onOpenWhitepaper,
         </div>
         <div className="flex flex-wrap items-center justify-center sm:justify-end gap-5">
           <a
+            href="https://github.com/DrianOps/BinaryLiquid"
+            target="_blank"
+            rel="noreferrer"
+            className="text-ink-2 hover:text-ink font-medium transition-colors whitespace-nowrap"
+          >
+            GitHub
+          </a>
+          <a
             href="https://wallet.bliquid.xyz"
             target="_blank"
             rel="noreferrer"
@@ -864,13 +986,21 @@ export default function LandingPage({ onLaunchApp, onOpenDocs, onOpenWhitepaper,
           >
             Web Wallet
           </a>
+          <a
+            href="/explainer/"
+            target="_blank"
+            rel="noreferrer"
+            className="hover:text-ink transition-colors whitespace-nowrap"
+          >
+            Explainers
+          </a>
           {onOpenWhitepaper && (
             <button
               type="button"
               onClick={onOpenWhitepaper}
-              className="text-ink-2 hover:text-ink font-medium transition-colors cursor-pointer whitespace-nowrap"
+              className="hover:text-ink transition-colors cursor-pointer whitespace-nowrap"
             >
-              Whitepaper v1.0
+              Whitepaper
             </button>
           )}
           <a href="https://paryonusd.com" target="_blank" rel="noreferrer" className="hover:text-ink transition-colors whitespace-nowrap">
@@ -879,86 +1009,8 @@ export default function LandingPage({ onLaunchApp, onOpenDocs, onOpenWhitepaper,
           <a href="https://bchblaze.cash" target="_blank" rel="noreferrer" className="hover:text-ink transition-colors whitespace-nowrap">
             BCH BLAZE
           </a>
-          <a href="https://t.me/bchblaze" target="_blank" rel="noreferrer" className="hover:text-ink transition-colors whitespace-nowrap">
-            BCH Blaze TG
-          </a>
         </div>
       </footer>
-
-      {/* PROMOTIONAL HACKATHON MODAL */}
-      <AnimatePresence>
-        {showPromoModal && (
-          <div 
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md transition-opacity"
-            onClick={handleDismissPromo}
-          >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.92, y: 16 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.92, y: 16 }}
-              transition={{ type: 'spring', damping: 26, stiffness: 340 }}
-              onClick={(e) => e.stopPropagation()}
-              className="relative w-full max-w-lg bg-surface border border-line rounded-card shadow-2xl overflow-hidden flex flex-col"
-            >
-              {/* Top Close Button */}
-              <button
-                type="button"
-                onClick={handleDismissPromo}
-                className="absolute top-3 right-3 z-20 w-8 h-8 rounded-full bg-black/60 hover:bg-black/90 text-white flex items-center justify-center transition-colors cursor-pointer border border-white/10"
-                title="Cerrar / Close"
-              >
-                <X className="w-4 h-4" />
-              </button>
-
-              {/* Banner Image with Badge */}
-              <div className="relative w-full overflow-hidden bg-black flex items-center justify-center border-b border-line group">
-                <img
-                  src="/binaryliquid_.jpeg"
-                  alt="BinaryLiquid - BCH BLAZE 2026"
-                  className="w-full h-auto max-h-[260px] sm:max-h-[300px] object-cover"
-                />
-                <div className="absolute top-3 left-3 pointer-events-none">
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/85 backdrop-blur-md border border-primary/40 text-primary text-[11px] font-bold shadow-md">
-                    <Sparkles className="w-3.5 h-3.5 text-primary" />
-                    {t.promoModal.badge}
-                  </span>
-                </div>
-              </div>
-
-              {/* Content Body */}
-              <div className="p-5 sm:p-6 space-y-4">
-                <div>
-                  <h3 className="text-xl sm:text-2xl font-bold text-ink tracking-tight flex items-center gap-2">
-                    {t.promoModal.title}
-                  </h3>
-                  <p className="mt-2 text-xs sm:text-sm text-ink-2 leading-relaxed">
-                    {t.promoModal.desc}
-                  </p>
-                </div>
-
-                {/* Actions */}
-                <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
-                  <button
-                    type="button"
-                    onClick={handleAcceptPromo}
-                    className="flex-1 ui-btn-primary ui-btn-lg text-sm font-bold flex items-center justify-center gap-2 shadow-lg shadow-primary/20 hover:scale-[1.01] active:scale-[0.99] transition-all"
-                  >
-                    <span>{t.promoModal.acceptBtn}</span>
-                    <ExternalLink className="w-4 h-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleDismissPromo}
-                    className="ui-btn-secondary ui-btn-lg text-xs sm:text-sm font-semibold"
-                  >
-                    {t.promoModal.dismissBtn}
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }

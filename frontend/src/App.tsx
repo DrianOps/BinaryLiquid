@@ -3155,6 +3155,7 @@ export default function App() {
           onLaunchApp={() => setMainView('bridge')}
           onOpenDocs={() => setMainView('docs')}
           onOpenWhitepaper={() => setMainView('whitepaper')}
+          onNavigateView={(view) => setMainView(view)}
           lang={lang}
         />
       )}
